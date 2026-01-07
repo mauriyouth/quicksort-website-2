@@ -54,7 +54,7 @@ export const InfrastructureOverviewSection = (): JSX.Element => {
           <img
             className="w-[428px] h-[428px]"
             alt="Group"
-            src="/group-238095.png"
+            src="/infra-grid.svg"
           />
         </div>
       </div>

@@ -16,7 +16,7 @@ const contactInfo = [
         isLink: true,
     },
     { label: "+33 6 30 05 99 01", href: "#", isLink: false },
-    { label: "142 Rue Rivoli 75001 Process", href: "#", isLink: false },
+    { label: "142 Rue Rivoli 75001 Paris", href: "#", isLink: false },
 ];
 
 export const SiteFooterSection = (): JSX.Element => {

@@ -54,7 +54,7 @@ export const DataOverviewSection = (): JSX.Element => {
           <img
             className="w-[435.5px] h-[387.11px]"
             alt="Group"
-            src="/group-134.png"
+            src="/data-for-ai.svg"
           />
         </div>
       </div>

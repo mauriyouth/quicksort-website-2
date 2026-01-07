@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { ScrollToTop } from "./components/ScrollToTop";
 import { Desktop } from "./screens/Desktop";
 import { AiForBusiness } from "./screens/AiForBusiness";
 import { Blog } from "./screens/Blog";
@@ -9,6 +10,7 @@ import { InfrastructureFor } from "./screens/InfrastructureFor";
 export const App = () => {
   return (
     <Router>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<Desktop />} />
         <Route path="/ai-for-business" element={<AiForBusiness />} />

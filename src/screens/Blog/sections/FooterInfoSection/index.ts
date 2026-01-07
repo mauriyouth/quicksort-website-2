@@ -1,0 +1,1 @@
+export { FooterInfoSection } from "./FooterInfoSection";

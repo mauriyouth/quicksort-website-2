@@ -1,0 +1,1 @@
+export { IntelligentWorkAdoptionSection } from "./IntelligentWorkAdoptionSection";

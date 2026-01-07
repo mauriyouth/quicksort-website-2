@@ -98,7 +98,7 @@ export const HeroIntroSection = (): JSX.Element => {
       </div>
 
       <div className="h-[757px] px-0 py-24 z-[1] flex items-start justify-center relative w-full">
-        <div className="flex w-[1280px] items-center justify-between relative">
+        <div className="flex max-w-screen-xl w-full items-center justify-between relative">
           <div className="flex max-w-screen-xl h-[515px] items-end gap-8 px-8 py-0 relative flex-1 grow">
             <div className="flex flex-col items-start gap-12 relative flex-1 self-stretch grow">
               <div className="flex flex-col max-w-screen-lg items-start gap-6 relative w-full">

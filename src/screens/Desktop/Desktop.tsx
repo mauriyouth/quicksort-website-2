@@ -6,7 +6,7 @@ import { TeamShowcaseSection } from "./sections/TeamShowcaseSection";
 
 export const Desktop = (): JSX.Element => {
   return (
-    <main className="flex flex-col w-full max-w-[1440px] mx-auto items-center relative bg-[#141414]">
+    <main className="flex flex-col w-full items-center relative bg-[#141414]">
       <HeroIntroSection />
 
       <KeyFeaturesSection />

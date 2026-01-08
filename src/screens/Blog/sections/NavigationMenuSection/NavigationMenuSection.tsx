@@ -1,4 +1,3 @@
-import { ChevronDownIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "../../../../components/ui/button";
 import {
@@ -60,7 +59,6 @@ export const NavigationMenuSection = (): JSX.Element => {
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="inline-flex items-center justify-center gap-2 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#94969c] text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-neutral-50 transition-colors bg-transparent border-0 p-0 shadow-none">
                     Services
-                    <ChevronDownIcon className="w-5 h-5" />
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
                     <div className="w-[200px] p-4 bg-[#101010] border border-[#1f242f] rounded-md shadow-lg">

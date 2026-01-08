@@ -20,7 +20,7 @@ const features = [
 export const ProductionDesignFeaturesSection = (): JSX.Element => {
   return (
     <section className="flex flex-col items-center gap-16 px-0 py-24 w-full bg-[#141414]">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-16 max-w-screen-xl px-8 py-0 w-full">
+      <div className="flex flex-col lg:flex-row items-start gap-16 max-w-screen-xl px-8 py-0 w-full">
         <div className="flex flex-col max-w-[360px] items-start gap-5 flex-1">
           <div className="flex flex-col items-start gap-5 w-full">
             <div className="w-[47.33px] h-[47.33px] bg-[#227b39] rounded-[9.77px] overflow-hidden border-[none] shadow-[inset_0px_-1.97px_0px_#0a0c120d,inset_0px_0px_0px_0.99px_#0a0c122e] relative before:content-[''] before:absolute before:inset-0 before:p-[1.97px] before:rounded-[9.77px] before:[background:linear-gradient(180deg,rgba(255,255,255,0.12)_0%,rgba(255,255,255,0)_100%)] before:[-webkit-mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] before:[-webkit-mask-composite:xor] before:[mask-composite:exclude] before:z-[1] before:pointer-events-none">

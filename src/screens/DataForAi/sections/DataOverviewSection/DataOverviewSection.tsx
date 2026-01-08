@@ -1,3 +1,5 @@
+import { DataForAiIcon } from "../../../../components/DataForAiIcon";
+
 export const DataOverviewSection = (): JSX.Element => {
   const features = [
     {
@@ -51,11 +53,7 @@ export const DataOverviewSection = (): JSX.Element => {
             </div>
           </div>
 
-          <img
-            className="w-[435.5px] h-[387.11px]"
-            alt="Group"
-            src="/data-for-ai.svg"
-          />
+          <DataForAiIcon className="w-[435.5px] h-[387.11px]" />
         </div>
       </div>
     </section>

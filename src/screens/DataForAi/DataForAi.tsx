@@ -13,12 +13,6 @@ export const DataForAi = (): JSX.Element => {
       <DataOverviewSection />
 
       <SiteFooterSection />
-
-      <img
-        className="absolute top-0 left-[90px] w-[1260px] h-[945px] pointer-events-none"
-        alt="Background pattern"
-        src="/background-pattern.svg"
-      />
     </div>
   );
 };

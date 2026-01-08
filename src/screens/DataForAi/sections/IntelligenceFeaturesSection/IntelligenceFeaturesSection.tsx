@@ -6,11 +6,6 @@ export const IntelligenceFeaturesSection = (): JSX.Element => {
         "Seamless integration of knowledge graphs and vector databases like Neo4j, Milvus, and Weaviate.",
     },
     {
-      title: "Governance & Explainable AI",
-      description:
-        "End-to-end lineage, semantic enrichment, and governance for transparent, traceable AI decisions.",
-    },
-    {
       title: "Context-Aware Retrieval & RAG",
       description:
         "High-precision context retrieval and RAG pipelines tailored to domain-specific memory.",
@@ -20,14 +15,18 @@ export const IntelligenceFeaturesSection = (): JSX.Element => {
       description:
         "End-to-end lineage, semantic enrichment, and governance for transparent, traceable AI decisions.",
     },
+    {
+      title: "Active Learning Loops",
+      description: "Systems that capture human feedback to continuously refine model performance and domain accuracy.",
+    },
   ];
 
   return (
     <section className="flex flex-col items-center gap-16 px-0 py-24 w-full bg-[#141414]">
-      <div className="flex items-center gap-16 max-w-screen-xl px-8 py-0 w-full">
+      <div className="flex flex-col lg:flex-row items-start gap-16 max-w-screen-xl px-8 py-0 w-full">
         <div className="flex flex-col max-w-[360px] items-start gap-5 flex-1">
           <div className="flex flex-col items-start gap-5 w-full">
-            <div className="relative w-[48.2px] h-[48.2px] bg-[#b12a33] rounded-[9.95px] overflow-hidden border-[none] shadow-[inset_0px_-2.01px_0px_#0a0c120d,inset_0px_0px_0px_1px_#0a0c122e] before:content-[''] before:absolute before:inset-0 before:p-[2.01px] before:rounded-[9.95px] before:[background:linear-gradient(180deg,rgba(255,255,255,0.12)_0%,rgba(255,255,255,0)_100%)] before:[-webkit-mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] before:[-webkit-mask-composite:xor] before:[mask-composite:exclude] before:z-[1] before:pointer-events-none">
+            <div className="relative w-[47.33px] h-[47.33px] bg-[#b12a33] rounded-[9.77px] overflow-hidden border-[none] shadow-[inset_0px_-1.97px_0px_#0a0c120d,inset_0px_0px_0px_0.99px_#0a0c122e] before:content-[''] before:absolute before:inset-0 before:p-[1.97px] before:rounded-[9.77px] before:[background:linear-gradient(180deg,rgba(255,255,255,0.12)_0%,rgba(255,255,255,0)_100%)] before:[-webkit-mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] before:[-webkit-mask-composite:xor] before:[mask-composite:exclude] before:z-[1] before:pointer-events-none">
               <img
                 className="absolute top-[11px] left-[11px] w-[26px] h-[26px]"
                 alt="Database folder"

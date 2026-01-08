@@ -24,7 +24,7 @@ export const IntelligentWorkAdoptionSection = (): JSX.Element => {
 
   return (
     <section className="flex flex-col items-center gap-16 px-0 py-24 w-full">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-16 max-w-screen-xl px-8 py-0 w-full">
+      <div className="flex flex-col lg:flex-row items-start gap-16 max-w-screen-xl px-8 py-0 w-full">
         <div className="flex flex-col max-w-[360px] items-start gap-5 flex-1">
           <div className="flex flex-col items-start gap-5 w-full">
             <img

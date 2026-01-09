@@ -1,6 +1,6 @@
 import { BlogPostsGridSection } from "./sections/BlogPostsGridSection";
 import { FooterInfoSection } from "./sections/FooterInfoSection";
-import { NavigationMenuSection } from "./sections/NavigationMenuSection";
+import { MainNavigationSection } from "../../components/MainNavigationSection";
 import { PageHeaderSection } from "./sections/PageHeaderSection";
 
 export const Blog = (): JSX.Element => {
@@ -12,7 +12,7 @@ export const Blog = (): JSX.Element => {
         src="/background-pattern.svg"
       />
 
-      <NavigationMenuSection />
+      <MainNavigationSection />
       <PageHeaderSection />
       <BlogPostsGridSection />
       <FooterInfoSection />

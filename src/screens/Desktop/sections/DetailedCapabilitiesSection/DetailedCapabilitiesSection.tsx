@@ -1,18 +1,19 @@
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon, TrendingUpIcon, ServerIcon, DatabaseIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "../../../../components/ui/card";
 
 const serviceCards = [
   {
-    icon: "/featured-icon.svg",
+    icon: TrendingUpIcon,
     title: "AI for business",
     description:
       "We build custom AI workspaces and agents that embed directly into your operations. Our systems connect people, data, and tools into orchestrated environments where human judgment validates agent reasoning — automating coordination, and decision loops.",
     bgColor: "bg-[#101010]",
+    iconBg: "bg-[#309eff]",
     href: "/ai-for-business",
   },
   {
-    icon: "/database--folder--synchronize--sync-1.svg",
+    icon: DatabaseIcon,
     title: "Data for AI",
     description:
       "We transform fragmented enterprise data into structured, contextual intelligence ready for AI consumption — enabling models and agents to reason, learn, and act with precision.",
@@ -21,7 +22,7 @@ const serviceCards = [
     href: "/data-for-ai",
   },
   {
-    icon: "/database--folder--synchronize--sync-1-1.svg",
+    icon: ServerIcon,
     title: "Infrastructure for AI",
     description:
       "We design, deploy, and operate on-premise or cloud-native AI infrastructures optimized for LLMs, multimodal models, and agent systems — secure, compliant, and performance-tuned for enterprise workloads.",
@@ -98,54 +99,45 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
 
       <div className="flex flex-col max-w-screen-xl items-start gap-16 px-8 py-0 w-full">
         <div className="flex flex-wrap items-start gap-6 w-full">
-          {serviceCards.map((card, index) => (
-            <Card
-              key={index}
-              className="flex-col min-w-[280px] gap-6 p-6 flex-1 bg-[#101010] border-0 rounded-none"
-            >
-              <CardContent className="flex flex-col gap-6 p-0">
-                {index === 0 ? (
-                  <img
-                    className="w-[47px] h-[47px]"
-                    alt="Featured icon"
-                    src={card.icon}
-                  />
-                ) : (
-                  <div
-                    className={`w-[47.33px] h-[47.33px] ${card.iconBg} rounded-[9.77px] shadow-[inset_0px_-1.97px_0px_#0a0c120d,inset_0px_0px_0px_0.99px_#0a0c122e] overflow-hidden border-[none] relative before:content-[''] before:absolute before:inset-0 before:p-[1.97px] before:rounded-[9.77px] before:[background:linear-gradient(180deg,rgba(255,255,255,0.12)_0%,rgba(255,255,255,0)_100%)] before:[-webkit-mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] before:[-webkit-mask-composite:xor] before:[mask-composite:exclude] before:z-[1] before:pointer-events-none`}
-                  >
-                    <img
-                      className="absolute top-[11px] left-[11px] w-[26px] h-[26px]"
-                      alt="Database folder"
-                      src={card.icon}
-                    />
-                  </div>
-                )}
+          {serviceCards.map((card, index) => {
+            const Icon = card.icon;
+            return (
+              <Link
+                key={index}
+                to={card.href || "#"}
+                className="flex flex-1 min-w-[280px] group"
+              >
+                <Card className="flex-col w-full gap-6 p-6 flex-1 bg-[#101010] border-0 rounded-none transition-colors duration-300 group-hover:bg-[#1c1c1c]">
+                  <CardContent className="flex flex-col gap-6 p-0">
+                    <div
+                      className={`flex-shrink-0 w-[47px] h-[47px] ${card.iconBg} rounded-lg flex items-center justify-center transition-colors duration-300 group-hover:bg-[#ccff00]`}
+                    >
+                      <Icon className="w-5 h-5 text-white transition-colors duration-300 group-hover:text-black" />
+                    </div>
 
-                <div className="flex flex-col items-start gap-5 w-full">
-                  <div className="flex flex-col items-start gap-2 w-full">
-                    <h3 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-white text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
-                      {card.title}
-                    </h3>
+                    <div className="flex flex-col items-start gap-5 w-full">
+                      <div className="flex flex-col items-start gap-2 w-full">
+                        <h3 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-white text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)] transition-colors duration-300 group-hover:text-[#ccff00]">
+                          {card.title}
+                        </h3>
 
-                    <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
-                      {card.description}
-                    </p>
-                  </div>
+                        <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+                          {card.description}
+                        </p>
+                      </div>
 
-                  <Link
-                    to={card.href || "#"}
-                    className="inline-flex items-center justify-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-                  >
-                    <span className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#cecfd2] text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] whitespace-nowrap [font-style:var(--text-md-semibold-font-style)]">
-                      See more
-                    </span>
-                    <ArrowRightIcon className="w-5 h-5 text-[#cecfd2]" />
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                      <div className="inline-flex items-center justify-center gap-2 cursor-pointer">
+                        <span className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#cecfd2] text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] whitespace-nowrap [font-style:var(--text-md-semibold-font-style)] transition-colors duration-300 group-hover:text-[#ccff00]">
+                          See more
+                        </span>
+                        <ArrowRightIcon className="w-5 h-5 text-[#cecfd2] transition-colors duration-300 group-hover:text-[#ccff00]" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       </div>
 

@@ -76,8 +76,11 @@ export const FooterSection = (): JSX.Element => {
         </div>
       </div>
 
-      <div className="flex flex-col max-w-screen-xl items-center justify-center gap-8 px-8 py-0 relative w-full z-[1]">
+      <div className="w-full flex justify-center">
         <SectionSeparator />
+      </div>
+
+      <div className="flex flex-col max-w-screen-xl items-center justify-center gap-8 px-8 py-0 relative w-full z-[1]">
         <div className="flex flex-wrap items-center justify-between gap-[24px_32px] pt-8 pb-0 px-0 relative self-stretch w-full">
           <p className="relative w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)]">
             © 2026 Copyright Quicksort

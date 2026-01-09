@@ -82,55 +82,55 @@ const integrationExpertise = [
 
 export const DetailedCapabilitiesSection = (): JSX.Element => {
   return (
-    <section className="relative flex flex-col items-center gap-16 px-0 py-24 w-full bg-[#141414]">
+    <section className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-12 sm:py-16 md:py-24 w-full bg-[#141414]">
       <SectionGridOverlay showCenterLine={false} />
-      <div className="flex flex-col max-w-screen-xl items-start gap-8 px-8 py-0 w-full relative z-[1]">
-        <div className="flex flex-col items-start gap-8 w-full">
-          <div className="flex flex-col items-start gap-5 w-full">
+      <div className="flex flex-col max-w-screen-xl items-start gap-6 sm:gap-8 px-4 sm:px-8 py-0 w-full relative z-[1]">
+        <div className="flex flex-col items-start gap-6 sm:gap-8 w-full">
+          <div className="flex flex-col items-start gap-4 sm:gap-5 w-full">
             <div className="flex flex-col items-start gap-3 w-full">
-              <h2 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
+              <h2 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
                 Our Services
               </h2>
             </div>
 
-            <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-[#94969c] text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
+            <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-[#94969c] text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
               Right-sized innovation. Real systems. Compounding value.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col max-w-screen-xl items-start gap-16 px-8 py-0 w-full relative z-[1]">
-        <div className="flex flex-wrap items-start gap-6 w-full">
+      <div className="flex flex-col max-w-screen-xl items-start gap-8 sm:gap-12 md:gap-16 px-4 sm:px-8 py-0 w-full relative z-[1]">
+        <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-3 items-start gap-4 sm:gap-6 w-full">
           {serviceCards.map((card, index) => {
             const Icon = card.icon;
             return (
               <Link
                 key={index}
                 to={card.href || "#"}
-                className="flex flex-1 min-w-[280px] group"
+                className="flex flex-1 min-w-0 w-full group"
               >
-                <Card className="flex-col w-full gap-6 p-6 flex-1 bg-[#101010] border-0 rounded-none transition-colors duration-300 group-hover:bg-[#1c1c1c]">
-                  <CardContent className="flex flex-col gap-6 p-0">
+                <Card className="flex-col w-full gap-4 sm:gap-6 p-4 sm:p-6 flex-1 bg-[#101010] border-0 rounded-none transition-colors duration-300 group-hover:bg-[#1c1c1c]">
+                  <CardContent className="flex flex-col gap-4 sm:gap-6 p-0">
                     <div
                       className={`flex-shrink-0 w-[47px] h-[47px] ${card.iconBg} rounded-lg flex items-center justify-center transition-colors duration-300 group-hover:bg-[#ccff00]`}
                     >
                       <Icon className="w-5 h-5 text-white transition-colors duration-300 group-hover:text-black" />
                     </div>
 
-                    <div className="flex flex-col items-start gap-5 w-full">
+                    <div className="flex flex-col items-start gap-4 sm:gap-5 w-full">
                       <div className="flex flex-col items-start gap-2 w-full">
-                        <h3 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-white text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)] transition-colors duration-300 group-hover:text-[#ccff00]">
+                        <h3 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-white text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)] transition-colors duration-300 group-hover:text-[#ccff00]">
                           {card.title}
                         </h3>
 
-                        <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+                        <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
                           {card.description}
                         </p>
                       </div>
 
                       <div className="inline-flex items-center justify-center gap-2 cursor-pointer">
-                        <span className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#cecfd2] text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] whitespace-nowrap [font-style:var(--text-md-semibold-font-style)] transition-colors duration-300 group-hover:text-[#ccff00]">
+                        <span className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#cecfd2] text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] whitespace-nowrap [font-style:var(--text-md-semibold-font-style)] transition-colors duration-300 group-hover:text-[#ccff00]">
                           See more
                         </span>
                         <ArrowRightIcon className="w-5 h-5 text-[#cecfd2] transition-colors duration-300 group-hover:text-[#ccff00]" />
@@ -146,32 +146,32 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
 
       <SectionSeparator />
 
-      <div className="flex flex-col items-center justify-center gap-20 px-0 py-24 w-full relative z-[1]">
-        <div className="flex flex-wrap max-w-screen-xl items-start justify-center gap-[130px] px-8 py-0 w-full">
-          <div className="flex flex-col max-w-[720px] w-[480px] items-start gap-12">
+      <div className="flex flex-col items-center justify-center gap-12 sm:gap-16 md:gap-20 px-0 py-12 sm:py-16 md:py-24 w-full relative z-[1]">
+        <div className="flex flex-col lg:flex-row max-w-screen-xl items-start justify-center gap-12 sm:gap-16 lg:gap-[130px] px-4 sm:px-8 py-0 w-full">
+          <div className="flex flex-col max-w-full lg:max-w-[720px] lg:w-[480px] items-start gap-8 sm:gap-12 w-full">
             <div className="flex flex-col max-w-screen-md gap-3 items-start w-full">
-              <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#ccff00] text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
+              <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#ccff00] text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
                 Technology Expertise
               </div>
 
-              <h3 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
+              <h3 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
                 Advanced AI Capabilities
               </h3>
             </div>
 
-            <div className="flex flex-col max-w-[560px] items-start gap-6 w-full">
+            <div className="flex flex-col max-w-full lg:max-w-[560px] items-start gap-4 sm:gap-6 w-full">
               {advancedCapabilities.map((capability, index) => (
                 <div
                   key={index}
-                  className="min-w-80 max-w-[560px] gap-4 w-full flex items-start"
+                  className="min-w-0 max-w-full lg:max-w-[560px] gap-4 w-full flex items-start"
                 >
-                  <div className="flex flex-col items-start gap-5 flex-1">
+                  <div className="flex flex-col items-start gap-4 sm:gap-5 flex-1">
                     <div className="flex flex-col items-start gap-2 pt-2.5 pb-0 px-0 w-full">
-                      <h4 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-[#f5f5f6] text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
+                      <h4 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-[#f5f5f6] text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
                         {capability.title}
                       </h4>
 
-                      <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+                      <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
                         {capability.description}
                       </p>
                     </div>
@@ -181,30 +181,30 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
             </div>
           </div>
 
-          <div className="flex flex-col max-w-[720px] w-[480px] items-start gap-12">
+          <div className="flex flex-col max-w-full lg:max-w-[720px] lg:w-[480px] items-start gap-8 sm:gap-12 w-full">
             <div className="flex flex-col max-w-screen-md gap-3 items-start w-full">
-              <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#ccff00] text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
+              <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#ccff00] text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
                 Technology Expertise
               </div>
 
-              <h3 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
+              <h3 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
                 Integration Expertise
               </h3>
             </div>
 
-            <div className="flex flex-col max-w-[560px] items-start gap-6 w-full">
+            <div className="flex flex-col max-w-full lg:max-w-[560px] items-start gap-4 sm:gap-6 w-full">
               {integrationExpertise.map((expertise, index) => (
                 <div
                   key={index}
-                  className="min-w-80 max-w-[560px] gap-4 w-full flex items-start"
+                  className="min-w-0 max-w-full lg:max-w-[560px] gap-4 w-full flex items-start"
                 >
-                  <div className="flex flex-col items-start gap-5 flex-1">
+                  <div className="flex flex-col items-start gap-4 sm:gap-5 flex-1">
                     <div className="flex flex-col items-start gap-2 pt-2.5 pb-0 px-0 w-full">
-                      <h4 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-[#f5f5f6] text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
+                      <h4 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-[#f5f5f6] text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
                         {expertise.title}
                       </h4>
 
-                      <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+                      <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
                         {expertise.description}
                       </p>
                     </div>

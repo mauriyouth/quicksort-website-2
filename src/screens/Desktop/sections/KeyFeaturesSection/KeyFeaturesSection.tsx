@@ -1,4 +1,6 @@
 import { Card, CardContent } from "../../../../components/ui/card";
+import { SectionGridOverlay } from "../../../../components/SectionGridOverlay";
+import { SectionSeparator } from "../../../../components/SectionSeparator";
 
 const features = [
   {
@@ -25,8 +27,9 @@ const features = [
 
 export const KeyFeaturesSection = (): JSX.Element => {
   return (
-    <section className="flex flex-col items-center gap-16 px-0 py-24 w-full bg-[#141414]">
-      <div className="flex max-w-screen-xl items-start gap-16 px-8 py-0 w-full">
+    <section className="relative flex flex-col items-center gap-16 px-0 py-24 w-full bg-[#141414]">
+      <SectionGridOverlay showCenterLine={false} />
+      <div className="flex max-w-screen-xl items-start gap-16 px-8 py-0 w-full relative z-[1]">
         <div className="max-w-[360px] gap-5 flex-1 grow flex flex-col items-start">
           <div className="flex flex-col items-start gap-5 w-full">
             <div className="relative w-14 h-[52px]">
@@ -67,6 +70,7 @@ export const KeyFeaturesSection = (): JSX.Element => {
           ))}
         </div>
       </div>
+      <SectionSeparator />
     </section>
   );
 };

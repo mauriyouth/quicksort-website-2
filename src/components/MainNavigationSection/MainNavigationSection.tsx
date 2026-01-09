@@ -43,7 +43,7 @@ const servicesData = [
 
 export const MainNavigationSection = (): JSX.Element => {
     return (
-        <header className="sticky top-0 z-50 w-full h-20 flex flex-col items-center justify-center bg-[#141414] border-b border-[#1f242f]">
+        <header className="sticky top-0 z-50 w-full h-20 flex flex-col items-center justify-center bg-[#141414] border-b border-white/40">
             <div className="items-center justify-between flex max-w-screen-xl px-8 py-0 relative w-full flex-[0_0_auto]">
                 <div className="inline-flex items-center gap-10 relative flex-[0_0_auto]">
                     <Link to="/" className="relative w-[138.22px] h-7">

@@ -1,6 +1,8 @@
 import { ArrowRightIcon, TrendingUpIcon, ServerIcon, DatabaseIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "../../../../components/ui/card";
+import { SectionGridOverlay } from "../../../../components/SectionGridOverlay";
+import { SectionSeparator } from "../../../../components/SectionSeparator";
 
 const serviceCards = [
   {
@@ -80,8 +82,9 @@ const integrationExpertise = [
 
 export const DetailedCapabilitiesSection = (): JSX.Element => {
   return (
-    <section className="flex flex-col items-center gap-16 px-0 py-24 w-full bg-[#141414]">
-      <div className="flex flex-col max-w-screen-xl items-start gap-8 px-8 py-0 w-full">
+    <section className="relative flex flex-col items-center gap-16 px-0 py-24 w-full bg-[#141414]">
+      <SectionGridOverlay showCenterLine={false} />
+      <div className="flex flex-col max-w-screen-xl items-start gap-8 px-8 py-0 w-full relative z-[1]">
         <div className="flex flex-col items-start gap-8 w-full">
           <div className="flex flex-col items-start gap-5 w-full">
             <div className="flex flex-col items-start gap-3 w-full">
@@ -97,7 +100,7 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
         </div>
       </div>
 
-      <div className="flex flex-col max-w-screen-xl items-start gap-16 px-8 py-0 w-full">
+      <div className="flex flex-col max-w-screen-xl items-start gap-16 px-8 py-0 w-full relative z-[1]">
         <div className="flex flex-wrap items-start gap-6 w-full">
           {serviceCards.map((card, index) => {
             const Icon = card.icon;
@@ -141,7 +144,9 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
         </div>
       </div>
 
-      <div className="flex flex-col items-center justify-center gap-20 px-0 py-24 w-full bg-[#141414]">
+      <SectionSeparator />
+
+      <div className="flex flex-col items-center justify-center gap-20 px-0 py-24 w-full relative z-[1]">
         <div className="flex flex-wrap max-w-screen-xl items-start justify-center gap-[130px] px-8 py-0 w-full">
           <div className="flex flex-col max-w-[720px] w-[480px] items-start gap-12">
             <div className="flex flex-col max-w-screen-md gap-3 items-start w-full">
@@ -210,6 +215,7 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
           </div>
         </div>
       </div>
+      <SectionSeparator />
     </section>
   );
 };

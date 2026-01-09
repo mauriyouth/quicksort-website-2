@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "../../../../components/ui/button";
+import { SectionGridOverlay } from "../../../../components/SectionGridOverlay";
+import { SectionSeparator } from "../../../../components/SectionSeparator";
 
 const navigationLinks = [
   { label: "AI for Business", href: "/ai-for-business" },
@@ -30,7 +32,8 @@ const decorativeRectangles = [
 export const FooterSection = (): JSX.Element => {
   return (
     <footer className="flex flex-col items-center gap-16 pt-16 pb-12 px-0 relative w-full bg-[#141414]">
-      <div className="flex max-w-screen-xl items-center justify-center gap-8 px-8 py-0 relative w-full">
+      <SectionGridOverlay showCenterLine={false} />
+      <div className="flex max-w-screen-xl items-center justify-center gap-8 px-8 py-0 relative w-full z-[1]">
         <div className="flex flex-col items-start justify-center gap-12 relative flex-1">
           <div className="relative w-[138.22px] h-7">
             <div className="absolute top-0 left-[34px] [font-family:'Inter',Helvetica] font-medium text-neutral-50 text-[22.9px] tracking-[-0.69px] leading-[normal]">
@@ -73,8 +76,9 @@ export const FooterSection = (): JSX.Element => {
         </div>
       </div>
 
-      <div className="flex flex-col max-w-screen-xl items-center justify-center gap-8 px-8 py-0 relative w-full">
-        <div className="flex flex-wrap items-center justify-between gap-[24px_32px] pt-8 pb-0 px-0 relative self-stretch w-full border-t [border-top-style:solid] border-[#1f242f]">
+      <div className="flex flex-col max-w-screen-xl items-center justify-center gap-8 px-8 py-0 relative w-full z-[1]">
+        <SectionSeparator />
+        <div className="flex flex-wrap items-center justify-between gap-[24px_32px] pt-8 pb-0 px-0 relative self-stretch w-full">
           <p className="relative w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)]">
             © 2026 Copyright Quicksort
           </p>

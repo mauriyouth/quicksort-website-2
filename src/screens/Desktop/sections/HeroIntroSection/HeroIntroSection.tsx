@@ -1,4 +1,6 @@
 import { Button } from "../../../../components/ui/button";
+import { SectionGridOverlay } from "../../../../components/SectionGridOverlay";
+import { SectionSeparator } from "../../../../components/SectionSeparator";
 
 export const HeroIntroSection = (): JSX.Element => {
   return (
@@ -34,6 +36,9 @@ export const HeroIntroSection = (): JSX.Element => {
           />
         </div>
       </div>
+      <SectionGridOverlay showCenterLine={false} />
+
+      <SectionSeparator />
 
       <img
         className="absolute top-0 left-[calc(50.00%_-_720px)] w-[1440px] h-[837px] z-0"

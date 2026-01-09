@@ -1,6 +1,8 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { Card, CardContent } from "../../../../components/ui/card";
+import { SectionGridOverlay } from "../../../../components/SectionGridOverlay";
+import { SectionSeparator } from "../../../../components/SectionSeparator";
 
 const teamMembers = [
   {
@@ -68,8 +70,9 @@ const teamMembers = [
 
 export const TeamShowcaseSection = (): JSX.Element => {
   return (
-    <section className="flex flex-col items-center gap-16 w-full bg-[#141414]">
-      <div className="flex flex-col items-center gap-16 px-0 py-24 w-full bg-[#141414]">
+    <section className="relative flex flex-col items-center gap-16 w-full bg-[#141414]">
+      <SectionGridOverlay showCenterLine={false} />
+      <div className="flex flex-col items-center gap-16 px-0 py-24 w-full relative z-[1]">
         <div className="flex flex-col max-w-screen-xl items-start gap-8 px-8 py-0 w-full">
           <div className="flex flex-wrap items-start justify-between gap-[32px_0px] w-full">
             <div className="min-w-[480px] max-w-screen-md gap-5 flex-1 grow flex flex-col items-start">
@@ -162,6 +165,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
           </div>
         </div>
       </div>
+      <SectionSeparator />
     </section>
   );
 };

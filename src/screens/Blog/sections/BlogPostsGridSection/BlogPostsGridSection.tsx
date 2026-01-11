@@ -14,7 +14,11 @@ const blogPosts = [
   {
     image: "url(..//image.png)",
     category: "Software Development",
-    title: "The Age Of Human + AI Collaboration",
+    title: (
+      <>
+        The Age Of Human <span className="px-1">+</span> AI Collaboration
+      </>
+    ),
     description:
       "The future of work is not human or AI — it's collaborating by design.",
   },

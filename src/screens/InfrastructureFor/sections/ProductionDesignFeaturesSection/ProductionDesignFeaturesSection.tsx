@@ -1,11 +1,19 @@
 const features = [
   {
     title: "GPU/TPU orchestration",
-    description: "With Kubernetes + Ray + vLLM/TensorRT-LLM",
+    description: (
+      <>
+        With Kubernetes <span className="px-1">+</span> Ray <span className="px-1">+</span> vLLM/TensorRT-LLM
+      </>
+    ),
   },
   {
     title: "Monitoring, tracing, and evaluation",
-    description: "Via Langfuse + Prometheus + Grafana",
+    description: (
+      <>
+        Via Langfuse <span className="px-1">+</span> Prometheus <span className="px-1">+</span> Grafana
+      </>
+    ),
   },
   {
     title: "Model serving pipelines",

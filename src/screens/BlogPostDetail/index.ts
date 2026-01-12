@@ -1,0 +1,1 @@
+export { BlogPostDetail } from "./BlogPostDetail";

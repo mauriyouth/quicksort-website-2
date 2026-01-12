@@ -1,6 +1,8 @@
 import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "../../../../components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
+import { getAllBlogPosts } from "../../../../lib/blogPosts";
 
 const categories = [
   { id: "all", label: "View all" },
@@ -10,54 +12,7 @@ const categories = [
   { id: "infrastructure", label: "Infrastructure" },
 ];
 
-const blogPosts = [
-  {
-    image: "url(..//image.png)",
-    category: "Software Development",
-    title: (
-      <>
-        The Age Of Human <span className="px-1">+</span> AI Collaboration
-      </>
-    ),
-    description:
-      "The future of work is not human or AI — it's collaborating by design.",
-  },
-  {
-    image: "url(..//image-1.png)",
-    category: "Software Development",
-    title: "Migrating to Linear 101",
-    description:
-      "Linear helps streamline software projects, sprints, tasks, and bug tracking. Here's how to get started.",
-  },
-  {
-    image: "url(..//image-2.png)",
-    category: "Data",
-    title: "Building your API stack",
-    description:
-      "The rise of RESTful APIs has been met by a rise in tools for creating, testing, and managing them.",
-  },
-  {
-    image: "url(..//image-3.png)",
-    category: "Design",
-    title: "Bill Walsh leadership lessons",
-    description:
-      "Like to know the secrets of transforming a 2-14 team into a 3x Super Bowl winning Dynasty?",
-  },
-  {
-    image: "url(..//image-4.png)",
-    category: "Infrastructure",
-    title: "PM mental models",
-    description:
-      "Mental models are simple expressions of complex processes or relationships.",
-  },
-  {
-    image: "url(..//image-5.png)",
-    category: "Data",
-    title: "What is wireframing?",
-    description:
-      "Introduction to Wireframing and its Principles. Learn from the best in the industry.",
-  },
-];
+const blogPosts = getAllBlogPosts();
 
 const pageNumbers = [
   { number: "1", isActive: true },
@@ -93,39 +48,46 @@ export const BlogPostsGridSection = (): JSX.Element => {
 
         <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-3 items-start gap-6 sm:gap-8 md:gap-[48px_32px] w-full">
           {blogPosts.map((post, index) => (
-            <article
-              key={index}
-              className="flex flex-col min-w-0 w-full sm:min-w-[280px] items-start gap-4 sm:gap-5 flex-1"
+            <Link
+              key={post.slug}
+              to={`/blog/${post.slug}`}
+              className="flex flex-col min-w-0 w-full sm:min-w-[280px] items-start gap-4 sm:gap-5 flex-1 hover:opacity-90 transition-opacity"
             >
-              <div
-                className="relative self-stretch w-full h-48 sm:h-56 md:h-60 rounded-xl sm:rounded-2xl"
-                style={{ background: `${post.image} 50% 50% / cover` }}
-              />
+              <article className="flex flex-col min-w-0 w-full items-start gap-4 sm:gap-5 flex-1">
+                <div
+                  className="relative self-stretch w-full h-48 sm:h-56 md:h-60 rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#1f242f] to-[#141414]"
+                  style={
+                    post.image
+                      ? { background: `${post.image} 50% 50% / cover` }
+                      : undefined
+                  }
+                />
 
-              <div className="flex flex-col items-start gap-4 sm:gap-6 w-full">
-                <div className="flex flex-col items-start gap-2 w-full">
-                  <div className="text-[#cecfd2] text-xs sm:text-sm md:text-[length:var(--text-sm-semibold-font-size)] leading-[var(--text-sm-semibold-line-height)] self-stretch font-text-sm-semibold font-[number:var(--text-sm-semibold-font-weight)] tracking-[var(--text-sm-semibold-letter-spacing)] [font-style:var(--text-sm-semibold-font-style)]">
-                    {post.category}
-                  </div>
-
+                <div className="flex flex-col items-start gap-4 sm:gap-6 w-full">
                   <div className="flex flex-col items-start gap-2 w-full">
-                    <div className="gap-3 sm:gap-4 flex items-start w-full">
-                      <h3 className="flex-1 font-display-xs-semibold font-[number:var(--display-xs-semibold-font-weight)] text-[#f5f5f6] text-lg sm:text-xl md:text-[length:var(--display-xs-semibold-font-size)] tracking-[var(--display-xs-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-xs-semibold-line-height)] [font-style:var(--display-xs-semibold-font-style)]">
-                        {post.title}
-                      </h3>
-
-                      <div className="inline-flex flex-col items-start pt-1 pb-0 px-0 shrink-0">
-                        <ArrowUpRightIcon className="w-5 h-5 sm:w-6 sm:h-6 text-[#f5f5f6]" />
-                      </div>
+                    <div className="text-[#cecfd2] text-xs sm:text-sm md:text-[length:var(--text-sm-semibold-font-size)] leading-[var(--text-sm-semibold-line-height)] self-stretch font-text-sm-semibold font-[number:var(--text-sm-semibold-font-weight)] tracking-[var(--text-sm-semibold-letter-spacing)] [font-style:var(--text-sm-semibold-font-style)]">
+                      {post.category}
                     </div>
 
-                    <p className="self-stretch font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
-                      {post.description}
-                    </p>
+                    <div className="flex flex-col items-start gap-2 w-full">
+                      <div className="gap-3 sm:gap-4 flex items-start w-full">
+                        <h3 className="flex-1 font-display-xs-semibold font-[number:var(--display-xs-semibold-font-weight)] text-[#f5f5f6] text-lg sm:text-xl md:text-[length:var(--display-xs-semibold-font-size)] tracking-[var(--display-xs-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-xs-semibold-line-height)] [font-style:var(--display-xs-semibold-font-style)]">
+                          {post.title}
+                        </h3>
+
+                        <div className="inline-flex flex-col items-start pt-1 pb-0 px-0 shrink-0">
+                          <ArrowUpRightIcon className="w-5 h-5 sm:w-6 sm:h-6 text-[#f5f5f6]" />
+                        </div>
+                      </div>
+
+                      <p className="self-stretch font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+                        {post.description}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </article>
+              </article>
+            </Link>
           ))}
         </div>
 

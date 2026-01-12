@@ -10,8 +10,10 @@ export const SectionSeparator = () => {
                     viewBox="0 0 15 15"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
+                    className="block"
+                    style={{ shapeRendering: 'crispEdges' }}
                 >
-                    <path d="M7.5 0V15M0 7.5H15" stroke="currentColor" />
+                    <path d="M7.5 0.5V14.5M0.5 7.5H14.5" stroke="currentColor" strokeWidth="1" />
                 </svg>
             </div>
             <div className="absolute left-1/2 -translate-x-1/2 w-screen top-1/2 -translate-y-1/2 h-[1px] bg-white/40" />
@@ -22,8 +24,10 @@ export const SectionSeparator = () => {
                     viewBox="0 0 15 15"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
+                    className="block"
+                    style={{ shapeRendering: 'crispEdges' }}
                 >
-                    <path d="M7.5 0V15M0 7.5H15" stroke="currentColor" />
+                    <path d="M7.5 0.5V14.5M0.5 7.5H14.5" stroke="currentColor" strokeWidth="1" />
                 </svg>
             </div>
         </div>

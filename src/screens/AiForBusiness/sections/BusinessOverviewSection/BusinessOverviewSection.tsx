@@ -1,3 +1,5 @@
+import { GameOfLifeCanvas } from '../../../../components/GameOfLifeCanvas';
+
 export const BusinessOverviewSection = (): JSX.Element => {
   const features = [
     {
@@ -52,10 +54,11 @@ export const BusinessOverviewSection = (): JSX.Element => {
           </div>
 
           <div className="flex items-center justify-center w-full lg:w-auto">
-            <img
-              className="w-full max-w-[300px] sm:max-w-[380px] lg:w-[430.76px] h-auto lg:h-[420.75px]"
-              alt="Topology"
-              src="/topology-1.png"
+            <GameOfLifeCanvas
+              cols={26}
+              rows={26}
+              cellSize={16}
+              className="w-full max-w-[300px] sm:max-w-[380px] lg:w-[416px] h-auto lg:h-[416px]"
             />
           </div>
         </div>

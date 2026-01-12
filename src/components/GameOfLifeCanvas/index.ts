@@ -1,0 +1,1 @@
+export { GameOfLifeCanvas } from './GameOfLifeCanvas';

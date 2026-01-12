@@ -1,4 +1,4 @@
-import { GameOfLifeCanvas } from '../../../../components/GameOfLifeCanvas';
+import AiForBusinessIcon from '../../../../components/AiForBusinessIcon';
 
 export const BusinessOverviewSection = (): JSX.Element => {
   const features = [
@@ -54,7 +54,7 @@ export const BusinessOverviewSection = (): JSX.Element => {
           </div>
 
           <div className="flex items-center justify-center w-full lg:w-[430px] lg:h-[430px]">
-            <GameOfLifeCanvas />
+            <AiForBusinessIcon />
           </div>
         </div>
       </div>

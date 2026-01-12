@@ -1,143 +1,141 @@
-import { useEffect, useRef, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 
 interface GameOfLifeCanvasProps {
-    cols?: number;
-    rows?: number;
-    cellSize?: number;
     className?: string;
+    gridSize?: number;
 }
 
-export const GameOfLifeCanvas = ({
-    cols = 26,
-    rows = 26,
-    cellSize = 16,
+const operations = [
+    [0, 1], [0, -1], [1, -1], [-1, 1],
+    [1, 1], [-1, -1], [1, 0], [-1, 0]
+];
+
+const GameOfLifeCanvas: React.FC<GameOfLifeCanvasProps> = ({
     className = '',
-}: GameOfLifeCanvasProps): JSX.Element => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const gridRef = useRef<boolean[][]>([]);
-    const animationRef = useRef<number | null>(null);
-    const lastUpdateRef = useRef<number>(0);
+    gridSize = 35
+}) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [grid, setGrid] = useState(() => generateEmptyGrid(gridSize));
+    const speedRef = useRef(500);
+    const runningRef = useRef(true);
 
-    // Calculate exact canvas dimensions based on grid
-    const width = cols * cellSize;
-    const height = rows * cellSize;
+    function generateEmptyGrid(size: number) {
+        return Array.from({ length: size }, () => Array(size).fill(0));
+    }
 
-    // Initialize grid with random values
-    const initializeGrid = useCallback(() => {
-        const grid: boolean[][] = [];
-        for (let i = 0; i < rows; i++) {
-            grid[i] = [];
-            for (let j = 0; j < cols; j++) {
-                // 30% chance of being alive
-                grid[i][j] = Math.random() < 0.3;
+    const seedGrid = useCallback(() => {
+        const newGrid = generateEmptyGrid(gridSize);
+        for (let i = 0; i < gridSize; i++) {
+            for (let j = 0; j < gridSize; j++) {
+                if (Math.random() > 0.85) newGrid[i][j] = 1;
             }
         }
-        return grid;
-    }, [rows, cols]);
-
-    // Count live neighbors for a cell
-    const countNeighbors = useCallback((grid: boolean[][], row: number, col: number) => {
-        let count = 0;
-        for (let i = -1; i <= 1; i++) {
-            for (let j = -1; j <= 1; j++) {
-                if (i === 0 && j === 0) continue;
-                const newRow = (row + i + rows) % rows;
-                const newCol = (col + j + cols) % cols;
-                if (grid[newRow][newCol]) count++;
-            }
-        }
-        return count;
-    }, [rows, cols]);
-
-    // Compute next generation
-    const nextGeneration = useCallback((grid: boolean[][]) => {
-        const newGrid: boolean[][] = [];
-        for (let i = 0; i < rows; i++) {
-            newGrid[i] = [];
-            for (let j = 0; j < cols; j++) {
-                const neighbors = countNeighbors(grid, i, j);
-                if (grid[i][j]) {
-                    // Alive cell survives with 2 or 3 neighbors
-                    newGrid[i][j] = neighbors === 2 || neighbors === 3;
-                } else {
-                    // Dead cell becomes alive with exactly 3 neighbors
-                    newGrid[i][j] = neighbors === 3;
-                }
-            }
-        }
-        return newGrid;
-    }, [rows, countNeighbors]);
-
-    // Draw the grid on canvas
-    const drawGrid = useCallback((ctx: CanvasRenderingContext2D, grid: boolean[][]) => {
-        // Clear with transparent background
-        ctx.clearRect(0, 0, width, height);
-
-        for (let i = 0; i < rows; i++) {
-            for (let j = 0; j < cols; j++) {
-                const x = j * cellSize;
-                const y = i * cellSize;
-
-                if (grid[i][j]) {
-                    // Alive cell - green
-                    ctx.fillStyle = '#ccff00';
-                } else {
-                    // Dead cell - dark
-                    ctx.fillStyle = '#1a1a1a';
-                }
-
-                // Fill cells edge-to-edge with 1px gap
-                ctx.fillRect(x, y, cellSize - 1, cellSize - 1);
-            }
-        }
-    }, [width, height, rows, cols, cellSize]);
-
-    // Animation loop
-    const animate = useCallback((timestamp: number) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // Update every 200ms
-        if (timestamp - lastUpdateRef.current > 200) {
-            gridRef.current = nextGeneration(gridRef.current);
-            drawGrid(ctx, gridRef.current);
-            lastUpdateRef.current = timestamp;
-        }
-
-        animationRef.current = requestAnimationFrame(animate);
-    }, [nextGeneration, drawGrid]);
+        setGrid(newGrid);
+    }, [gridSize]);
 
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        seedGrid();
+    }, [seedGrid]);
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+    const runSimulation = useCallback(() => {
+        if (!runningRef.current) return;
 
-        // Initialize and draw
-        gridRef.current = initializeGrid();
-        drawGrid(ctx, gridRef.current);
+        setGrid((g) => {
+            let activeCells = 0;
+            const next = g.map((row, i) => {
+                return row.map((col, j) => {
+                    let neighbors = 0;
+                    operations.forEach(([x, y]) => {
+                        const newI = (i + x + gridSize) % gridSize;
+                        const newJ = (j + y + gridSize) % gridSize;
+                        neighbors += g[newI][newJ];
+                    });
 
-        // Start animation
-        animationRef.current = requestAnimationFrame(animate);
+                    if (neighbors < 2 || neighbors > 3) {
+                        return 0;
+                    } else if (g[i][j] === 0 && neighbors === 3) {
+                        activeCells++;
+                        return 1;
+                    }
+                    if (g[i][j] === 1) activeCells++;
+                    return g[i][j];
+                });
+            });
 
-        return () => {
-            if (animationRef.current) {
-                cancelAnimationFrame(animationRef.current);
+            if (activeCells < 10) {
+                setTimeout(() => seedGrid(), 1000);
+                return g;
             }
+
+            return next;
+        });
+
+        setTimeout(runSimulation, speedRef.current);
+    }, [seedGrid, gridSize]);
+
+    useEffect(() => {
+        runningRef.current = true;
+        const timeout = setTimeout(runSimulation, speedRef.current);
+        return () => {
+            runningRef.current = false;
+            clearTimeout(timeout);
         };
-    }, [initializeGrid, drawGrid, animate]);
+    }, [runSimulation]);
+
+    const interpolate = (ratio: number, start: number[], end: number[]) => {
+        const r = Math.round(start[0] + (end[0] - start[0]) * ratio);
+        const g = Math.round(start[1] + (end[1] - start[1]) * ratio);
+        const b = Math.round(start[2] + (end[2] - start[2]) * ratio);
+        return `rgb(${r}, ${g}, ${b})`;
+    };
+
+    const getCellColor = (i: number, j: number, isActive: boolean) => {
+        const maxIndexSum = (gridSize - 1) * 2;
+        const ratio = (i + j) / maxIndexSum;
+
+        if (isActive) {
+            return interpolate(ratio, [204, 255, 0], [102, 128, 0]);
+        } else {
+            return interpolate(ratio, [51, 51, 51], [20, 20, 20]);
+        }
+    };
 
     return (
-        <canvas
-            ref={canvasRef}
-            width={width}
-            height={height}
-            className={className}
-            style={{ imageRendering: 'pixelated' }}
-        />
+        <div
+            ref={containerRef}
+            className={`w-full max-w-[430px] ${className}`}
+            style={{
+                width: '100%',
+                maxWidth: '430px',
+                height: 'auto',
+            }}
+        >
+            <div
+                className="bg-[#141414] border border-[#1a1a1a] rounded overflow-hidden shadow-2xl"
+                style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${gridSize}, 1fr)`,
+                    gap: '1px',
+                    width: '100%',
+                    aspectRatio: '1 / 1',
+                }}
+            >
+                {grid.map((rows, i) =>
+                    rows.map((col, j) => (
+                        <div
+                            key={`${i}-${j}`}
+                            style={{
+                                aspectRatio: '1 / 1',
+                                borderRadius: '1px',
+                                backgroundColor: getCellColor(i, j, grid[i][j] === 1),
+                                transition: 'background-color 0.6s ease'
+                            }}
+                        />
+                    ))
+                )}
+            </div>
+        </div>
     );
 };
+
+export default GameOfLifeCanvas;

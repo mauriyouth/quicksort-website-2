@@ -53,13 +53,8 @@ export const BusinessOverviewSection = (): JSX.Element => {
             </div>
           </div>
 
-          <div className="flex items-center justify-center w-full lg:w-auto">
-            <GameOfLifeCanvas
-              cols={26}
-              rows={26}
-              cellSize={16}
-              className="w-full max-w-[300px] sm:max-w-[380px] lg:w-[416px] h-auto lg:h-[416px]"
-            />
+          <div className="flex items-center justify-center w-full lg:w-[430px] lg:h-[430px]">
+            <GameOfLifeCanvas />
           </div>
         </div>
       </div>

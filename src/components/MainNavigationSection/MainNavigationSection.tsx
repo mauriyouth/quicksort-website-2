@@ -11,11 +11,25 @@ import {
 } from "../ui/navigation-menu";
 import {
     DatabaseIcon,
-    ServerIcon,
     TrendingUpIcon,
     MenuIcon,
     XIcon,
 } from "lucide-react";
+
+// Custom Infrastructure Icon component using the sync SVG
+const InfrastructureIcon = ({ className }: { className?: string }) => (
+    <svg width="27" height="27" viewBox="0 0 27 27" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+        <g clipPath="url(#clip0_infra)">
+            <path d="M16.875 3.37444H21.6967C22.761 3.37444 23.625 4.23844 23.625 5.30269V8.99943M23.6238 19.1244C23.6238 20.3675 21.861 21.3744 19.6863 21.3744C17.5117 21.3744 15.75 20.3664 15.75 19.1244M15.75 15.7494C15.75 16.9926 17.5128 17.9994 19.6875 17.9994C21.8621 17.9994 23.625 16.9926 23.625 15.7494" stroke="currentColor" strokeWidth="1.63211" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M10.1247 23.6244H5.303C4.23876 23.6244 3.37476 22.7604 3.37476 21.6962V17.9994M15.7497 15.7494C15.7509 14.5074 17.5137 13.4994 19.6872 13.4994C21.8607 13.4994 23.6247 14.5063 23.6236 15.7494V22.4994C23.6236 23.7425 21.8607 24.7494 19.6861 24.7494C17.5115 24.7494 15.7497 23.7414 15.7497 22.4994V15.7494ZM12.0001 5.02819H8.83438C8.58575 5.02819 8.354 4.90556 8.2145 4.69969L7.535 3.70181C7.3955 3.49706 7.16375 3.37444 6.91513 3.37444H4.87438C4.04638 3.37444 3.37476 4.04606 3.37476 4.87406V10.8737C3.37476 11.7028 4.04638 12.3744 4.87438 12.3744H11.999C12.8281 12.3744 13.4997 11.7028 13.4997 10.8748V6.52781C13.4997 5.69981 12.8281 5.02819 12.0001 5.02819Z" stroke="currentColor" strokeWidth="1.63211" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+        <defs>
+            <clipPath id="clip0_infra">
+                <rect width="26.1137" height="26.1137" fill="white" transform="scale(1.03394)" />
+            </clipPath>
+        </defs>
+    </svg>
+);
 
 const navigationItems = [
     { label: "Home", href: "/" },
@@ -33,8 +47,9 @@ const servicesData = [
     {
         title: "Infrastructure for AI",
         description: "Robust infrastructure designed for AI workloads and scalability",
-        icon: ServerIcon,
+        icon: InfrastructureIcon,
         href: "/infrastructure-for-ai",
+        iconColor: "#3AE165",
     },
     {
         title: "Data for AI",
@@ -103,8 +118,8 @@ export const MainNavigationSection = (): JSX.Element => {
                                                         to={service.href}
                                                         className="group flex items-start gap-3 p-3 rounded-lg hover:bg-[#2a2a2a] transition-colors"
                                                     >
-                                                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center group-hover:bg-[#ccff00] transition-colors">
-                                                            <Icon className="w-5 h-5 text-[#94969c] group-hover:text-black transition-colors" />
+                                                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center transition-colors ${service.iconColor ? '' : 'group-hover:bg-[#ccff00]'}`} style={service.iconColor ? { backgroundColor: service.iconColor } : undefined}>
+                                                            <Icon className={`w-5 h-5 transition-colors ${service.iconColor ? 'text-black' : 'text-[#94969c] group-hover:text-black'}`} />
                                                         </div>
                                                         <div className="flex flex-col gap-1">
                                                             <span className="text-sm font-semibold text-[#f5f5f6] group-hover:text-[#ccff00] transition-colors">
@@ -171,8 +186,8 @@ export const MainNavigationSection = (): JSX.Element => {
                                         onClick={() => setMobileMenuOpen(false)}
                                         className="group flex items-start gap-3 p-3 rounded-lg hover:bg-[#2a2a2a] transition-colors"
                                     >
-                                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center group-hover:bg-[#ccff00] transition-colors">
-                                            <Icon className="w-5 h-5 text-[#94969c] group-hover:text-black transition-colors" />
+                                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg bg-[#2a2a2a] flex items-center justify-center transition-colors ${service.iconColor ? '' : 'group-hover:bg-[#ccff00]'}`} style={service.iconColor ? { backgroundColor: service.iconColor } : undefined}>
+                                            <Icon className={`w-5 h-5 transition-colors ${service.iconColor ? 'text-black' : 'text-[#94969c] group-hover:text-black'}`} />
                                         </div>
                                         <div className="flex flex-col gap-1">
                                             <span className="text-sm font-semibold text-[#f5f5f6] group-hover:text-[#ccff00] transition-colors">

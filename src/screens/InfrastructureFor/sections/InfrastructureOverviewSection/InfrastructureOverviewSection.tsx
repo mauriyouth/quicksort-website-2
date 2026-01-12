@@ -1,3 +1,5 @@
+import GameOfLifeCanvas from "../../../../components/GameOfLifeCanvas/GameOfLifeCanvas";
+
 export const InfrastructureOverviewSection = (): JSX.Element => {
   const features = [
     {
@@ -51,11 +53,7 @@ export const InfrastructureOverviewSection = (): JSX.Element => {
             </div>
           </div>
 
-          <img
-            className="w-[428px] h-[428px]"
-            alt="Group"
-            src="/infra-grid.svg"
-          />
+          <GameOfLifeCanvas className="w-[428px] h-[428px]" />
         </div>
       </div>
     </section>

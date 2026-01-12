@@ -94,7 +94,7 @@ const GameOfLifeCanvas: React.FC<GameOfLifeCanvasProps> = ({
         const ratio = (i + j) / maxIndexSum;
 
         if (isActive) {
-            return interpolate(ratio, [204, 255, 0], [102, 128, 0]);
+            return interpolate(ratio, [58, 225, 101], [29, 113, 51]);
         } else {
             return interpolate(ratio, [51, 51, 51], [20, 20, 20]);
         }

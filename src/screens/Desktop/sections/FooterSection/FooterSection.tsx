@@ -60,9 +60,11 @@ export const FooterSection = (): JSX.Element => {
           </div>
 
           <div className="inline-flex items-start gap-3 relative">
-            <Button className="gap-2.5 px-5 sm:px-[22px] py-3 sm:py-4 bg-[#ccff00] hover:bg-[#ccff00]/90 rounded-lg border border-solid border-black shadow-shadows-shadow-xs text-black font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-sm sm:text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
-              Get in touch
-            </Button>
+            <a href="mailto:hello@quicksort.fr">
+              <Button className="gap-2.5 px-5 sm:px-[22px] py-3 sm:py-4 bg-[#ccff00] hover:bg-[#ccff00]/90 rounded-lg border border-solid border-black shadow-shadows-shadow-xs text-black font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-sm sm:text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
+                Get in touch
+              </Button>
+            </a>
           </div>
         </div>
 

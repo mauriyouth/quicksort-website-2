@@ -141,9 +141,11 @@ export const MainNavigationSection = (): JSX.Element => {
                 </div>
 
                 <div className="gap-3 inline-flex items-center">
-                    <Button className="hidden sm:inline-flex gap-1.5 px-4 py-2.5 bg-[#ccff00] rounded-lg border border-solid border-black shadow-shadows-shadow-xs font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-black text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:bg-[#b8e600]">
-                        Get in touch
-                    </Button>
+                    <a href="mailto:hello@quicksort.fr">
+                        <Button className="hidden sm:inline-flex gap-1.5 px-4 py-2.5 bg-[#ccff00] rounded-lg border border-solid border-black shadow-shadows-shadow-xs font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-black text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:bg-[#b8e600]">
+                            Get in touch
+                        </Button>
+                    </a>
                     <Button
                         variant="ghost"
                         size="icon"
@@ -201,9 +203,11 @@ export const MainNavigationSection = (): JSX.Element => {
                                 );
                             })}
                         </div>
-                        <Button className="w-full gap-1.5 px-4 py-2.5 bg-[#ccff00] rounded-lg border border-solid border-black shadow-shadows-shadow-xs font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-black text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:bg-[#b8e600] mt-2">
-                            Get in touch
-                        </Button>
+                        <a href="mailto:hello@quicksort.fr" className="w-full">
+                            <Button className="w-full gap-1.5 px-4 py-2.5 bg-[#ccff00] rounded-lg border border-solid border-black shadow-shadows-shadow-xs font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-black text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:bg-[#b8e600] mt-2">
+                                Get in touch
+                            </Button>
+                        </a>
                     </div>
                 </div>
             )}

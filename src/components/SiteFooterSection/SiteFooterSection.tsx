@@ -49,11 +49,13 @@ export const SiteFooterSection = (): JSX.Element => {
                     </div>
 
                     <div className="inline-flex items-start gap-3">
-                        <Button className="gap-2.5 px-[22px] py-4 bg-[#ccff00] hover:bg-[#b8e600] rounded-lg border border-solid border-black shadow-shadows-shadow-xs">
-                            <span className="font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-black text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
-                                Get in touch
-                            </span>
-                        </Button>
+                        <a href="mailto:hello@quicksort.fr">
+                            <Button className="gap-2.5 px-[22px] py-4 bg-[#ccff00] hover:bg-[#b8e600] rounded-lg border border-solid border-black shadow-shadows-shadow-xs">
+                                <span className="font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-black text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
+                                    Get in touch
+                                </span>
+                            </Button>
+                        </a>
                     </div>
                 </div>
             </div>

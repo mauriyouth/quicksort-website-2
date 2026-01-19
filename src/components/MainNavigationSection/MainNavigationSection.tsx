@@ -33,7 +33,6 @@ const InfrastructureIcon = ({ className }: { className?: string }) => (
 
 const navigationItems = [
     { label: "Home", href: "/" },
-    { label: "About", href: "#" },
     { label: "Blog", href: "/blog" },
 ];
 

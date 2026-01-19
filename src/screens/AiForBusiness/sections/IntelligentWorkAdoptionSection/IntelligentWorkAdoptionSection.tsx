@@ -45,7 +45,7 @@ export const IntelligentWorkAdoptionSection = (): JSX.Element => {
           </p>
         </div>
 
-        <div className="flex flex-col sm:grid sm:grid-cols-2 lg:flex lg:flex-wrap items-start justify-center gap-6 sm:gap-8 lg:gap-[32px_64px] flex-1 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 items-start gap-6 sm:gap-8 lg:gap-x-16 lg:gap-y-8 flex-1 w-full">
           {features.map((feature, index) => (
             <div
               key={index}

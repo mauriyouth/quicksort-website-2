@@ -1,1 +1,0 @@
-export { SiteFooterSection } from "./SiteFooterSection";

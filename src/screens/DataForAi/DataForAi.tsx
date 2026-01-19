@@ -1,7 +1,7 @@
 import { DataOverviewSection } from "./sections/DataOverviewSection";
 import { IntelligenceFeaturesSection } from "./sections/IntelligenceFeaturesSection";
 import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooterSection } from "../../components/SiteFooterSection";
+import { SiteFooter } from "../../components/SiteFooter";
 
 export const DataForAi = (): JSX.Element => {
   return (
@@ -12,7 +12,7 @@ export const DataForAi = (): JSX.Element => {
 
       <DataOverviewSection />
 
-      <SiteFooterSection />
+      <SiteFooter />
     </div>
   );
 };

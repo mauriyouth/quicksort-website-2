@@ -1,7 +1,7 @@
 import { BusinessOverviewSection } from "./sections/BusinessOverviewSection";
 import { IntelligentWorkAdoptionSection } from "./sections/IntelligentWorkAdoptionSection";
 import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooterSection } from "../../components/SiteFooterSection";
+import { SiteFooter } from "../../components/SiteFooter";
 
 export const AiForBusiness = (): JSX.Element => {
   return (
@@ -12,7 +12,7 @@ export const AiForBusiness = (): JSX.Element => {
 
       <BusinessOverviewSection />
 
-      <SiteFooterSection />
+      <SiteFooter />
     </div>
   );
 };

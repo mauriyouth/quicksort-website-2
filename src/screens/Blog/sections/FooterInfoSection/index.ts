@@ -1,1 +1,0 @@
-export { FooterInfoSection } from "./FooterInfoSection";

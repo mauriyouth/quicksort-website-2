@@ -1,7 +1,7 @@
 import { CareersIntroSection } from "./sections/CareersIntroSection";
 import { JobListingsSection } from "./sections/JobListingsSection";
 import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooterSection } from "../../components/SiteFooterSection";
+import { SiteFooter } from "../../components/SiteFooter";
 
 export const Carreer = (): JSX.Element => {
   return (
@@ -15,7 +15,7 @@ export const Carreer = (): JSX.Element => {
       <MainNavigationSection />
       <CareersIntroSection />
       <JobListingsSection />
-      <SiteFooterSection />
+      <SiteFooter />
     </main>
   );
 };

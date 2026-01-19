@@ -1,7 +1,7 @@
 import { BlogPostsGridSection } from "./sections/BlogPostsGridSection";
-import { FooterInfoSection } from "./sections/FooterInfoSection";
 import { MainNavigationSection } from "../../components/MainNavigationSection";
 import { PageHeaderSection } from "./sections/PageHeaderSection";
+import { SiteFooter } from "../../components/SiteFooter";
 
 export const Blog = (): JSX.Element => {
   return (
@@ -15,7 +15,7 @@ export const Blog = (): JSX.Element => {
       <MainNavigationSection />
       <PageHeaderSection />
       <BlogPostsGridSection />
-      <FooterInfoSection />
+      <SiteFooter />
     </main>
   );
 };

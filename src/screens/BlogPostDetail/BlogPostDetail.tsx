@@ -2,7 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { ArrowLeftIcon } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { FooterInfoSection } from "../Blog/sections/FooterInfoSection";
+import { SiteFooter } from "../../components/SiteFooter";
 import { getBlogPost } from "../../lib/blogPosts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -30,7 +30,7 @@ export const BlogPostDetail = (): JSX.Element => {
         // Use Vite's glob import to load the markdown file
         const modulePath = `../../content/blog/${slug}.md`;
         const loader = markdownModules[modulePath];
-        
+
         if (loader) {
           const content = await loader();
           setMarkdownContent(content as string);
@@ -58,7 +58,7 @@ export const BlogPostDetail = (): JSX.Element => {
             <Button variant="outline">Back to Blog</Button>
           </Link>
         </div>
-        <FooterInfoSection />
+        <SiteFooter />
       </main>
     );
   }
@@ -183,7 +183,7 @@ export const BlogPostDetail = (): JSX.Element => {
         </div>
       </article>
 
-      <FooterInfoSection />
+      <SiteFooter />
     </main>
   );
 };

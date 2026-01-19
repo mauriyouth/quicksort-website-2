@@ -1,7 +1,7 @@
 import { InfrastructureOverviewSection } from "./sections/InfrastructureOverviewSection";
 import { ProductionDesignFeaturesSection } from "./sections/ProductionDesignFeaturesSection";
 import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooterSection } from "../../components/SiteFooterSection";
+import { SiteFooter } from "../../components/SiteFooter";
 
 export const InfrastructureFor = (): JSX.Element => {
   return (
@@ -9,7 +9,7 @@ export const InfrastructureFor = (): JSX.Element => {
       <MainNavigationSection />
       <ProductionDesignFeaturesSection />
       <InfrastructureOverviewSection />
-      <SiteFooterSection />
+      <SiteFooter />
     </div>
   );
 };

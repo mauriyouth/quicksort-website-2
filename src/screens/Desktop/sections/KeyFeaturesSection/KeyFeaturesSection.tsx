@@ -49,7 +49,7 @@ export const KeyFeaturesSection = (): JSX.Element => {
           </p>
         </div>
 
-        <div className="flex flex-col sm:grid sm:grid-cols-2 lg:flex lg:flex-wrap items-start justify-center gap-6 sm:gap-8 lg:gap-[32px_64px] flex-1 grow w-full">
+        <div className="flex flex-col sm:grid sm:grid-cols-2 items-start justify-center gap-6 sm:gap-8 lg:gap-[32px_64px] flex-1 grow w-full">
           {features.map((feature, index) => (
             <Card
               key={index}

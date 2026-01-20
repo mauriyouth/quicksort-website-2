@@ -9,15 +9,15 @@ const teamMembers = [
   {
     name: "Mohamed Ahmednah",
     role: "Founder, CTO",
-    description: "Former co-founder of Quicksort.",
-    image: "..//-team-member.png",
+    description: "",
+    image: "/mohamed-ahmednah.jpg",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mohamed-ahmednah-19313116/",
   },
   {
     name: "Mirette Moawad",
     role: "AI Researcher",
-    description: "Former co-founder of Quicksort.",
+    description: "",
     image: "..//-team-member-1.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mirettemoawad/",
@@ -25,7 +25,7 @@ const teamMembers = [
   {
     name: "Nageeta Kumari",
     role: "AI Researcher",
-    description: "Former co-founder of Quicksort.",
+    description: "",
     image: "..//-team-member-2.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/nageeta124/",
@@ -33,7 +33,7 @@ const teamMembers = [
   {
     name: "Mohamed Benyahia",
     role: "AI Researcher",
-    description: "Former co-founder of Quicksort.",
+    description: "",
     image: "..//-team-member-3.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mohamed-benyahia-3171b7252/",
@@ -41,7 +41,7 @@ const teamMembers = [
   {
     name: "Amadou Ngam",
     role: "AI Engineer",
-    description: "Former co-founder of Quicksort.",
+    description: "",
     image: "..//-team-member-4.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/amadoungam/",
@@ -49,7 +49,7 @@ const teamMembers = [
   {
     name: "Aicha Dridi",
     role: "AI Product Owner",
-    description: "Former co-founder of Quicksort.",
+    description: "",
     image: "..//-team-member-5.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/aicha-dridi/",
@@ -57,7 +57,7 @@ const teamMembers = [
   {
     name: "Adel Benz",
     role: "AI Product Designer",
-    description: "Former co-founder of Quicksort.",
+    description: "",
     image: "..//-team-member-6.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/adel-benzehda/",
@@ -65,7 +65,7 @@ const teamMembers = [
   {
     name: "Asame Karmouchi",
     role: "AI Engineer",
-    description: "Former co-founder of Quicksort.",
+    description: "",
     image: "..//-team-member-7.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/asmae-karmouchi-522769255/",

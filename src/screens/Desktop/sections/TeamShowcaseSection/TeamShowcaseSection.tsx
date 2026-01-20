@@ -1,9 +1,9 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useRef } from "react";
-import { Button } from "../../../../components/ui/button";
-import { Card, CardContent } from "../../../../components/ui/card";
-import { SectionGridOverlay } from "../../../../components/SectionGridOverlay";
-import { SectionSeparator } from "../../../../components/SectionSeparator";
+import { Button } from "@components/ui/button";
+import { Card, CardContent } from "@components/ui/card";
+import { SectionGridOverlay } from "@components/SectionGridOverlay";
+import { SectionSeparator } from "@components/SectionSeparator";
 
 const teamMembers = [
   {

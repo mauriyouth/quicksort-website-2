@@ -1,7 +1,7 @@
 import { BusinessOverviewSection } from "./sections/BusinessOverviewSection";
 import { IntelligentWorkAdoptionSection } from "./sections/IntelligentWorkAdoptionSection";
-import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooter } from "../../components/SiteFooter";
+import { MainNavigationSection } from "@components/MainNavigationSection";
+import { SiteFooter } from "@components/SiteFooter";
 
 export const AiForBusiness = (): JSX.Element => {
   return (

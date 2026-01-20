@@ -1,4 +1,4 @@
-import AiForBusinessIcon from '../../../../components/AiForBusinessIcon';
+import AiForBusinessIcon from "@components/AiForBusinessIcon";
 
 export const BusinessOverviewSection = (): JSX.Element => {
   const features = [

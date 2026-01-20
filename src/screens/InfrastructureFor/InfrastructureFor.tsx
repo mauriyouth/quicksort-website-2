@@ -1,7 +1,7 @@
 import { InfrastructureOverviewSection } from "./sections/InfrastructureOverviewSection";
 import { ProductionDesignFeaturesSection } from "./sections/ProductionDesignFeaturesSection";
-import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooter } from "../../components/SiteFooter";
+import { MainNavigationSection } from "@components/MainNavigationSection";
+import { SiteFooter } from "@components/SiteFooter";
 
 export const InfrastructureFor = (): JSX.Element => {
   return (

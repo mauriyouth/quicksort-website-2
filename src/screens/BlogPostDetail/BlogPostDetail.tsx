@@ -1,9 +1,9 @@
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeftIcon } from "lucide-react";
-import { Button } from "../../components/ui/button";
-import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooter } from "../../components/SiteFooter";
-import { getBlogPost } from "../../lib/blogPosts";
+import { Button } from "@components/ui/button";
+import { MainNavigationSection } from "@components/MainNavigationSection";
+import { SiteFooter } from "@components/SiteFooter";
+import { getBlogPost } from "@lib/blogPosts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useEffect, useState } from "react";

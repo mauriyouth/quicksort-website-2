@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { Button } from "../ui/button";
+import { Button } from "@components/ui/button";
 import {
     NavigationMenu,
     NavigationMenuItem,
@@ -8,7 +8,7 @@ import {
     NavigationMenuTrigger,
     NavigationMenuContent,
     NavigationMenuLink,
-} from "../ui/navigation-menu";
+} from "@components/ui/navigation-menu";
 import {
     TrendingUpIcon,
     MenuIcon,

@@ -2,8 +2,8 @@ import { DetailedCapabilitiesSection } from "./sections/DetailedCapabilitiesSect
 import { HeroIntroSection } from "./sections/HeroIntroSection";
 import { KeyFeaturesSection } from "./sections/KeyFeaturesSection";
 import { TeamShowcaseSection } from "./sections/TeamShowcaseSection";
-import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooter } from "../../components/SiteFooter";
+import { MainNavigationSection } from "@components/MainNavigationSection";
+import { SiteFooter } from "@components/SiteFooter";
 
 export const Desktop = (): JSX.Element => {
   return (

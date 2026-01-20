@@ -1,6 +1,6 @@
-import { Button } from "../../../../components/ui/button";
-import { SectionGridOverlay } from "../../../../components/SectionGridOverlay";
-import { SectionSeparator } from "../../../../components/SectionSeparator";
+import { Button } from "@components/ui/button";
+import { SectionGridOverlay } from "@components/SectionGridOverlay";
+import { SectionSeparator } from "@components/SectionSeparator";
 
 export const HeroIntroSection = (): JSX.Element => {
   return (

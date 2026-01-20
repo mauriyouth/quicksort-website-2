@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
 import tailwind from "tailwindcss";
 import { defineConfig } from "vite";
@@ -9,6 +10,14 @@ export default defineConfig({
   css: {
     postcss: {
       plugins: [tailwind()],
+    },
+  },
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@components": fileURLToPath(new URL("./src/components", import.meta.url)),
+      "@screens": fileURLToPath(new URL("./src/screens", import.meta.url)),
+      "@lib": fileURLToPath(new URL("./src/lib", import.meta.url)),
     },
   },
 });

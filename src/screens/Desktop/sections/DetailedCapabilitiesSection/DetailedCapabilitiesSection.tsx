@@ -1,8 +1,8 @@
 import { ArrowRightIcon, TrendingUpIcon } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Card, CardContent } from "../../../../components/ui/card";
-import { SectionGridOverlay } from "../../../../components/SectionGridOverlay";
-import { SectionSeparator } from "../../../../components/SectionSeparator";
+import { Card, CardContent } from "@components/ui/card";
+import { SectionGridOverlay } from "@components/SectionGridOverlay";
+import { SectionSeparator } from "@components/SectionSeparator";
 
 // Custom Infrastructure Icon component - inline SVG for hover color support
 const InfrastructureIcon = ({ className }: { className?: string }) => (

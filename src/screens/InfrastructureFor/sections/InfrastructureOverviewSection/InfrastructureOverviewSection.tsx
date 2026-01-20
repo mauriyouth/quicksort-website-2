@@ -1,4 +1,4 @@
-import GameOfLifeCanvas from "../../../../components/GameOfLifeCanvas/GameOfLifeCanvas";
+import GameOfLifeCanvas from "@components/GameOfLifeCanvas/GameOfLifeCanvas";
 
 export const InfrastructureOverviewSection = (): JSX.Element => {
   const features = [

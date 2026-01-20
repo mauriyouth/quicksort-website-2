@@ -1,4 +1,4 @@
-import { DataForAiIcon } from "../../../../components/DataForAiIcon";
+import { DataForAiIcon } from "@components/DataForAiIcon";
 
 export const DataOverviewSection = (): JSX.Element => {
   const features = [

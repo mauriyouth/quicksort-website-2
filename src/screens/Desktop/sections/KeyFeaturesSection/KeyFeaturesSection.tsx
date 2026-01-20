@@ -1,6 +1,6 @@
-import { Card, CardContent } from "../../../../components/ui/card";
-import { SectionGridOverlay } from "../../../../components/SectionGridOverlay";
-import { SectionSeparator } from "../../../../components/SectionSeparator";
+import { Card, CardContent } from "@components/ui/card";
+import { SectionGridOverlay } from "@components/SectionGridOverlay";
+import { SectionSeparator } from "@components/SectionSeparator";
 
 const features = [
   {

@@ -1,7 +1,7 @@
 import { DataOverviewSection } from "./sections/DataOverviewSection";
 import { IntelligenceFeaturesSection } from "./sections/IntelligenceFeaturesSection";
-import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooter } from "../../components/SiteFooter";
+import { MainNavigationSection } from "@components/MainNavigationSection";
+import { SiteFooter } from "@components/SiteFooter";
 
 export const DataForAi = (): JSX.Element => {
   return (

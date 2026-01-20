@@ -1,8 +1,8 @@
 import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Button } from "../../../../components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
-import { getAllBlogPosts } from "../../../../lib/blogPosts";
+import { Button } from "@components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { getAllBlogPosts } from "@lib/blogPosts";
 
 const categories = [
   { id: "all", label: "View all" },

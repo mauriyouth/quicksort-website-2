@@ -1,7 +1,7 @@
 import { CareersIntroSection } from "./sections/CareersIntroSection";
 import { JobListingsSection } from "./sections/JobListingsSection";
-import { MainNavigationSection } from "../../components/MainNavigationSection";
-import { SiteFooter } from "../../components/SiteFooter";
+import { MainNavigationSection } from "@components/MainNavigationSection";
+import { SiteFooter } from "@components/SiteFooter";
 
 export const Carreer = (): JSX.Element => {
   return (

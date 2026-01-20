@@ -6,7 +6,7 @@ const features = [
   {
     title: "Integrated AI Solutions",
     description:
-      "We deliver the complete AI product—design, data pipelines, backend infrastructure, and frontend interfaces. One integrated team, one cohesive vision: we architect and deploy AI systems where every layer works together to enhance how your teams collaborate with agents.",
+      "From initial design to production deployment, we handle every dimension of your AI product. Our integrated team can works on the complete stack user experience, data architecture, backend infrastructure, and frontend interfaces as a cohesive system designed for human - AI collaboration.",
   },
   {
     title: "Engineering-First Approach",

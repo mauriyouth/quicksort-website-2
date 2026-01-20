@@ -4,9 +4,9 @@ import { SectionSeparator } from "../../../../components/SectionSeparator";
 
 const features = [
   {
-    title: "Full-Stack AI Development",
+    title: "Integrated AI Solutions",
     description:
-      "From data pipelines to user interfaces, we handle the entire technology stack. No need to coordinate multiple vendors, thiwe design, build, and deploy complete AI-powered systems that integrate seamlessly with your existing infrastructure.",
+      "We deliver the complete AI product—design, data pipelines, backend infrastructure, and frontend interfaces. One integrated team, one cohesive vision: we architect and deploy AI systems where every layer works together to enhance how your teams collaborate with agents.",
   },
   {
     title: "Engineering-First Approach",

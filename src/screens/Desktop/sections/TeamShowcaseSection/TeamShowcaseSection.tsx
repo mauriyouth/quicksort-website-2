@@ -70,6 +70,14 @@ const teamMembers = [
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/asmae-karmouchi-522769255/",
   },
+  {
+    name: "Murad Mustafayev",
+    role: "AI Engineer",
+    description: "",
+    image: "..//-team-member-8.png",
+    hasArrow: false,
+    linkedinUrl: "https://www.linkedin.com/in/murad-mustafayev/",
+  },
 ];
 
 export const TeamShowcaseSection = (): JSX.Element => {

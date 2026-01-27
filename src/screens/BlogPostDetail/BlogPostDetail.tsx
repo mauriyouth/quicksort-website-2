@@ -50,7 +50,7 @@ export const BlogPostDetail = (): JSX.Element => {
 
   if (!post) {
     return (
-      <main className="flex flex-col w-full items-center relative bg-[#141414] min-h-screen">
+      <main className="flex flex-col w-full items-center relative bg-[#141414] min-h-screen overflow-x-hidden">
         <MainNavigationSection />
         <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
           <h1 className="text-2xl font-bold text-[#f5f5f6] mb-4">Post Not Found</h1>
@@ -64,7 +64,7 @@ export const BlogPostDetail = (): JSX.Element => {
   }
 
   return (
-    <main className="flex flex-col w-full items-center relative bg-[#141414] min-h-screen">
+    <main className="flex flex-col w-full items-center relative bg-[#141414] min-h-screen overflow-x-hidden">
       <MainNavigationSection />
 
       <article className="flex flex-col max-w-4xl w-full px-4 sm:px-8 py-12 sm:py-16 md:py-24">

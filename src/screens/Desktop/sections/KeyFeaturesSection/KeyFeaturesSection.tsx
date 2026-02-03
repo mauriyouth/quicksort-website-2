@@ -4,24 +4,24 @@ import { SectionSeparator } from "@components/SectionSeparator";
 
 const features = [
   {
-    title: "Integrated AI Solutions",
+    title: "Enterprise AI Implementation",
     description:
-      "From initial design to production deployment, we handle every dimension of your AI product. Our integrated team can works on the complete stack user experience, data architecture, backend infrastructure, and frontend interfaces as a cohesive system designed for human - AI collaboration.",
+      "Production AI agents and copilots for complex business environments. Banking, finance, regulated industries, where reliability and security aren't negotiable.",
+  },
+  {
+    title: "Full-Stack AI Development",
+    description:
+      "Agentic architectures to user interfaces, complete solutions. AI orchestration, data pipelines, infrastructure, frontend experiences. Unified systems built for human-AI collaboration.",
   },
   {
     title: "Engineering-First Approach",
     description:
-      "While others sell platforms or high-level strategy, we write the code. Our deep technical roots in JavaScript/TypeScript, cloud-native architecture, and agile development mean we deliver production-ready AI solutions, not prototypes.",
+      "We don't just advise on AI strategy, we implement it. Real engineering expertise. Cloud-native or on-premise. Whatever your security requirements demand.",
   },
   {
-    title: "Rapid Iteration & Deployment",
+    title: "Trusted by Regulated Industries",
     description:
-      "Our agile methodology and DevOps expertise ensure fast time-to-market. We build MVPs in weeks, not months, and scale them progressively based on real user feedback and business metrics.",
-  },
-  {
-    title: "Connect with customers",
-    description:
-      "Solve a problem or close a sale in real-time with chat. If no one is available, customers are seamlessly routed to email without confusion.",
+      "Major banks. Aerospace. Industrial leaders. We understand compliance constraints, data governance, and the rigor required when AI mistakes have consequences.",
   },
 ];
 

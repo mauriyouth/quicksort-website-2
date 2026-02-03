@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { ArrowUpRightIcon, ClockIcon, MapPinIcon } from "lucide-react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
@@ -5,45 +6,18 @@ import { Card, CardContent } from "@components/ui/card";
 
 const jobListings = [
   {
-    title: "AI Engineering",
-    category: "Software",
+    slug: "senior-ai-ml-engineer",
+    title: "Senior AI & ML Engineer",
+    category: "Engineering",
     categoryColor: {
       bg: "bg-[#4e0d30]",
       border: "border-[#9e155e]",
       dot: "bg-[#ed46bb]",
       text: "text-[#f9a7df]",
     },
-    description: "We're looking for a mid-level AI Engineer to join our team.",
+    description: "Design and deploy autonomous AI agents that transform our clients' business processes. 5+ years experience, €60-90K based on profile.",
     location: "Paris",
-    type: "Full-time",
-  },
-  {
-    title: "Product Designer",
-    category: "Design",
-    categoryColor: {
-      bg: "bg-[#102955]",
-      border: "border-[#1849a9]",
-      dot: "bg-[#2e90fa]",
-      text: "text-[#84caff]",
-    },
-    description:
-      "We're looking for a mid-level product designer to join our team.",
-    location: "Paris",
-    type: "Full-time",
-  },
-  {
-    title: "Product Designer",
-    category: "Strategy",
-    categoryColor: {
-      bg: "bg-[#501b0f]",
-      border: "border-[#932f18]",
-      dot: "bg-[#ef681f]",
-      text: "text-[#f7b279]",
-    },
-    description:
-      "We're looking for a mid-level product designer to join our team.",
-    location: "Paris",
-    type: "Full-time",
+    type: "Permanent (CDI)",
   },
 ];
 
@@ -185,13 +159,13 @@ export const JobListingsSection = (): JSX.Element => {
                       </div>
                     </div>
 
-                    <button className="gap-1.5 inline-flex items-center justify-center cursor-pointer">
+                    <Link to={`/career/${job.slug}`} className="gap-1.5 inline-flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity">
                       <span className="mt-[-1.00px] font-text-sm-semibold font-[number:var(--text-sm-semibold-font-weight)] text-[#cecfd2] text-[length:var(--text-sm-semibold-font-size)] tracking-[var(--text-sm-semibold-letter-spacing)] leading-[var(--text-sm-semibold-line-height)] whitespace-nowrap [font-style:var(--text-sm-semibold-font-style)]">
                         View job
                       </span>
 
                       <ArrowUpRightIcon className="w-5 h-5" />
-                    </button>
+                    </Link>
                   </div>
 
                   <p className="font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">

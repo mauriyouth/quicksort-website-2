@@ -6,6 +6,7 @@ import { Blog } from "./screens/Blog";
 import { BlogPostDetail } from "./screens/BlogPostDetail";
 import { DataForAi } from "./screens/DataForAi";
 import { Carreer } from "./screens/Carreer";
+import { JobDetail } from "./screens/JobDetail";
 import { InfrastructureFor } from "./screens/InfrastructureFor";
 
 export const App = () => {
@@ -19,6 +20,7 @@ export const App = () => {
         <Route path="/blog/:slug" element={<BlogPostDetail />} />
         <Route path="/data-for-ai" element={<DataForAi />} />
         <Route path="/career" element={<Carreer />} />
+        <Route path="/career/:slug" element={<JobDetail />} />
         <Route path="/infrastructure-for-ai" element={<InfrastructureFor />} />
       </Routes>
     </Router>

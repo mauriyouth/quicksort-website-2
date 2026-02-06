@@ -58,7 +58,7 @@ const teamMembers = [
     name: "Adel Benz",
     role: "AI Product Designer",
     description: "",
-    image: "..//-team-member-6.png",
+    image: "/adel.webp",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/adel-benzehda/",
   },

@@ -5,7 +5,7 @@ import { SectionSeparator } from "@components/SectionSeparator";
 export const HeroIntroSection = (): JSX.Element => {
   return (
     <section className="flex flex-col items-center relative w-full bg-[#141414] overflow-hidden">
-      <div className="min-h-[757px] px-0 py-12 sm:py-16 md:py-24 z-[1] flex items-start justify-center relative w-full">
+      <div className="min-h-[757px] px-0 py-4 sm:py-6 md:py-8 z-[1] flex items-start justify-center relative w-full">
         <div className="flex flex-col lg:flex-row max-w-screen-xl w-full items-center justify-between relative gap-8 lg:gap-0">
           <div className="flex max-w-screen-xl items-end gap-8 px-4 sm:px-8 py-0 relative flex-1 grow w-full">
             <div className="flex flex-col items-start gap-8 sm:gap-12 relative flex-1 self-stretch grow w-full">

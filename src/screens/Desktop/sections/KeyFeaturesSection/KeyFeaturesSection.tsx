@@ -27,7 +27,7 @@ const features = [
 
 export const KeyFeaturesSection = (): JSX.Element => {
   return (
-    <section className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-12 sm:py-16 md:py-24 w-full bg-[#141414]">
+    <section className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-[#141414]">
       <SectionGridOverlay showCenterLine={false} />
       <div className="flex flex-col lg:flex-row max-w-screen-xl items-start gap-8 sm:gap-12 lg:gap-16 px-4 sm:px-8 py-0 w-full relative z-[1]">
         <div className="max-w-full lg:max-w-[360px] gap-5 flex-1 grow flex flex-col items-start w-full lg:w-auto">

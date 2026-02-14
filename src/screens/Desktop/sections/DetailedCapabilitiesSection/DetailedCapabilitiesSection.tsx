@@ -162,7 +162,7 @@ const integrationExpertise = [
 
 export const DetailedCapabilitiesSection = (): JSX.Element => {
   return (
-    <section className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-12 sm:py-16 md:py-24 w-full bg-[#141414]">
+    <section className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-[#141414]">
       <SectionGridOverlay showCenterLine={false} />
       <div className="flex flex-col max-w-screen-xl items-start gap-6 sm:gap-8 px-4 sm:px-8 py-0 w-full relative z-[1]">
         <div className="flex flex-col items-start gap-6 sm:gap-8 w-full">
@@ -226,7 +226,7 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
 
       <SectionSeparator />
 
-      <div className="flex flex-col items-center justify-center gap-12 sm:gap-16 md:gap-20 px-0 py-12 sm:py-16 md:py-24 w-full relative z-[1]">
+      <div className="flex flex-col items-center justify-center gap-12 sm:gap-16 md:gap-20 px-0 py-4 sm:py-6 md:py-8 w-full relative z-[1]">
         <div className="flex flex-col lg:flex-row max-w-screen-xl items-start justify-center gap-12 sm:gap-16 lg:gap-[130px] px-4 sm:px-8 py-0 w-full">
           <div className="flex flex-col max-w-full lg:max-w-[720px] lg:w-[480px] items-start gap-8 sm:gap-12 w-full">
             <div className="flex flex-col max-w-screen-md gap-3 items-start w-full">

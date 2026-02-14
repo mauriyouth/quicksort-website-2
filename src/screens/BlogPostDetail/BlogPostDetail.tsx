@@ -27,15 +27,20 @@ export const BlogPostDetail = (): JSX.Element => {
 
     const loadMarkdown = async () => {
       try {
-        // Use Vite's glob import to load the markdown file
-        const modulePath = `../../content/blog/${slug}.md`;
-        const loader = markdownModules[modulePath];
+        // Find the matching loader by checking all keys in the glob
+        // Vite's glob creates keys that match the file paths
+        const matchingKey = Object.keys(markdownModules).find(key => 
+          key.endsWith(`${slug}.md`)
+        );
 
-        if (loader) {
+        if (matchingKey && markdownModules[matchingKey]) {
+          const loader = markdownModules[matchingKey];
           const content = await loader();
           setMarkdownContent(content as string);
         } else {
-          throw new Error("Markdown file not found");
+          console.error("Markdown file not found for slug:", slug);
+          console.error("Available modules:", Object.keys(markdownModules));
+          throw new Error(`Markdown file not found for slug: ${slug}`);
         }
       } catch (error) {
         console.error("Error loading markdown:", error);

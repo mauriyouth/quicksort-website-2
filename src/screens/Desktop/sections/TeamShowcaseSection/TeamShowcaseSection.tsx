@@ -9,7 +9,8 @@ const teamMembers = [
   {
     name: "Mohamed Ahmednah",
     role: "Founder, CTO",
-    description: "",
+    description:
+      "Seasoned tech leader with deep expertise in AI systems and enterprise software architecture.",
     image: "/ahmednah.webp",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mohamed-ahmednah-19313116/",
@@ -17,15 +18,17 @@ const teamMembers = [
   {
     name: "Mirette Moawad",
     role: "AI Researcher",
-    description: "",
+    description:
+      "Specializes in NLP and large language models, driving cutting-edge research into production.",
     image: "/mirette.webp",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mirettemoawad/",
   },
   {
     name: "Nageeta Kumari",
-    role: "AI Researcher",
-    description: "",
+    role: "AI Engineer",
+    description:
+      "Focused on machine learning and computer vision, bridging academic research with real-world applications.",
     image: "/nageeta.webp",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/nageeta124/",
@@ -33,7 +36,8 @@ const teamMembers = [
   {
     name: "Mohamed Benyahia",
     role: "AI Researcher",
-    description: "",
+    description:
+      "Expert in deep learning and generative AI, building intelligent solutions for complex problems.",
     image: "/benyahia.webp",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mohamed-benyahia-3171b7252/",
@@ -41,7 +45,8 @@ const teamMembers = [
   {
     name: "Amadou Ngam",
     role: "AI Engineer",
-    description: "",
+    description:
+      "Full-stack AI engineer passionate about deploying scalable ML pipelines and infrastructure.",
     image: "/amadou.webp",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/amadoungam/",
@@ -49,7 +54,8 @@ const teamMembers = [
   {
     name: "Aicha Dridi",
     role: "AI Product Owner",
-    description: "",
+    description:
+      "Bridges business strategy and technical execution, ensuring AI products deliver measurable impact.",
     image: "/dridi.webp",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/aicha-dridi/",
@@ -57,7 +63,8 @@ const teamMembers = [
   {
     name: "Adel Benz",
     role: "AI Product Designer",
-    description: "",
+    description:
+      "Crafts intuitive user experiences for AI-powered products, blending design thinking with technology.",
     image: "/adel.webp",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/adel-benzehda/",
@@ -65,7 +72,8 @@ const teamMembers = [
   {
     name: "Asame Karmouchi",
     role: "AI Engineer",
-    description: "",
+    description:
+      "Builds robust AI solutions and integrations, with a focus on reliability and performance.",
     image: "..//-team-member-7.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/asmae-karmouchi-522769255/",
@@ -73,7 +81,8 @@ const teamMembers = [
   {
     name: "Murad Mustafayev",
     role: "AI Engineer",
-    description: "",
+    description:
+      "Develops end-to-end AI systems, specializing in model optimization and deployment at scale.",
     image: "..//-team-member-8.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/murad-mustafayev/",
@@ -98,10 +107,10 @@ export const TeamShowcaseSection = (): JSX.Element => {
   return (
     <section className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#141414]">
       <SectionGridOverlay showCenterLine={false} />
-      <div className="flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-12 sm:py-16 md:py-24 w-full relative z-[1]">
+      <div className="flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full relative z-[1]">
         <div className="flex flex-col max-w-screen-xl items-start gap-6 sm:gap-8 px-4 sm:px-8 py-0 w-full">
-          <div className="flex flex-wrap items-start justify-between gap-[32px_0px] w-full">
-            <div className="min-w-0 max-w-full sm:min-w-[480px] sm:max-w-screen-md gap-4 sm:gap-5 flex-1 grow flex flex-col items-start w-full">
+          <div className="flex items-start justify-between gap-6 w-full">
+            <div className="min-w-0 max-w-full sm:min-w-[480px] sm:max-w-screen-md gap-4 sm:gap-5 flex-1 grow flex flex-col items-start">
               <h2 className="mt-[-1.00px] font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
                 We&apos;re a fast-growing team
               </h2>
@@ -110,6 +119,25 @@ export const TeamShowcaseSection = (): JSX.Element => {
                 We&apos;re always on the lookout for passionate, dynamic, and
                 talented individuals.
               </p>
+            </div>
+
+            <div className="hidden sm:inline-flex items-center gap-4 shrink-0 pt-1">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={scrollLeft}
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-solid border-[#1f242f] bg-transparent hover:bg-[#1f242f]"
+              >
+                <ChevronLeftIcon className="w-5 h-5 text-white" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={scrollRight}
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-solid border-[#1f242f] bg-transparent hover:bg-[#1f242f]"
+              >
+                <ChevronRightIcon className="w-5 h-5 text-white" />
+              </Button>
             </div>
           </div>
         </div>
@@ -124,7 +152,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
               {teamMembers.map((member, index) => (
                 <Card
                   key={index}
-                  className="flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] h-[400px] sm:h-[450px] md:h-[480px] border-0 rounded-lg overflow-hidden relative"
+                  className="group flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] h-[400px] sm:h-[450px] md:h-[480px] border-0 rounded-lg overflow-hidden relative"
                 >
                   <img
                     src={member.image}
@@ -132,37 +160,34 @@ export const TeamShowcaseSection = (): JSX.Element => {
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                   <CardContent className="relative flex flex-col w-full h-full items-center justify-end p-0 z-10">
-                    <div className="flex flex-col w-full items-center justify-center pt-16 sm:pt-20 md:pt-24 pb-0 px-0 bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,0.6)_100%)]">
-                      <div className="flex flex-col items-start gap-4 sm:gap-6 md:gap-8 pt-4 sm:pt-6 pb-6 sm:pb-8 px-4 sm:px-6 w-full bg-[#0c111d4c] border-t [border-top-style:solid] backdrop-blur-md backdrop-brightness-[100%] [-webkit-backdrop-filter:blur(12px)_brightness(100%)] shadow-backdrop-blurs-backdrop-blur-lg">
-                        <div className="flex flex-col items-start gap-3 sm:gap-4 w-full">
-                          <div className="gap-3 sm:gap-4 flex items-start w-full">
-                            <h3 className="flex-1 mt-[-1.00px] font-display-sm-semibold font-[number:var(--display-sm-semibold-font-weight)] text-white text-xl sm:text-2xl md:text-[length:var(--display-sm-semibold-font-size)] tracking-[var(--display-sm-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-sm-semibold-line-height)] [font-style:var(--display-sm-semibold-font-style)]">
-                              {member.name}
-                            </h3>
+                    {/* Overlay container — anchored to bottom, slides up on hover */}
+                    <div
+                      className="absolute bottom-0 left-0 right-0 flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] translate-y-[calc(100%-230px)] sm:translate-y-[calc(100%-250px)] group-hover:translate-y-0"
+                    >
+                      {/* Gradient fade above the content */}
+                      <div className="h-16 sm:h-20 bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,0.6)_100%)] pointer-events-none" />
 
-                            {member.hasArrow && (
-                              <div className="inline-flex flex-col items-start pt-1.5 pb-0 px-0 shrink-0">
-                                <img
-                                  className="w-5 h-5 sm:w-6 sm:h-6"
-                                  alt="Arrow up right"
-                                  src="/arrow-up-right.svg"
-                                />
-                              </div>
-                            )}
-                          </div>
+                      {/* Content panel */}
+                      <div className="flex flex-col items-start gap-4 sm:gap-5 pt-4 sm:pt-5 pb-5 sm:pb-6 px-4 sm:px-6 w-full bg-[#0c111d99] border-t [border-top-style:solid] backdrop-blur-md backdrop-brightness-[100%] [-webkit-backdrop-filter:blur(12px)_brightness(100%)]">
+                        {/* Name */}
+                        <h3 className="font-display-sm-semibold font-[number:var(--display-sm-semibold-font-weight)] text-white text-lg sm:text-xl md:text-2xl tracking-[var(--display-sm-semibold-letter-spacing)] leading-[1.2] [font-style:var(--display-sm-semibold-font-style)]">
+                          {member.name}
+                        </h3>
 
-                          <div className="flex flex-col items-start gap-1 w-full">
-                            <div className="mt-[-1.00px] font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-white text-base sm:text-lg md:text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
-                              {member.role}
-                            </div>
-
-                            <p className="text-white font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
-                              {member.description}
-                            </p>
-                          </div>
+                        {/* Role */}
+                        <div className="font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-[#b0b3ba] text-sm sm:text-base md:text-lg tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
+                          {member.role}
                         </div>
 
-                        <div className="flex items-center gap-4 sm:gap-5 w-full">
+                        {/* Description — only visible when hovered */}
+                        {member.description && (
+                          <p className="text-[#d0d5dd] text-sm sm:text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
+                            {member.description}
+                          </p>
+                        )}
+
+                        {/* LinkedIn */}
+                        <div className="flex items-center gap-4 sm:gap-5 w-full pt-1">
                           <a
                             href={member.linkedinUrl}
                             target="_blank"
@@ -181,26 +206,6 @@ export const TeamShowcaseSection = (): JSX.Element => {
                   </CardContent>
                 </Card>
               ))}
-            </div>
-
-            <div className="inline-flex items-start gap-4 sm:gap-6 md:gap-8 self-center sm:self-start">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={scrollLeft}
-                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-solid border-[#1f242f] bg-transparent hover:bg-[#1f242f]"
-              >
-                <ChevronLeftIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-              </Button>
-
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={scrollRight}
-                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-solid border-[#1f242f] bg-transparent hover:bg-[#1f242f]"
-              >
-                <ChevronRightIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-              </Button>
             </div>
           </div>
         </div>

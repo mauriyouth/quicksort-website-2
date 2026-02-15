@@ -1,9 +1,13 @@
+import { useEffect, useRef } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useRef } from "react";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+gsap.registerPlugin(ScrollTrigger);
 
 const teamMembers = [
   {
@@ -91,6 +95,9 @@ const teamMembers = [
 
 export const TeamShowcaseSection = (): JSX.Element => {
   const carouselRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const cardsContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollLeft = () => {
     if (carouselRef.current) {
@@ -104,11 +111,56 @@ export const TeamShowcaseSection = (): JSX.Element => {
     }
   };
 
+  useEffect(() => {
+    if (!sectionRef.current || !headerRef.current || !cardsContainerRef.current) return;
+
+    const ctx = gsap.context(() => {
+      // Header slides in from the left
+      gsap.from(headerRef.current, {
+        x: -60,
+        opacity: 0,
+        duration: 1,
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: headerRef.current,
+          start: "top 85%",
+          toggleActions: "play none none reverse",
+        },
+      });
+
+      // Team cards stagger up from below
+      const cards = cardsContainerRef.current?.querySelectorAll(".team-card");
+      if (cards && cards.length > 0) {
+        gsap.set(cards, { y: 60, opacity: 0 });
+        gsap.to(cards, {
+          y: 0,
+          opacity: 1,
+          duration: 0.8,
+          stagger: 0.1,
+          ease: "power3.out",
+          scrollTrigger: {
+            trigger: cardsContainerRef.current,
+            start: "top 90%",
+            toggleActions: "play none none reverse",
+          },
+        });
+      }
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
-    <section className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#141414]">
+    <section
+      ref={sectionRef}
+      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#141414]"
+    >
       <SectionGridOverlay showCenterLine={false} />
       <div className="flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full relative z-[1]">
-        <div className="flex flex-col max-w-screen-xl items-start gap-6 sm:gap-8 px-4 sm:px-8 py-0 w-full">
+        <div
+          ref={headerRef}
+          className="flex flex-col max-w-screen-xl items-start gap-6 sm:gap-8 px-4 sm:px-8 py-0 w-full"
+        >
           <div className="flex items-start justify-between gap-6 w-full">
             <div className="min-w-0 max-w-full sm:min-w-[480px] sm:max-w-screen-md gap-4 sm:gap-5 flex-1 grow flex flex-col items-start">
               <h2 className="mt-[-1.00px] font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
@@ -145,14 +197,17 @@ export const TeamShowcaseSection = (): JSX.Element => {
         <div className="flex flex-col w-full items-start gap-6 sm:gap-8 px-4 sm:px-8 py-0">
           <div className="inline-flex flex-col items-start gap-6 sm:gap-8 w-full">
             <div
-              ref={carouselRef}
+              ref={(el) => {
+                carouselRef.current = el;
+                cardsContainerRef.current = el;
+              }}
               className="flex w-full items-start gap-4 sm:gap-6 md:gap-8 overflow-x-auto scroll-smooth scrollbar-hide"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {teamMembers.map((member, index) => (
                 <Card
                   key={index}
-                  className="group flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] h-[400px] sm:h-[450px] md:h-[480px] border-0 rounded-lg overflow-hidden relative"
+                  className="team-card group flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] h-[400px] sm:h-[450px] md:h-[480px] border-0 rounded-lg overflow-hidden relative"
                 >
                   <img
                     src={member.image}

@@ -1,6 +1,11 @@
+import { useEffect, useRef } from "react";
 import { Card, CardContent } from "@components/ui/card";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+gsap.registerPlugin(ScrollTrigger);
 
 const features = [
   {
@@ -26,11 +31,60 @@ const features = [
 ];
 
 export const KeyFeaturesSection = (): JSX.Element => {
+  const sectionRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const cardsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!sectionRef.current || !headerRef.current || !cardsRef.current) return;
+
+    const ctx = gsap.context(() => {
+      // Header slides in from the left
+      gsap.from(headerRef.current, {
+        x: -60,
+        opacity: 0,
+        duration: 1,
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: headerRef.current,
+          start: "top 85%",
+          toggleActions: "play none none reverse",
+        },
+      });
+
+      // Feature cards stagger up from below
+      const cards = cardsRef.current?.querySelectorAll(".feature-card");
+      if (cards && cards.length > 0) {
+        gsap.set(cards, { y: 60, opacity: 0 });
+        gsap.to(cards, {
+          y: 0,
+          opacity: 1,
+          duration: 0.8,
+          stagger: 0.15,
+          ease: "power3.out",
+          scrollTrigger: {
+            trigger: cardsRef.current,
+            start: "top 90%",
+            toggleActions: "play none none reverse",
+          },
+        });
+      }
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
-    <section className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-[#141414]">
+    <section
+      ref={sectionRef}
+      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-[#141414]"
+    >
       <SectionGridOverlay showCenterLine={false} />
       <div className="flex flex-col lg:flex-row max-w-screen-xl items-start gap-8 sm:gap-12 lg:gap-16 px-4 sm:px-8 py-0 w-full relative z-[1]">
-        <div className="max-w-full lg:max-w-[360px] gap-5 flex-1 grow flex flex-col items-start w-full lg:w-auto">
+        <div
+          ref={headerRef}
+          className="max-w-full lg:max-w-[360px] gap-5 flex-1 grow flex flex-col items-start w-full lg:w-auto"
+        >
           <div className="flex flex-col items-start gap-5 w-full">
             <div className="relative w-14 h-[52px] shrink-0">
               <div className="absolute top-0 left-0 w-[51px] h-[51px] bg-neutral-50 rounded-[25.33px]" />
@@ -49,11 +103,14 @@ export const KeyFeaturesSection = (): JSX.Element => {
           </p>
         </div>
 
-        <div className="flex flex-col sm:grid sm:grid-cols-2 items-start justify-center gap-6 sm:gap-8 lg:gap-[32px_64px] flex-1 grow w-full">
+        <div
+          ref={cardsRef}
+          className="flex flex-col sm:grid sm:grid-cols-2 items-start justify-center gap-6 sm:gap-8 lg:gap-[32px_64px] flex-1 grow w-full"
+        >
           {features.map((feature, index) => (
             <Card
               key={index}
-              className="flex min-w-0 sm:min-w-[280px] lg:min-w-80 max-w-full sm:max-w-none lg:max-w-[480px] items-start gap-4 flex-1 grow border-0 bg-transparent shadow-none"
+              className="feature-card flex min-w-0 sm:min-w-[280px] lg:min-w-80 max-w-full sm:max-w-none lg:max-w-[480px] items-start gap-4 flex-1 grow border-0 bg-transparent shadow-none"
             >
               <CardContent className="flex flex-col items-start gap-5 flex-1 grow p-0">
                 <div className="flex flex-col items-start gap-2 w-full">

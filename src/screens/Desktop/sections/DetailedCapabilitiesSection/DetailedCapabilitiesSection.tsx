@@ -1,8 +1,13 @@
+import { useEffect, useRef } from "react";
 import { ArrowRightIcon, TrendingUpIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@components/ui/card";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+gsap.registerPlugin(ScrollTrigger);
 
 // Custom Infrastructure Icon component - inline SVG for hover color support
 const InfrastructureIcon = ({ className }: { className?: string }) => (
@@ -161,10 +166,130 @@ const integrationExpertise = [
 ];
 
 export const DetailedCapabilitiesSection = (): JSX.Element => {
+  const sectionRef = useRef<HTMLElement>(null);
+  const serviceCardsRef = useRef<HTMLDivElement>(null);
+  const leftColumnRef = useRef<HTMLDivElement>(null);
+  const rightColumnRef = useRef<HTMLDivElement>(null);
+  const sectionHeaderRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!sectionRef.current) return;
+
+    const ctx = gsap.context(() => {
+      // "Our Services" header slides in
+      if (sectionHeaderRef.current) {
+        gsap.from(sectionHeaderRef.current, {
+          x: -60,
+          opacity: 0,
+          duration: 1,
+          ease: "power3.out",
+          scrollTrigger: {
+            trigger: sectionHeaderRef.current,
+            start: "top 85%",
+            toggleActions: "play none none reverse",
+          },
+        });
+      }
+
+      // Service cards stagger up
+      if (serviceCardsRef.current) {
+        const cards = serviceCardsRef.current.querySelectorAll(".service-card");
+        if (cards.length > 0) {
+          gsap.set(cards, { y: 60, opacity: 0 });
+          gsap.to(cards, {
+            y: 0,
+            opacity: 1,
+            duration: 0.8,
+            stagger: 0.15,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: serviceCardsRef.current,
+              start: "top 90%",
+              toggleActions: "play none none reverse",
+            },
+          });
+        }
+      }
+
+      // Left column (Advanced AI Capabilities) slides in from left
+      if (leftColumnRef.current) {
+        gsap.from(leftColumnRef.current, {
+          x: -80,
+          opacity: 0,
+          duration: 1,
+          ease: "power3.out",
+          scrollTrigger: {
+            trigger: leftColumnRef.current,
+            start: "top 85%",
+            toggleActions: "play none none reverse",
+          },
+        });
+
+        // Capability items stagger in
+        const leftItems = leftColumnRef.current.querySelectorAll(".capability-item");
+        if (leftItems.length > 0) {
+          gsap.set(leftItems, { y: 40, opacity: 0 });
+          gsap.to(leftItems, {
+            y: 0,
+            opacity: 1,
+            duration: 0.6,
+            stagger: 0.12,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: leftColumnRef.current,
+              start: "top 80%",
+              toggleActions: "play none none reverse",
+            },
+          });
+        }
+      }
+
+      // Right column (Integration Expertise) slides in from right
+      if (rightColumnRef.current) {
+        gsap.from(rightColumnRef.current, {
+          x: 80,
+          opacity: 0,
+          duration: 1,
+          ease: "power3.out",
+          scrollTrigger: {
+            trigger: rightColumnRef.current,
+            start: "top 85%",
+            toggleActions: "play none none reverse",
+          },
+        });
+
+        const rightItems = rightColumnRef.current.querySelectorAll(".capability-item");
+        if (rightItems.length > 0) {
+          gsap.set(rightItems, { y: 40, opacity: 0 });
+          gsap.to(rightItems, {
+            y: 0,
+            opacity: 1,
+            duration: 0.6,
+            stagger: 0.12,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: rightColumnRef.current,
+              start: "top 80%",
+              toggleActions: "play none none reverse",
+            },
+          });
+        }
+      }
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
-    <section className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-[#141414]">
+    <section
+      ref={sectionRef}
+      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-[#141414]"
+    >
       <SectionGridOverlay showCenterLine={false} />
-      <div className="flex flex-col max-w-screen-xl items-start gap-6 sm:gap-8 px-4 sm:px-8 py-0 w-full relative z-[1]">
+      <div
+        ref={sectionHeaderRef}
+        className="flex flex-col max-w-screen-xl items-start gap-6 sm:gap-8 px-4 sm:px-8 py-0 w-full relative z-[1]"
+      >
         <div className="flex flex-col items-start gap-6 sm:gap-8 w-full">
           <div className="flex flex-col items-start gap-4 sm:gap-5 w-full">
             <div className="flex flex-col items-start gap-3 w-full">
@@ -180,7 +305,10 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
         </div>
       </div>
 
-      <div className="flex flex-col max-w-screen-xl items-start gap-8 sm:gap-12 md:gap-16 px-4 sm:px-8 py-0 w-full relative z-[1]">
+      <div
+        ref={serviceCardsRef}
+        className="flex flex-col max-w-screen-xl items-start gap-8 sm:gap-12 md:gap-16 px-4 sm:px-8 py-0 w-full relative z-[1]"
+      >
         <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-3 items-stretch gap-4 sm:gap-6 w-full">
           {serviceCards.map((card, index) => {
             const Icon = card.icon;
@@ -188,7 +316,7 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
               <Link
                 key={index}
                 to={card.href || "#"}
-                className="flex flex-1 min-w-0 w-full h-full group"
+                className="service-card flex flex-1 min-w-0 w-full h-full group"
               >
                 <Card className="flex-col w-full gap-4 sm:gap-6 p-4 sm:p-6 flex-1 h-full bg-[#101010] border-0 rounded-none transition-colors duration-300 group-hover:bg-[#1c1c1c]">
                   <CardContent className="flex flex-col gap-4 sm:gap-6 p-0 h-full">
@@ -228,7 +356,10 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
 
       <div className="flex flex-col items-center justify-center gap-12 sm:gap-16 md:gap-20 px-0 py-4 sm:py-6 md:py-8 w-full relative z-[1]">
         <div className="flex flex-col lg:flex-row max-w-screen-xl items-start justify-center gap-12 sm:gap-16 lg:gap-[130px] px-4 sm:px-8 py-0 w-full">
-          <div className="flex flex-col max-w-full lg:max-w-[720px] lg:w-[480px] items-start gap-8 sm:gap-12 w-full">
+          <div
+            ref={leftColumnRef}
+            className="flex flex-col max-w-full lg:max-w-[720px] lg:w-[480px] items-start gap-8 sm:gap-12 w-full"
+          >
             <div className="flex flex-col max-w-screen-md gap-3 items-start w-full">
               <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#ccff00] text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
                 Technology Expertise
@@ -243,7 +374,7 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
               {advancedCapabilities.map((capability, index) => (
                 <div
                   key={index}
-                  className="min-w-0 max-w-full lg:max-w-[560px] gap-4 w-full flex items-start"
+                  className="capability-item min-w-0 max-w-full lg:max-w-[560px] gap-4 w-full flex items-start"
                 >
                   <div className="flex flex-col items-start gap-4 sm:gap-5 flex-1">
                     <div className="flex flex-col items-start gap-2 pt-2.5 pb-0 px-0 w-full">
@@ -261,7 +392,10 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
             </div>
           </div>
 
-          <div className="flex flex-col max-w-full lg:max-w-[720px] lg:w-[480px] items-start gap-8 sm:gap-12 w-full">
+          <div
+            ref={rightColumnRef}
+            className="flex flex-col max-w-full lg:max-w-[720px] lg:w-[480px] items-start gap-8 sm:gap-12 w-full"
+          >
             <div className="flex flex-col max-w-screen-md gap-3 items-start w-full">
               <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#ccff00] text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
                 Technology Expertise
@@ -276,7 +410,7 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
               {integrationExpertise.map((expertise, index) => (
                 <div
                   key={index}
-                  className="min-w-0 max-w-full lg:max-w-[560px] gap-4 w-full flex items-start"
+                  className="capability-item min-w-0 max-w-full lg:max-w-[560px] gap-4 w-full flex items-start"
                 >
                   <div className="flex flex-col items-start gap-4 sm:gap-5 flex-1">
                     <div className="flex flex-col items-start gap-2 pt-2.5 pb-0 px-0 w-full">

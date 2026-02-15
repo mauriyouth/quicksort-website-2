@@ -2,15 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
-import { AnimatedNoise } from "@components/AnimatedNoise";
+
 import { ScrambleTextOnHover } from "@components/ScrambleText";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-// Accent color for hover effects
-const ACCENT_COLOR = { text: "#ccff00", noise: [204, 255, 0] as [number, number, number] };
+
 
 export const HeroIntroSection = (): JSX.Element => {
   const sectionRef = useRef<HTMLElement>(null);
@@ -92,10 +91,7 @@ export const HeroIntroSection = (): JSX.Element => {
       ref={sectionRef}
       className="flex flex-col items-center relative w-full bg-[#141414] overflow-hidden"
     >
-      <AnimatedNoise
-        opacity={isHovered ? 0.15 : 0.08}
-        color={isHovered ? ACCENT_COLOR.noise : undefined}
-      />
+
 
       <div
         ref={contentRef}

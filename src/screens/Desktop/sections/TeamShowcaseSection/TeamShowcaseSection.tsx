@@ -74,7 +74,7 @@ const teamMembers = [
     linkedinUrl: "https://www.linkedin.com/in/adel-benzehda/",
   },
   {
-    name: "Asame Karmouchi",
+    name: "Asmae Karmouchi",
     role: "AI Engineer",
     description:
       "Builds robust AI solutions and integrations, with a focus on reliability and performance.",

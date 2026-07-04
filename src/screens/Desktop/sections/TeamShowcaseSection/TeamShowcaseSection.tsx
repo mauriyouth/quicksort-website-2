@@ -65,15 +65,6 @@ const teamMembers = [
     linkedinUrl: "https://www.linkedin.com/in/aicha-dridi/",
   },
   {
-    name: "Adel Benz",
-    role: "AI Product Designer",
-    description:
-      "Crafts intuitive user experiences for AI-powered products, blending design thinking with technology.",
-    image: "/adel.webp",
-    hasArrow: false,
-    linkedinUrl: "https://www.linkedin.com/in/adel-benzehda/",
-  },
-  {
     name: "Asmae Karmouchi",
     role: "AI Engineer",
     description:

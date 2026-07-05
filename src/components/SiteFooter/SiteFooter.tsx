@@ -22,11 +22,11 @@ const contactInfo = [
 ];
 
 const decorativeRectangles = [
-    { top: "top-[-25px]", borderColor: "border-white" },
-    { top: "top-[5px]", borderColor: "border-[#ccff00]" },
-    { top: "top-[23px]", borderColor: "border-white" },
-    { top: "top-[49px]", borderColor: "border-white" },
-    { top: "top-[85px]", borderColor: "border-white" },
+    { top: "top-[-25px]", borderColor: "border-border-inv-strong" },
+    { top: "top-[5px]", borderColor: "border-lime" },
+    { top: "top-[23px]", borderColor: "border-border-inv-strong" },
+    { top: "top-[49px]", borderColor: "border-border-inv-strong" },
+    { top: "top-[85px]", borderColor: "border-border-inv-strong" },
 ];
 
 interface SiteFooterProps {
@@ -55,7 +55,7 @@ export const SiteFooter = ({
 
     return (
         <footer
-            className={`flex flex-col items-center w-full bg-[#141414] ${isHomepage
+            className={`flex flex-col items-center w-full bg-ink ${isHomepage
                 ? "gap-8 sm:gap-12 md:gap-16 pt-12 sm:pt-16 pb-8 sm:pb-12 px-0 relative"
                 : "gap-16 pt-16 pb-12 px-0"
                 }`}
@@ -81,13 +81,13 @@ export const SiteFooter = ({
                         to="/"
                         className={`relative w-[138.22px] h-7 ${isHomepage ? "shrink-0" : ""}`}
                     >
-                        <div className="absolute top-0 left-[34px] [font-family:'Inter',Helvetica] font-medium text-neutral-50 text-[22.9px] tracking-[-0.69px] leading-[normal]">
+                        <div className="absolute top-0 left-[34px] [font-family:'Inter',Helvetica] font-medium text-seasalt text-[22.9px] tracking-[-0.69px] leading-[normal]">
                             Quicksort
                         </div>
                         <div className="absolute top-px left-0 w-[29px] h-[27px]">
-                            <div className="top-0 left-0 w-[26px] h-[26px] rounded-[12.99px] absolute bg-neutral-50" />
-                            <div className="absolute top-[9px] left-[15px] w-[9px] h-[17px] bg-[#141414] rounded-[17.76px] rotate-[-47.64deg]" />
-                            <div className="top-4 left-[19px] w-[9px] h-[9px] rounded-[4.39px] absolute bg-neutral-50" />
+                            <div className="top-0 left-0 w-[26px] h-[26px] rounded-[12.99px] absolute bg-seasalt" />
+                            <div className="absolute top-[9px] left-[15px] w-[9px] h-[17px] bg-ink rounded-[17.76px] rotate-[-47.64deg]" />
+                            <div className="top-4 left-[19px] w-[9px] h-[9px] rounded-[4.39px] absolute bg-seasalt" />
                         </div>
                     </Link>
 
@@ -99,7 +99,7 @@ export const SiteFooter = ({
                             }`}
                     >
                         <h2
-                            className={`font-display-sm-semibold font-[number:var(--display-sm-semibold-font-weight)] text-[#f5f5f6] tracking-[var(--display-sm-semibold-letter-spacing)] [font-style:var(--display-sm-semibold-font-style)] ${isHomepage
+                            className={`font-display-sm-semibold font-[number:var(--display-sm-semibold-font-weight)] text-seasalt tracking-[var(--display-sm-semibold-letter-spacing)] [font-style:var(--display-sm-semibold-font-style)] ${isHomepage
                                 ? "mt-[-1.00px] text-xl sm:text-2xl md:text-[length:var(--display-sm-semibold-font-size)] leading-[1.2] md:leading-[var(--display-sm-semibold-line-height)] relative self-stretch"
                                 : "self-stretch mt-[-1.00px] text-[length:var(--display-sm-semibold-font-size)] text-center leading-[var(--display-sm-semibold-line-height)]"
                                 }`}
@@ -108,7 +108,7 @@ export const SiteFooter = ({
                         </h2>
 
                         <p
-                            className={`font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-[#94969c] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)] ${isHomepage
+                            className={`font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-fg-inv-2 tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)] ${isHomepage
                                 ? "relative self-stretch text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)]"
                                 : "text-center self-stretch text-[length:var(--text-xl-regular-font-size)]"
                                 }`}
@@ -120,18 +120,8 @@ export const SiteFooter = ({
                     {/* CTA Button */}
                     <div className="inline-flex items-start gap-3">
                         <a href="mailto:hello@quicksort.fr">
-                            <Button
-                                className={`gap-2.5 bg-[#ccff00] hover:bg-[#ccff00]/90 rounded-lg border border-solid border-black shadow-shadows-shadow-xs ${isHomepage
-                                    ? "px-5 sm:px-[22px] py-3 sm:py-4 text-black font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-sm sm:text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]"
-                                    : "px-[22px] py-4"
-                                    }`}
-                            >
-                                {!isHomepage && (
-                                    <span className="font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-black text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
-                                        Get in touch
-                                    </span>
-                                )}
-                                {isHomepage && "Get in touch"}
+                            <Button variant="accent">
+                                Get in touch
                             </Button>
                         </a>
                     </div>
@@ -167,12 +157,12 @@ export const SiteFooter = ({
                 <div
                     className={`flex items-center justify-between self-stretch w-full ${isHomepage
                         ? "flex-col sm:flex-row sm:flex-wrap gap-4 sm:gap-6 md:gap-[24px_32px] pt-6 sm:pt-8 pb-0 px-0 relative"
-                        : "flex-wrap gap-[24px_32px] pt-8 pb-0 px-0 border-t [border-top-style:solid] border-[#1f242f]"
+                        : "flex-wrap gap-[24px_32px] pt-8 pb-0 px-0 border-t [border-top-style:solid] border-border-inv"
                         }`}
                 >
                     {/* Copyright */}
                     <p
-                        className={`w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)] ${isHomepage
+                        className={`w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-fg-inv-2 tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)] ${isHomepage
                             ? "relative text-sm sm:text-[length:var(--text-md-regular-font-size)] order-3 sm:order-1"
                             : "text-[length:var(--text-md-regular-font-size)]"
                             }`}
@@ -192,7 +182,7 @@ export const SiteFooter = ({
                                 <Link
                                     key={index}
                                     to={link.href}
-                                    className={`w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)] hover:text-neutral-50 transition-colors ${isHomepage
+                                    className={`w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-fg-inv-2 tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)] hover:text-seasalt transition-colors ${isHomepage
                                         ? "relative text-sm sm:text-[length:var(--text-md-regular-font-size)]"
                                         : "text-[length:var(--text-md-regular-font-size)]"
                                         }`}
@@ -203,7 +193,7 @@ export const SiteFooter = ({
                                 <a
                                     key={index}
                                     href={link.href}
-                                    className={`w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)] hover:text-neutral-50 transition-colors ${isHomepage
+                                    className={`w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-fg-inv-2 tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)] hover:text-seasalt transition-colors ${isHomepage
                                         ? "relative text-sm sm:text-[length:var(--text-md-regular-font-size)]"
                                         : "text-[length:var(--text-md-regular-font-size)]"
                                         }`}
@@ -224,7 +214,7 @@ export const SiteFooter = ({
                         {contactInfo.map((info, index) => (
                             <div
                                 key={index}
-                                className={`w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)] ${isHomepage
+                                className={`w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-fg-inv-2 tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)] ${isHomepage
                                     ? "relative text-sm sm:text-[length:var(--text-md-regular-font-size)]"
                                     : "text-[length:var(--text-md-regular-font-size)]"
                                     }`}
@@ -234,7 +224,7 @@ export const SiteFooter = ({
                                         href={info.href}
                                         rel="noopener noreferrer"
                                         target="_blank"
-                                        className="underline hover:text-neutral-50 transition-colors"
+                                        className="underline hover:text-seasalt transition-colors"
                                     >
                                         {info.label}
                                     </a>

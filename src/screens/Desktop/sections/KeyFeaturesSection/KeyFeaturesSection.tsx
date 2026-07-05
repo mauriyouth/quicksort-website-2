@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Card, CardContent } from "@components/ui/card";
+import { DsCard, DsCardTitle, DsCardBody } from "@components/ui/ds-card";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
 import gsap from "gsap";
@@ -92,12 +92,12 @@ export const KeyFeaturesSection = (): JSX.Element => {
               <div className="absolute top-8 left-9 w-[17px] h-[17px] bg-neutral-50 rounded-[8.55px]" />
             </div>
 
-            <h2 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
+            <h2 className="font-display font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-seasalt [font-style:var(--display-md-semibold-font-style)]">
               Why Quicksort is Different
             </h2>
           </div>
 
-          <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-[#94969c] text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
+          <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-fg-inv-2 text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
             We blend deep AI research, product design, and infrastructure
             engineering into a single craft.
           </p>
@@ -108,22 +108,14 @@ export const KeyFeaturesSection = (): JSX.Element => {
           className="flex flex-col sm:grid sm:grid-cols-2 items-start justify-center gap-6 sm:gap-8 lg:gap-[32px_64px] flex-1 grow w-full"
         >
           {features.map((feature, index) => (
-            <Card
+            <DsCard
               key={index}
-              className="feature-card flex min-w-0 sm:min-w-[280px] lg:min-w-80 max-w-full sm:max-w-none lg:max-w-[480px] items-start gap-4 flex-1 grow border-0 bg-transparent shadow-none"
+              variant="dark"
+              className="feature-card min-w-0 sm:min-w-[280px] lg:min-w-80 max-w-full sm:max-w-none lg:max-w-[480px] flex-1 grow"
             >
-              <CardContent className="flex flex-col items-start gap-5 flex-1 grow p-0">
-                <div className="flex flex-col items-start gap-2 w-full">
-                  <h3 className="mt-[-1.00px] font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-[#f5f5f6] text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
-                    {feature.title}
-                  </h3>
-
-                  <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
-                    {feature.description}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+              <DsCardTitle>{feature.title}</DsCardTitle>
+              <DsCardBody tone="dark">{feature.description}</DsCardBody>
+            </DsCard>
           ))}
         </div>
       </div>

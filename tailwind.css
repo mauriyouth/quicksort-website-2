@@ -307,4 +307,10 @@
     font-feature-settings: "ss01", "cv11", "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
   }
+
+  a:focus-visible, button:focus-visible, input:focus-visible,
+  textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--qs-lime);
+    outline-offset: 2px;
+  }
 }

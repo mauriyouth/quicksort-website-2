@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
+import { Halo } from "@components/Halo";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
 
@@ -34,7 +35,7 @@ export const HeroIntroSection = (): JSX.Element => {
 
     const ctx = gsap.context(() => {
       // Staggered entrance animation
-      const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+      const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
 
       tl.from(headingRef.current, {
         y: 60,
@@ -63,7 +64,7 @@ export const HeroIntroSection = (): JSX.Element => {
         .from(
           imageRef.current,
           {
-            x: 80,
+            y: 24,
             opacity: 0,
             duration: 1,
           },
@@ -89,7 +90,7 @@ export const HeroIntroSection = (): JSX.Element => {
   return (
     <section
       ref={sectionRef}
-      className="flex flex-col items-center relative w-full bg-[#141414] overflow-hidden"
+      className="flex flex-col items-center relative w-full bg-ink overflow-hidden"
     >
 
 
@@ -103,7 +104,7 @@ export const HeroIntroSection = (): JSX.Element => {
               <div className="flex flex-col max-w-screen-lg items-start gap-4 sm:gap-6 relative w-full">
                 <h1
                   ref={headingRef}
-                  className="mt-[-1.00px] [font-family:'Hanken_Grotesk',Helvetica] font-medium text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-[-1.20px] leading-[1.2] sm:leading-[56px] lg:leading-[72px] relative self-stretch text-[#f5f5f6]"
+                  className="mt-[-1.00px] font-display font-medium text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-[-1.20px] leading-[1.2] sm:leading-[56px] lg:leading-[72px] relative self-stretch text-seasalt"
                 >
                   We Craft{" "}
                   <span
@@ -127,7 +128,7 @@ export const HeroIntroSection = (): JSX.Element => {
                     <span
                       className="relative z-10"
                       style={{
-                        color: isHovered ? "#000000" : "#f5f5f6",
+                        color: isHovered ? "#141414" : "#FAFAFA",
                         transition: "color 0.3s ease 0.1s",
                       }}
                     >
@@ -142,7 +143,7 @@ export const HeroIntroSection = (): JSX.Element => {
 
                 <p
                   ref={subtitleRef}
-                  className="relative self-stretch font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-[#94969c] text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]"
+                  className="relative self-stretch font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-fg-inv-2 text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]"
                 >
                   We design and engineer agentic systems where humans
                   orchestrate AI agents — connecting data, tools, and memory to
@@ -152,9 +153,7 @@ export const HeroIntroSection = (): JSX.Element => {
 
               <div ref={ctaRef} className="inline-flex items-start gap-3 relative">
                 <a href="mailto:hello@quicksort.fr">
-                  <Button className="group gap-2.5 px-5 sm:px-[22px] py-3 sm:py-4 bg-[#ccff00] hover:bg-[#b8e600] rounded-lg border border-solid border-black shadow-shadows-shadow-xs text-black font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-sm sm:text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
-                    Get in touch
-                  </Button>
+                  <Button variant="accent">Get in touch →</Button>
                 </a>
               </div>
             </div>
@@ -169,20 +168,10 @@ export const HeroIntroSection = (): JSX.Element => {
           </div>
         </div>
       </div>
+      <Halo tone="lime" />
       <SectionGridOverlay showCenterLine={false} />
 
       <SectionSeparator />
-
-      <img
-        className="hidden lg:block absolute top-0 left-[calc(50.00%_-_720px)] w-[1440px] h-[837px] z-0"
-        alt="Background pattern"
-        src="/background-pattern.svg"
-      />
-      <img
-        className="lg:hidden absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1440px] h-auto z-0 opacity-50"
-        alt="Background pattern"
-        src="/background-pattern.svg"
-      />
     </section>
   );
 };

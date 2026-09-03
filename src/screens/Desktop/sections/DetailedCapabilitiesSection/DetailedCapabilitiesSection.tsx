@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ArrowRightIcon, TrendingUpIcon } from "lucide-react";
+import { ArrowRightIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@components/ui/card";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
@@ -91,7 +91,8 @@ const DataForAiIcon = ({ className }: { className?: string }) => (
 
 const serviceCards = [
   {
-    icon: TrendingUpIcon,
+    icon: null,
+    iconSrc: "/service-icons/ai-for-business.png",
     title: "AI for business",
     description:
       "We build custom AI workspaces and agents that embed directly into your operations. Our systems connect people, data, and tools into orchestrated environments where human judgment validates agent reasoning — automating coordination, and decision loops.",
@@ -101,6 +102,7 @@ const serviceCards = [
   },
   {
     icon: DataForAiIcon,
+    iconSrc: null,
     title: "Data for AI",
     description:
       "We transform fragmented enterprise data into structured, contextual intelligence ready for AI consumption — enabling models and agents to reason, learn, and act with precision.",
@@ -110,6 +112,7 @@ const serviceCards = [
   },
   {
     icon: InfrastructureIcon,
+    iconSrc: null,
     title: "Infrastructure for AI",
     description:
       "We design, deploy, and operate on-premise or cloud-native AI infrastructures optimized for LLMs, multimodal models, and agent systems — secure, compliant, and performance-tuned for enterprise workloads.",
@@ -321,9 +324,23 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
                 <Card className="flex-col w-full gap-4 sm:gap-6 p-4 sm:p-6 flex-1 h-full bg-[#101010] border-0 rounded-none transition-colors duration-300 group-hover:bg-[#1c1c1c]">
                   <CardContent className="flex flex-col gap-4 sm:gap-6 p-0 h-full">
                     <div
-                      className={`flex-shrink-0 w-[47px] h-[47px] ${card.iconBg} rounded-lg flex items-center justify-center transition-colors duration-300 group-hover:bg-[#ccff00]`}
+                      className={`flex-shrink-0 w-[47px] h-[47px] rounded-lg flex items-center justify-center ${
+                        card.iconSrc
+                          ? ""
+                          : `${card.iconBg} transition-colors duration-300 group-hover:bg-[#ccff00]`
+                      }`}
                     >
-                      <Icon className="w-5 h-5 text-white transition-colors duration-300 group-hover:text-black" />
+                      {card.iconSrc ? (
+                        <img
+                          src={card.iconSrc}
+                          alt=""
+                          width={80}
+                          height={80}
+                          className="w-[47px] h-[47px] object-contain"
+                        />
+                      ) : Icon ? (
+                        <Icon className="w-5 h-5 text-white transition-colors duration-300 group-hover:text-black" />
+                      ) : null}
                     </div>
 
                     <div className="flex flex-col items-start gap-4 sm:gap-5 w-full flex-1">

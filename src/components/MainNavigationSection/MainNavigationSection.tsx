@@ -10,7 +10,6 @@ import {
     NavigationMenuLink,
 } from "@components/ui/navigation-menu";
 import {
-    TrendingUpIcon,
     MenuIcon,
     XIcon,
 } from "lucide-react";
@@ -104,7 +103,8 @@ const servicesData = [
     {
         title: "AI for Business",
         description: "Intelligent solutions tailored for business growth and efficiency",
-        icon: TrendingUpIcon,
+        icon: null,
+        iconSrc: "/service-icons/ai-for-business.png",
         href: "/ai-for-business",
         iconBgClass: "bg-[#309eff]",
     },
@@ -112,6 +112,7 @@ const servicesData = [
         title: "Infrastructure for AI",
         description: "Robust infrastructure designed for AI workloads and scalability",
         icon: InfrastructureIcon,
+        iconSrc: null,
         href: "/infrastructure-for-ai",
         iconBgClass: "bg-[#3AE165]",
     },
@@ -119,6 +120,7 @@ const servicesData = [
         title: "Data for AI",
         description: "Data preparation, management, and optimization for AI systems",
         icon: DataForAiIcon,
+        iconSrc: null,
         href: "/data-for-ai",
         iconBgClass: "bg-[#FF303E]",
     },
@@ -183,8 +185,22 @@ export const MainNavigationSection = (): JSX.Element => {
                                                         to={service.href}
                                                         className="group flex items-start gap-3 p-3 rounded-lg hover:bg-[#2a2a2a] transition-colors"
                                                     >
-                                                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${service.iconBgClass} group-hover:!bg-[#ccff00]`}>
-                                                            <Icon className="w-5 h-5 transition-colors text-white group-hover:!text-black" />
+                                                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
+                                                            service.iconSrc
+                                                                ? ""
+                                                                : `transition-colors ${service.iconBgClass} group-hover:!bg-[#ccff00]`
+                                                        }`}>
+                                                            {service.iconSrc ? (
+                                                                <img
+                                                                    src={service.iconSrc}
+                                                                    alt=""
+                                                                    width={81}
+                                                                    height={81}
+                                                                    className="w-10 h-10 object-contain"
+                                                                />
+                                                            ) : Icon ? (
+                                                                <Icon className="w-5 h-5 transition-colors text-white group-hover:!text-black" />
+                                                            ) : null}
                                                         </div>
                                                         <div className="flex flex-col gap-1">
                                                             <span className="text-sm font-semibold text-[#f5f5f6] group-hover:text-[#ccff00] transition-colors">
@@ -253,8 +269,22 @@ export const MainNavigationSection = (): JSX.Element => {
                                         onClick={() => setMobileMenuOpen(false)}
                                         className="group flex items-start gap-3 p-3 rounded-lg hover:bg-[#2a2a2a] transition-colors"
                                     >
-                                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${service.iconBgClass} group-hover:!bg-[#ccff00]`}>
-                                            <Icon className="w-5 h-5 transition-colors text-white group-hover:!text-black" />
+                                        <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
+                                            service.iconSrc
+                                                ? ""
+                                                : `transition-colors ${service.iconBgClass} group-hover:!bg-[#ccff00]`
+                                        }`}>
+                                            {service.iconSrc ? (
+                                                <img
+                                                    src={service.iconSrc}
+                                                    alt=""
+                                                    width={81}
+                                                    height={81}
+                                                    className="w-10 h-10 object-contain"
+                                                />
+                                            ) : Icon ? (
+                                                <Icon className="w-5 h-5 transition-colors text-white group-hover:!text-black" />
+                                            ) : null}
                                         </div>
                                         <div className="flex flex-col gap-1">
                                             <span className="text-sm font-semibold text-[#f5f5f6] group-hover:text-[#ccff00] transition-colors">

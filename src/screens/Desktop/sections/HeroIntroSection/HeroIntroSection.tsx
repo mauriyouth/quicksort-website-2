@@ -9,7 +9,36 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-
+const clientLogos = [
+  {
+    name: "Airbus",
+    src: "/client-logos/airbus.png",
+    width: 157,
+    height: 29,
+    className: "w-[142px] sm:w-[157px] lg:w-[176px]",
+  },
+  {
+    name: "BNP Paribas",
+    src: "/client-logos/bnp-paribas.png",
+    width: 261,
+    height: 54,
+    className: "w-[174px] sm:w-[196px] lg:w-[218px]",
+  },
+  {
+    name: "Capgemini",
+    src: "/client-logos/capgemini.png",
+    width: 210,
+    height: 47,
+    className: "w-[166px] sm:w-[188px] lg:w-[202px]",
+  },
+  {
+    name: "Club Med",
+    src: "/client-logos/club-med.png",
+    width: 215,
+    height: 42,
+    className: "w-[174px] sm:w-[196px] lg:w-[214px]",
+  },
+];
 
 export const HeroIntroSection = (): JSX.Element => {
   const sectionRef = useRef<HTMLElement>(null);
@@ -169,6 +198,38 @@ export const HeroIntroSection = (): JSX.Element => {
           </div>
         </div>
       </div>
+
+      <div className="relative z-[2] w-full max-w-screen-xl px-6 sm:px-10 lg:px-16 py-14 sm:py-16 lg:py-20">
+        <div
+          className="flex flex-col items-center gap-9 sm:gap-10"
+          aria-labelledby="client-logos-title"
+        >
+          <p
+            id="client-logos-title"
+            className="text-center text-base sm:text-lg text-[#a4a4aa] leading-7"
+          >
+            Trusted by CAC 40 leaders and global enterprises.
+          </p>
+
+          <ul className="grid w-full grid-cols-2 items-center justify-items-center gap-x-6 gap-y-10 lg:flex lg:justify-center lg:gap-6 xl:gap-10">
+            {clientLogos.map((logo) => (
+              <li
+                key={logo.name}
+                className="flex min-h-12 w-full items-center justify-center lg:w-auto lg:flex-none"
+              >
+                <img
+                  src={logo.src}
+                  alt={logo.name}
+                  width={logo.width}
+                  height={logo.height}
+                  className={`${logo.className} h-auto max-w-full object-contain`}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
       <SectionGridOverlay showCenterLine={false} />
 
       <SectionSeparator />

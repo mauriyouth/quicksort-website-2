@@ -6,6 +6,7 @@ import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import alexandraBeljakovImage from "./alexandra-beljakov.png";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -18,6 +19,13 @@ const teamMembers = [
     image: "/ahmednah.webp",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mohamed-ahmednah-19313116/",
+  },
+  {
+    name: "Alexandra Beljakov",
+    role: "AI Strategist",
+    description: "15 years+ Data & Strategy @ Mercedes · MBA EDHEC",
+    image: alexandraBeljakovImage,
+    hasArrow: false,
   },
   {
     name: "Mirette Moawad",
@@ -78,7 +86,7 @@ const teamMembers = [
     role: "AI Engineer",
     description:
       "Builds robust AI solutions and integrations, with a focus on reliability and performance.",
-    image: "..//-team-member-7.png",
+    image: "/asmae-karmouchi.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/asmae-karmouchi-522769255/",
   },
@@ -87,9 +95,16 @@ const teamMembers = [
     role: "AI Engineer",
     description:
       "Develops end-to-end AI systems, specializing in model optimization and deployment at scale.",
-    image: "..//-team-member-8.png",
+    image: "/murad-mustafayev.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/murad-mustafayev/",
+  },
+  {
+    name: "William Vanhuffel",
+    role: "Applied AI Engineer",
+    description: "CentraleSupélec · Document Extraction",
+    image: "/william-vanhuffel.png",
+    hasArrow: false,
   },
 ];
 
@@ -242,20 +257,22 @@ export const TeamShowcaseSection = (): JSX.Element => {
                         )}
 
                         {/* LinkedIn */}
-                        <div className="flex items-center gap-4 sm:gap-5 w-full pt-1">
-                          <a
-                            href={member.linkedinUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:opacity-80 transition-opacity"
-                          >
-                            <img
-                              className="w-5 h-5 sm:w-6 sm:h-6"
-                              alt="LinkedIn"
-                              src="/social-icon-1.svg"
-                            />
-                          </a>
-                        </div>
+                        {member.linkedinUrl && (
+                          <div className="flex items-center gap-4 sm:gap-5 w-full pt-1">
+                            <a
+                              href={member.linkedinUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:opacity-80 transition-opacity"
+                            >
+                              <img
+                                className="w-5 h-5 sm:w-6 sm:h-6"
+                                alt="LinkedIn"
+                                src="/social-icon-1.svg"
+                              />
+                            </a>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>

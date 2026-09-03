@@ -120,6 +120,16 @@ const serviceCards = [
     iconBg: "bg-[#3AE165]",
     href: "/infrastructure-for-ai",
   },
+  {
+    icon: null,
+    iconSrc: "/service-icons/voice-ai.svg",
+    title: "Voice AI",
+    description:
+      "We build intelligent inbound and outbound voice bots, embedded voice interfaces, and real-time conversational agents that understand context, execute workflows, and hand off seamlessly to humans.",
+    bgColor: "bg-[#101010]",
+    iconBg: "bg-[#9B5CFF]",
+    href: "/voice-ai",
+  },
 ];
 
 const advancedCapabilities = [
@@ -312,7 +322,7 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
         ref={serviceCardsRef}
         className="flex flex-col max-w-screen-xl items-start gap-8 sm:gap-12 md:gap-16 px-4 sm:px-8 py-0 w-full relative z-[1]"
       >
-        <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-3 items-stretch gap-4 sm:gap-6 w-full">
+        <div className="flex flex-col sm:grid sm:grid-cols-2 items-stretch gap-4 sm:gap-6 w-full">
           {serviceCards.map((card, index) => {
             const Icon = card.icon;
             return (

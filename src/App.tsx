@@ -8,6 +8,7 @@ import { DataForAi } from "./screens/DataForAi";
 import { Carreer } from "./screens/Carreer";
 import { JobDetail } from "./screens/JobDetail";
 import { InfrastructureFor } from "./screens/InfrastructureFor";
+import { VoiceAi } from "./screens/VoiceAi";
 
 export const App = () => {
   return (
@@ -22,6 +23,7 @@ export const App = () => {
         <Route path="/career" element={<Carreer />} />
         <Route path="/career/:slug" element={<JobDetail />} />
         <Route path="/infrastructure-for-ai" element={<InfrastructureFor />} />
+        <Route path="/voice-ai" element={<VoiceAi />} />
       </Routes>
     </Router>
   );

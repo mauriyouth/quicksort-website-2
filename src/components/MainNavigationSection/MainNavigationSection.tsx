@@ -124,6 +124,14 @@ const servicesData = [
         href: "/data-for-ai",
         iconBgClass: "bg-[#FF303E]",
     },
+    {
+        title: "Voice AI",
+        description: "Voice bots and conversational interfaces that listen, understand, and act",
+        icon: null,
+        iconSrc: "/service-icons/voice-ai.svg",
+        href: "/voice-ai",
+        iconBgClass: "bg-[#9B5CFF]",
+    },
 ];
 
 export const MainNavigationSection = (): JSX.Element => {

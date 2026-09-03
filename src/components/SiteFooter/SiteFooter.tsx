@@ -7,6 +7,7 @@ const navigationLinks = [
     { label: "AI for Business", href: "/ai-for-business" },
     { label: "Data for AI", href: "/data-for-ai" },
     { label: "Infrastructure for AI", href: "/infrastructure-for-ai" },
+    { label: "Voice AI", href: "/voice-ai" },
     { label: "Careers", href: "/career" },
     { label: "Blog", href: "/blog" },
 ];

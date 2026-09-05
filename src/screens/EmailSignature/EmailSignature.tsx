@@ -60,21 +60,21 @@ export const EmailSignature = (): JSX.Element => {
   };
 
   return (
-    <main className="min-h-screen bg-[#f4f4f2] text-[#141414] flex items-center justify-center p-4 sm:p-8 [font-family:Arial,Helvetica,sans-serif]">
-      <section className="w-full max-w-[720px] rounded-3xl border border-black/10 bg-white p-5 shadow-[0_24px_70px_rgba(20,20,20,0.08)] sm:p-9">
+    <main className="min-h-screen bg-surface text-ink flex items-center justify-center p-4 sm:p-8 [font-family:Arial,Helvetica,sans-serif]">
+      <section className="w-full max-w-[720px] rounded-3xl border border-line bg-surface-raised p-5 shadow-[0_24px_70px_rgba(20,20,20,0.08)] sm:p-9">
         <div className="mb-7 flex items-center gap-2.5 text-[17px] font-bold tracking-[-0.3px]">
           <img src="/quicksort-signature-logo-v2.png" width="34" height="34" alt="" className="rounded-lg" />
           <span>Quicksort</span>
         </div>
 
-        <p className="mb-2 text-xs font-bold uppercase tracking-[0.1em] text-[#727272]">Email signature</p>
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">Email signature</p>
         <h1 className="m-0 text-4xl font-bold leading-none tracking-[-0.055em] sm:text-5xl">Ready to copy</h1>
-        <p className="mt-3.5 max-w-[520px] text-base leading-6 text-[#727272]">
+        <p className="mt-3.5 max-w-[520px] text-base leading-6 text-ink-faint">
           Copy the signature, then paste it into Gmail, Outlook, or Apple Mail.
         </p>
 
-        <p className="mb-2 mt-8 text-xs font-bold uppercase tracking-[0.1em] text-[#727272]">Signature preview</p>
-        <div className="overflow-x-auto rounded-2xl border border-black/10 bg-white p-5 sm:p-7">
+        <p className="mb-2 mt-8 text-xs font-bold uppercase tracking-[0.1em] text-ink-faint">Signature preview</p>
+        <div className="overflow-x-auto rounded-2xl border border-[rgba(0,7,14,0.1)] bg-white p-5 sm:p-7">
           <div
             ref={signatureRef}
             className="min-w-[460px]"
@@ -85,12 +85,12 @@ export const EmailSignature = (): JSX.Element => {
         <button
           type="button"
           onClick={copySignature}
-          className="mt-[18px] w-full rounded-xl border-0 bg-[#141414] px-5 py-[15px] text-sm font-bold text-white transition hover:-translate-y-px hover:bg-black focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#CCFF00]"
+          className="mt-[18px] w-full rounded-xl border-0 bg-surface-inverse px-5 py-[15px] text-sm font-bold text-ink-inverse transition hover:-translate-y-px hover:opacity-90 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-signal"
         >
           {copyState === "copied" ? "Copied — paste it into Gmail" : "Copy signature"}
         </button>
 
-        <p className="mt-3 min-h-[18px] text-center text-xs leading-[18px] text-[#727272]" aria-live="polite">
+        <p className="mt-3 min-h-[18px] text-center text-xs leading-[18px] text-ink-faint" aria-live="polite">
           {copyState === "manual"
             ? "The signature is selected. Press Ctrl+C, then paste it into Gmail."
             : "After pasting, click the logo in Gmail to choose Small, Medium, Large, or Original size."}

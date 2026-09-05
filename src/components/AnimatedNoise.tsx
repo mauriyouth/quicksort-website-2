@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTheme } from "@lib/theme";
 
 interface AnimatedNoiseProps {
     opacity?: number;
@@ -10,11 +11,21 @@ interface AnimatedNoiseProps {
 export function AnimatedNoise({ opacity = 0.05, className, color }: AnimatedNoiseProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const colorRef = useRef(color);
+    const { theme } = useTheme();
 
-    // Keep the ref in sync so the animation loop sees the latest color
+    // Untinted noise is near-white, which is invisible on a light canvas.
+    // Flip it to dark grain so the texture reads in both themes.
+    const invert = theme === "light" && !color;
+    const invertRef = useRef(invert);
+
+    // Keep the refs in sync so the animation loop sees the latest values
     useEffect(() => {
         colorRef.current = color;
     }, [color]);
+
+    useEffect(() => {
+        invertRef.current = invert;
+    }, [invert]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -45,9 +56,10 @@ export function AnimatedNoise({ opacity = 0.05, className, color }: AnimatedNois
                     data[i + 1] = Math.round(c[1] * mix);
                     data[i + 2] = Math.round(c[2] * mix);
                 } else {
-                    data[i] = value;
-                    data[i + 1] = value;
-                    data[i + 2] = value;
+                    const grain = invertRef.current ? 255 - value : value;
+                    data[i] = grain;
+                    data[i + 1] = grain;
+                    data[i + 2] = grain;
                 }
                 data[i + 3] = 255;
             }

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@components/ui/button";
+import { ThemeToggle } from "@components/ThemeToggle";
 import {
     NavigationMenu,
     NavigationMenuItem,
@@ -106,7 +107,7 @@ const servicesData = [
         icon: null,
         iconSrc: "/service-icons/ai-for-business.png",
         href: "/ai-for-business",
-        iconBgClass: "bg-[#309eff]",
+        iconBgClass: "bg-cat-blue",
     },
     {
         title: "Infrastructure for AI",
@@ -114,7 +115,7 @@ const servicesData = [
         icon: InfrastructureIcon,
         iconSrc: null,
         href: "/infrastructure-for-ai",
-        iconBgClass: "bg-[#3AE165]",
+        iconBgClass: "bg-cat-green",
     },
     {
         title: "Data for AI",
@@ -122,7 +123,7 @@ const servicesData = [
         icon: DataForAiIcon,
         iconSrc: null,
         href: "/data-for-ai",
-        iconBgClass: "bg-[#FF303E]",
+        iconBgClass: "bg-cat-red",
     },
     {
         title: "Voice AI",
@@ -130,7 +131,7 @@ const servicesData = [
         icon: null,
         iconSrc: "/service-icons/voice-ai.svg",
         href: "/voice-ai",
-        iconBgClass: "bg-[#9B5CFF]",
+        iconBgClass: "bg-cat-violet",
     },
 ];
 
@@ -138,20 +139,20 @@ export const MainNavigationSection = (): JSX.Element => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     return (
-        <header className="sticky top-0 z-50 w-full h-20 flex flex-col items-center justify-center bg-[#000000] border-b border-white/40">
+        <header className="sticky top-0 z-50 w-full h-20 flex flex-col items-center justify-center bg-surface border-b border-line-hair">
             <div className="items-center justify-between flex max-w-screen-xl px-4 sm:px-8 py-0 relative w-full flex-[0_0_auto]">
                 <div className="inline-flex items-center gap-4 lg:gap-10 relative flex-[0_0_auto]">
                     <Link to="/" className="relative w-[138.22px] h-7 shrink-0">
-                        <div className="absolute top-0 left-[34px] [font-family:'Inter',Helvetica] font-medium text-neutral-50 text-[22.9px] tracking-[-0.69px] leading-[normal]">
+                        <div className="absolute top-0 left-[34px] font-qs-sans font-medium text-ink text-[22.9px] tracking-[-0.69px] leading-[normal]">
                             Quicksort
                         </div>
 
                         <div className="absolute top-px left-0 w-[29px] h-[27px]">
-                            <div className="top-0 left-0 w-[26px] h-[26px] rounded-[12.99px] absolute bg-neutral-50" />
+                            <div className="top-0 left-0 w-[26px] h-[26px] rounded-[12.99px] absolute bg-ink" />
 
-                            <div className="absolute top-[9px] left-[15px] w-[9px] h-[17px] bg-[#000000] rounded-[17.76px] rotate-[-47.64deg]" />
+                            <div className="absolute top-[9px] left-[15px] w-[9px] h-[17px] bg-surface rounded-[17.76px] rotate-[-47.64deg]" />
 
-                            <div className="top-4 left-[19px] w-[9px] h-[9px] rounded-[4.39px] absolute bg-neutral-50" />
+                            <div className="top-4 left-[19px] w-[9px] h-[9px] rounded-[4.39px] absolute bg-ink" />
                         </div>
                     </Link>
 
@@ -163,14 +164,14 @@ export const MainNavigationSection = (): JSX.Element => {
                                     {item.href.startsWith("/") ? (
                                         <Link
                                             to={item.href}
-                                            className="inline-flex items-center justify-center gap-2 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-white text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-neutral-50 transition-colors"
+                                            className="inline-flex items-center justify-center gap-2 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-ink-2 transition-colors"
                                         >
                                             {item.label}
                                         </Link>
                                     ) : (
                                         <NavigationMenuLink
                                             href={item.href}
-                                            className="inline-flex items-center justify-center gap-2 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-white text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-neutral-50 transition-colors"
+                                            className="inline-flex items-center justify-center gap-2 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-ink-2 transition-colors"
                                         >
                                             {item.label}
                                         </NavigationMenuLink>
@@ -179,11 +180,11 @@ export const MainNavigationSection = (): JSX.Element => {
                             ))}
 
                             <NavigationMenuItem>
-                                <NavigationMenuTrigger className="bg-transparent hover:bg-transparent data-[state=open]:bg-transparent px-0 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-white text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-neutral-50 data-[state=open]:text-neutral-50">
+                                <NavigationMenuTrigger className="bg-transparent hover:bg-transparent data-[state=open]:bg-transparent px-0 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-ink-2 data-[state=open]:text-ink-2">
                                     Services
                                 </NavigationMenuTrigger>
                                 <NavigationMenuContent>
-                                    <div className="w-[500px] p-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg">
+                                    <div className="w-[500px] p-6 bg-surface-raised border border-line rounded-lg">
                                         <div className="flex flex-col gap-3">
                                             {servicesData.map((service, serviceIndex) => {
                                                 const Icon = service.icon;
@@ -191,12 +192,12 @@ export const MainNavigationSection = (): JSX.Element => {
                                                     <Link
                                                         key={serviceIndex}
                                                         to={service.href}
-                                                        className="group flex items-start gap-3 p-3 rounded-lg hover:bg-[#2a2a2a] transition-colors"
+                                                        className="group flex items-start gap-3 p-3 rounded-lg hover:bg-surface-sunken transition-colors"
                                                     >
                                                         <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
                                                             service.iconSrc
                                                                 ? ""
-                                                                : `transition-colors ${service.iconBgClass} group-hover:!bg-[#ccff00]`
+                                                                : `transition-colors ${service.iconBgClass} group-hover:!bg-signal`
                                                         }`}>
                                                             {service.iconSrc ? (
                                                                 <img
@@ -207,14 +208,14 @@ export const MainNavigationSection = (): JSX.Element => {
                                                                     className="w-10 h-10 object-contain"
                                                                 />
                                                             ) : Icon ? (
-                                                                <Icon className="w-5 h-5 transition-colors text-white group-hover:!text-black" />
+                                                                <Icon className="w-5 h-5 transition-colors text-on-fill group-hover:!text-signal-fg" />
                                                             ) : null}
                                                         </div>
                                                         <div className="flex flex-col gap-1">
-                                                            <span className="text-sm font-semibold text-[#f5f5f6] group-hover:text-[#ccff00] transition-colors">
+                                                            <span className="text-sm font-semibold text-ink group-hover:text-signal-text transition-colors">
                                                                 {service.title}
                                                             </span>
-                                                            <span className="text-xs text-[#94969c] leading-relaxed">
+                                                            <span className="text-xs text-ink-muted leading-relaxed">
                                                                 {service.description}
                                                             </span>
                                                         </div>
@@ -230,15 +231,17 @@ export const MainNavigationSection = (): JSX.Element => {
                 </div>
 
                 <div className="gap-3 inline-flex items-center">
+                    <ThemeToggle className="hidden sm:inline-flex" />
+
                     <a href="mailto:hello@quicksort.fr">
-                        <Button className="hidden sm:inline-flex gap-1.5 px-4 py-2.5 bg-[#ccff00] rounded-lg border border-solid border-black shadow-shadows-shadow-xs font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-black text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:bg-[#b8e600]">
+                        <Button variant="signal" size="qs-sm" className="hidden sm:inline-flex">
                             Get in touch
                         </Button>
                     </a>
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="lg:hidden text-neutral-50 hover:bg-white/10"
+                        className="lg:hidden text-ink hover:bg-line-faint"
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                     >
                         {mobileMenuOpen ? (
@@ -252,20 +255,20 @@ export const MainNavigationSection = (): JSX.Element => {
 
             {/* Mobile Menu */}
             {mobileMenuOpen && (
-                <div className="lg:hidden w-full bg-[#000000] border-t border-white/40">
+                <div className="lg:hidden w-full bg-surface border-t border-line-hair">
                     <div className="flex flex-col max-w-screen-xl px-4 sm:px-8 py-6 gap-4">
                         {navigationItems.map((item, index) => (
                             <Link
                                 key={index}
                                 to={item.href}
                                 onClick={() => setMobileMenuOpen(false)}
-                                className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-white text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-neutral-50 transition-colors py-2"
+                                className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-ink-2 transition-colors py-2"
                             >
                                 {item.label}
                             </Link>
                         ))}
                         <div className="flex flex-col gap-2 py-2">
-                            <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-white text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] py-2">
+                            <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] py-2">
                                 Services
                             </div>
                             {servicesData.map((service, serviceIndex) => {
@@ -275,12 +278,12 @@ export const MainNavigationSection = (): JSX.Element => {
                                         key={serviceIndex}
                                         to={service.href}
                                         onClick={() => setMobileMenuOpen(false)}
-                                        className="group flex items-start gap-3 p-3 rounded-lg hover:bg-[#2a2a2a] transition-colors"
+                                        className="group flex items-start gap-3 p-3 rounded-lg hover:bg-surface-sunken transition-colors"
                                     >
                                         <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
                                             service.iconSrc
                                                 ? ""
-                                                : `transition-colors ${service.iconBgClass} group-hover:!bg-[#ccff00]`
+                                                : `transition-colors ${service.iconBgClass} group-hover:!bg-signal`
                                         }`}>
                                             {service.iconSrc ? (
                                                 <img
@@ -291,14 +294,14 @@ export const MainNavigationSection = (): JSX.Element => {
                                                     className="w-10 h-10 object-contain"
                                                 />
                                             ) : Icon ? (
-                                                <Icon className="w-5 h-5 transition-colors text-white group-hover:!text-black" />
+                                                <Icon className="w-5 h-5 transition-colors text-on-fill group-hover:!text-signal-fg" />
                                             ) : null}
                                         </div>
                                         <div className="flex flex-col gap-1">
-                                            <span className="text-sm font-semibold text-[#f5f5f6] group-hover:text-[#ccff00] transition-colors">
+                                            <span className="text-sm font-semibold text-ink group-hover:text-signal-text transition-colors">
                                                 {service.title}
                                             </span>
-                                            <span className="text-xs text-[#94969c] leading-relaxed">
+                                            <span className="text-xs text-ink-muted leading-relaxed">
                                                 {service.description}
                                             </span>
                                         </div>
@@ -307,7 +310,7 @@ export const MainNavigationSection = (): JSX.Element => {
                             })}
                         </div>
                         <a href="mailto:hello@quicksort.fr" className="w-full">
-                            <Button className="w-full gap-1.5 px-4 py-2.5 bg-[#ccff00] rounded-lg border border-solid border-black shadow-shadows-shadow-xs font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-black text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:bg-[#b8e600] mt-2">
+                            <Button variant="signal" size="qs-sm" className="w-full mt-2">
                                 Get in touch
                             </Button>
                         </a>

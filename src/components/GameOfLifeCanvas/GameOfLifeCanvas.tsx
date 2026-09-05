@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useTheme } from '@lib/theme';
 
 interface GameOfLifeCanvasProps {
     className?: string;
@@ -15,6 +16,8 @@ const GameOfLifeCanvas: React.FC<GameOfLifeCanvasProps> = ({
     gridSize = 35
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const { theme } = useTheme();
+
     const [grid, setGrid] = useState(() => generateEmptyGrid(gridSize));
     const speedRef = useRef(500);
     const runningRef = useRef(true);
@@ -95,9 +98,13 @@ const GameOfLifeCanvas: React.FC<GameOfLifeCanvasProps> = ({
 
         if (isActive) {
             return interpolate(ratio, [58, 225, 101], [29, 113, 51]);
-        } else {
-            return interpolate(ratio, [51, 51, 51], [20, 20, 20]);
         }
+
+        // Dead cells are the board's resting surface, so they follow the
+        // theme: near-black on dark, near-white on light.
+        return theme === "light"
+            ? interpolate(ratio, [205, 205, 205], [235, 235, 235])
+            : interpolate(ratio, [51, 51, 51], [20, 20, 20]);
     };
 
     return (
@@ -111,7 +118,7 @@ const GameOfLifeCanvas: React.FC<GameOfLifeCanvasProps> = ({
             }}
         >
             <div
-                className="bg-[#000000] border border-[#1a1a1a] rounded overflow-hidden shadow-2xl"
+                className="bg-surface border border-line rounded overflow-hidden shadow-2xl"
                 style={{
                     display: 'grid',
                     gridTemplateColumns: `repeat(${gridSize}, 1fr)`,

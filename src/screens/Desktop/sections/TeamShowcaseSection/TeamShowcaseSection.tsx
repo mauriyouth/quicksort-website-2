@@ -152,7 +152,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
   return (
     <section
       ref={sectionRef}
-      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#000000]"
+      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-surface"
     >
       <SectionGridOverlay showCenterLine={false} />
       <div className="flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full relative z-[1]">
@@ -162,11 +162,11 @@ export const TeamShowcaseSection = (): JSX.Element => {
         >
           <div className="flex items-start justify-between gap-6 w-full">
             <div className="min-w-0 max-w-full sm:min-w-[480px] sm:max-w-screen-md gap-4 sm:gap-5 flex-1 grow flex flex-col items-start">
-              <h2 className="mt-[-1.00px] font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
+              <h2 className="mt-[-1.00px] font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-ink [font-style:var(--display-md-semibold-font-style)]">
                 We&apos;re a fast-growing team
               </h2>
 
-              <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-[#94969c] text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
+              <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
                 We&apos;re always on the lookout for passionate, dynamic, and
                 talented individuals.
               </p>
@@ -177,17 +177,17 @@ export const TeamShowcaseSection = (): JSX.Element => {
                 variant="outline"
                 size="icon"
                 onClick={scrollLeft}
-                className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-solid border-[#1f242f] bg-transparent hover:bg-[#1f242f]"
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-solid border-line bg-transparent hover:bg-surface-sunken"
               >
-                <ChevronLeftIcon className="w-5 h-5 text-white" />
+                <ChevronLeftIcon className="w-5 h-5 text-ink" />
               </Button>
               <Button
                 variant="outline"
                 size="icon"
                 onClick={scrollRight}
-                className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-solid border-[#1f242f] bg-transparent hover:bg-[#1f242f]"
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-solid border-line bg-transparent hover:bg-surface-sunken"
               >
-                <ChevronRightIcon className="w-5 h-5 text-white" />
+                <ChevronRightIcon className="w-5 h-5 text-ink" />
               </Button>
             </div>
           </div>
@@ -222,20 +222,20 @@ export const TeamShowcaseSection = (): JSX.Element => {
                       <div className="h-16 sm:h-20 bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,0.6)_100%)] pointer-events-none" />
 
                       {/* Content panel */}
-                      <div className="flex flex-col items-start gap-4 sm:gap-5 pt-4 sm:pt-5 pb-5 sm:pb-6 px-4 sm:px-6 w-full bg-[#0c111d99] border-t [border-top-style:solid] backdrop-blur-md backdrop-brightness-[100%] [-webkit-backdrop-filter:blur(12px)_brightness(100%)]">
+                      <div className="flex flex-col items-start gap-4 sm:gap-5 pt-4 sm:pt-5 pb-5 sm:pb-6 px-4 sm:px-6 w-full bg-photo-scrim border-t [border-top-style:solid] backdrop-blur-md backdrop-brightness-[100%] [-webkit-backdrop-filter:blur(12px)_brightness(100%)]">
                         {/* Name */}
-                        <h3 className="font-display-sm-semibold font-[number:var(--display-sm-semibold-font-weight)] text-white text-lg sm:text-xl md:text-2xl tracking-[var(--display-sm-semibold-letter-spacing)] leading-[1.2] [font-style:var(--display-sm-semibold-font-style)]">
+                        <h3 className="font-display-sm-semibold font-[number:var(--display-sm-semibold-font-weight)] text-on-fill text-lg sm:text-xl md:text-2xl tracking-[var(--display-sm-semibold-letter-spacing)] leading-[1.2] [font-style:var(--display-sm-semibold-font-style)]">
                           {member.name}
                         </h3>
 
                         {/* Role */}
-                        <div className="font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-[#b0b3ba] text-sm sm:text-base md:text-lg tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
+                        <div className="font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-on-fill/70 text-sm sm:text-base md:text-lg tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
                           {member.role}
                         </div>
 
                         {/* Description — only visible when hovered */}
                         {member.description && (
-                          <p className="text-[#d0d5dd] text-sm sm:text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
+                          <p className="text-on-fill/85 text-sm sm:text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
                             {member.description}
                           </p>
                         )}

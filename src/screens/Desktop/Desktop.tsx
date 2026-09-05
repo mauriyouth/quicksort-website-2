@@ -7,7 +7,7 @@ import { SiteFooter } from "@components/SiteFooter";
 
 export const Desktop = (): JSX.Element => {
   return (
-    <main className="flex flex-col w-full items-center relative bg-[#000000] overflow-x-hidden">
+    <main className="flex flex-col w-full items-center relative bg-surface overflow-x-hidden">
       <MainNavigationSection />
       <HeroIntroSection />
 

@@ -33,12 +33,12 @@ export const IntelligentWorkAdoptionSection = (): JSX.Element => {
               src="/featured-icon.svg"
             />
 
-            <h2 className="w-full font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-[#f5f5f6] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] [font-style:var(--display-md-semibold-font-style)]">
+            <h2 className="w-full font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-ink text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] [font-style:var(--display-md-semibold-font-style)]">
               AI for business
             </h2>
           </div>
 
-          <p className="w-full font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+          <p className="w-full font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-ink-muted text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
             We treat AI as a product, not just a model. Our end-to-end delivery
             focuses heavily on Product Design, ensuring your teams can
             intuitively adapt to new, high-efficiency ways of working.
@@ -53,11 +53,11 @@ export const IntelligentWorkAdoptionSection = (): JSX.Element => {
             >
               <div className="flex flex-col items-start gap-4 sm:gap-5 flex-1">
                 <div className="flex flex-col items-start gap-2 w-full">
-                  <h3 className="w-full mt-[-1.00px] font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-[#f5f5f6] text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
+                  <h3 className="w-full mt-[-1.00px] font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-ink text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
                     {feature.title}
                   </h3>
 
-                  <p className="w-full font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-[#94969c] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+                  <p className="w-full font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-ink-muted text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
                     {feature.description}
                   </p>
                 </div>
@@ -68,11 +68,11 @@ export const IntelligentWorkAdoptionSection = (): JSX.Element => {
       </div>
 
       <div className="flex flex-col items-start gap-3 sm:gap-4 max-w-screen-xl px-4 sm:px-8 py-0 w-full">
-        <h3 className="w-full mt-[-1.00px] font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-[#f5f5f6] text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
+        <h3 className="w-full mt-[-1.00px] font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-ink text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
           From workflows to work intelligence.
         </h3>
 
-        <p className="w-full font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-[#94969c] text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
+        <p className="w-full font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
           We build custom AI workspaces and agents that embed directly into your
           operations. Our systems connect people, data, and tools into
           orchestrated environments where human judgment validates agent

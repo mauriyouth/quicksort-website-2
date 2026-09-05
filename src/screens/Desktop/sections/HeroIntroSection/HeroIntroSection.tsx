@@ -107,7 +107,7 @@ export const HeroIntroSection = (): JSX.Element => {
   return (
     <section
       ref={sectionRef}
-      className="flex flex-col items-center relative w-full bg-[#000000] overflow-hidden"
+      className="flex flex-col items-center relative w-full bg-surface overflow-hidden"
     >
       <div
         ref={contentRef}
@@ -119,7 +119,7 @@ export const HeroIntroSection = (): JSX.Element => {
               <div className="flex flex-col max-w-3xl items-start gap-4 sm:gap-6 relative w-full">
                 <h1
                   ref={headingRef}
-                  className="mt-[-1.00px] [font-family:'Hanken_Grotesk',Helvetica] font-medium text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-[-1.20px] leading-[1.2] sm:leading-[56px] lg:leading-[72px] relative self-stretch text-[#f5f5f6]"
+                  className="mt-[-1.00px] [font-family:'Hanken_Grotesk',Helvetica] font-medium text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-[-1.20px] leading-[1.2] sm:leading-[56px] lg:leading-[72px] relative self-stretch text-ink"
                 >
                   We Craft{" "}
                   <span
@@ -129,7 +129,7 @@ export const HeroIntroSection = (): JSX.Element => {
                   >
                     {/* Accent background rectangle — scales in on hover */}
                     <span
-                      className="absolute bg-[#ccff00]"
+                      className="absolute bg-signal"
                       style={{
                         left: "-0.15em",
                         right: "-0.15em",
@@ -143,7 +143,7 @@ export const HeroIntroSection = (): JSX.Element => {
                     <span
                       className="relative z-10"
                       style={{
-                        color: isHovered ? "#000000" : "#f5f5f6",
+                        color: isHovered ? "var(--qs-signal-fg)" : "var(--qs-ink)",
                         transition: "color 0.3s ease 0.1s",
                       }}
                     >
@@ -155,7 +155,7 @@ export const HeroIntroSection = (): JSX.Element => {
 
                 <p
                   ref={subtitleRef}
-                  className="relative self-stretch font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-[#94969c] text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]"
+                  className="relative self-stretch font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]"
                 >
                   We design and engineer agentic systems where humans
                   orchestrate AI agents — connecting data, tools, and memory to
@@ -165,7 +165,7 @@ export const HeroIntroSection = (): JSX.Element => {
 
               <div ref={ctaRef} className="inline-flex items-start gap-3 relative">
                 <a href="mailto:hello@quicksort.fr">
-                  <Button className="group gap-2.5 px-5 sm:px-[22px] py-3 sm:py-4 bg-[#ccff00] hover:bg-[#b8e600] rounded-lg border border-solid border-black shadow-shadows-shadow-xs text-black font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-sm sm:text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
+                  <Button variant="signal" size="qs-hero" className="group">
                     Get in touch
                   </Button>
                 </a>
@@ -182,7 +182,7 @@ export const HeroIntroSection = (): JSX.Element => {
         >
           <p
             id="client-logos-title"
-            className="text-center text-base sm:text-lg text-[#a4a4aa] leading-7"
+            className="text-center text-base sm:text-lg text-ink-muted leading-7"
           >
             Trusted by CAC 40 leaders and global enterprises.
           </p>
@@ -198,7 +198,7 @@ export const HeroIntroSection = (): JSX.Element => {
                   alt={logo.name}
                   width={logo.width}
                   height={logo.height}
-                  className={`${logo.className} h-auto max-w-full object-contain`}
+                  className={`${logo.className} qs-invert-on-light h-auto max-w-full object-contain`}
                 />
               </li>
             ))}

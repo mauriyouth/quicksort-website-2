@@ -41,7 +41,7 @@ const AiForBusinessIcon: React.FC<{ className?: string }> = ({ className }) => {
           y1="50"
           x2="168.962"
           y2="410"
-          stroke="#309EFF"
+          stroke="var(--qs-cat-blue)"
           strokeWidth="2"
           strokeDasharray="8 8"
           opacity="0.7"
@@ -65,10 +65,10 @@ const AiForBusinessIcon: React.FC<{ className?: string }> = ({ className }) => {
 
       <style>{`
         .ai-business-icon-stage {
-          --blue-accent: #309EFF;
+          --blue-accent: var(--qs-cat-blue);
           --total-duration: 24s;
           --bg-color: transparent;
-          --shape-color: #ffffff;
+          --shape-color: var(--qs-ink);
           --travel-dist: -200px;
           
           position: relative;

@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="_card.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<style>
+  html,body{margin:0;padding:0;background:transparent}
+  body{width:700px;padding:20px;box-sizing:border-box}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakToggle } = window;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "dark",
+  "halo": "white",
+  "texture": "plain"
+}/*EDITMODE-END*/;
+
+function SlideAnatomy() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const dark = t.theme === "dark";
+
+  const ink = "#000710";
+  const fg = dark ? "#FAFAFA" : ink;
+  const fgMeta = dark ? "rgba(250,250,250,.78)" : "#141414";
+  const eyebrow = dark ? "rgba(250,250,250,.6)" : "#141414";
+  const gridLine = dark ? "rgba(250,250,250,.07)" : "rgba(0,7,14,.08)";
+  const canvas = dark ? "#151515" : "#FAFAFA";
+
+  const haloColor = t.halo === "lime" ? "#CCFF00" : "#FFFFFF";
+  const haloOpacity = t.halo === "none" ? 0 : (t.halo === "lime" ? (dark ? .5 : .55) : (dark ? .12 : .5));
+
+  const showGrid = t.texture !== "plain";
+  const showGrain = t.texture === "grain";
+
+  const markSrc = dark ? "../assets/logo-mark-light.svg" : "../assets/logo-mark-dark.svg";
+
+  return (
+    <div className="card">
+      <div style={{position:"relative",height:300,borderRadius:14,overflow:"hidden",
+        background:canvas,border:dark?"1px solid rgba(250,250,250,.08)":"1px solid rgba(0,7,14,.08)"}}>
+
+        {/* grid layer (masked) */}
+        {showGrid && (
+          <div style={{position:"absolute",inset:0,
+            backgroundImage:`linear-gradient(to right, ${gridLine} 1px, transparent 1px), linear-gradient(to bottom, ${gridLine} 1px, transparent 1px)`,
+            backgroundSize:"48px 48px",
+            WebkitMaskImage:"radial-gradient(ellipse at 50% 30%, black 0%, transparent 90%)",
+            maskImage:"radial-gradient(ellipse at 50% 30%, black 0%, transparent 90%)"}}/>
+        )}
+
+        {/* grain overlay */}
+        {showGrain && (
+          <div style={{position:"absolute",inset:0,
+            backgroundImage:"url(../assets/grain-texture.png)",backgroundSize:"cover",
+            mixBlendMode:dark?"screen":"multiply",opacity:dark?.25:.12}}/>
+        )}
+
+        {/* halo */}
+        <div style={{position:"absolute",left:"50%",top:-70,width:"80%",height:150,
+          transform:"translateX(-50%)",borderRadius:"50%",
+          background:haloColor,opacity:haloOpacity,filter:"blur(12px)",pointerEvents:"none"}}/>
+
+        {/* mark top-left */}
+        <div style={{position:"absolute",left:28,top:28}}>
+          <img src={markSrc} style={{width:32,display:"block"}}/>
+        </div>
+        <div style={{position:"absolute",left:28,top:72,fontFamily:"Inter",fontSize:11,
+          color:eyebrow,letterSpacing:".12em",textTransform:"uppercase",fontWeight:500,opacity:.85}}>Mark · top-left</div>
+
+        {/* headline */}
+        <div style={{position:"absolute",left:28,right:28,top:128,fontFamily:"'Hanken Grotesk',sans-serif",
+          fontSize:28,lineHeight:1.1,color:fg,fontWeight:500,
+          textShadow:dark?"none":"0 1px 0 rgba(255,255,255,.5)"}}>
+          Quicksort sits between your team and your systems — noticing, drafting, handing control back.
+        </div>
+
+        {/* meta */}
+        <div style={{position:"absolute",right:20,bottom:16,fontFamily:"Inter",fontSize:13,
+          color:fgMeta,letterSpacing:".04em",fontWeight:500}}>12 · meta</div>
+        <div style={{position:"absolute",left:28,bottom:16,fontFamily:"Inter",fontSize:11,
+          color:eyebrow,letterSpacing:".12em",textTransform:"uppercase",fontWeight:500,opacity:.7}}>Halo · Grid · Mask</div>
+      </div>
+      <div className="mono" style={{marginTop:8,color:dark?"#8E8E8E":"#141414"}}>
+        Slide anatomy · grid (masked) · halo top · mark top-left · meta bottom-right
+      </div>
+
+      <TweaksPanel>
+        <TweakSection label="Background" />
+        <TweakRadio label="Theme" value={t.theme}
+          options={["light","dark"]}
+          onChange={(v)=>setTweak("theme",v)} />
+        <TweakRadio label="Halo" value={t.halo}
+          options={["lime","white","none"]}
+          onChange={(v)=>setTweak("halo",v)} />
+        <TweakRadio label="Texture" value={t.texture}
+          options={["grid","grain","plain"]}
+          onChange={(v)=>setTweak("texture",v)} />
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<SlideAnatomy/>);
+</script>
+</body>
+</html>

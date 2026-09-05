@@ -9,55 +9,105 @@
 
 :root {
   --backdrop-blurs-backdrop-blur-lg: ;
-  --display-md-semibold-font-family: "Inter", Helvetica;
+  --shadows-shadow-xs: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
+
+  /* ── Display steps · Hanken Grotesk ─────────────────────────────
+     The brand's headline voice. Sizes are unchanged from what the
+     site already shipped; only the face and tracking move. */
+  --display-lg-semibold-font-family: var(--qs-font-display);
+  --display-lg-semibold-font-size: 48px;
+  --display-lg-semibold-font-style: normal;
+  --display-lg-semibold-font-weight: 600;
+  --display-lg-semibold-letter-spacing: -0.96px;
+  --display-lg-semibold-line-height: 60px;
+
+  --display-md-semibold-font-family: var(--qs-font-display);
   --display-md-semibold-font-size: 36px;
   --display-md-semibold-font-style: normal;
   --display-md-semibold-font-weight: 600;
   --display-md-semibold-letter-spacing: -0.72px;
   --display-md-semibold-line-height: 44px;
-  --display-sm-semibold-font-family: "Inter", Helvetica;
+
+  --display-sm-semibold-font-family: var(--qs-font-display);
   --display-sm-semibold-font-size: 30px;
   --display-sm-semibold-font-style: normal;
   --display-sm-semibold-font-weight: 600;
-  --display-sm-semibold-letter-spacing: 0px;
+  --display-sm-semibold-letter-spacing: -0.6px;
   --display-sm-semibold-line-height: 38px;
-  --m3-title-large-font-family: "Roboto", Helvetica;
-  --m3-title-large-font-size: 22px;
-  --m3-title-large-font-style: normal;
-  --m3-title-large-font-weight: 400;
-  --m3-title-large-letter-spacing: 0px;
-  --m3-title-large-line-height: 28px;
-  --shadows-shadow-xs: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
-  --text-lg-semibold-font-family: "Inter", Helvetica;
-  --text-lg-semibold-font-size: 18px;
-  --text-lg-semibold-font-style: normal;
-  --text-lg-semibold-font-weight: 600;
-  --text-lg-semibold-letter-spacing: 0px;
-  --text-lg-semibold-line-height: 28px;
-  --text-md-regular-font-family: "Inter", Helvetica;
-  --text-md-regular-font-size: 16px;
-  --text-md-regular-font-style: normal;
-  --text-md-regular-font-weight: 400;
-  --text-md-regular-letter-spacing: 0px;
-  --text-md-regular-line-height: 24px;
-  --text-md-semibold-font-family: "Inter", Helvetica;
-  --text-md-semibold-font-size: 16px;
-  --text-md-semibold-font-style: normal;
-  --text-md-semibold-font-weight: 600;
-  --text-md-semibold-letter-spacing: 0px;
-  --text-md-semibold-line-height: 24px;
-  --text-xl-regular-font-family: "Inter", Helvetica;
-  --text-xl-regular-font-size: 20px;
-  --text-xl-regular-font-style: normal;
-  --text-xl-regular-font-weight: 400;
-  --text-xl-regular-letter-spacing: 0px;
-  --text-xl-regular-line-height: 30px;
-  --text-xl-semibold-font-family: "Inter", Helvetica;
+
+  --display-xs-semibold-font-family: var(--qs-font-display);
+  --display-xs-semibold-font-size: 24px;
+  --display-xs-semibold-font-style: normal;
+  --display-xs-semibold-font-weight: 600;
+  --display-xs-semibold-letter-spacing: -0.48px;
+  --display-xs-semibold-line-height: 32px;
+
+  /* ── Text steps · Inter ─────────────────────────────────────────
+     Everything a person reads at length, plus all UI. */
+  --text-xl-semibold-font-family: var(--qs-font-sans);
   --text-xl-semibold-font-size: 20px;
   --text-xl-semibold-font-style: normal;
   --text-xl-semibold-font-weight: 600;
   --text-xl-semibold-letter-spacing: 0px;
   --text-xl-semibold-line-height: 30px;
+
+  --text-xl-regular-font-family: var(--qs-font-sans);
+  --text-xl-regular-font-size: 20px;
+  --text-xl-regular-font-style: normal;
+  --text-xl-regular-font-weight: 400;
+  --text-xl-regular-letter-spacing: 0px;
+  --text-xl-regular-line-height: 30px;
+
+  --text-lg-semibold-font-family: var(--qs-font-sans);
+  --text-lg-semibold-font-size: 18px;
+  --text-lg-semibold-font-style: normal;
+  --text-lg-semibold-font-weight: 600;
+  --text-lg-semibold-letter-spacing: 0px;
+  --text-lg-semibold-line-height: 28px;
+
+  --text-md-semibold-font-family: var(--qs-font-sans);
+  --text-md-semibold-font-size: 16px;
+  --text-md-semibold-font-style: normal;
+  --text-md-semibold-font-weight: 600;
+  --text-md-semibold-letter-spacing: 0px;
+  --text-md-semibold-line-height: 24px;
+
+  --text-md-medium-font-family: var(--qs-font-sans);
+  --text-md-medium-font-size: 16px;
+  --text-md-medium-font-style: normal;
+  --text-md-medium-font-weight: 500;
+  --text-md-medium-letter-spacing: 0px;
+  --text-md-medium-line-height: 24px;
+
+  --text-md-regular-font-family: var(--qs-font-sans);
+  --text-md-regular-font-size: 16px;
+  --text-md-regular-font-style: normal;
+  --text-md-regular-font-weight: 400;
+  --text-md-regular-letter-spacing: 0px;
+  --text-md-regular-line-height: 24px;
+
+  --text-sm-semibold-font-family: var(--qs-font-sans);
+  --text-sm-semibold-font-size: 14px;
+  --text-sm-semibold-font-style: normal;
+  --text-sm-semibold-font-weight: 600;
+  --text-sm-semibold-letter-spacing: 0px;
+  --text-sm-semibold-line-height: 20px;
+
+  --text-sm-medium-font-family: var(--qs-font-sans);
+  --text-sm-medium-font-size: 14px;
+  --text-sm-medium-font-style: normal;
+  --text-sm-medium-font-weight: 500;
+  --text-sm-medium-letter-spacing: 0px;
+  --text-sm-medium-line-height: 20px;
+
+  /* Legacy alias. Was Roboto — the only off-brand family on the
+     site — now folded into the Inter scale. */
+  --m3-title-large-font-family: var(--qs-font-sans);
+  --m3-title-large-font-size: 22px;
+  --m3-title-large-font-style: normal;
+  --m3-title-large-font-weight: 400;
+  --m3-title-large-letter-spacing: 0px;
+  --m3-title-large-line-height: 28px;
 }
 
 :root {
@@ -171,81 +221,307 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════
+   QUICKSORT DESIGN SYSTEM · TOKEN LAYER
+   Derived from the brand identity bundle in quicksort-design-system/.
+   See docs/superpowers/specs/2026-09-05-design-system-theming-design.md
+
+   Three layers:
+     1. Brand primitives  — the raw palette. Never used by a component.
+     2. Semantic tokens   — flip between themes. Consumed via layer 3.
+     3. Tailwind names    — see tailwind.config.js (bg-surface, text-ink, …)
+
+   Components must only ever touch layer 3. If a colour you need is not
+   in layer 2, add a token — do not reach for a hex.
+
+   Solid colours are stored as space-separated RGB triplets so Tailwind
+   can apply opacity modifiers (`text-ink/40`). Each has a derived plain
+   colour var alongside it for use in hand-written CSS and inline styles.
+   ═══════════════════════════════════════════════════════════════════ */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 47.4% 11.2%;
+    /* ── Layer 1 · Brand primitives ───────────────────────────────
+       Rich Black #000710 · Ink #141414 · Dim Gray #8E8E8E
+       Timberwolf #D6D6D6 · Seasalt #FAFAFA · Signal Lime #CCFF00 */
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* ── Layer 2 · Semantic tokens · DARK (the default theme) ─────
+       These values reproduce the pre-token site exactly. */
+    --qs-surface-rgb:         0 0 0;  /* page canvas */
+    --qs-surface-raised-rgb:  16 16 16;  /* cards, panels, nav */
+    --qs-surface-sunken-rgb:  31 36 47;  /* wells, chips, inset blocks */
+    --qs-surface-inverse-rgb: 250 250 250;  /* flipped CTA blocks */
+    --qs-surface-inverse-hover-rgb: 234 234 234;  /* ~8% down from Seasalt */
+    --qs-ink-rgb:             245 245 246;  /* primary text */
+    --qs-ink-2-rgb:           206 207 210;  /* secondary text */
+    --qs-ink-muted-rgb:       148 150 156;  /* muted labels */
+    --qs-ink-faint-rgb:       125 125 125;  /* meta, timestamps */
+    --qs-ink-inverse-rgb:     0 7 16;  /* text on inverse surfaces */
+    --qs-line-rgb:            31 36 47;  /* default hairline */
+    --qs-signal-rgb:          204 255 0;  /* Signal Lime, as a fill */
+    --qs-signal-hover-rgb:    184 230 0;  /* lime, pressed / hovered */
+    --qs-signal-fg-rgb:       20 20 20;  /* text sitting ON lime */
+    --qs-signal-text-rgb:     204 255 0;  /* lime used AS text */
+    --qs-cat-violet-rgb:      155 92 255;
+    --qs-cat-violet-soft-rgb: 167 139 250;
+    --qs-cat-pink-rgb:        237 70 187;
+    --qs-cat-pink-soft-rgb:   244 114 182;
+    --qs-cat-pink-deep-rgb:   158 21 94;
+    --qs-cat-blue-rgb:        48 158 255;
+    --qs-cat-red-rgb:         255 48 62;
+    --qs-cat-red-soft-rgb:    241 74 85;
+    --qs-cat-green-rgb:       58 225 101;
+    --qs-cat-green-deep-rgb:  48 183 83;
+    --qs-danger-rgb:          190 18 30;  /* destructive fill; white on it clears AA */
+    --qs-cat-pink-tint-rgb:    78 13 48;    /* soft category chip fill */
+    --qs-cat-pink-tint-fg-rgb: 249 167 223; /* text inside that chip */
+    --qs-on-fill-rgb:          255 255 255; /* text on a saturated fill */
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 47.4% 11.2%;
+    /* Translucent tokens. Already carry their own alpha, so they are
+       not meant to be stacked with a Tailwind opacity modifier. */
+    --qs-surface-scrim: rgba(0, 0, 0, 0.72);
+    --qs-line-strong:   rgba(250, 250, 250, 0.24);
+    --qs-line-faint:    rgba(250, 250, 250, 0.1);
+    --qs-hairline:      rgba(250, 250, 250, 0.4);
+    --qs-signal-soft:   rgba(204, 255, 0, 0.4);
+    --qs-grid-line:     rgba(250, 250, 250, 0.05);
+    /* Scrim over photography. Stays dark in both themes — it exists to
+       make white text readable on top of an image. */
+    --qs-photo-scrim:   rgba(12, 17, 29, 0.6);
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    /* Gradient stops inside the decorative SVG illustrations. */
+    --qs-illus-3d-0:  #111111;
+    --qs-illus-3d-1:  #444444;
+    --qs-illus-3d-2:  #ffffff;
+    --qs-illus-red-0: #330000;
+    --qs-illus-red-1: #880000;
 
-    --card: transparent;
-    --card-foreground: 222.2 47.4% 11.2%;
+    /* Decorative surfaces painted from JS (canvas, animated noise) */
+    --qs-canvas-cell-from: 51 51 51;
+    --qs-canvas-cell-to:   20 20 20;
+    --qs-noise-rgb:        255 255 255;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Derived plain colours — for CSS and inline styles. */
+    --qs-surface:         rgb(var(--qs-surface-rgb));
+    --qs-surface-raised:  rgb(var(--qs-surface-raised-rgb));
+    --qs-surface-sunken:  rgb(var(--qs-surface-sunken-rgb));
+    --qs-surface-inverse: rgb(var(--qs-surface-inverse-rgb));
+    --qs-surface-inverse-hover: rgb(var(--qs-surface-inverse-hover-rgb));
+    --qs-ink:             rgb(var(--qs-ink-rgb));
+    --qs-ink-2:           rgb(var(--qs-ink-2-rgb));
+    --qs-ink-muted:       rgb(var(--qs-ink-muted-rgb));
+    --qs-ink-faint:       rgb(var(--qs-ink-faint-rgb));
+    --qs-ink-inverse:     rgb(var(--qs-ink-inverse-rgb));
+    --qs-line:            rgb(var(--qs-line-rgb));
+    --qs-signal:          rgb(var(--qs-signal-rgb));
+    --qs-signal-hover:    rgb(var(--qs-signal-hover-rgb));
+    --qs-signal-fg:       rgb(var(--qs-signal-fg-rgb));
+    --qs-signal-text:     rgb(var(--qs-signal-text-rgb));
+    --qs-cat-violet:      rgb(var(--qs-cat-violet-rgb));
+    --qs-cat-violet-soft: rgb(var(--qs-cat-violet-soft-rgb));
+    --qs-cat-pink:        rgb(var(--qs-cat-pink-rgb));
+    --qs-cat-pink-soft:   rgb(var(--qs-cat-pink-soft-rgb));
+    --qs-cat-pink-deep:   rgb(var(--qs-cat-pink-deep-rgb));
+    --qs-cat-blue:        rgb(var(--qs-cat-blue-rgb));
+    --qs-cat-red:         rgb(var(--qs-cat-red-rgb));
+    --qs-cat-red-soft:    rgb(var(--qs-cat-red-soft-rgb));
+    --qs-cat-green:       rgb(var(--qs-cat-green-rgb));
+    --qs-cat-green-deep:  rgb(var(--qs-cat-green-deep-rgb));
+    --qs-danger:           rgb(var(--qs-danger-rgb));
+    --qs-cat-pink-tint:    rgb(var(--qs-cat-pink-tint-rgb));
+    --qs-cat-pink-tint-fg: rgb(var(--qs-cat-pink-tint-fg-rgb));
+    --qs-on-fill:          rgb(var(--qs-on-fill-rgb));
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* ── Theme-independent tokens (from the brand bundle) ───────── */
+    --qs-font-display: "Hanken Grotesk", "Inter", "Helvetica Neue", Arial, sans-serif;
+    --qs-font-sans:    "Inter", "Helvetica Neue", Arial, sans-serif;
+    --qs-font-mono:    "JetBrains Mono", "SF Mono", ui-monospace, monospace;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --qs-space-1: 4px;
+    --qs-space-2: 8px;
+    --qs-space-3: 12px;
+    --qs-space-4: 16px;
+    --qs-space-5: 24px;
+    --qs-space-6: 32px;
+    --qs-space-7: 48px;
+    --qs-space-8: 64px;
+    --qs-space-9: 96px;
+    --qs-space-10: 128px;
 
-    --destructive: 0 100% 50%;
-    --destructive-foreground: 210 40% 98%;
+    --qs-radius-sm: 6px;
+    --qs-radius-md: 10px;
+    --qs-radius-lg: 16px;
+    --qs-radius-xl: 20px;
+    --qs-radius-pill: 999px;
 
-    --ring: 215 20.2% 65.1%;
+    --qs-shadow-1: 0 1px 2px rgba(0, 7, 14, 0.04), 0 1px 1px rgba(0, 7, 14, 0.02);
+    --qs-shadow-2: 0 6px 16px rgba(0, 7, 14, 0.06), 0 2px 4px rgba(0, 7, 14, 0.04);
+    --qs-shadow-3: 0 24px 48px rgba(0, 7, 14, 0.1), 0 8px 16px rgba(0, 7, 14, 0.06);
+
+    --qs-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --qs-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --qs-dur-1: 120ms;
+    --qs-dur-2: 200ms;
+    --qs-dur-3: 360ms;
+    --qs-dur-4: 640ms;
+
+    --qs-grid-cell: 96px;
 
     --radius: 0.5rem;
+    color-scheme: dark;
   }
 
-  .dark {
-    --background: 224 71% 4%;
-    --foreground: 213 31% 91%;
+  /* ── Layer 2 · Semantic tokens · LIGHT ───────────────────────────
+     Only the tokens that must flip are redefined, so there is exactly
+     one place to add a token. Signal Lime keeps its value as a FILL
+     (with Ink on top, per the brand doc) but darkens as TEXT — lime on
+     Seasalt measures ~1.1:1, which is illegible. */
+  [data-theme="light"] {
+    --qs-surface-rgb:         250 250 250;
+    --qs-surface-raised-rgb:  255 255 255;
+    --qs-surface-sunken-rgb:  240 241 243;
+    --qs-surface-inverse-rgb: 20 20 20;
+    --qs-surface-inverse-hover-rgb: 38 38 38;
+    --qs-ink-rgb:             0 7 16;
+    --qs-ink-2-rgb:           58 58 58;
+    --qs-ink-muted-rgb:       97 97 97;
+    --qs-ink-faint-rgb:       107 107 107;
+    --qs-ink-inverse-rgb:     250 250 250;
+    --qs-line-rgb:            214 214 214;
+    --qs-signal-text-rgb:     92 115 0;
+    --qs-cat-violet-rgb:      109 40 217;
+    --qs-cat-violet-soft-rgb: 124 58 237;
+    --qs-cat-pink-rgb:        162 28 175;
+    --qs-cat-pink-soft-rgb:   190 24 93;
+    --qs-cat-blue-rgb:        0 112 216;
+    --qs-cat-red-rgb:         200 30 42;
+    --qs-cat-red-soft-rgb:    209 58 69;
+    --qs-cat-green-rgb:       21 128 61;
+    --qs-cat-green-deep-rgb:  21 128 61;
+    --qs-danger-rgb:          185 28 28;
+    --qs-cat-pink-tint-rgb:    250 232 243;
+    --qs-cat-pink-tint-fg-rgb: 158 21 94;
 
-    --muted: 223 47% 11%;
-    --muted-foreground: 215.4 16.3% 56.9%;
+    --qs-surface-scrim: rgba(250, 250, 250, 0.78);
+    --qs-line-strong:   rgba(0, 7, 14, 0.16);
+    --qs-line-faint:    rgba(0, 7, 14, 0.08);
+    --qs-hairline:      rgba(0, 7, 14, 0.28);
+    --qs-signal-soft:   rgba(204, 255, 0, 0.55);
+    --qs-grid-line:     rgba(0, 7, 14, 0.05);
 
-    --accent: 216 34% 17%;
-    --accent-foreground: 210 40% 98%;
+    --qs-illus-3d-0:  #e4e4e4;
+    --qs-illus-3d-1:  #9a9a9a;
+    --qs-illus-3d-2:  #000710;
+    --qs-illus-red-0: #ffd9dc;
+    --qs-illus-red-1: #d13a45;
 
-    --popover: 224 71% 4%;
-    --popover-foreground: 215 20.2% 65.1%;
+    --qs-canvas-cell-from: 205 205 205;
+    --qs-canvas-cell-to:   235 235 235;
+    --qs-noise-rgb:        0 7 20;
 
-    --border: 216 34% 17%;
-    --input: 216 34% 17%;
+    --qs-surface:         rgb(var(--qs-surface-rgb));
+    --qs-surface-raised:  rgb(var(--qs-surface-raised-rgb));
+    --qs-surface-sunken:  rgb(var(--qs-surface-sunken-rgb));
+    --qs-surface-inverse: rgb(var(--qs-surface-inverse-rgb));
+    --qs-surface-inverse-hover: rgb(var(--qs-surface-inverse-hover-rgb));
+    --qs-ink:             rgb(var(--qs-ink-rgb));
+    --qs-ink-2:           rgb(var(--qs-ink-2-rgb));
+    --qs-ink-muted:       rgb(var(--qs-ink-muted-rgb));
+    --qs-ink-faint:       rgb(var(--qs-ink-faint-rgb));
+    --qs-ink-inverse:     rgb(var(--qs-ink-inverse-rgb));
+    --qs-line:            rgb(var(--qs-line-rgb));
+    --qs-signal-text:     rgb(var(--qs-signal-text-rgb));
+    --qs-cat-violet:      rgb(var(--qs-cat-violet-rgb));
+    --qs-cat-violet-soft: rgb(var(--qs-cat-violet-soft-rgb));
+    --qs-cat-pink:        rgb(var(--qs-cat-pink-rgb));
+    --qs-cat-pink-soft:   rgb(var(--qs-cat-pink-soft-rgb));
+    --qs-cat-blue:        rgb(var(--qs-cat-blue-rgb));
+    --qs-cat-red:         rgb(var(--qs-cat-red-rgb));
+    --qs-cat-red-soft:    rgb(var(--qs-cat-red-soft-rgb));
+    --qs-cat-green:       rgb(var(--qs-cat-green-rgb));
+    --qs-cat-green-deep:  rgb(var(--qs-cat-green-deep-rgb));
+    --qs-danger:           rgb(var(--qs-danger-rgb));
+    --qs-cat-pink-tint:    rgb(var(--qs-cat-pink-tint-rgb));
+    --qs-cat-pink-tint-fg: rgb(var(--qs-cat-pink-tint-fg-rgb));
+    --qs-on-fill:          rgb(var(--qs-on-fill-rgb));
 
-    --card: transparent;
-    --card-foreground: 213 31% 91%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 1.2%;
-
-    --secondary: 222.2 47.4% 11.2%;
-    --secondary-foreground: 210 40% 98%;
-
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-
-    --ring: 216 34% 17%;
-
-    --radius: 0.5rem;
+    color-scheme: light;
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-line;
+  }
+
+  html {
+    background-color: var(--qs-surface);
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-surface text-ink;
+    font-family: var(--qs-font-sans);
     font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Every interactive element gets a visible Signal Lime focus ring. */
+  :focus-visible {
+    outline: 2px solid var(--qs-signal);
+    outline-offset: 2px;
+  }
+}
+
+/* Theme crossfade. Scoped to the properties that actually change, and
+   suppressed while the toggle is mid-swap so nothing lags behind. */
+@layer base {
+  body:not(.qs-theme-switching) *,
+  body:not(.qs-theme-switching) *::before,
+  body:not(.qs-theme-switching) *::after {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: var(--qs-dur-2);
+    transition-timing-function: var(--qs-ease);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body * {
+      transition: none !important;
+    }
+  }
+}
+
+/* ── Brand grid background · the signature Quicksort surface ─────── */
+@layer components {
+  .qs-grid-bg {
+    background-image: linear-gradient(to right, var(--qs-grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--qs-grid-line) 1px, transparent 1px);
+    background-size: var(--qs-grid-cell) var(--qs-grid-cell);
+  }
+
+  .qs-grid-mask {
+    -webkit-mask-image: radial-gradient(ellipse at 50% 30%, black 0%, transparent 85%);
+    mask-image: radial-gradient(ellipse at 50% 30%, black 0%, transparent 85%);
+  }
+
+  /* Monochrome white artwork — client logos, icon PNGs, social marks.
+     These are flat white assets with no light-mode counterpart, so the
+     theme inverts them rather than shipping a second set of files. */
+  [data-theme="light"] .qs-invert-on-light {
+    filter: invert(1);
+  }
+
+  /* Lime halo — the top-edge bleed from the identity slides. */
+  .qs-halo {
+    position: absolute;
+    left: 50%;
+    top: -260px;
+    width: min(1400px, 120%);
+    height: 320px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: var(--qs-signal);
+    opacity: 0.22;
+    filter: blur(90px);
+    pointer-events: none;
   }
 }

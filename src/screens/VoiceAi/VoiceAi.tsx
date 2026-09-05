@@ -46,7 +46,7 @@ const productionCapabilities = [
 ];
 
 export const VoiceAi = (): JSX.Element => (
-  <div className="flex w-full flex-col items-center overflow-x-hidden bg-[#000000]">
+  <div className="flex w-full flex-col items-center overflow-x-hidden bg-surface">
     <MainNavigationSection />
 
     <main className="flex w-full flex-col items-center">
@@ -60,10 +60,10 @@ export const VoiceAi = (): JSX.Element => (
               alt="Voice AI waveform"
               className="h-[47px] w-[47px]"
             />
-            <h1 className="text-3xl font-semibold leading-tight tracking-[-0.72px] text-[#f5f5f6] sm:text-4xl">
+            <h1 className="text-3xl font-semibold leading-tight tracking-[-0.72px] text-ink sm:text-4xl">
               Voice AI
             </h1>
-            <p className="text-base leading-6 text-[#94969c] sm:text-lg sm:leading-7">
+            <p className="text-base leading-6 text-ink-muted sm:text-lg sm:leading-7">
               Voice bots and conversational interfaces that listen, understand,
               and act across your business.
             </p>
@@ -72,10 +72,10 @@ export const VoiceAi = (): JSX.Element => (
           <div className="grid w-full flex-1 grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-x-16">
             {voiceCapabilities.map((capability) => (
               <article key={capability.title} className="flex flex-col gap-2">
-                <h2 className="text-lg font-semibold leading-7 text-[#f5f5f6] sm:text-xl">
+                <h2 className="text-lg font-semibold leading-7 text-ink sm:text-xl">
                   {capability.title}
                 </h2>
-                <p className="text-sm leading-6 text-[#94969c] sm:text-base">
+                <p className="text-sm leading-6 text-ink-muted sm:text-base">
                   {capability.description}
                 </p>
               </article>
@@ -84,10 +84,10 @@ export const VoiceAi = (): JSX.Element => (
         </div>
 
         <div className="relative z-[1] flex w-full max-w-screen-xl flex-col gap-4 px-4 sm:px-8">
-          <h2 className="text-xl font-semibold leading-8 text-[#f5f5f6]">
+          <h2 className="text-xl font-semibold leading-8 text-ink">
             Not scripted phone trees. Voice agents that get work done.
           </h2>
-          <p className="max-w-5xl text-base leading-7 text-[#94969c] sm:text-xl sm:leading-8">
+          <p className="max-w-5xl text-base leading-7 text-ink-muted sm:text-xl sm:leading-8">
             We design and engineer intelligent inbound and outbound voice bots,
             embedded voice interfaces, and real-time agents that understand
             context, execute workflows, and know when to involve a human.
@@ -102,10 +102,10 @@ export const VoiceAi = (): JSX.Element => (
         <div className="relative z-[1] flex w-full max-w-screen-xl flex-col items-center gap-12 px-4 sm:px-8 lg:flex-row lg:gap-[130px]">
           <div className="flex w-full flex-1 flex-col items-start gap-8 sm:gap-12">
             <div className="flex flex-col gap-3">
-              <p className="text-sm font-semibold leading-6 text-[#9B5CFF] sm:text-base">
+              <p className="text-sm font-semibold leading-6 text-cat-violet sm:text-base">
                 From conversations to completed work
               </p>
-              <h2 className="text-2xl font-semibold leading-tight tracking-[-0.72px] text-[#f5f5f6] sm:text-3xl md:text-4xl">
+              <h2 className="text-2xl font-semibold leading-tight tracking-[-0.72px] text-ink sm:text-3xl md:text-4xl">
                 Voice agents connected to the business.
               </h2>
             </div>
@@ -113,10 +113,10 @@ export const VoiceAi = (): JSX.Element => (
             <div className="flex flex-col gap-6">
               {productionCapabilities.map((capability) => (
                 <article key={capability.title} className="flex flex-col gap-2">
-                  <h3 className="text-lg font-semibold leading-7 text-[#f5f5f6] sm:text-xl">
+                  <h3 className="text-lg font-semibold leading-7 text-ink sm:text-xl">
                     {capability.title}
                   </h3>
-                  <p className="text-sm leading-6 text-[#94969c] sm:text-base">
+                  <p className="text-sm leading-6 text-ink-muted sm:text-base">
                     {capability.description}
                   </p>
                 </article>

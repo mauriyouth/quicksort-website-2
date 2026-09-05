@@ -96,8 +96,8 @@ const serviceCards = [
     title: "AI for business",
     description:
       "We build custom AI workspaces and agents that embed directly into your operations. Our systems connect people, data, and tools into orchestrated environments where human judgment validates agent reasoning — automating coordination, and decision loops.",
-    bgColor: "bg-[#101010]",
-    iconBg: "bg-[#309eff]",
+    bgColor: "bg-surface-raised",
+    iconBg: "bg-cat-blue",
     href: "/ai-for-business",
   },
   {
@@ -106,8 +106,8 @@ const serviceCards = [
     title: "Data for AI",
     description:
       "We transform fragmented enterprise data into structured, contextual intelligence ready for AI consumption — enabling models and agents to reason, learn, and act with precision.",
-    bgColor: "bg-[#101010]",
-    iconBg: "bg-[#FF303E]",
+    bgColor: "bg-surface-raised",
+    iconBg: "bg-cat-red",
     href: "/data-for-ai",
   },
   {
@@ -116,8 +116,8 @@ const serviceCards = [
     title: "Infrastructure for AI",
     description:
       "We design, deploy, and operate on-premise or cloud-native AI infrastructures optimized for LLMs, multimodal models, and agent systems — secure, compliant, and performance-tuned for enterprise workloads.",
-    bgColor: "bg-[#101010]",
-    iconBg: "bg-[#3AE165]",
+    bgColor: "bg-surface-raised",
+    iconBg: "bg-cat-green",
     href: "/infrastructure-for-ai",
   },
   {
@@ -126,8 +126,8 @@ const serviceCards = [
     title: "Voice AI",
     description:
       "We build intelligent inbound and outbound voice bots, embedded voice interfaces, and real-time conversational agents that understand context, execute workflows, and hand off seamlessly to humans.",
-    bgColor: "bg-[#101010]",
-    iconBg: "bg-[#9B5CFF]",
+    bgColor: "bg-surface-raised",
+    iconBg: "bg-cat-violet",
     href: "/voice-ai",
   },
 ];
@@ -296,7 +296,7 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
   return (
     <section
       ref={sectionRef}
-      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-[#000000]"
+      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-surface"
     >
       <SectionGridOverlay showCenterLine={false} />
       <div
@@ -306,12 +306,12 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
         <div className="flex flex-col items-start gap-6 sm:gap-8 w-full">
           <div className="flex flex-col items-start gap-4 sm:gap-5 w-full">
             <div className="flex flex-col items-start gap-3 w-full">
-              <h2 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
+              <h2 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-ink [font-style:var(--display-md-semibold-font-style)]">
                 Our Services
               </h2>
             </div>
 
-            <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-[#94969c] text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
+            <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
               Right-sized innovation. Real systems. Compounding value.
             </p>
           </div>
@@ -331,13 +331,13 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
                 to={card.href || "#"}
                 className="service-card flex flex-1 min-w-0 w-full h-full group"
               >
-                <Card className="flex-col w-full gap-4 sm:gap-6 p-4 sm:p-6 flex-1 h-full bg-[#101010] border-0 rounded-none transition-colors duration-300 group-hover:bg-[#1c1c1c]">
+                <Card className="flex-col w-full gap-4 sm:gap-6 p-4 sm:p-6 flex-1 h-full bg-surface-raised border-0 rounded-none transition-colors duration-300 group-hover:bg-surface-raised">
                   <CardContent className="flex flex-col gap-4 sm:gap-6 p-0 h-full">
                     <div
                       className={`flex-shrink-0 w-[47px] h-[47px] rounded-lg flex items-center justify-center ${
                         card.iconSrc
                           ? ""
-                          : `${card.iconBg} transition-colors duration-300 group-hover:bg-[#ccff00]`
+                          : `${card.iconBg} transition-colors duration-300 group-hover:bg-signal`
                       }`}
                     >
                       {card.iconSrc ? (
@@ -349,26 +349,26 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
                           className="w-[47px] h-[47px] object-contain"
                         />
                       ) : Icon ? (
-                        <Icon className="w-5 h-5 text-white transition-colors duration-300 group-hover:text-black" />
+                        <Icon className="w-5 h-5 text-on-fill transition-colors duration-300 group-hover:text-signal-fg" />
                       ) : null}
                     </div>
 
                     <div className="flex flex-col items-start gap-4 sm:gap-5 w-full flex-1">
                       <div className="flex flex-col items-start gap-2 w-full">
-                        <h3 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-white text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)] transition-colors duration-300 group-hover:text-[#ccff00]">
+                        <h3 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-ink text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)] transition-colors duration-300 group-hover:text-signal-text">
                           {card.title}
                         </h3>
 
-                        <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+                        <p className="text-ink-muted font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
                           {card.description}
                         </p>
                       </div>
 
                       <div className="inline-flex items-center justify-center gap-2 cursor-pointer mt-auto">
-                        <span className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#cecfd2] text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] whitespace-nowrap [font-style:var(--text-md-semibold-font-style)] transition-colors duration-300 group-hover:text-[#ccff00]">
+                        <span className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink-2 text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] whitespace-nowrap [font-style:var(--text-md-semibold-font-style)] transition-colors duration-300 group-hover:text-signal-text">
                           See more
                         </span>
-                        <ArrowRightIcon className="w-5 h-5 text-[#cecfd2] transition-colors duration-300 group-hover:text-[#ccff00]" />
+                        <ArrowRightIcon className="w-5 h-5 text-ink-2 transition-colors duration-300 group-hover:text-signal-text" />
                       </div>
                     </div>
                   </CardContent>
@@ -388,11 +388,11 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
             className="flex flex-col max-w-full lg:max-w-[720px] lg:w-[480px] items-start gap-8 sm:gap-12 w-full"
           >
             <div className="flex flex-col max-w-screen-md gap-3 items-start w-full">
-              <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#ccff00] text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
+              <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-signal-text text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
                 Technology Expertise
               </div>
 
-              <h3 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
+              <h3 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-ink [font-style:var(--display-md-semibold-font-style)]">
                 Advanced AI Capabilities
               </h3>
             </div>
@@ -405,11 +405,11 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
                 >
                   <div className="flex flex-col items-start gap-4 sm:gap-5 flex-1">
                     <div className="flex flex-col items-start gap-2 pt-2.5 pb-0 px-0 w-full">
-                      <h4 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-[#f5f5f6] text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
+                      <h4 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-ink text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
                         {capability.title}
                       </h4>
 
-                      <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+                      <p className="text-ink-muted font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
                         {capability.description}
                       </p>
                     </div>
@@ -424,11 +424,11 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
             className="flex flex-col max-w-full lg:max-w-[720px] lg:w-[480px] items-start gap-8 sm:gap-12 w-full"
           >
             <div className="flex flex-col max-w-screen-md gap-3 items-start w-full">
-              <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-[#ccff00] text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
+              <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-signal-text text-sm sm:text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)]">
                 Technology Expertise
               </div>
 
-              <h3 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-[#f5f5f6] [font-style:var(--display-md-semibold-font-style)]">
+              <h3 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-ink [font-style:var(--display-md-semibold-font-style)]">
                 Integration Expertise
               </h3>
             </div>
@@ -441,11 +441,11 @@ export const DetailedCapabilitiesSection = (): JSX.Element => {
                 >
                   <div className="flex flex-col items-start gap-4 sm:gap-5 flex-1">
                     <div className="flex flex-col items-start gap-2 pt-2.5 pb-0 px-0 w-full">
-                      <h4 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-[#f5f5f6] text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
+                      <h4 className="font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-ink text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
                         {expertise.title}
                       </h4>
 
-                      <p className="text-[#94969c] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
+                      <p className="text-ink-muted font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
                         {expertise.description}
                       </p>
                     </div>

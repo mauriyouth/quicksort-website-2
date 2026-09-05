@@ -41,18 +41,20 @@ export const DataForAiIcon = ({
       className={className}
     >
       <defs>
-        {/* 3D Gradient: Shadow at top, light at bottom */}
+        {/* 3D gradient: shadow at top, light at bottom. The stops are
+            tokens so the cylinder reads on either canvas — it inverts
+            from dark-to-white on dark, to light-to-ink on light. */}
         <linearGradient id="grad-white-3d" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#111111" />
-          <stop offset="45%" stopColor="#444444" />
-          <stop offset="100%" stopColor="#FFFFFF" />
+          <stop offset="0%" stopColor="var(--qs-illus-3d-0)" />
+          <stop offset="45%" stopColor="var(--qs-illus-3d-1)" />
+          <stop offset="100%" stopColor="var(--qs-illus-3d-2)" />
         </linearGradient>
 
         {/* Red pulse gradient */}
         <linearGradient id="grad-red-3d" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#330000" />
-          <stop offset="45%" stopColor="#880000" />
-          <stop offset="100%" stopColor="#F14A55" />
+          <stop offset="0%" stopColor="var(--qs-illus-red-0)" />
+          <stop offset="45%" stopColor="var(--qs-illus-red-1)" />
+          <stop offset="100%" stopColor="var(--qs-cat-red-soft)" />
         </linearGradient>
 
         <style>

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-const PUBLIC_LOGO_URL = "https://www.quicksort.fr/quicksort-signature-logo.png";
+const PUBLIC_LOGO_URL = "https://www.quicksort.fr/quicksort-signature-logo-v2.png";
 
 const signatureMarkup = `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;color:#141414;background:#ffffff;">
@@ -63,7 +63,7 @@ export const EmailSignature = (): JSX.Element => {
     <main className="min-h-screen bg-[#f4f4f2] text-[#141414] flex items-center justify-center p-4 sm:p-8 [font-family:Arial,Helvetica,sans-serif]">
       <section className="w-full max-w-[720px] rounded-3xl border border-black/10 bg-white p-5 shadow-[0_24px_70px_rgba(20,20,20,0.08)] sm:p-9">
         <div className="mb-7 flex items-center gap-2.5 text-[17px] font-bold tracking-[-0.3px]">
-          <img src="/quicksort-signature-logo.png" width="34" height="34" alt="" className="rounded-lg" />
+          <img src="/quicksort-signature-logo-v2.png" width="34" height="34" alt="" className="rounded-lg" />
           <span>Quicksort</span>
         </div>
 

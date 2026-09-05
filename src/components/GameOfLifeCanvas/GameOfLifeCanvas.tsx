@@ -111,7 +111,7 @@ const GameOfLifeCanvas: React.FC<GameOfLifeCanvasProps> = ({
             }}
         >
             <div
-                className="bg-[#141414] border border-[#1a1a1a] rounded overflow-hidden shadow-2xl"
+                className="bg-[#000000] border border-[#1a1a1a] rounded overflow-hidden shadow-2xl"
                 style={{
                     display: 'grid',
                     gridTemplateColumns: `repeat(${gridSize}, 1fr)`,

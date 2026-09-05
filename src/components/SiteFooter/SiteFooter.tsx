@@ -56,7 +56,7 @@ export const SiteFooter = ({
 
     return (
         <footer
-            className={`flex flex-col items-center w-full bg-[#141414] ${isHomepage
+            className={`flex flex-col items-center w-full bg-[#000000] ${isHomepage
                 ? "gap-8 sm:gap-12 md:gap-16 pt-12 sm:pt-16 pb-8 sm:pb-12 px-0 relative"
                 : "gap-16 pt-16 pb-12 px-0"
                 }`}
@@ -87,7 +87,7 @@ export const SiteFooter = ({
                         </div>
                         <div className="absolute top-px left-0 w-[29px] h-[27px]">
                             <div className="top-0 left-0 w-[26px] h-[26px] rounded-[12.99px] absolute bg-neutral-50" />
-                            <div className="absolute top-[9px] left-[15px] w-[9px] h-[17px] bg-[#141414] rounded-[17.76px] rotate-[-47.64deg]" />
+                            <div className="absolute top-[9px] left-[15px] w-[9px] h-[17px] bg-[#000000] rounded-[17.76px] rotate-[-47.64deg]" />
                             <div className="top-4 left-[19px] w-[9px] h-[9px] rounded-[4.39px] absolute bg-neutral-50" />
                         </div>
                     </Link>

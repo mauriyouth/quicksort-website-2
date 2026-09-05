@@ -21,6 +21,15 @@ const teamMembers = [
     linkedinUrl: "https://www.linkedin.com/in/mohamed-ahmednah-19313116/",
   },
   {
+    name: "Renaud Granier",
+    role: "COO",
+    description:
+      "15+ years as a founder and executive, driving operations, growth, and secure AI transformation.",
+    image: "/renaud-granier.png",
+    hasArrow: false,
+    linkedinUrl: "https://www.linkedin.com/in/renaud-granier-8027788b/",
+  },
+  {
     name: "Alexandra Beljakov",
     role: "AI Strategist",
     description: "15 years+ Data & Strategy @ Mercedes · MBA EDHEC",
@@ -46,15 +55,6 @@ const teamMembers = [
     linkedinUrl: "https://www.linkedin.com/in/nageeta124/",
   },
   {
-    name: "Mohamed Benyahia",
-    role: "AI Researcher",
-    description:
-      "Expert in deep learning and generative AI, building intelligent solutions for complex problems.",
-    image: "/benyahia.webp",
-    hasArrow: false,
-    linkedinUrl: "https://www.linkedin.com/in/mohamed-benyahia-3171b7252/",
-  },
-  {
     name: "Amadou Ngam",
     role: "AI Engineer",
     description:
@@ -73,15 +73,6 @@ const teamMembers = [
     linkedinUrl: "https://www.linkedin.com/in/aicha-dridi/",
   },
   {
-    name: "Adel Benz",
-    role: "AI Product Designer",
-    description:
-      "Crafts intuitive user experiences for AI-powered products, blending design thinking with technology.",
-    image: "/adel.webp",
-    hasArrow: false,
-    linkedinUrl: "https://www.linkedin.com/in/adel-benzehda/",
-  },
-  {
     name: "Asmae Karmouchi",
     role: "AI Engineer",
     description:
@@ -98,13 +89,6 @@ const teamMembers = [
     image: "/murad-mustafayev.png",
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/murad-mustafayev/",
-  },
-  {
-    name: "William Vanhuffel",
-    role: "Applied AI Engineer",
-    description: "CentraleSupélec · Document Extraction",
-    image: "/william-vanhuffel.png",
-    hasArrow: false,
   },
 ];
 
@@ -168,7 +152,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
   return (
     <section
       ref={sectionRef}
-      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#141414]"
+      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#000000]"
     >
       <SectionGridOverlay showCenterLine={false} />
       <div className="flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full relative z-[1]">

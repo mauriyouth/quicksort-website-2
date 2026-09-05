@@ -46,7 +46,7 @@ const productionCapabilities = [
 ];
 
 export const VoiceAi = (): JSX.Element => (
-  <div className="flex w-full flex-col items-center overflow-x-hidden bg-[#141414]">
+  <div className="flex w-full flex-col items-center overflow-x-hidden bg-[#000000]">
     <MainNavigationSection />
 
     <main className="flex w-full flex-col items-center">

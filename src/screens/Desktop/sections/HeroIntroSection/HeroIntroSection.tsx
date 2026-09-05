@@ -3,7 +3,6 @@ import { Button } from "@components/ui/button";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
 
-import { ScrambleTextOnHover } from "@components/ScrambleText";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
@@ -46,7 +45,6 @@ export const HeroIntroSection = (): JSX.Element => {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
   const ctaRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLDivElement>(null);
 
   const [isHovered, setIsHovered] = useState(false);
 
@@ -88,15 +86,6 @@ export const HeroIntroSection = (): JSX.Element => {
             duration: 0.6,
           },
           "-=0.4"
-        )
-        .from(
-          imageRef.current,
-          {
-            x: 80,
-            opacity: 0,
-            duration: 1,
-          },
-          "-=0.8"
         );
 
       // Parallax scroll-out: content fades up as user scrolls past hero
@@ -118,18 +107,16 @@ export const HeroIntroSection = (): JSX.Element => {
   return (
     <section
       ref={sectionRef}
-      className="flex flex-col items-center relative w-full bg-[#141414] overflow-hidden"
+      className="flex flex-col items-center relative w-full bg-[#000000] overflow-hidden"
     >
-
-
       <div
         ref={contentRef}
-        className="min-h-[757px] px-0 py-4 sm:py-6 md:py-8 z-[1] flex items-start justify-center relative w-full"
+        className="px-0 pt-12 sm:pt-16 md:pt-24 pb-4 sm:pb-6 md:pb-8 z-[1] flex items-start justify-center relative w-full"
       >
         <div className="flex flex-col lg:flex-row max-w-screen-xl w-full items-center justify-between relative gap-8 lg:gap-0">
           <div className="flex max-w-screen-xl items-end gap-8 px-4 sm:px-8 py-0 relative flex-1 grow w-full">
             <div className="flex flex-col items-start gap-8 sm:gap-12 relative flex-1 self-stretch grow w-full">
-              <div className="flex flex-col max-w-screen-lg items-start gap-4 sm:gap-6 relative w-full">
+              <div className="flex flex-col max-w-3xl items-start gap-4 sm:gap-6 relative w-full">
                 <h1
                   ref={headingRef}
                   className="mt-[-1.00px] [font-family:'Hanken_Grotesk',Helvetica] font-medium text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-[-1.20px] leading-[1.2] sm:leading-[56px] lg:leading-[72px] relative self-stretch text-[#f5f5f6]"
@@ -160,10 +147,7 @@ export const HeroIntroSection = (): JSX.Element => {
                         transition: "color 0.3s ease 0.1s",
                       }}
                     >
-                      <ScrambleTextOnHover
-                        text="Human + AI"
-                        duration={1.4}
-                      />
+                      Human + AI
                     </span>
                   </span>{" "}
                   Collaboration.
@@ -187,14 +171,6 @@ export const HeroIntroSection = (): JSX.Element => {
                 </a>
               </div>
             </div>
-          </div>
-
-          <div ref={imageRef} className="flex items-center justify-center w-full lg:w-auto">
-            <img
-              className="relative max-w-full w-full sm:w-[400px] md:w-[500px] lg:w-[536px] h-auto lg:h-[518.63px] mb-[-3.63px]"
-              alt="Container"
-              src="/container-3.svg"
-            />
           </div>
         </div>
       </div>
@@ -234,16 +210,6 @@ export const HeroIntroSection = (): JSX.Element => {
 
       <SectionSeparator />
 
-      <img
-        className="hidden lg:block absolute top-0 left-[calc(50.00%_-_720px)] w-[1440px] h-[837px] z-0"
-        alt="Background pattern"
-        src="/background-pattern.svg"
-      />
-      <img
-        className="lg:hidden absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1440px] h-auto z-0 opacity-50"
-        alt="Background pattern"
-        src="/background-pattern.svg"
-      />
     </section>
   );
 };

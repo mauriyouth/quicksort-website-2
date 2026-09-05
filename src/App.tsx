@@ -9,6 +9,7 @@ import { Carreer } from "./screens/Carreer";
 import { JobDetail } from "./screens/JobDetail";
 import { InfrastructureFor } from "./screens/InfrastructureFor";
 import { VoiceAi } from "./screens/VoiceAi";
+import { EmailSignature } from "./screens/EmailSignature";
 
 export const App = () => {
   return (
@@ -24,6 +25,7 @@ export const App = () => {
         <Route path="/career/:slug" element={<JobDetail />} />
         <Route path="/infrastructure-for-ai" element={<InfrastructureFor />} />
         <Route path="/voice-ai" element={<VoiceAi />} />
+        <Route path="/email-signature" element={<EmailSignature />} />
       </Routes>
     </Router>
   );

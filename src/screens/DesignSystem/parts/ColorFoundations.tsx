@@ -25,10 +25,10 @@ const TEXT: Swatch[] = [
 ];
 
 const SIGNAL: Swatch[] = [
-    { token: "signal", name: "Signal Lime", note: "The one accent — as a fill", fill: "bg-signal" },
+    { token: "signal", name: "Signal Lime", note: "The one accent, as a fill", fill: "bg-signal" },
     { token: "signal-hover", name: "Signal hover", note: "Pressed and hovered lime", fill: "bg-signal-hover" },
     { token: "signal-fg", name: "Signal foreground", note: "Text sitting on lime", fill: "bg-signal-fg" },
-    { token: "signal-text", name: "Signal text", note: "Lime used as text — darkens on light", fill: "bg-signal-text" },
+    { token: "signal-text", name: "Signal text", note: "Lime used as text, darkens on light", fill: "bg-signal-text" },
 ];
 
 const CATEGORY: Swatch[] = [
@@ -62,7 +62,7 @@ const SwatchGrid = ({ swatches }: { swatches: Swatch[] }) => {
                     <div className="flex flex-col gap-1">
                         <span className="text-sm font-semibold text-ink">{swatch.name}</span>
                         <span className="font-qs-mono text-[11px] text-ink-muted">
-                            {values[swatch.token] ? toHex(values[swatch.token]) : "—"}
+                            {values[swatch.token] ? toHex(values[swatch.token]) : "n/a"}
                         </span>
                         <span className="text-xs leading-snug text-ink-muted">{swatch.note}</span>
                         <Token>--qs-{swatch.token}</Token>
@@ -102,7 +102,7 @@ export const ColorFoundations = () => (
 
         <Specimen
             title="Signal Lime"
-            note="The single brand accent. One lime element per composition — a second one halves the value of the first."
+            note="The single brand accent. One lime element per composition. A second one halves the value of the first."
         >
             <SwatchGrid swatches={SIGNAL} />
             <Panel className="mt-qs-2">
@@ -139,7 +139,7 @@ export const ColorFoundations = () => (
         <Specimen title="Rules">
             <ul className="flex flex-col gap-qs-3">
                 <Rule kind="do">
-                    reach for a semantic token — <Token>bg-surface</Token>,{" "}
+                    reach for a semantic token: <Token>bg-surface</Token>,{" "}
                     <Token>text-ink-muted</Token>, <Token>border-line</Token>.
                 </Rule>
                 <Rule kind="do">

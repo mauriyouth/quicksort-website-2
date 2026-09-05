@@ -5,7 +5,7 @@ export const InfrastructureOverviewSection = (): JSX.Element => {
     {
       title: "Production-First Infrastructure Design",
       description:
-        "Cloud-native or on-prem stacks architected for performance, isolation, and cost control — not demos.",
+        "Cloud-native or on-prem stacks architected for performance, isolation, and cost control, not demos.",
     },
     {
       title: "Compute-Aware Orchestration",
@@ -15,7 +15,7 @@ export const InfrastructureOverviewSection = (): JSX.Element => {
     {
       title: "Observable Intelligence",
       description:
-        "End-to-end monitoring, tracing, and evaluation pipelines using Langfuse, Prometheus, and Grafana — so model behavior is measurable, not assumed.",
+        "End-to-end monitoring, tracing, and evaluation pipelines using Langfuse, Prometheus, and Grafana, so model behavior is measurable, not assumed.",
     },
   ];
 

@@ -29,7 +29,7 @@ const useNoIndex = () => {
         document.head.appendChild(meta);
 
         const previousTitle = document.title;
-        document.title = "Design System — Quicksort";
+        document.title = "Design System | Quicksort";
 
         return () => {
             document.head.removeChild(meta);
@@ -59,7 +59,7 @@ export const DesignSystem = (): JSX.Element => {
                         Design system
                     </h1>
                     <p className="mt-qs-5 max-w-[58ch] text-base leading-relaxed text-ink-2 sm:text-lg">
-                        The tokens, type and components behind quicksort.fr — rendered from
+                        The tokens, type and components behind quicksort.fr, rendered from
                         the code the site actually runs, in whichever theme you are reading
                         it in.
                     </p>
@@ -68,8 +68,8 @@ export const DesignSystem = (): JSX.Element => {
                         <ThemeToggle />
                         <span className="text-sm text-ink-muted">
                             Currently{" "}
-                            <span className="font-semibold text-ink">{theme}</span> mode —
-                            every specimen on this page follows it.
+                            <span className="font-semibold text-ink">{theme}</span> mode.
+                            Every specimen on this page follows it.
                         </span>
                     </div>
                 </div>

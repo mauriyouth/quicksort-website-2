@@ -45,7 +45,7 @@ export const ProductionDesignFeaturesSection = (): JSX.Element => {
           </div>
 
           <p className="font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-ink-muted text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
-            Run production-grade AI safely, efficiently, and at scale — in your
+            Run production-grade AI safely, efficiently, and at scale, in your
             infrastructure, under your control.
           </p>
         </div>
@@ -80,7 +80,7 @@ export const ProductionDesignFeaturesSection = (): JSX.Element => {
         <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
           We design, deploy, and operate on-premise or cloud-native AI
           infrastructures optimized for LLMs, multimodal models, and agent
-          systems — secure, compliant, and performance-tuned for enterprise
+          systems: secure, compliant, and performance-tuned for enterprise
           workloads.
         </p>
       </div>

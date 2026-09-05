@@ -134,7 +134,7 @@ export const JobListingsSection = (): JSX.Element => {
                 Bias for action
               </h3>
               <p className="font-text-md-regular text-ink-muted text-sm text-center leading-relaxed">
-                We move fast, make decisions, and iterate. Speed matters—we ship and learn.
+                We move fast, make decisions, and iterate. Speed matters. We ship and learn.
               </p>
             </div>
 
@@ -149,7 +149,7 @@ export const JobListingsSection = (): JSX.Element => {
                 Excellence
               </h3>
               <p className="font-text-md-regular text-ink-muted text-sm text-center leading-relaxed">
-                We hold ourselves to the highest standards. Good isn't good enough—we aim for exceptional.
+                We hold ourselves to the highest standards. Good isn't good enough. We aim for exceptional.
               </p>
             </div>
 

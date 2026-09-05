@@ -5,7 +5,7 @@ export const BusinessOverviewSection = (): JSX.Element => {
     {
       title: "Explainable Agent Behavior",
       description:
-        "Clear reasoning, traceability, and decision visibility so users understand why an agent acts — not just what it outputs.",
+        "Clear reasoning, traceability, and decision visibility so users understand why an agent acts, not just what it outputs.",
     },
     {
       title: "Progressive Autonomy Design",
@@ -15,7 +15,7 @@ export const BusinessOverviewSection = (): JSX.Element => {
     {
       title: "Adoption-First Product Design",
       description:
-        "Onboarding, feedback loops, and interaction patterns designed to make AI a habit — not a disruption.",
+        "Onboarding, feedback loops, and interaction patterns designed to make AI a habit, not a disruption.",
     },
   ];
 

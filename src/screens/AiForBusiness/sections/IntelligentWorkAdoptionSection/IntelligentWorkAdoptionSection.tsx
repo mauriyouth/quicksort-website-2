@@ -76,7 +76,7 @@ export const IntelligentWorkAdoptionSection = (): JSX.Element => {
           We build custom AI workspaces and agents that embed directly into your
           operations. Our systems connect people, data, and tools into
           orchestrated environments where human judgment validates agent
-          reasoning — automating coordination, and decision loops.
+          reasoning, automating coordination, and decision loops.
         </p>
       </div>
     </section>

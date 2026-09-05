@@ -95,7 +95,7 @@ const serviceCards = [
     iconSrc: "/service-icons/ai-for-business.png",
     title: "AI for business",
     description:
-      "We build custom AI workspaces and agents that embed directly into your operations. Our systems connect people, data, and tools into orchestrated environments where human judgment validates agent reasoning — automating coordination, and decision loops.",
+      "We build custom AI workspaces and agents that embed directly into your operations. Our systems connect people, data, and tools into orchestrated environments where human judgment validates agent reasoning, automating coordination, and decision loops.",
     bgColor: "bg-surface-raised",
     iconBg: "bg-cat-blue",
     href: "/ai-for-business",
@@ -105,7 +105,7 @@ const serviceCards = [
     iconSrc: null,
     title: "Data for AI",
     description:
-      "We transform fragmented enterprise data into structured, contextual intelligence ready for AI consumption — enabling models and agents to reason, learn, and act with precision.",
+      "We transform fragmented enterprise data into structured, contextual intelligence ready for AI consumption, enabling models and agents to reason, learn, and act with precision.",
     bgColor: "bg-surface-raised",
     iconBg: "bg-cat-red",
     href: "/data-for-ai",
@@ -115,7 +115,7 @@ const serviceCards = [
     iconSrc: null,
     title: "Infrastructure for AI",
     description:
-      "We design, deploy, and operate on-premise or cloud-native AI infrastructures optimized for LLMs, multimodal models, and agent systems — secure, compliant, and performance-tuned for enterprise workloads.",
+      "We design, deploy, and operate on-premise or cloud-native AI infrastructures optimized for LLMs, multimodal models, and agent systems: secure, compliant, and performance-tuned for enterprise workloads.",
     bgColor: "bg-surface-raised",
     iconBg: "bg-cat-green",
     href: "/infrastructure-for-ai",
@@ -136,7 +136,7 @@ const advancedCapabilities = [
   {
     title: "Large Language Models",
     description:
-      "Design, fine-tuning, and deployment of production-ready LLMs — from RAG architectures to custom model pipelines built for reliability, security, and scale.",
+      "Design, fine-tuning, and deployment of production-ready LLMs, from RAG architectures to custom model pipelines built for reliability, security, and scale.",
   },
   {
     title: "Computer Vision",
@@ -146,7 +146,7 @@ const advancedCapabilities = [
   {
     title: "Agentic AI",
     description:
-      "Autonomous AI systems capable of reasoning, planning, and executing complex tasks — seamlessly orchestrating tools, APIs, and code to drive real outcomes.",
+      "Autonomous AI systems capable of reasoning, planning, and executing complex tasks, seamlessly orchestrating tools, APIs, and code to drive real outcomes.",
   },
   {
     title: "Natural Language Processing",
@@ -164,7 +164,7 @@ const integrationExpertise = [
   {
     title: "Third-Party APIs",
     description:
-      "Secure and reliable connections to payment providers, communication tools, and external data sources — designed for scale and resilience.",
+      "Secure and reliable connections to payment providers, communication tools, and external data sources, designed for scale and resilience.",
   },
   {
     title: "Development & Platform Tooling",

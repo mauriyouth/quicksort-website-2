@@ -99,9 +99,9 @@ export const Rule = ({
         />
         <span>
             <span className="font-semibold text-ink">
-                {kind === "do" ? "Do" : "Don't"}
+                {kind === "do" ? "Do:" : "Don't:"}
             </span>{" "}
-            — {children}
+            {children}
         </span>
     </li>
 );

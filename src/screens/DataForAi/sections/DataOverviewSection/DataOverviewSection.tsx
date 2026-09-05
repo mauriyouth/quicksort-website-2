@@ -5,7 +5,7 @@ export const DataOverviewSection = (): JSX.Element => {
     {
       title: "Context-First Data Modeling",
       description:
-        "We structure data around decisions, not tables — capturing intent, relationships, and business semantics.",
+        "We structure data around decisions, not tables, capturing intent, relationships, and business semantics.",
     },
     {
       title: "Retrieval-Centric Architectures",
@@ -15,7 +15,7 @@ export const DataOverviewSection = (): JSX.Element => {
     {
       title: "Learning-Ready RAG Systems",
       description:
-        "Context retrieval pipelines that evolve with usage, feedback, and domain drift — not frozen embeddings",
+        "Context retrieval pipelines that evolve with usage, feedback, and domain drift, not frozen embeddings",
     },
   ];
 

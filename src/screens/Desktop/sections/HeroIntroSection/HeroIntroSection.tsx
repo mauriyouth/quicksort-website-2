@@ -158,7 +158,7 @@ export const HeroIntroSection = (): JSX.Element => {
                   className="relative self-stretch font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]"
                 >
                   We design and engineer agentic systems where humans
-                  orchestrate AI agents — connecting data, tools, and memory to
+                  orchestrate AI agents, connecting data, tools, and memory to
                   transform how organizations think, decide, and deliver value.
                 </p>
               </div>

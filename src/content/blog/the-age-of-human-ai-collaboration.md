@@ -4,11 +4,11 @@ For decades, organizations have tried to automate their way out of complexity.
 
 They built systems to remove friction, dashboards to measure performance, and workflows to make people predictable.
 
-But the next frontier isn’t automation — it’s **collaboration**.
+But the next frontier isn’t automation. It’s **collaboration**.
 
 Not between departments or tools, but between **humans and intelligent agents**.
 
-At Quicksort, we believe the defining challenge of the next decade is not *building smarter models* — it’s *designing better collaboration between people and AI*.
+At Quicksort, we believe the defining challenge of the next decade is not *building smarter models*. It’s *designing better collaboration between people and AI*.
 
 ---
 
@@ -18,11 +18,11 @@ Modern enterprises run on data, but drown in it.
 
 Knowledge lives in silos, tools multiply, and decisions depend on information that’s always half-understood.
 
-AI, as it’s typically deployed, often adds more noise than clarity — another model, another dashboard, another black box.
+AI, as it’s typically deployed, often adds more noise than clarity: another model, another dashboard, another black box.
 
 What’s missing is **orchestration**: a way to coordinate humans and machines around shared context, memory, and intent.
 
-This is the foundation of a truly intelligent organization — one where every process learns, every decision compounds, and every team amplifies its impact through AI agents that understand the mission.
+This is the foundation of a truly intelligent organization, one where every process learns, every decision compounds, and every team amplifies its impact through AI agents that understand the mission.
 
 ---
 
@@ -30,7 +30,7 @@ This is the foundation of a truly intelligent organization — one where every p
 
 We’re entering the age of **agentic work**.
 
-Instead of one monolithic model, enterprises will operate a constellation of specialized agents — each capable of perception, reasoning, and action.
+Instead of one monolithic model, enterprises will operate a constellation of specialized agents, each capable of perception, reasoning, and action.
 
 These agents won’t live in isolation.
 
@@ -52,7 +52,7 @@ Every collaboration loop makes the organization faster, safer, and more adaptive
 
 At Quicksort, **we craft Human + AI collaboration**.
 
-We design and engineer **agentic workspaces** for enterprises and governments — environments where humans and AI agents collaborate seamlessly across data, tools, and memory.
+We design and engineer **agentic workspaces** for enterprises and governments: environments where humans and AI agents collaborate seamlessly across data, tools, and memory.
 
 Our work blends deep engineering with organizational design.
 
@@ -68,7 +68,7 @@ We engineer **collaboration systems** that turn fragmented operations into unifi
 
 In this new paradigm, work itself becomes **adaptive**.
 
-Humans no longer delegate and wait — they **co-create** with AI.
+Humans no longer delegate and wait. They **co-create** with AI.
 
 Agents explore, summarize, reason, and act; humans provide judgment, ethics, and context.
 
@@ -84,7 +84,7 @@ This is how organizations evolve from static workflows into **living intelligenc
 
 ### Building the connective layer of tomorrow
 
-AI will not just sit beside the enterprise stack; it will **become the connective layer** — linking tools, people, and data into a coherent system.
+AI will not just sit beside the enterprise stack; it will **become the connective layer**, linking tools, people, and data into a coherent system.
 
 That layer must be **engineered**, not improvised.
 
@@ -98,7 +98,7 @@ the **human + AI infrastructure** that enables organizations to think, decide, a
 
 ### The vision
 
-We imagine a world where every enterprise operates like a collective brain — distributed, adaptive, and continuously learning.
+We imagine a world where every enterprise operates like a collective brain: distributed, adaptive, and continuously learning.
 
 Where agents handle complexity, and humans guide meaning.
 
@@ -106,4 +106,4 @@ Where collaboration itself becomes the most powerful form of intelligence.
 
 Because the future of work isn’t human *or* AI.
 
-It’s **human + AI — collaborating by design.**
+It’s **human + AI, collaborating by design.**

@@ -23,12 +23,12 @@ export const ComponentGallery = () => (
             title="Buttons"
             note={
                 <>
-                    One component, four brand variants — the identity bundle&apos;s four
+                    One component, four brand variants, the identity bundle&apos;s four
                     buttons under this codebase&apos;s names: <Token>signal</Token> is
                     Accent, <Token>inverse</Token> is Primary, <Token>outline</Token> is
                     Secondary, <Token>quiet</Token> is Ghost. The lime CTA is the primary
                     action and appears at most once per view. Every button on the site
-                    is this component — if you find yourself writing padding, radius or
+                    is this component. If you find yourself writing padding, radius or
                     a font class at a call site, the size you want is missing.
                 </>
             }
@@ -63,14 +63,14 @@ export const ComponentGallery = () => (
         </Specimen>
 
         <Specimen
-            title="Shape — the one departure from the brand bundle"
+            title="Shape: the one departure from the brand bundle"
             note="Worth knowing about, rather than quietly resolving one way or the other."
         >
             <Panel>
                 <p className="text-sm leading-relaxed text-ink-2">
                     The identity bundle specifies pill buttons (999px). The site ships
                     <Token>rounded-lg</Token> (8px), and that is the shape the system
-                    documents — the running site wins over the exported prototype. The
+                    documents. The running site wins over the exported prototype. The
                     pill radius is still a token (<Token>rounded-qs-pill</Token>) and is
                     used for chips and the theme toggle, where it is right.
                 </p>
@@ -83,9 +83,9 @@ export const ComponentGallery = () => (
                     bundle&apos;s preview card, which is a prototype, not a spec.
                 </p>
                 <div className="mt-qs-4 flex flex-wrap items-center gap-qs-4">
-                    <Button variant="signal" size="qs">What ships — 8px</Button>
+                    <Button variant="signal" size="qs">What ships: 8px</Button>
                     <Button variant="signal" size="qs" className="rounded-qs-pill">
-                        Bundle&apos;s pill — 999px
+                        Bundle&apos;s pill: 999px
                     </Button>
                 </div>
             </Panel>
@@ -192,7 +192,7 @@ export const ComponentGallery = () => (
                         <TabsTrigger value="voice">Voice AI</TabsTrigger>
                     </TabsList>
                     <TabsContent value="data" className="pt-qs-4 text-sm text-ink-2">
-                        Knowledge graphs, retrieval and evaluation — the groundwork that makes
+                        Knowledge graphs, retrieval and evaluation, the groundwork that makes
                         a model useful on your own material.
                     </TabsContent>
                     <TabsContent value="infra" className="pt-qs-4 text-sm text-ink-2">

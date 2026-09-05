@@ -34,7 +34,7 @@ export const TypeFoundations = () => (
         intro={
             <>
                 Two families. <span className="text-ink">Hanken Grotesk</span> carries the
-                display voice — every heading on the site. Everything a person reads at
+                display voice, every heading on the site. Everything a person reads at
                 length, and all UI, is <span className="text-ink">Inter</span>. JetBrains
                 Mono appears only where a value is meant to be copied. The scale below is
                 rendered with the same classes a component would use.
@@ -59,7 +59,7 @@ export const TypeFoundations = () => (
         </Specimen>
 
         <div className="grid gap-qs-6 lg:grid-cols-2">
-            <Specimen title="Hanken Grotesk — display">
+            <Specimen title="Hanken Grotesk (display)">
                 <Panel className="flex flex-col gap-qs-4">
                     {WEIGHTS.map((w) => (
                         <div key={w.weight} className="flex items-baseline justify-between gap-qs-4">
@@ -77,7 +77,7 @@ export const TypeFoundations = () => (
                 </Panel>
             </Specimen>
 
-            <Specimen title="Inter — UI and body">
+            <Specimen title="Inter (UI and body)">
                 <Panel className="flex flex-col gap-qs-4">
                     {WEIGHTS.map((w) => (
                         <div key={w.weight} className="flex items-baseline justify-between gap-qs-4">
@@ -114,8 +114,8 @@ export const TypeFoundations = () => (
         <Specimen title="Rules">
             <ul className="flex flex-col gap-qs-3">
                 <Rule kind="do">
-                    use a named step — <Token>font-display-md-semibold</Token>,{" "}
-                    <Token>font-text-md-regular</Token> — and let it carry the family,
+                    use a named step like <Token>font-display-md-semibold</Token> or{" "}
+                    <Token>font-text-md-regular</Token>, and let it carry the family,
                     weight, tracking and leading together.
                 </Rule>
                 <Rule kind="do">
@@ -124,7 +124,7 @@ export const TypeFoundations = () => (
                     need a size the scale does not have.
                 </Rule>
                 <Rule kind="do">
-                    keep measure under about 70 characters — long lines are the fastest way
+                    keep measure under about 70 characters. Long lines are the fastest way
                     to make good type unreadable.
                 </Rule>
                 <Rule kind="dont">
@@ -132,8 +132,7 @@ export const TypeFoundations = () => (
                     the tension that makes it worth using.
                 </Rule>
                 <Rule kind="dont">
-                    invent a step. Five display sizes and four text sizes cover this site —
-                    a tenth is a sign the layout, not the scale, needs work.
+                    invent a step. Five display sizes and four text sizes cover this site. A tenth is a sign the layout, not the scale, needs work.
                 </Rule>
                 <Rule kind="dont">use SHOUTY CAPS outside the eyebrow style.</Rule>
             </ul>

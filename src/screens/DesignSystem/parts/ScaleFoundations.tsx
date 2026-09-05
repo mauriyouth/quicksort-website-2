@@ -69,8 +69,7 @@ const MotionDemo = () => {
             </button>
 
             <p className="mt-qs-4 text-sm leading-relaxed text-ink-2">
-                One easing, everywhere: <Token>cubic-bezier(0.2, 0.8, 0.2, 1)</Token> —
-                confident out, no overshoot. Fades and short translates only. No bounce,
+                One easing, everywhere: <Token>cubic-bezier(0.2, 0.8, 0.2, 1)</Token>: confident out, no overshoot. Fades and short translates only. No bounce,
                 no spring, no parallax.
             </p>
 
@@ -89,7 +88,7 @@ export const ScaleFoundations = () => (
         id="scale"
         eyebrow="Foundations"
         title="Space, shape and motion"
-        intro="A 4px base, five radii, three shadows and one easing curve. The constraint is the point — a system with ten shadow values has no shadow system."
+        intro="A 4px base, five radii, three shadows and one easing curve. The constraint is the point: a system with ten shadow values has no shadow system."
     >
         <Specimen title="Spacing scale" note="4px base. Everything is a step on this ladder.">
             <Panel className="flex flex-col gap-qs-3">

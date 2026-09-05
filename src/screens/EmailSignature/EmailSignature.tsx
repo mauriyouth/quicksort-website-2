@@ -87,7 +87,7 @@ export const EmailSignature = (): JSX.Element => {
           onClick={copySignature}
           className="mt-[18px] w-full rounded-xl border-0 bg-surface-inverse px-5 py-[15px] text-sm font-bold text-ink-inverse transition hover:-translate-y-px hover:opacity-90 focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-signal"
         >
-          {copyState === "copied" ? "Copied — paste it into Gmail" : "Copy signature"}
+          {copyState === "copied" ? "Copied. Paste it into Gmail" : "Copy signature"}
         </button>
 
         <p className="mt-3 min-h-[18px] text-center text-xs leading-[18px] text-ink-faint" aria-live="polite">

@@ -13,7 +13,7 @@ export const UsageRules = () => (
                     {
                         n: "01",
                         title: "Brand primitives",
-                        body: "The raw palette — Rich Black, Dim Gray, Timberwolf, Seasalt, Signal Lime. Never referenced by a component.",
+                        body: "The raw palette: Rich Black, Dim Gray, Timberwolf, Seasalt, Signal Lime. Never referenced by a component.",
                     },
                     {
                         n: "02",
@@ -67,15 +67,14 @@ surface: "rgb(var(--qs-surface-rgb) / <alpha-value>)"`}
                     <Token>bg-surface</Token> already supports both themes.
                 </Rule>
                 <Rule kind="do">
-                    use <Token>text-on-fill</Token> for text sitting on a saturated fill —
-                    it stays white because the fill stays saturated.
+                    use <Token>text-on-fill</Token> for text sitting on a saturated fill. It stays white because the fill stays saturated.
                 </Rule>
                 <Rule kind="dont">
                     reach for Tailwind&apos;s <Token>dark:</Token> variant. Two class sets
                     per element is how a theme falls out of sync.
                 </Rule>
                 <Rule kind="dont">
-                    assume dark. Check both themes before shipping — the toggle in the
+                    assume dark. Check both themes before shipping. The toggle in the
                     header is here for exactly that.
                 </Rule>
             </ul>
@@ -84,18 +83,17 @@ surface: "rgb(var(--qs-surface-rgb) / <alpha-value>)"`}
         <Specimen title="Known substitutions" note="Flagged, not hidden.">
             <Panel className="flex flex-col gap-qs-4 text-sm leading-relaxed text-ink-2">
                 <p>
-                    <span className="font-semibold text-ink">Helvetica Neue Medium</span> —
-                    used once in the source Figma file, on the &ldquo;Brand Colours&rdquo;
+                    <span className="font-semibold text-ink">Helvetica Neue Medium</span>: used once in the source Figma file, on the &ldquo;Brand Colours&rdquo;
                     capsule. No license-safe web copy, so the stack falls through to Inter
                     Medium.
                 </p>
                 <p>
-                    <span className="font-semibold text-ink">Icons</span> — the identity
+                    <span className="font-semibold text-ink">Icons</span>: the identity
                     file contains no icon set. Lucide stands in at 1.5px stroke, which
                     matches the mark&apos;s geometry better than a heavier or filled family.
                 </p>
                 <p>
-                    <span className="font-semibold text-ink">Category hues</span> — the
+                    <span className="font-semibold text-ink">Category hues</span>: the
                     brand doc says never introduce a second accent. The service and job
                     colours predate the system and carry real meaning, so they are kept and
                     documented rather than quietly dropped.

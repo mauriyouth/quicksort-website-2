@@ -40,7 +40,7 @@ export const IntelligenceFeaturesSection = (): JSX.Element => {
           </div>
 
           <p className="w-full font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-ink-muted text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
-            Empower your agents and copilots with the right context — the data
+            Empower your agents and copilots with the right context, the data
             fabric that makes intelligence actionable.
           </p>
         </div>
@@ -74,7 +74,7 @@ export const IntelligenceFeaturesSection = (): JSX.Element => {
 
         <p className="w-full font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
           We transform fragmented enterprise data into structured, contextual
-          intelligence ready for AI consumption — enabling models and agents to
+          intelligence ready for AI consumption, enabling models and agents to
           reason, learn, and act with precision.
         </p>
       </div>

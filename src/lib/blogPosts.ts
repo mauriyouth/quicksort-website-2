@@ -12,7 +12,7 @@ export const blogPosts: BlogPostMetadata[] = [
   {
     slug: "the-age-of-human-ai-collaboration",
     title: "The Age Of Human + AI Collaboration",
-    description: "The future of work is not human or AI — it's collaborating by design.",
+    description: "The future of work is not human or AI. It's collaborating by design.",
     category: "Software Development",
     publishedDate: "January 2024",
   },

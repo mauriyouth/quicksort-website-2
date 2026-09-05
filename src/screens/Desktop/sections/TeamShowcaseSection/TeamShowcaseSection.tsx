@@ -168,7 +168,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
   return (
     <section
       ref={sectionRef}
-      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#141414]"
+      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#000000]"
     >
       <SectionGridOverlay showCenterLine={false} />
       <div className="flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full relative z-[1]">

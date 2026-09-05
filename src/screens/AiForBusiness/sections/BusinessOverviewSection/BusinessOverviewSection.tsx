@@ -20,8 +20,8 @@ export const BusinessOverviewSection = (): JSX.Element => {
   ];
 
   return (
-    <section className="flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#141414]">
-      <div className="flex flex-col items-center justify-center gap-12 sm:gap-16 md:gap-20 px-0 py-12 sm:py-16 md:py-24 w-full bg-[#141414]">
+    <section className="flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-[#000000]">
+      <div className="flex flex-col items-center justify-center gap-12 sm:gap-16 md:gap-20 px-0 py-12 sm:py-16 md:py-24 w-full bg-[#000000]">
         <div className="flex flex-col lg:flex-row items-center justify-center gap-8 sm:gap-12 lg:gap-[130px] max-w-screen-xl w-full px-4 sm:px-8">
           <div className="flex flex-col items-start gap-8 sm:gap-10 md:gap-12 flex-1 min-w-0 w-full lg:w-auto">
             <div className="flex flex-col items-start gap-3 w-full">

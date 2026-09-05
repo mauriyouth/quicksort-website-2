@@ -20,8 +20,8 @@ export const InfrastructureOverviewSection = (): JSX.Element => {
   ];
 
   return (
-    <section className="flex flex-col items-center gap-16 w-full bg-[#141414]">
-      <div className="flex flex-col items-center justify-center gap-20 px-0 py-24 w-full bg-[#141414]">
+    <section className="flex flex-col items-center gap-16 w-full bg-[#000000]">
+      <div className="flex flex-col items-center justify-center gap-20 px-0 py-24 w-full bg-[#000000]">
         <div className="flex flex-wrap items-center gap-[130px] max-w-screen-xl w-full px-8">
           <div className="flex flex-col items-start gap-12 flex-1 min-w-[300px]">
             <div className="flex flex-col items-start gap-3 w-full">

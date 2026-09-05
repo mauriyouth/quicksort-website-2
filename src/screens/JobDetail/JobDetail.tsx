@@ -59,7 +59,7 @@ export const JobDetail = (): JSX.Element => {
 
     if (!job) {
         return (
-            <main className="flex flex-col w-full items-center relative bg-[#141414] min-h-screen overflow-x-hidden">
+            <main className="flex flex-col w-full items-center relative bg-[#000000] min-h-screen overflow-x-hidden">
                 <MainNavigationSection />
                 <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
                     <h1 className="text-2xl font-bold text-[#f5f5f6] mb-4">Job Not Found</h1>
@@ -73,7 +73,7 @@ export const JobDetail = (): JSX.Element => {
     }
 
     return (
-        <main className="flex flex-col w-full items-center relative bg-[#141414] min-h-screen overflow-x-hidden">
+        <main className="flex flex-col w-full items-center relative bg-[#000000] min-h-screen overflow-x-hidden">
             <img
                 className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1440px] h-[722px] pointer-events-none"
                 alt="Background pattern"

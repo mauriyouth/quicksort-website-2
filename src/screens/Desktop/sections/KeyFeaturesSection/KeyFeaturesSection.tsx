@@ -77,7 +77,7 @@ export const KeyFeaturesSection = (): JSX.Element => {
   return (
     <section
       ref={sectionRef}
-      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-[#141414]"
+      className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 px-0 py-4 sm:py-6 md:py-8 w-full bg-[#000000]"
     >
       <SectionGridOverlay showCenterLine={false} />
       <div className="flex flex-col lg:flex-row max-w-screen-xl items-start gap-8 sm:gap-12 lg:gap-16 px-4 sm:px-8 py-0 w-full relative z-[1]">
@@ -88,7 +88,7 @@ export const KeyFeaturesSection = (): JSX.Element => {
           <div className="flex flex-col items-start gap-5 w-full">
             <div className="relative w-14 h-[52px] shrink-0">
               <div className="absolute top-0 left-0 w-[51px] h-[51px] bg-neutral-50 rounded-[25.33px]" />
-              <div className="absolute top-[18px] left-[30px] w-[17px] h-[34px] bg-[#141414] rounded-[34.62px] rotate-[-47.64deg]" />
+              <div className="absolute top-[18px] left-[30px] w-[17px] h-[34px] bg-[#000000] rounded-[34.62px] rotate-[-47.64deg]" />
               <div className="absolute top-8 left-9 w-[17px] h-[17px] bg-neutral-50 rounded-[8.55px]" />
             </div>
 

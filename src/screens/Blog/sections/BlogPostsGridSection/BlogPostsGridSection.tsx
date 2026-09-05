@@ -26,7 +26,7 @@ const pageNumbers = [
 
 export const BlogPostsGridSection = (): JSX.Element => {
   return (
-    <section className="flex-col items-center gap-8 sm:gap-12 md:gap-16 pt-0 pb-12 sm:pb-16 md:pb-24 px-0 bg-[#141414] flex w-full">
+    <section className="flex-col items-center gap-8 sm:gap-12 md:gap-16 pt-0 pb-12 sm:pb-16 md:pb-24 px-0 bg-[#000000] flex w-full">
       <div className="flex flex-col max-w-screen-xl items-start gap-8 sm:gap-12 md:gap-16 px-4 sm:px-8 py-0 w-full">
         <div className="flex items-end gap-4 sm:gap-8 w-full overflow-x-auto">
           <div className="flex flex-col items-start gap-2 flex-1 min-w-0 border-b [border-bottom-style:solid] border-[#1f242f]">
@@ -55,7 +55,7 @@ export const BlogPostsGridSection = (): JSX.Element => {
             >
               <article className="flex flex-col min-w-0 w-full items-start gap-4 sm:gap-5 flex-1">
                 <div
-                  className="relative self-stretch w-full h-48 sm:h-56 md:h-60 rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#1f242f] to-[#141414]"
+                  className="relative self-stretch w-full h-48 sm:h-56 md:h-60 rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#1f242f] to-[#000000]"
                   style={
                     post.image
                       ? { background: `${post.image} 50% 50% / cover` }

@@ -20,8 +20,8 @@ export const DataOverviewSection = (): JSX.Element => {
   ];
 
   return (
-    <section className="flex flex-col items-center gap-16 w-full bg-[#141414]">
-      <div className="flex flex-col items-center justify-around gap-20 px-0 py-24 w-full bg-[#141414]">
+    <section className="flex flex-col items-center gap-16 w-full bg-[#000000]">
+      <div className="flex flex-col items-center justify-around gap-20 px-0 py-24 w-full bg-[#000000]">
         <div className="flex flex-wrap items-center gap-[130px] max-w-screen-xl px-8 py-0 w-full">
           <div className="flex flex-col items-start gap-12 flex-1 min-w-[400px]">
             <div className="flex flex-col items-start gap-3 w-full">

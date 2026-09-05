@@ -2,14 +2,12 @@ import { useRef, useState } from "react";
 
 const PUBLIC_LOGO_URL = "https://www.quicksort.fr/quicksort-signature-logo.png";
 
-const buildSignatureMarkup = (logoSize: number) => `
+const signatureMarkup = `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;color:#141414;background:#ffffff;">
   <tbody>
     <tr>
-      <td style="width:${logoSize + 4}px;padding:2px 20px 2px 0;vertical-align:top;">
-        <a href="https://www.quicksort.fr" style="text-decoration:none;">
-          <img src="${PUBLIC_LOGO_URL}" width="${logoSize}" height="${logoSize}" alt="Quicksort" style="display:block;width:${logoSize}px;height:${logoSize}px;border:0;border-radius:${Math.round(logoSize * 0.22)}px;">
-        </a>
+      <td style="width:76px;padding:2px 20px 2px 0;vertical-align:top;">
+        <img src="${PUBLIC_LOGO_URL}" width="72" height="72" alt="Quicksort" style="display:block;border:0;border-radius:16px;">
       </td>
       <td style="padding:0 0 0 20px;border-left:2px solid #CCFF00;vertical-align:top;">
         <p style="margin:0 0 3px;font-size:18px;line-height:22px;font-weight:700;letter-spacing:-0.2px;color:#141414;">Quicksort Team</p>
@@ -30,8 +28,6 @@ const buildSignatureMarkup = (logoSize: number) => `
 export const EmailSignature = (): JSX.Element => {
   const signatureRef = useRef<HTMLDivElement>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "manual">("idle");
-  const [logoSize, setLogoSize] = useState(64);
-  const signatureMarkup = buildSignatureMarkup(logoSize);
 
   const copySignature = async () => {
     if (!signatureRef.current) return;
@@ -77,30 +73,7 @@ export const EmailSignature = (): JSX.Element => {
           Copy the signature, then paste it into Gmail, Outlook, or Apple Mail.
         </p>
 
-        <div className="mb-3 mt-8 flex flex-wrap items-center justify-between gap-3">
-          <p className="m-0 text-xs font-bold uppercase tracking-[0.1em] text-[#727272]">Signature preview</p>
-          <div className="flex items-center gap-1 rounded-xl bg-[#f4f4f2] p-1" aria-label="Logo size">
-            {[
-              { label: "Small", size: 48 },
-              { label: "Medium", size: 64 },
-              { label: "Large", size: 80 },
-            ].map((option) => (
-              <button
-                key={option.size}
-                type="button"
-                aria-pressed={logoSize === option.size}
-                onClick={() => setLogoSize(option.size)}
-                className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
-                  logoSize === option.size
-                    ? "bg-[#141414] text-white shadow-sm"
-                    : "bg-transparent text-[#727272] hover:text-[#141414]"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <p className="mb-2 mt-8 text-xs font-bold uppercase tracking-[0.1em] text-[#727272]">Signature preview</p>
         <div className="overflow-x-auto rounded-2xl border border-black/10 bg-white p-5 sm:p-7">
           <div
             ref={signatureRef}
@@ -120,7 +93,7 @@ export const EmailSignature = (): JSX.Element => {
         <p className="mt-3 min-h-[18px] text-center text-xs leading-[18px] text-[#727272]" aria-live="polite">
           {copyState === "manual"
             ? "The signature is selected. Press Ctrl+C, then paste it into Gmail."
-            : "The logo is hosted publicly, so it will remain visible in sent emails."}
+            : "After pasting, click the logo in Gmail to choose Small, Medium, Large, or Original size."}
         </p>
       </section>
     </main>

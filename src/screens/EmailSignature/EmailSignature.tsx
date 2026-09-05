@@ -11,7 +11,7 @@ const signatureMarkup = `
       </td>
       <td style="padding:0 0 0 20px;border-left:2px solid #CCFF00;vertical-align:top;">
         <p style="margin:0 0 3px;font-size:18px;line-height:22px;font-weight:700;letter-spacing:-0.2px;color:#141414;">Quicksort Team</p>
-        <p style="margin:0 0 12px;font-size:12px;line-height:17px;font-weight:600;color:#727272;">Human + AI Collaboration</p>
+        <p style="margin:0 0 12px;font-size:12px;line-height:17px;font-weight:600;color:#727272;">We craft Human + AI</p>
         <p style="margin:0;font-size:12px;line-height:19px;color:#3A3A3A;">
           <a href="mailto:hello@quicksort.fr" style="color:#141414;text-decoration:none;">hello@quicksort.fr</a>
           <span style="color:#B6B6B6;">&nbsp;·&nbsp;</span>
@@ -35,7 +35,7 @@ export const EmailSignature = (): JSX.Element => {
     const html = signatureRef.current.innerHTML;
     const text = [
       "Quicksort Team",
-      "Human + AI Collaboration",
+      "We craft Human + AI",
       "hello@quicksort.fr · +33 6 30 05 99 01",
       "quicksort.fr · Paris, France",
     ].join("\n");

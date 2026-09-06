@@ -54,7 +54,7 @@ The two new Vercel projects have been created in the existing website team (`tea
 
 The Vercel account could not connect the GitHub repository to these new projects because its GitHub integration is missing. A repository owner must connect `mauriyouth/quicksort-website-2` in each project's Git settings to enable automatic deployments. The source is already pushed to `feat/workforce-monorepo` in that repository.
 
-The existing production website project has not been changed. Its Root Directory update must be coordinated with merging the monorepo branch. Enable source files outside each Root Directory so workspace dependencies can be bundled. Use automatic pnpm workspace installation from the committed lockfile.
+The existing website Vercel project is configured to build from `apps/web`, with the public Supabase environment variables set. Merging the monorepo branch into `main` triggers the website production rollout. Enable source files outside each Root Directory so workspace dependencies can be bundled. Use automatic pnpm workspace installation from the committed lockfile.
 
 | Project | Root Directory | Build command | Output |
 | --- | --- | --- | --- |
@@ -62,7 +62,7 @@ The existing production website project has not been changed. Its Root Directory
 | `quicksort-admin` | `apps/admin` | `pnpm build` | `dist` |
 | `quicksort-candidate` | `apps/candidate` | `pnpm build` | `dist` |
 
-The two new portal projects already have their public Supabase environment variables. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` on the existing website project for the intended environments. Use the public publishable key, never a secret/service-role key. Environment changes require a new Vite build.
+All three Vercel projects have `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` configured for production, preview and development. Use the public publishable key, never a secret/service-role key. Environment changes require a new Vite build.
 
 Coordinate changing the existing website Root Directory with merging the monorepo commit. The old website revision cannot build from `apps/web`, and the monorepo revision should not build as the old root app. The local `.vercel` website link lives in `apps/web/.vercel`.
 

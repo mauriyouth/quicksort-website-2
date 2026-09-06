@@ -25,3 +25,11 @@ dist-ssr
 .vercel
 .env*
 .gstack/
+
+!.env.example
+.pnpm-store/
+playwright-report/
+test-results/
+supabase/.temp/
+
+.vite/

@@ -1,10 +1,13 @@
+import { useLocale } from '@lib/i18n';
 interface VoiceAiVisualProps {
   className?: string;
 }
 
 const waveformBars = [34, 58, 82, 48, 100, 66, 42, 76, 54, 30];
 
-export const VoiceAiVisual = ({ className = "" }: VoiceAiVisualProps) => (
+export const VoiceAiVisual = ({ className = "" }: VoiceAiVisualProps) => {
+  const { t, localize } = useLocale();
+ return (
   <div
     className={`relative flex aspect-square items-center justify-center overflow-hidden rounded-full border border-cat-violet/30 bg-surface-raised ${className}`}
     aria-hidden="true"
@@ -23,8 +26,7 @@ export const VoiceAiVisual = ({ className = "" }: VoiceAiVisualProps) => (
       ))}
     </div>
 
-    <div className="absolute bottom-[11%] rounded-full border border-line-faint bg-line-faint px-4 py-2 text-xs font-semibold tracking-[0.16em] text-ink-2 sm:text-sm">
-      LISTEN · UNDERSTAND · ACT
-    </div>
+    <div className="absolute bottom-[11%] rounded-full border border-line-faint bg-line-faint px-4 py-2 text-xs font-semibold tracking-[0.16em] text-ink-2 sm:text-sm">{t("\n      LISTEN Â· UNDERSTAND Â· ACT\n    ")}</div>
   </div>
 );
+};

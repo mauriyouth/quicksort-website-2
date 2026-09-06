@@ -1,0 +1,994 @@
+[
+  [
+    "Home",
+    "Accueil"
+  ],
+  [
+    "Blog",
+    "Blog"
+  ],
+  [
+    "Services",
+    "Services"
+  ],
+  [
+    "Get in touch",
+    "Contactez-nous"
+  ],
+  [
+    "Change language",
+    "Changer de langue"
+  ],
+  [
+    "Language",
+    "Langue"
+  ],
+  [
+    "Open navigation",
+    "Ouvrir le menu"
+  ],
+  [
+    "Close navigation",
+    "Fermer le menu"
+  ],
+  [
+    "AI for business",
+    "L’IA pour les entreprises"
+  ],
+  [
+    "AI for Business",
+    "L’IA pour les entreprises"
+  ],
+  [
+    "Data for AI",
+    "Les données pour l’IA"
+  ],
+  [
+    "Infrastructure for AI",
+    "Infrastructure pour l’IA"
+  ],
+  [
+    "Voice AI",
+    "IA vocale"
+  ],
+  [
+    "Careers",
+    "Carrières"
+  ],
+  [
+    "We treat AI as a product, not just a model. Our end-to-end delivery focuses heavily on Product Design, ensuring your teams can intuitively adapt to new, high-efficiency ways of working.",
+    "Nous concevons l’IA comme un produit à part entière. Notre accompagnement de bout en bout place la conception produit au premier plan pour permettre à vos équipes d’adopter naturellement des méthodes de travail plus efficaces."
+  ],
+  [
+    "Multi-Agent Architectures",
+    "Architectures multi-agents"
+  ],
+  [
+    "Deploy teams of specialized agents that collaborate to solve complex problems.",
+    "Déployez des équipes d’agents spécialisés qui collaborent pour résoudre des problèmes complexes."
+  ],
+  [
+    "Deep Enterprise Integration",
+    "Intégration aux systèmes d’entreprise"
+  ],
+  [
+    "Seamless connections with your CRMs, ERPs, and internal data lakes.",
+    "Connectez vos CRM, ERP et lacs de données internes."
+  ],
+  [
+    "Context-Aware Copilots",
+    "Copilotes sensibles au contexte"
+  ],
+  [
+    "Domain-specific assistants that retain memory and understand the nuance of your business.",
+    "Des assistants spécialisés qui conservent une mémoire et comprennent les particularités de votre métier."
+  ],
+  [
+    "Human-in-the-Loop",
+    "Supervision humaine intégrée"
+  ],
+  [
+    "Interfaces designed for validation, feedback, and continuous model fine-tuning.",
+    "Des interfaces conçues pour la validation, le retour d’expérience et l’amélioration continue des modèles."
+  ],
+  [
+    "From workflows to work intelligence.",
+    "Des processus à l’intelligence du travail."
+  ],
+  [
+    "We build custom AI workspaces and agents that embed directly into your operations. Our systems connect people, data, and tools into orchestrated environments where human judgment validates agent reasoning, automating coordination, and decision loops.",
+    "Nous créons des espaces de travail et des agents IA sur mesure intégrés à vos opérations. Ils relient personnes, données et outils dans des environnements coordonnés où le jugement humain valide le raisonnement des agents et où la coordination et les cycles de décision sont automatisés."
+  ],
+  [
+    "From AI capability to everyday leverage",
+    "De la capacité IA à son utilité au quotidien"
+  ],
+  [
+    "Designing intelligent work adoption",
+    "Concevoir l’adoption du travail intelligent"
+  ],
+  [
+    "Explainable Agent Behavior",
+    "Comportement des agents explicable"
+  ],
+  [
+    "Clear reasoning, traceability, and decision visibility so users understand why an agent acts, not just what it outputs.",
+    "Un raisonnement clair et des décisions traçables pour comprendre pourquoi un agent agit, au-delà de ses résultats."
+  ],
+  [
+    "Progressive Autonomy Design",
+    "Autonomie progressive"
+  ],
+  [
+    "Agents evolve from assistive → collaborative → autonomous, at a pace aligned with team maturity and risk tolerance.",
+    "Les agents passent de l’assistance à la collaboration puis à l’autonomie, au rythme de la maturité de l’équipe et de sa tolérance au risque."
+  ],
+  [
+    "Adoption-First Product Design",
+    "Conception produit centrée sur l’adoption"
+  ],
+  [
+    "Onboarding, feedback loops, and interaction patterns designed to make AI a habit, not a disruption.",
+    "Accompagnement initial, boucles de retour et interactions pour intégrer l’IA aux habitudes de travail."
+  ],
+  [
+    "Let's design your AI transformation",
+    "Concevons votre transformation par l’IA"
+  ],
+  [
+    "Strategic partnerships built on elite talent and proven delivery",
+    "Des partenariats fondés sur l’expertise et la qualité d’exécution"
+  ],
+  [
+    "Copyright Quicksort",
+    "Tous droits réservés Quicksort"
+  ],
+  [
+    "Our blog",
+    "Notre blog"
+  ],
+  [
+    "Resources and insights",
+    "Ressources et perspectives"
+  ],
+  [
+    "The latest industry news, interviews, technologies, and resources.",
+    "Actualités du secteur, entretiens, technologies et ressources."
+  ],
+  [
+    "View all",
+    "Tout voir"
+  ],
+  [
+    "Software Development",
+    "Développement logiciel"
+  ],
+  [
+    "Data",
+    "Données"
+  ],
+  [
+    "Design",
+    "Conception"
+  ],
+  [
+    "Infrastructure",
+    "Infrastructure"
+  ],
+  [
+    "The Age Of Human + AI Collaboration",
+    "L’ère de la collaboration entre l’humain et l’IA"
+  ],
+  [
+    "The future of work is not human or AI; it's collaborating by design.",
+    "L’avenir du travail repose sur une collaboration pensée dès le départ entre l’humain et l’IA."
+  ],
+  [
+    "We're building the future of human-AI collaboration",
+    "Nous construisons l’avenir de la collaboration humain-IA"
+  ],
+  [
+    "Quicksort is an AI services firm based in Paris, working with major enterprises across banking, aerospace, utilities, and hospitality. We don't just implement AI; we fundamentally transform how organizations leverage intelligent systems to amplify human capability.",
+    "Quicksort est une société de services IA basée à Paris. Nous accompagnons de grandes entreprises de la banque, de l’aérospatiale, des services collectifs et de l’hôtellerie. Nous transformons la manière dont les organisations utilisent les systèmes intelligents pour renforcer les capacités humaines."
+  ],
+  [
+    "Our philosophy is grounded in a simple equation:",
+    "Notre philosophie repose sur une équation simple :"
+  ],
+  [
+    "Human + AI = Compound Value",
+    "Humain + IA = Valeur cumulative"
+  ],
+  [
+    ". We believe the future isn't about AI replacing people, but about collaborative systems that make teams more effective, decisions more informed, and businesses more resilient.",
+    ". Nous croyons en des systèmes collaboratifs qui rendent les équipes plus efficaces, les décisions mieux informées et les entreprises plus résilientes."
+  ],
+  [
+    "What we do",
+    "Notre activité"
+  ],
+  [
+    "We partner with C-level executives and technical leaders to design and implement AI transformation strategies that actually work. Our focus is on:",
+    "Nous accompagnons les dirigeants et responsables techniques pour concevoir et mettre en œuvre des stratégies IA concrètes. Nos priorités :"
+  ],
+  [
+    "Strategic AI services for banking, finance, and enterprise sectors",
+    "Services stratégiques en IA pour la banque, la finance et les entreprises"
+  ],
+  [
+    "Agentic AI systems that enhance rather than automate",
+    "Systèmes d’agents IA qui renforcent les capacités des équipes"
+  ],
+  [
+    "Custom AI copilots tailored to specific business processes",
+    "Copilotes IA sur mesure adaptés aux processus métier"
+  ],
+  [
+    "End-to-end implementation from strategy to deployment",
+    "Mise en œuvre de bout en bout, de la stratégie au déploiement"
+  ],
+  [
+    "Who you'll work with",
+    "Avec qui vous travaillerez"
+  ],
+  [
+    "Some of our core values",
+    "Nos valeurs fondamentales"
+  ],
+  [
+    "Bias for action",
+    "Privilégier l’action"
+  ],
+  [
+    "We move fast, make decisions, and iterate. Speed matters. We ship and learn.",
+    "Nous avançons vite, prenons des décisions et améliorons nos solutions. Nous livrons et apprenons."
+  ],
+  [
+    "Excellence",
+    "Excellence"
+  ],
+  [
+    "We hold ourselves to the highest standards. Good isn't good enough. We aim for exceptional.",
+    "Nous nous imposons les standards les plus élevés et visons l’excellence."
+  ],
+  [
+    "Leave your ego aside",
+    "Mettre son ego de côté"
+  ],
+  [
+    "The best ideas win, not the loudest voices. We collaborate with humility and respect.",
+    "Les meilleures idées l’emportent. Nous collaborons avec humilité et respect."
+  ],
+  [
+    "We unite world-class talent to push boundaries and build what's next.",
+    "Nous réunissons des talents de premier plan pour repousser les limites et construire l’avenir."
+  ],
+  [
+    "We believe in building teams where unique perspectives and talents can thrive and everyone has what they need to excel in their role, career, and at home.",
+    "Nous créons des équipes où les perspectives et les talents de chacun peuvent s’épanouir, avec les moyens de réussir au travail et dans la vie personnelle."
+  ],
+  [
+    "Senior AI & ML Engineer",
+    "Ingénieur senior en IA et machine learning"
+  ],
+  [
+    "Engineering",
+    "Ingénierie"
+  ],
+  [
+    "View job",
+    "Voir l’offre"
+  ],
+  [
+    "Design and deploy autonomous AI agents that transform our clients' business processes. 5+ years experience, €60-90K based on profile.",
+    "Concevez et déployez des agents IA autonomes pour nos clients. Plus de 5 ans d’expérience, 60–90 k€ selon profil."
+  ],
+  [
+    "Paris",
+    "Paris"
+  ],
+  [
+    "Permanent (CDI)",
+    "CDI"
+  ],
+  [
+    "Empower your agents and copilots with the right context: the data fabric that makes intelligence actionable.",
+    "Donnez à vos agents et copilotes le bon contexte : un socle de données qui rend l’intelligence exploitable."
+  ],
+  [
+    "Data that Scales",
+    "Des données qui passent à l’échelle"
+  ],
+  [
+    "Seamless integration of knowledge graphs and vector databases like Neo4j, Milvus, and Weaviate.",
+    "Intégration de graphes de connaissances et de bases vectorielles comme Neo4j, Milvus et Weaviate."
+  ],
+  [
+    "Context-Aware Retrieval & RAG",
+    "Recherche contextuelle et RAG"
+  ],
+  [
+    "High-precision context retrieval and RAG pipelines tailored to domain-specific memory.",
+    "Recherche contextuelle de haute précision et pipelines RAG adaptés à la mémoire métier."
+  ],
+  [
+    "Governance & Explainable AI",
+    "Gouvernance et IA explicable"
+  ],
+  [
+    "End-to-end lineage, semantic enrichment, and governance for transparent, traceable AI decisions.",
+    "Traçabilité de bout en bout, enrichissement sémantique et gouvernance pour des décisions IA transparentes."
+  ],
+  [
+    "Active Learning Loops",
+    "Boucles d’apprentissage actif"
+  ],
+  [
+    "Systems that capture human feedback to continuously refine model performance and domain accuracy.",
+    "Des systèmes qui recueillent les retours humains pour améliorer en continu les performances et la précision métier des modèles."
+  ],
+  [
+    "Context is the new compute.",
+    "Le contexte, nouveau moteur de l’intelligence."
+  ],
+  [
+    "We transform fragmented enterprise data into structured, contextual intelligence ready for AI consumption, enabling models and agents to reason, learn, and act with precision.",
+    "Nous transformons les données d’entreprise fragmentées en intelligence structurée et contextualisée, exploitable par l’IA, pour permettre aux modèles et agents de raisonner, apprendre et agir avec précision."
+  ],
+  [
+    "Designing data that learns",
+    "Concevoir des données qui apprennent"
+  ],
+  [
+    "From static pipelines to living intelligence.",
+    "Des pipelines statiques à une intelligence évolutive."
+  ],
+  [
+    "Context-First Data Modeling",
+    "Modélisation centrée sur le contexte"
+  ],
+  [
+    "We structure data around decisions, not tables, capturing intent, relationships, and business semantics.",
+    "Nous structurons les données autour des décisions, en intégrant l’intention, les relations et la sémantique métier."
+  ],
+  [
+    "Retrieval-Centric Architectures",
+    "Architectures centrées sur la recherche"
+  ],
+  [
+    "Knowledge graphs and vector layers (e.g. Neo4j, Milvus, Weaviate) designed to surface the right information at the right moment.",
+    "Des graphes de connaissances et couches vectorielles, comme Neo4j, Milvus et Weaviate, pour fournir la bonne information au bon moment."
+  ],
+  [
+    "Learning-Ready RAG Systems",
+    "Systèmes RAG conçus pour apprendre"
+  ],
+  [
+    "Context retrieval pipelines that evolve with usage, feedback, and domain drift, not frozen embeddings",
+    "Des pipelines de recherche contextuelle qui évoluent avec les usages, les retours et les changements du domaine."
+  ],
+  [
+    "We Craft",
+    "Nous concevons"
+  ],
+  [
+    "Human + AI",
+    "Humain + IA"
+  ],
+  [
+    "Collaboration.",
+    "La collaboration."
+  ],
+  [
+    "We design and engineer agentic systems where humans orchestrate AI agents, connecting data, tools, and memory to transform how organizations think, decide, and deliver value.",
+    "Nous concevons des systèmes d’agents IA pilotés par l’humain, reliant données, outils et mémoire pour transformer la manière dont les organisations réfléchissent, décident et créent de la valeur."
+  ],
+  [
+    "Trusted by CAC 40 leaders and global enterprises.",
+    "La confiance de leaders du CAC 40 et de grandes entreprises internationales."
+  ],
+  [
+    "Why Quicksort is Different",
+    "Ce qui distingue Quicksort"
+  ],
+  [
+    "We blend deep AI research, product design, and infrastructure engineering into a single craft.",
+    "Nous réunissons recherche avancée en IA, conception produit et ingénierie d’infrastructure."
+  ],
+  [
+    "Enterprise AI Implementation",
+    "Déploiement de l’IA en entreprise"
+  ],
+  [
+    "Production AI agents and copilots for complex business environments. Banking, finance, regulated industries, where reliability and security aren't negotiable.",
+    "Des agents et copilotes IA en production pour la banque, la finance et les secteurs réglementés, où fiabilité et sécurité sont essentielles."
+  ],
+  [
+    "Full-Stack AI Development",
+    "Développement IA de bout en bout"
+  ],
+  [
+    "Agentic architectures to user interfaces, complete solutions. AI orchestration, data pipelines, infrastructure, frontend experiences. Unified systems built for human-AI collaboration.",
+    "Des architectures d’agents aux interfaces utilisateur : orchestration IA, pipelines de données, infrastructure et expériences utilisateur, réunis pour la collaboration humain-IA."
+  ],
+  [
+    "Engineering-First Approach",
+    "Une approche fondée sur l’ingénierie"
+  ],
+  [
+    "We don't just advise on AI strategy, we implement it. Real engineering expertise. Cloud-native or on-premise. Whatever your security requirements demand.",
+    "Nous mettons votre stratégie IA en œuvre avec une expertise concrète, dans le cloud ou sur site, selon vos exigences de sécurité."
+  ],
+  [
+    "Trusted by Regulated Industries",
+    "La confiance des secteurs réglementés"
+  ],
+  [
+    "Major banks. Aerospace. Industrial leaders. We understand compliance constraints, data governance, and the rigor required when AI mistakes have consequences.",
+    "Grandes banques, aérospatiale, industrie : nous comprenons la conformité, la gouvernance des données et la rigueur nécessaire lorsque les erreurs de l’IA ont des conséquences."
+  ],
+  [
+    "Our Services",
+    "Nos services"
+  ],
+  [
+    "Right-sized innovation. Real systems. Compounding value.",
+    "Une innovation adaptée. Des systèmes concrets. Une valeur qui se cumule."
+  ],
+  [
+    "See more",
+    "En savoir plus"
+  ],
+  [
+    "We design, deploy, and operate on-premise or cloud-native AI infrastructures optimized for LLMs, multimodal models, and agent systems, secure, compliant, and performance-tuned for enterprise workloads.",
+    "Nous concevons, déployons et exploitons des infrastructures IA sur site ou dans le cloud, optimisées pour les grands modèles de langage, les modèles multimodaux et les agents, avec sécurité, conformité et performances adaptées aux entreprises."
+  ],
+  [
+    "We build intelligent inbound and outbound voice bots, embedded voice interfaces, and real-time conversational agents that understand context, execute workflows, and hand off seamlessly to humans.",
+    "Nous créons des agents vocaux pour les appels entrants et sortants, des interfaces vocales intégrées et des agents conversationnels en temps réel qui comprennent le contexte, exécutent les processus et passent le relais à l’humain."
+  ],
+  [
+    "Technology Expertise",
+    "Expertise technologique"
+  ],
+  [
+    "Advanced AI Capabilities",
+    "Capacités avancées en IA"
+  ],
+  [
+    "Large Language Models",
+    "Grands modèles de langage"
+  ],
+  [
+    "Design, fine-tuning, and deployment of production-ready LLMs, from RAG architectures to custom model pipelines built for reliability, security, and scale.",
+    "Conception, ajustement et déploiement de grands modèles de langage prêts pour la production, des architectures RAG aux pipelines sur mesure, avec fiabilité, sécurité et passage à l’échelle."
+  ],
+  [
+    "Computer Vision",
+    "Vision par ordinateur"
+  ],
+  [
+    "End-to-end visual intelligence systems, including image processing, object detection, and recognition models integrated into real-world workflows.",
+    "Des systèmes de vision de bout en bout : traitement d’images, détection d’objets et reconnaissance intégrés aux processus métier."
+  ],
+  [
+    "Agentic AI",
+    "IA agentique"
+  ],
+  [
+    "Autonomous AI systems capable of reasoning, planning, and executing complex tasks, seamlessly orchestrating tools, APIs, and code to drive real outcomes.",
+    "Des systèmes IA autonomes capables de raisonner, planifier et exécuter des tâches complexes, en coordonnant outils, API et code pour produire des résultats concrets."
+  ],
+  [
+    "Natural Language Processing",
+    "Traitement automatique du langage"
+  ],
+  [
+    "Advanced NLP solutions for document understanding, content generation, and conversational interfaces tailored to enterprise use cases.",
+    "Des solutions avancées de compréhension documentaire, de génération de contenu et d’interfaces conversationnelles adaptées aux usages métier."
+  ],
+  [
+    "Integration Expertise",
+    "Expertise en intégration"
+  ],
+  [
+    "Enterprise Systems",
+    "Systèmes d’entreprise"
+  ],
+  [
+    "Deep integration with CRM, ERP, databases, and business intelligence platforms to connect AI directly to core business operations.",
+    "Intégration aux CRM, ERP, bases de données et plateformes décisionnelles pour relier l’IA au cœur des opérations."
+  ],
+  [
+    "Third-Party APIs",
+    "API tierces"
+  ],
+  [
+    "Secure and reliable connections to payment providers, communication tools, and external data sources, designed for scale and resilience.",
+    "Des connexions sûres et fiables aux prestataires de paiement, outils de communication et sources externes, conçues pour évoluer et résister aux incidents."
+  ],
+  [
+    "Development & Platform Tooling",
+    "Outils de développement et de plateforme"
+  ],
+  [
+    "Production-grade engineering foundations including CI/CD pipelines, observability, automated testing, and security best practices.",
+    "Des fondations d’ingénierie pour la production : CI/CD, observabilité, tests automatisés et bonnes pratiques de sécurité."
+  ],
+  [
+    "Data & Infrastructure",
+    "Données et infrastructure"
+  ],
+  [
+    "Real-time data processing, vector databases, and knowledge graphs powering high-performance, context-aware AI systems.",
+    "Traitement en temps réel, bases vectorielles et graphes de connaissances au service de systèmes IA performants et contextuels."
+  ],
+  [
+    "We're a fast-growing team",
+    "Notre équipe grandit rapidement"
+  ],
+  [
+    "We're always on the lookout for passionate, dynamic, and talented individuals.",
+    "Nous recherchons des personnes passionnées, dynamiques et talentueuses."
+  ],
+  [
+    "Founder, CTO",
+    "Fondateur, directeur technique"
+  ],
+  [
+    "Seasoned tech leader with deep expertise in AI systems and enterprise software architecture.",
+    "Dirigeant technique expérimenté, expert des systèmes IA et de l’architecture logicielle d’entreprise."
+  ],
+  [
+    "COO",
+    "Directeur des opérations"
+  ],
+  [
+    "15+ years as a founder and executive, driving operations, growth, and secure AI transformation.",
+    "Plus de 15 ans comme fondateur et dirigeant, au service des opérations, de la croissance et d’une transformation IA sécurisée."
+  ],
+  [
+    "AI Strategist",
+    "Stratège IA"
+  ],
+  [
+    "15 years+ Data & Strategy @ Mercedes · MBA EDHEC",
+    "Plus de 15 ans en données et stratégie chez Mercedes · MBA EDHEC"
+  ],
+  [
+    "AI Researcher",
+    "Chercheuse en IA"
+  ],
+  [
+    "Specializes in NLP and large language models, driving cutting-edge research into production.",
+    "Spécialiste du traitement du langage et des grands modèles de langage, elle transforme la recherche avancée en solutions de production."
+  ],
+  [
+    "AI Engineer",
+    "Ingénieur IA"
+  ],
+  [
+    "Focused on machine learning and computer vision, bridging academic research with real-world applications.",
+    "Spécialiste du machine learning et de la vision par ordinateur, reliant recherche académique et applications concrètes."
+  ],
+  [
+    "Full-stack AI engineer passionate about deploying scalable ML pipelines and infrastructure.",
+    "Ingénieur IA de bout en bout, passionné par les pipelines ML et infrastructures évolutives."
+  ],
+  [
+    "AI Product Owner",
+    "Responsable produit IA"
+  ],
+  [
+    "Bridges business strategy and technical execution, ensuring AI products deliver measurable impact.",
+    "Relie la stratégie métier à l’exécution technique pour garantir un impact mesurable des produits IA."
+  ],
+  [
+    "Builds robust AI solutions and integrations, with a focus on reliability and performance.",
+    "Développe des solutions IA et des intégrations robustes, axées sur la fiabilité et la performance."
+  ],
+  [
+    "Develops end-to-end AI systems, specializing in model optimization and deployment at scale.",
+    "Développe des systèmes IA de bout en bout, avec une spécialisation en optimisation et déploiement à grande échelle."
+  ],
+  [
+    "Run production-grade AI safely, efficiently, and at scale in your infrastructure, under your control.",
+    "Exploitez une IA de production sûre, efficace et évolutive dans votre infrastructure, sous votre contrôle."
+  ],
+  [
+    "GPU/TPU orchestration",
+    "Orchestration GPU/TPU"
+  ],
+  [
+    "With Kubernetes",
+    "Avec Kubernetes"
+  ],
+  [
+    "Monitoring, tracing, and evaluation",
+    "Supervision, traçage et évaluation"
+  ],
+  [
+    "Via Langfuse",
+    "Avec Langfuse"
+  ],
+  [
+    "Model serving pipelines",
+    "Pipelines de mise à disposition des modèles"
+  ],
+  [
+    "With low-latency inference and versioning",
+    "Avec inférence à faible latence et gestion des versions"
+  ],
+  [
+    "MLOps frameworks",
+    "Cadres MLOps"
+  ],
+  [
+    "For continuous delivery and governance",
+    "Pour la livraison continue et la gouvernance"
+  ],
+  [
+    "Engineering the layer where intelligence runs.",
+    "Concevoir le socle qui fait fonctionner l’intelligence."
+  ],
+  [
+    "Designing AI that holds in production",
+    "Concevoir une IA fiable en production"
+  ],
+  [
+    "From experimental stacks to resilient systems.",
+    "Des environnements expérimentaux aux systèmes résilients."
+  ],
+  [
+    "Production-First Infrastructure Design",
+    "Infrastructure pensée pour la production"
+  ],
+  [
+    "Cloud-native or on-prem stacks architected for performance, isolation, and cost control, not demos.",
+    "Des architectures cloud ou sur site conçues pour les performances, l’isolation et la maîtrise des coûts."
+  ],
+  [
+    "Compute-Aware Orchestration",
+    "Orchestration adaptée aux ressources de calcul"
+  ],
+  [
+    "GPU/TPU workloads orchestrated with Kubernetes, Ray, and optimized runtimes like vLLM or TensorRT-LLM for predictable latency at scale.",
+    "Des charges GPU/TPU orchestrées avec Kubernetes, Ray et des moteurs optimisés comme vLLM ou TensorRT-LLM, pour une latence prévisible à grande échelle."
+  ],
+  [
+    "Observable Intelligence",
+    "Intelligence observable"
+  ],
+  [
+    "End-to-end monitoring, tracing, and evaluation pipelines using Langfuse, Prometheus, and Grafana, so model behavior is measurable, not assumed.",
+    "Supervision, traçage et évaluation de bout en bout avec Langfuse, Prometheus et Grafana pour mesurer le comportement des modèles."
+  ],
+  [
+    "Voice bots and conversational interfaces that listen, understand, and act across your business.",
+    "Des agents vocaux et interfaces conversationnelles qui écoutent, comprennent et agissent dans toute votre entreprise."
+  ],
+  [
+    "Inbound & Outbound Voice Bots",
+    "Agents vocaux entrants et sortants"
+  ],
+  [
+    "Natural conversations for service, qualification, booking, follow-ups, surveys, and operational calls.",
+    "Des conversations naturelles pour le service, la qualification, les réservations, le suivi, les enquêtes et les appels opérationnels."
+  ],
+  [
+    "Embedded Voice Interfaces",
+    "Interfaces vocales intégrées"
+  ],
+  [
+    "Voice-first experiences inside web, mobile, enterprise software, kiosks, and connected products.",
+    "Des expériences vocales dans les applications web et mobiles, logiciels d’entreprise, bornes et produits connectés."
+  ],
+  [
+    "Real-Time Conversation",
+    "Conversation en temps réel"
+  ],
+  [
+    "Low-latency dialogue with interruption handling, multilingual speech, memory, and contextual responses.",
+    "Un dialogue à faible latence avec gestion des interruptions, parole multilingue, mémoire et réponses contextuelles."
+  ],
+  [
+    "Human Handoffs",
+    "Relais vers l’humain"
+  ],
+  [
+    "Clear escalation paths that transfer the conversation, context, and next best action to the right person.",
+    "Des parcours d’escalade clairs transmettant la conversation, son contexte et l’action recommandée à la bonne personne."
+  ],
+  [
+    "Not scripted phone trees. Voice agents that get work done.",
+    "Des agents vocaux qui font avancer le travail."
+  ],
+  [
+    "We design and engineer intelligent inbound and outbound voice bots, embedded voice interfaces, and real-time agents that understand context, execute workflows, and know when to involve a human.",
+    "Nous concevons des agents vocaux intelligents pour les appels entrants et sortants, des interfaces intégrées et des agents en temps réel qui comprennent le contexte, exécutent les processus et savent quand solliciter un humain."
+  ],
+  [
+    "From conversations to completed work",
+    "De la conversation à l’action accomplie"
+  ],
+  [
+    "Voice agents connected to the business.",
+    "Des agents vocaux connectés à vos opérations."
+  ],
+  [
+    "Connected to Business Systems",
+    "Connectés aux systèmes métier"
+  ],
+  [
+    "Secure integrations with CRM, ERP, ticketing, scheduling, knowledge bases, and proprietary tools so conversations lead to completed work.",
+    "Des intégrations sécurisées aux CRM, ERP, outils de tickets, agendas, bases de connaissances et outils internes pour transformer les conversations en actions."
+  ],
+  [
+    "Context, Memory & Safeguards",
+    "Contexte, mémoire et garde-fous"
+  ],
+  [
+    "Agents grounded in approved enterprise knowledge, with permissions, policy controls, and human oversight designed into every workflow.",
+    "Des agents fondés sur les connaissances validées de l’entreprise, avec permissions, contrôles et supervision humaine dans chaque processus."
+  ],
+  [
+    "Production-Grade Operations",
+    "Exploitation adaptée à la production"
+  ],
+  [
+    "Evaluation, observability, call analytics, security, and private deployment options built for reliable enterprise use.",
+    "Évaluation, observabilité, analyse des appels, sécurité et déploiement privé pour une utilisation fiable en entreprise."
+  ],
+  [
+    "LISTEN · UNDERSTAND · ACT",
+    "ÉCOUTER · COMPRENDRE · AGIR"
+  ],
+  [
+    "Back to Blog",
+    "Retour au blog"
+  ],
+  [
+    "Published:",
+    "Publié :"
+  ],
+  [
+    "January 2024",
+    "Janvier 2024"
+  ],
+  [
+    "Back to Careers",
+    "Retour aux carrières"
+  ],
+  [
+    "5+ years",
+    "Plus de 5 ans"
+  ],
+  [
+    "€60-90K based on profile",
+    "60–90 k€ selon profil"
+  ],
+  [
+    "Who are we?",
+    "Qui sommes-nous ?"
+  ],
+  [
+    "We help organizations deploy reliable, custom, high-impact AI solutions quickly. At Quicksort, we design internal AI agents that are secure and adapted to the most demanding industries: finance, legal, compliance. Our team consists of AI and machine learning experts who combine a rigorous scientific approach with lean methodology to design custom, reliable solutions that are directly operational in production.",
+    "Nous aidons les organisations à déployer rapidement des solutions IA fiables, sur mesure et à fort impact. Chez Quicksort, nous concevons des agents internes sécurisés pour les secteurs exigeants : finance, droit et conformité. Nos experts en IA et machine learning allient rigueur scientifique et méthode lean pour créer des solutions fiables et opérationnelles en production."
+  ],
+  [
+    "Your Mission",
+    "Votre mission"
+  ],
+  [
+    "As a Senior AI & ML Engineer, you will design and deploy autonomous AI agents that transform our clients' business processes.",
+    "En tant qu’ingénieur senior en IA et machine learning, vous concevrez et déploierez des agents autonomes qui transforment les processus de nos clients."
+  ],
+  [
+    "Project Examples",
+    "Exemples de projets"
+  ],
+  [
+    "Development and production deployment of ML and RAG pipelines.",
+    "Développement et déploiement en production de pipelines ML et RAG."
+  ],
+  [
+    "Development of conversational agents large knowledge base.",
+    "Développement d’agents conversationnels connectés à de vastes bases de connaissances."
+  ],
+  [
+    "Business process copilots (legal, financial analysis...) and Agentic workflows.",
+    "Copilotes métier, notamment juridiques et financiers, et processus pilotés par des agents."
+  ],
+  [
+    "Model deployment and management in cloud or on-premise environments, with a focus on performance optimization and Observability.",
+    "Déploiement et gestion de modèles dans le cloud ou sur site, avec optimisation des performances et observabilité."
+  ],
+  [
+    "Training and R&D",
+    "Formation et R&D"
+  ],
+  [
+    "In addition to day to day projects, you contribute to R&D projects to enrich our internal products and libraries, accelerating our projects.",
+    "Vous contribuez aussi à la R&D pour enrichir nos produits et bibliothèques internes et accélérer nos projets."
+  ],
+  [
+    "Profile Sought",
+    "Profil recherché"
+  ],
+  [
+    "5+ years of experience on production Machine Learning projects.",
+    "Plus de 5 ans d’expérience sur des projets de machine learning en production."
+  ],
+  [
+    "Mastery of ML pipelines, from design to production.",
+    "Maîtrise des pipelines ML, de la conception à la production."
+  ],
+  [
+    "Excellent Python skills and development best practices.",
+    "Excellente maîtrise de Python et des bonnes pratiques de développement."
+  ],
+  [
+    "Deep understanding of modern AI architectures (transformers...).",
+    "Compréhension approfondie des architectures IA modernes, notamment les transformers."
+  ],
+  [
+    "Familiarity with pipelines evaluations and Observability.",
+    "Connaissance de l’évaluation des pipelines et de l’observabilité."
+  ],
+  [
+    "Understanding of Large Language Model deployment challenges and the LLMOps ecosystem.",
+    "Compréhension des enjeux de déploiement des grands modèles de langage et de l’écosystème LLMOps."
+  ],
+  [
+    "Practical knowledge of Linux, Kubernetes, Docker.",
+    "Connaissance pratique de Linux, Kubernetes et Docker."
+  ],
+  [
+    "Experience in technical mentoring.",
+    "Expérience en mentorat technique."
+  ],
+  [
+    "Bias for action.",
+    "Privilégier l’action."
+  ],
+  [
+    "Excellence.",
+    "Excellence."
+  ],
+  [
+    "Leave your ego aside.",
+    "Mettre son ego de côté."
+  ],
+  [
+    "We strongly believe AI will permeate every vertical, so let's have fun and build together awesome copilots...",
+    "Nous sommes convaincus que l’IA transformera tous les secteurs. Construisons ensemble des copilotes remarquables !"
+  ],
+  [
+    "Apply Now",
+    "Postuler"
+  ],
+  [
+    "Page not found",
+    "Page introuvable"
+  ],
+  [
+    "The page you requested could not be found.",
+    "La page demandée est introuvable."
+  ],
+  [
+    "Back to Quicksort",
+    "Retour à Quicksort"
+  ],
+  [
+    "Post Not Found",
+    "Article introuvable"
+  ],
+  [
+    "Intelligent solutions tailored for business growth and efficiency",
+    "Des solutions intelligentes pour la croissance et l’efficacité"
+  ],
+  [
+    "Robust infrastructure designed for AI workloads and scalability",
+    "Une infrastructure robuste pour les charges IA et le passage à l’échelle"
+  ],
+  [
+    "Data preparation, management, and optimization for AI systems",
+    "Préparation, gestion et optimisation des données pour l’IA"
+  ],
+  [
+    "Voice bots and conversational interfaces that listen, understand, and act",
+    "Des agents vocaux qui écoutent, comprennent et agissent"
+  ],
+  [
+    "No posts in this category yet.",
+    "Aucun article dans cette catégorie pour le moment."
+  ],
+  [
+    "Previous team members",
+    "Membres précédents"
+  ],
+  [
+    "Next team members",
+    "Membres suivants"
+  ],
+  [
+    "Enterprise AI Agents & Engineering",
+    "Agents IA et ingénierie pour les entreprises"
+  ],
+  [
+    "Enterprise AI Agents & Copilots",
+    "Agents et copilotes IA pour les entreprises"
+  ],
+  [
+    "Enterprise Data Engineering for AI",
+    "Ingénierie des données pour l’IA en entreprise"
+  ],
+  [
+    "Private AI Infrastructure & LLM Deployment",
+    "Infrastructure IA privée et déploiement de LLM"
+  ],
+  [
+    "Enterprise Voice AI Agents",
+    "Agents vocaux IA pour les entreprises"
+  ],
+  [
+    "Enterprise AI Insights",
+    "Perspectives sur l’IA en entreprise"
+  ],
+  [
+    "AI Engineering Careers",
+    "Carrières en ingénierie IA"
+  ],
+  [
+    "Quicksort designs enterprise AI agents, data systems and private AI infrastructure. Explore our engineering services and discuss your use case.",
+    "Quicksort conçoit des agents IA, des systèmes de données et des infrastructures privées pour les entreprises. Découvrez nos services et échangeons sur votre projet."
+  ],
+  [
+    "Build custom AI agents and copilots with Quicksort. Connect enterprise data and tools through human-in-the-loop workflows and product design.",
+    "Créez des agents et copilotes IA sur mesure avec Quicksort. Reliez vos données et outils grâce à des processus supervisés par l’humain et à la conception produit."
+  ],
+  [
+    "Prepare enterprise data for AI with Quicksort. Explore data pipelines, contextual intelligence and knowledge systems for models and agents.",
+    "Préparez vos données pour l’IA avec Quicksort : pipelines de données, intelligence contextuelle et systèmes de connaissances pour vos modèles et agents."
+  ],
+  [
+    "Design and deploy AI infrastructure with Quicksort. Explore secure on-premise and cloud environments for LLMs, multimodal models and agent systems.",
+    "Concevez et déployez votre infrastructure IA avec Quicksort : environnements sécurisés sur site ou dans le cloud pour LLM, modèles multimodaux et agents."
+  ],
+  [
+    "Build real-time voice agents with Quicksort. Connect conversations to enterprise workflows with contextual responses and seamless human handoffs.",
+    "Créez des agents vocaux en temps réel avec Quicksort. Reliez conversations et processus métier avec des réponses contextuelles et un relais fluide vers l’humain."
+  ],
+  [
+    "Read Quicksort insights on human and AI collaboration, agentic systems and enterprise engineering. Explore ideas behind our approach to AI delivery.",
+    "Découvrez les réflexions de Quicksort sur la collaboration humain-IA, les systèmes d’agents et l’ingénierie d’entreprise, au cœur de notre approche de l’IA."
+  ],
+  [
+    "Explore careers at Quicksort and help build enterprise AI systems. Discover our open roles, engineering approach and opportunities to join the team.",
+    "Rejoignez Quicksort pour construire des systèmes IA d’entreprise. Découvrez nos offres, notre approche de l’ingénierie et les possibilités de rejoindre l’équipe."
+  ],
+  [
+    "No articles in this category yet.",
+    "Aucun article dans cette catégorie pour le moment."
+  ],
+  [
+    "Voice AI waveform",
+    "Onde sonore de l’IA vocale"
+  ],
+  [
+    "Main navigation",
+    "Navigation principale"
+  ],
+  [
+    "Switch to light mode",
+    "Passer au thème clair"
+  ],
+  [
+    "Switch to dark mode",
+    "Passer au thème sombre"
+  ],
+  [
+    "The future of work is not human or AI. It's collaborating by design.",
+    "L’avenir du travail repose sur une collaboration pensée dès le départ entre l’humain et l’IA."
+  ]
+]

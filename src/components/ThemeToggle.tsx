@@ -1,3 +1,4 @@
+import { useLocale } from '@lib/i18n';
 import { MoonIcon, SunIcon } from "lucide-react";
 import { useTheme } from "@lib/theme";
 import { cn } from "@lib/utils";
@@ -11,6 +12,7 @@ type ThemeToggleProps = {
  * is the convention people already expect from a single-button toggle.
  */
 export const ThemeToggle = ({ className }: ThemeToggleProps) => {
+  const { t, localize } = useLocale();
     const { theme, toggleTheme } = useTheme();
     const nextTheme = theme === "dark" ? "light" : "dark";
 
@@ -18,8 +20,8 @@ export const ThemeToggle = ({ className }: ThemeToggleProps) => {
         <button
             type="button"
             onClick={toggleTheme}
-            aria-label={`Switch to ${nextTheme} mode`}
-            title={`Switch to ${nextTheme} mode`}
+            aria-label={t(`Switch to ${nextTheme} mode`)}
+            title={t(`Switch to ${nextTheme} mode`)}
             className={cn(
                 "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-qs-pill",
                 "border border-line text-ink-muted",

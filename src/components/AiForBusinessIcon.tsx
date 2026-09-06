@@ -1,6 +1,8 @@
+import { useLocale } from '@lib/i18n';
 import React, { useState, useEffect, useRef } from 'react';
 
 const AiForBusinessIcon: React.FC<{ className?: string }> = ({ className }) => {
+  const { t, localize } = useLocale();
   // Track which layer should be blue (0 = top, 1 = middle, 2 = bottom)
   const [blueLayer, setBlueLayer] = useState(() => Math.floor(Math.random() * 3));
   const [animationKey, setAnimationKey] = useState(0);
@@ -63,7 +65,7 @@ const AiForBusinessIcon: React.FC<{ className?: string }> = ({ className }) => {
         </g>
       </svg>
 
-      <style>{`
+      <style>{t(`
         .ai-business-icon-stage {
           --blue-accent: var(--qs-cat-blue);
           --total-duration: 24s;
@@ -219,7 +221,7 @@ const AiForBusinessIcon: React.FC<{ className?: string }> = ({ className }) => {
         .layer-bottom.layer-blue path {
           animation: bottomColorSequence var(--total-duration) cubic-bezier(0.4, 0, 0.2, 1) infinite;
         }
-      `}</style>
+      `)}</style>
     </div>
   );
 };

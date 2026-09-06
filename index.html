@@ -13,17 +13,7 @@
       renders dark, then flips to light a frame later for anyone who chose
       light — a visible flash on every navigation.
     -->
-    <script>
-      (function () {
-        try {
-          var stored = localStorage.getItem("qs-theme");
-          document.documentElement.dataset.theme =
-            stored === "light" || stored === "dark" ? stored : "dark";
-        } catch (e) {
-          document.documentElement.dataset.theme = "dark";
-        }
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -31,10 +21,10 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Hanken+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link href="tailwind.css" rel="stylesheet" />
+    <link href="/tailwind.css" rel="stylesheet" />
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="./src/index.tsx"></script>
+    <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>

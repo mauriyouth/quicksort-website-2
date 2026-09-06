@@ -1,3 +1,4 @@
+import { useLocale } from '@lib/i18n';
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
@@ -40,6 +41,7 @@ const clientLogos = [
 ];
 
 export const HeroIntroSection = (): JSX.Element => {
+  const { t, localize, locale } = useLocale();
   const sectionRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -120,14 +122,13 @@ export const HeroIntroSection = (): JSX.Element => {
                 <h1
                   ref={headingRef}
                   className="mt-[-1.00px] [font-family:'Hanken_Grotesk',Helvetica] font-medium text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-[-1.20px] leading-[1.2] sm:leading-[56px] lg:leading-[72px] relative self-stretch text-ink"
-                >
-                  We Craft{" "}
+                >{locale === "en" ? "We Craft" : "Nous concevons la collaboration"}{t(" ")}
                   <span
                     className="relative inline-block cursor-pointer"
                     onMouseEnter={handleHeadingHover}
                     onMouseLeave={handleHeadingLeave}
                   >
-                    {/* Accent background rectangle — scales in on hover */}
+                    {/* Accent background rectangle, scales in on hover */}
                     <span
                       className="absolute bg-signal"
                       style={{
@@ -146,28 +147,18 @@ export const HeroIntroSection = (): JSX.Element => {
                         color: isHovered ? "var(--qs-signal-fg)" : "var(--qs-ink)",
                         transition: "color 0.3s ease 0.1s",
                       }}
-                    >
-                      Human + AI
-                    </span>
-                  </span>{" "}
-                  Collaboration.
-                </h1>
+                    >{t("\n                      Human + AI\n                    ")}</span>
+                  </span>{t(" ")}{locale === "en" ? "Collaboration." : ""}</h1>
 
                 <p
                   ref={subtitleRef}
                   className="relative self-stretch font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]"
-                >
-                  We design and engineer agentic systems where humans
-                  orchestrate AI agents, connecting data, tools, and memory to
-                  transform how organizations think, decide, and deliver value.
-                </p>
+                >{t("\n                  We design and engineer agentic systems where humans\n                  orchestrate AI agents, connecting data, tools, and memory to\n                  transform how organizations think, decide, and deliver value.\n                ")}</p>
               </div>
 
               <div ref={ctaRef} className="inline-flex items-start gap-3 relative">
-                <a href="mailto:hello@quicksort.fr">
-                  <Button variant="signal" size="qs-hero" className="group">
-                    Get in touch
-                  </Button>
+                <a href={localize("mailto:hello@quicksort.fr")}>
+                  <Button variant="signal" size="qs-hero" className="group">{t("\n                    Get in touch\n                  ")}</Button>
                 </a>
               </div>
             </div>
@@ -183,9 +174,7 @@ export const HeroIntroSection = (): JSX.Element => {
           <p
             id="client-logos-title"
             className="text-center text-base sm:text-lg text-ink-muted leading-7"
-          >
-            Trusted by CAC 40 leaders and global enterprises.
-          </p>
+          >{t("\n            Trusted by CAC 40 leaders and global enterprises.\n          ")}</p>
 
           <ul className="grid w-full grid-cols-2 items-center justify-items-center gap-x-6 gap-y-10 lg:flex lg:justify-center lg:gap-6 xl:gap-10">
             {clientLogos.map((logo) => (
@@ -195,7 +184,7 @@ export const HeroIntroSection = (): JSX.Element => {
               >
                 <img
                   src={logo.src}
-                  alt={logo.name}
+                  alt={t(logo.name)}
                   width={logo.width}
                   height={logo.height}
                   className={`${logo.className} qs-invert-on-light h-auto max-w-full object-contain`}

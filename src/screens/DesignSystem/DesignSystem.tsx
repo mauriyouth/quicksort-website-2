@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { MainNavigationSection } from "@components/MainNavigationSection";
 import { SiteFooter } from "@components/SiteFooter";
 import { ThemeToggle } from "@components/ThemeToggle";
@@ -21,25 +20,8 @@ const SECTIONS = [
  * Keep this page out of search results. It is reachable by URL for anyone
  * who needs it, but it is a reference surface, not a marketing page.
  */
-const useNoIndex = () => {
-    useEffect(() => {
-        const meta = document.createElement("meta");
-        meta.name = "robots";
-        meta.content = "noindex, nofollow";
-        document.head.appendChild(meta);
-
-        const previousTitle = document.title;
-        document.title = "Design System | Quicksort";
-
-        return () => {
-            document.head.removeChild(meta);
-            document.title = previousTitle;
-        };
-    }, []);
-};
 
 export const DesignSystem = (): JSX.Element => {
-    useNoIndex();
     const { theme } = useTheme();
 
     return (

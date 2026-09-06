@@ -1,3 +1,4 @@
+import { useLocale } from '@lib/i18n';
 import { useEffect, useRef } from "react";
 import { Card, CardContent } from "@components/ui/card";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
@@ -31,6 +32,7 @@ const features = [
 ];
 
 export const KeyFeaturesSection = (): JSX.Element => {
+  const { t, localize } = useLocale();
   const sectionRef = useRef<HTMLElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
@@ -92,15 +94,10 @@ export const KeyFeaturesSection = (): JSX.Element => {
               <div className="absolute top-8 left-9 w-[17px] h-[17px] bg-ink rounded-[8.55px]" />
             </div>
 
-            <h2 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-ink [font-style:var(--display-md-semibold-font-style)]">
-              Why Quicksort is Different
-            </h2>
+            <h2 className="font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-ink [font-style:var(--display-md-semibold-font-style)]">{t("\n              Why Quicksort is Different\n            ")}</h2>
           </div>
 
-          <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
-            We blend deep AI research, product design, and infrastructure
-            engineering into a single craft.
-          </p>
+          <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">{t("\n            We blend deep AI research, product design, and infrastructure\n            engineering into a single craft.\n          ")}</p>
         </div>
 
         <div
@@ -115,11 +112,11 @@ export const KeyFeaturesSection = (): JSX.Element => {
               <CardContent className="flex flex-col items-start gap-5 flex-1 grow p-0">
                 <div className="flex flex-col items-start gap-2 w-full">
                   <h3 className="mt-[-1.00px] font-text-xl-semibold font-[number:var(--text-xl-semibold-font-weight)] text-ink text-lg sm:text-xl md:text-[length:var(--text-xl-semibold-font-size)] tracking-[var(--text-xl-semibold-letter-spacing)] leading-[var(--text-xl-semibold-line-height)] [font-style:var(--text-xl-semibold-font-style)]">
-                    {feature.title}
+                    {t(feature.title)}
                   </h3>
 
                   <p className="text-ink-muted font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-sm sm:text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
-                    {feature.description}
+                    {t(feature.description)}
                   </p>
                 </div>
               </CardContent>

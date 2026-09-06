@@ -1,4 +1,6 @@
-import { Link } from "react-router-dom";
+import { LanguageSwitcher } from '../LanguageSwitcher';
+import { useLocale } from '@lib/i18n';
+import { LocaleLink as Link } from '@lib/i18n';
 import { useState } from "react";
 import { Button } from "@components/ui/button";
 import { ThemeToggle } from "@components/ThemeToggle";
@@ -136,16 +138,15 @@ const servicesData = [
 ];
 
 export const MainNavigationSection = (): JSX.Element => {
+  const { t, localize } = useLocale();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     return (
-        <header className="sticky top-0 z-50 w-full h-20 flex flex-col items-center justify-center bg-surface border-b border-line-hair">
-            <div className="items-center justify-between flex max-w-screen-xl px-4 sm:px-8 py-0 relative w-full flex-[0_0_auto]">
+        <header className="sticky top-0 z-50 w-full min-h-20 flex flex-col items-center justify-center bg-surface border-b border-line-hair">
+            <div className="min-h-20 items-center justify-between flex max-w-screen-xl px-4 sm:px-8 py-0 relative w-full flex-[0_0_auto]">
                 <div className="inline-flex items-center gap-4 lg:gap-10 relative flex-[0_0_auto]">
                     <Link to="/" className="relative w-[138.22px] h-7 shrink-0">
-                        <div className="absolute top-0 left-[34px] font-qs-sans font-medium text-ink text-[22.9px] tracking-[-0.69px] leading-[normal]">
-                            Quicksort
-                        </div>
+                        <div className="absolute top-0 left-[34px] font-qs-sans font-medium text-ink text-[22.9px] tracking-[-0.69px] leading-[normal]">{t("\n                            Quicksort\n                        ")}</div>
 
                         <div className="absolute top-px left-0 w-[29px] h-[27px]">
                             <div className="top-0 left-0 w-[26px] h-[26px] rounded-[12.99px] absolute bg-ink" />
@@ -157,7 +158,7 @@ export const MainNavigationSection = (): JSX.Element => {
                     </Link>
 
                     {/* Desktop Navigation */}
-                    <NavigationMenu className="hidden lg:flex">
+                    <NavigationMenu aria-label={t("Main navigation")} className="hidden lg:flex">
                         <NavigationMenuList className="flex items-center gap-8">
                             {navigationItems.map((item, index) => (
                                 <NavigationMenuItem key={index}>
@@ -166,23 +167,21 @@ export const MainNavigationSection = (): JSX.Element => {
                                             to={item.href}
                                             className="inline-flex items-center justify-center gap-2 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-ink-2 transition-colors"
                                         >
-                                            {item.label}
+                                            {t(item.label)}
                                         </Link>
                                     ) : (
                                         <NavigationMenuLink
-                                            href={item.href}
+                                            href={localize(item.href)}
                                             className="inline-flex items-center justify-center gap-2 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-ink-2 transition-colors"
                                         >
-                                            {item.label}
+                                            {t(item.label)}
                                         </NavigationMenuLink>
                                     )}
                                 </NavigationMenuItem>
                             ))}
 
                             <NavigationMenuItem>
-                                <NavigationMenuTrigger className="bg-transparent hover:bg-transparent data-[state=open]:bg-transparent px-0 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-ink-2 data-[state=open]:text-ink-2">
-                                    Services
-                                </NavigationMenuTrigger>
+                                <NavigationMenuTrigger className="bg-transparent hover:bg-transparent data-[state=open]:bg-transparent px-0 font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-ink-2 data-[state=open]:text-ink-2">{t("\n                                    Services\n                                ")}</NavigationMenuTrigger>
                                 <NavigationMenuContent>
                                     <div className="w-[500px] p-6 bg-surface-raised border border-line rounded-lg">
                                         <div className="flex flex-col gap-3">
@@ -202,7 +201,7 @@ export const MainNavigationSection = (): JSX.Element => {
                                                             {service.iconSrc ? (
                                                                 <img
                                                                     src={service.iconSrc}
-                                                                    alt=""
+                                                                    alt={t("")}
                                                                     width={81}
                                                                     height={81}
                                                                     className="w-10 h-10 object-contain"
@@ -213,10 +212,10 @@ export const MainNavigationSection = (): JSX.Element => {
                                                         </div>
                                                         <div className="flex flex-col gap-1">
                                                             <span className="text-sm font-semibold text-ink group-hover:text-signal-text transition-colors">
-                                                                {service.title}
+                                                                {t(service.title)}
                                                             </span>
                                                             <span className="text-xs text-ink-muted leading-relaxed">
-                                                                {service.description}
+                                                                {t(service.description)}
                                                             </span>
                                                         </div>
                                                     </Link>
@@ -230,19 +229,21 @@ export const MainNavigationSection = (): JSX.Element => {
                     </NavigationMenu>
                 </div>
 
-                <div className="gap-3 inline-flex items-center">
+                <div className="gap-2 sm:gap-3 inline-flex items-center">
+                    <LanguageSwitcher />
                     <ThemeToggle className="hidden sm:inline-flex" />
 
-                    <a href="mailto:hello@quicksort.fr">
-                        <Button variant="signal" size="qs-sm" className="hidden sm:inline-flex">
-                            Get in touch
-                        </Button>
+                    <a href={localize("mailto:hello@quicksort.fr")}>
+                        <Button variant="signal" size="qs-sm" className="hidden sm:inline-flex">{t("\n                            Get in touch\n                        ")}</Button>
                     </a>
                     <Button
                         variant="ghost"
                         size="icon"
                         className="lg:hidden text-ink hover:bg-line-faint"
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                        aria-label={t(mobileMenuOpen ? "Close navigation" : "Open navigation")}
+                        aria-expanded={mobileMenuOpen}
+                        aria-controls="mobile-navigation"
                     >
                         {mobileMenuOpen ? (
                             <XIcon className="w-6 h-6" />
@@ -255,8 +256,9 @@ export const MainNavigationSection = (): JSX.Element => {
 
             {/* Mobile Menu */}
             {mobileMenuOpen && (
-                <div className="lg:hidden w-full bg-surface border-t border-line-hair">
+                <div id="mobile-navigation" className="lg:hidden w-full bg-surface border-t border-line-hair">
                     <div className="flex flex-col max-w-screen-xl px-4 sm:px-8 py-6 gap-4">
+                        <ThemeToggle className="sm:hidden self-start" />
                         {navigationItems.map((item, index) => (
                             <Link
                                 key={index}
@@ -264,13 +266,11 @@ export const MainNavigationSection = (): JSX.Element => {
                                 onClick={() => setMobileMenuOpen(false)}
                                 className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] hover:text-ink-2 transition-colors py-2"
                             >
-                                {item.label}
+                                {t(item.label)}
                             </Link>
                         ))}
                         <div className="flex flex-col gap-2 py-2">
-                            <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] py-2">
-                                Services
-                            </div>
+                            <div className="font-text-md-semibold font-[number:var(--text-md-semibold-font-weight)] text-ink text-[length:var(--text-md-semibold-font-size)] tracking-[var(--text-md-semibold-letter-spacing)] leading-[var(--text-md-semibold-line-height)] [font-style:var(--text-md-semibold-font-style)] py-2">{t("\n                                Services\n                            ")}</div>
                             {servicesData.map((service, serviceIndex) => {
                                 const Icon = service.icon;
                                 return (
@@ -288,7 +288,7 @@ export const MainNavigationSection = (): JSX.Element => {
                                             {service.iconSrc ? (
                                                 <img
                                                     src={service.iconSrc}
-                                                    alt=""
+                                                    alt={t("")}
                                                     width={81}
                                                     height={81}
                                                     className="w-10 h-10 object-contain"
@@ -299,20 +299,18 @@ export const MainNavigationSection = (): JSX.Element => {
                                         </div>
                                         <div className="flex flex-col gap-1">
                                             <span className="text-sm font-semibold text-ink group-hover:text-signal-text transition-colors">
-                                                {service.title}
+                                                {t(service.title)}
                                             </span>
                                             <span className="text-xs text-ink-muted leading-relaxed">
-                                                {service.description}
+                                                {t(service.description)}
                                             </span>
                                         </div>
                                     </Link>
                                 );
                             })}
                         </div>
-                        <a href="mailto:hello@quicksort.fr" className="w-full">
-                            <Button variant="signal" size="qs-sm" className="w-full mt-2">
-                                Get in touch
-                            </Button>
+                        <a href={localize("mailto:hello@quicksort.fr")} className="w-full">
+                            <Button variant="signal" size="qs-sm" className="w-full mt-2">{t("\n                                Get in touch\n                            ")}</Button>
                         </a>
                     </div>
                 </div>

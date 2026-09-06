@@ -72,7 +72,7 @@ const applyTheme = (theme: Theme) => {
 };
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-    const [theme, setThemeState] = useState<Theme>(readInitialTheme);
+    const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
 
     const setTheme = useCallback((next: Theme) => {
         setThemeState(next);
@@ -89,6 +89,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
     // Keep other tabs in step with the choice made here.
     useEffect(() => {
+        setThemeState(readInitialTheme());
         const onStorage = (event: StorageEvent) => {
             if (event.key !== THEME_STORAGE_KEY || !isTheme(event.newValue)) return;
             setThemeState(event.newValue);

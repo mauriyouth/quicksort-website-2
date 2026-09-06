@@ -525,3 +525,15 @@
     pointer-events: none;
   }
 }
+
+/* Language controls stay visible on mobile and work before hydration. */
+.language-switcher { position: relative; color: var(--qs-ink); font: 500 14px/1.5 Arial, sans-serif; }
+.language-switcher summary { display: flex; align-items: center; gap: .35rem; cursor: pointer; list-style: none; padding: .6rem .5rem; border: 1px solid var(--qs-line); border-radius: .5rem; white-space: nowrap; }
+.language-switcher summary::-webkit-details-marker { display: none; }
+.language-switcher summary:focus-visible, .language-switcher a:focus-visible { outline: 2px solid #ccff00; outline-offset: 3px; }
+.language-switcher nav { position: absolute; inset-inline-end: 0; top: calc(100% + .5rem); min-width: 150px; padding: .4rem; border: 1px solid var(--qs-line); border-radius: .5rem; background: var(--qs-surface-raised); box-shadow: 0 8px 24px #0008; z-index: 100; }
+.language-switcher a { display: flex; justify-content: space-between; gap: 1rem; padding: .6rem; border-radius: .25rem; }
+.language-switcher a:hover, .language-switcher a[aria-current] { color: var(--qs-signal-text); background: var(--qs-surface-sunken); }
+/* Footer links can grow when translated. */
+footer nav, footer nav + div { flex-wrap: wrap; height: auto !important; }
+@media (max-width: 374px) { .language-switcher summary { font-size: 12px; padding: .5rem .25rem; } }

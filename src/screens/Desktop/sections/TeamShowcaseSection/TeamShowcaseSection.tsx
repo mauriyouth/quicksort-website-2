@@ -1,3 +1,4 @@
+import { useLocale } from '@lib/i18n';
 import { useEffect, useRef } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@components/ui/button";
@@ -6,7 +7,7 @@ import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import alexandraBeljakovImage from "./alexandra-beljakov.png";
+
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -16,7 +17,10 @@ const teamMembers = [
     role: "Founder, CTO",
     description:
       "Seasoned tech leader with deep expertise in AI systems and enterprise software architecture.",
-    image: "/ahmednah.webp",
+    image: "/team/ahmednah-640.webp",
+    imageSet: "/team/ahmednah-320.webp 320w, /team/ahmednah-640.webp 640w",
+    imageWidth: 1452,
+    imageHeight: 2579,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mohamed-ahmednah-19313116/",
   },
@@ -25,15 +29,21 @@ const teamMembers = [
     role: "COO",
     description:
       "15+ years as a founder and executive, driving operations, growth, and secure AI transformation.",
-    image: "/renaud-granier.png",
+    image: "/team/renaud-granier-640.webp",
+    imageSet: "/team/renaud-granier-320.webp 320w, /team/renaud-granier-640.webp 640w",
+    imageWidth: 800,
+    imageHeight: 800,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/renaud-granier-8027788b/",
   },
   {
     name: "Alexandra Beljakov",
     role: "AI Strategist",
-    description: "15 years+ Data & Strategy @ Mercedes · MBA EDHEC",
-    image: alexandraBeljakovImage,
+    description: "15 years+ Data & Strategy @ Mercedes Â· MBA EDHEC",
+    image: "/team/alexandra-beljakov-640.webp",
+    imageSet: "/team/alexandra-beljakov-320.webp 320w, /team/alexandra-beljakov-640.webp 407w",
+    imageWidth: 407,
+    imageHeight: 480,
     hasArrow: false,
   },
   {
@@ -41,7 +51,10 @@ const teamMembers = [
     role: "AI Researcher",
     description:
       "Specializes in NLP and large language models, driving cutting-edge research into production.",
-    image: "/mirette.webp",
+    image: "/team/mirette-640.webp",
+    imageSet: "/team/mirette-320.webp 320w, /team/mirette-640.webp 640w",
+    imageWidth: 1452,
+    imageHeight: 2579,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mirettemoawad/",
   },
@@ -50,7 +63,10 @@ const teamMembers = [
     role: "AI Engineer",
     description:
       "Focused on machine learning and computer vision, bridging academic research with real-world applications.",
-    image: "/nageeta.webp",
+    image: "/team/nageeta-640.webp",
+    imageSet: "/team/nageeta-320.webp 320w, /team/nageeta-640.webp 640w",
+    imageWidth: 1452,
+    imageHeight: 2579,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/nageeta124/",
   },
@@ -59,7 +75,10 @@ const teamMembers = [
     role: "AI Engineer",
     description:
       "Full-stack AI engineer passionate about deploying scalable ML pipelines and infrastructure.",
-    image: "/amadou.webp",
+    image: "/team/amadou-640.webp",
+    imageSet: "/team/amadou-320.webp 320w, /team/amadou-640.webp 640w",
+    imageWidth: 1452,
+    imageHeight: 2579,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/amadoungam/",
   },
@@ -68,7 +87,10 @@ const teamMembers = [
     role: "AI Product Owner",
     description:
       "Bridges business strategy and technical execution, ensuring AI products deliver measurable impact.",
-    image: "/dridi.webp",
+    image: "/team/dridi-640.webp",
+    imageSet: "/team/dridi-320.webp 320w, /team/dridi-640.webp 640w",
+    imageWidth: 1452,
+    imageHeight: 2579,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/aicha-dridi/",
   },
@@ -77,7 +99,10 @@ const teamMembers = [
     role: "AI Engineer",
     description:
       "Builds robust AI solutions and integrations, with a focus on reliability and performance.",
-    image: "/asmae-karmouchi.png",
+    image: "/team/asmae-karmouchi-640.webp",
+    imageSet: "/team/asmae-karmouchi-320.webp 320w, /team/asmae-karmouchi-640.webp 407w",
+    imageWidth: 407,
+    imageHeight: 480,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/asmae-karmouchi-522769255/",
   },
@@ -86,13 +111,17 @@ const teamMembers = [
     role: "AI Engineer",
     description:
       "Develops end-to-end AI systems, specializing in model optimization and deployment at scale.",
-    image: "/murad-mustafayev.png",
+    image: "/team/murad-mustafayev-640.webp",
+    imageSet: "/team/murad-mustafayev-320.webp 320w, /team/murad-mustafayev-640.webp 640w",
+    imageWidth: 1070,
+    imageHeight: 1470,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/murad-mustafayev/",
   },
 ];
 
 export const TeamShowcaseSection = (): JSX.Element => {
+  const { t, localize, locale } = useLocale();
   const carouselRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -162,14 +191,9 @@ export const TeamShowcaseSection = (): JSX.Element => {
         >
           <div className="flex items-start justify-between gap-6 w-full">
             <div className="min-w-0 max-w-full sm:min-w-[480px] sm:max-w-screen-md gap-4 sm:gap-5 flex-1 grow flex flex-col items-start">
-              <h2 className="mt-[-1.00px] font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-ink [font-style:var(--display-md-semibold-font-style)]">
-                We&apos;re a fast-growing team
-              </h2>
+              <h2 className="mt-[-1.00px] font-display-md-semibold font-[number:var(--display-md-semibold-font-weight)] text-2xl sm:text-3xl md:text-[length:var(--display-md-semibold-font-size)] tracking-[var(--display-md-semibold-letter-spacing)] leading-[1.2] md:leading-[var(--display-md-semibold-line-height)] text-ink [font-style:var(--display-md-semibold-font-style)]">{t("\n                We're a fast-growing team\n              ")}</h2>
 
-              <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">
-                We&apos;re always on the lookout for passionate, dynamic, and
-                talented individuals.
-              </p>
+              <p className="font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)] tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)]">{t("\n                We're always on the lookout for passionate, dynamic, and\n                talented individuals.\n              ")}</p>
             </div>
 
             <div className="hidden sm:inline-flex items-center gap-4 shrink-0 pt-1">
@@ -177,6 +201,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
                 variant="outline"
                 size="icon"
                 onClick={scrollLeft}
+                aria-label={t("Previous team members")}
                 className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-solid border-line bg-transparent hover:bg-surface-sunken"
               >
                 <ChevronLeftIcon className="w-5 h-5 text-ink" />
@@ -185,6 +210,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
                 variant="outline"
                 size="icon"
                 onClick={scrollRight}
+                aria-label={t("Next team members")}
                 className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-solid border-line bg-transparent hover:bg-surface-sunken"
               >
                 <ChevronRightIcon className="w-5 h-5 text-ink" />
@@ -210,11 +236,17 @@ export const TeamShowcaseSection = (): JSX.Element => {
                 >
                   <img
                     src={member.image}
-                    alt={member.name}
+                    srcSet={member.imageSet}
+                    sizes="(min-width: 768px) 320px, (min-width: 640px) 300px, 280px"
+                    width={member.imageWidth}
+                    height={member.imageHeight}
+                    loading="lazy"
+                    decoding="async"
+                    alt={t(member.name)}
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                   <CardContent className="relative flex flex-col w-full h-full items-center justify-end p-0 z-10">
-                    {/* Overlay container — anchored to bottom, slides up on hover */}
+                    {/* Overlay container, anchored to bottom, slides up on hover */}
                     <div
                       className="absolute bottom-0 left-0 right-0 flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] translate-y-[calc(100%-230px)] sm:translate-y-[calc(100%-250px)] group-hover:translate-y-0"
                     >
@@ -225,18 +257,18 @@ export const TeamShowcaseSection = (): JSX.Element => {
                       <div className="flex flex-col items-start gap-4 sm:gap-5 pt-4 sm:pt-5 pb-5 sm:pb-6 px-4 sm:px-6 w-full bg-photo-scrim border-t [border-top-style:solid] backdrop-blur-md backdrop-brightness-[100%] [-webkit-backdrop-filter:blur(12px)_brightness(100%)]">
                         {/* Name */}
                         <h3 className="font-display-sm-semibold font-[number:var(--display-sm-semibold-font-weight)] text-on-fill text-lg sm:text-xl md:text-2xl tracking-[var(--display-sm-semibold-letter-spacing)] leading-[1.2] [font-style:var(--display-sm-semibold-font-style)]">
-                          {member.name}
+                          {t(member.name)}
                         </h3>
 
                         {/* Role */}
                         <div className="font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-on-fill/70 text-sm sm:text-base md:text-lg tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
-                          {member.role}
+                          {t(member.role)}
                         </div>
 
-                        {/* Description — only visible when hovered */}
+                        {/* Description, only visible when hovered */}
                         {member.description && (
                           <p className="text-on-fill/85 text-sm sm:text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
-                            {member.description}
+                            {t(member.description)}
                           </p>
                         )}
 
@@ -244,14 +276,14 @@ export const TeamShowcaseSection = (): JSX.Element => {
                         {member.linkedinUrl && (
                           <div className="flex items-center gap-4 sm:gap-5 w-full pt-1">
                             <a
-                              href={member.linkedinUrl}
+                              href={localize(member.linkedinUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="hover:opacity-80 transition-opacity"
                             >
                               <img
                                 className="w-5 h-5 sm:w-6 sm:h-6"
-                                alt="LinkedIn"
+                                alt={t("LinkedIn")}
                                 src="/social-icon-1.svg"
                               />
                             </a>

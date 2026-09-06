@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { useLocale } from '@lib/i18n';
+import { LocaleLink as Link } from '@lib/i18n';
 import { Button } from "@components/ui/button";
 import { SectionGridOverlay } from "@components/SectionGridOverlay";
 import { SectionSeparator } from "@components/SectionSeparator";
@@ -52,6 +53,7 @@ export const SiteFooter = ({
     showGridOverlay = true,
     showSeparator = true,
 }: SiteFooterProps): JSX.Element => {
+  const { t, localize } = useLocale();
     const isHomepage = variant === "homepage";
 
     return (
@@ -82,9 +84,7 @@ export const SiteFooter = ({
                         to="/"
                         className={`relative w-[138.22px] h-7 ${isHomepage ? "shrink-0" : ""}`}
                     >
-                        <div className="absolute top-0 left-[34px] font-qs-sans font-medium text-ink text-[22.9px] tracking-[-0.69px] leading-[normal]">
-                            Quicksort
-                        </div>
+                        <div className="absolute top-0 left-[34px] font-qs-sans font-medium text-ink text-[22.9px] tracking-[-0.69px] leading-[normal]">{t("\n                            Quicksort\n                        ")}</div>
                         <div className="absolute top-px left-0 w-[29px] h-[27px]">
                             <div className="top-0 left-0 w-[26px] h-[26px] rounded-[12.99px] absolute bg-ink" />
                             <div className="absolute top-[9px] left-[15px] w-[9px] h-[17px] bg-surface rounded-[17.76px] rotate-[-47.64deg]" />
@@ -104,26 +104,20 @@ export const SiteFooter = ({
                                 ? "mt-[-1.00px] text-xl sm:text-2xl md:text-[length:var(--display-sm-semibold-font-size)] leading-[1.2] md:leading-[var(--display-sm-semibold-line-height)] relative self-stretch"
                                 : "self-stretch mt-[-1.00px] text-[length:var(--display-sm-semibold-font-size)] text-center leading-[var(--display-sm-semibold-line-height)]"
                                 }`}
-                        >
-                            Let&apos;s design your AI transformation
-                        </h2>
+                        >{t("\n                            Let's design your AI transformation\n                        ")}</h2>
 
                         <p
                             className={`font-text-xl-regular font-[number:var(--text-xl-regular-font-weight)] text-ink-muted tracking-[var(--text-xl-regular-letter-spacing)] leading-[var(--text-xl-regular-line-height)] [font-style:var(--text-xl-regular-font-style)] ${isHomepage
                                 ? "relative self-stretch text-base sm:text-lg md:text-[length:var(--text-xl-regular-font-size)]"
                                 : "text-center self-stretch text-[length:var(--text-xl-regular-font-size)]"
                                 }`}
-                        >
-                            Strategic partnerships built on elite talent and proven delivery
-                        </p>
+                        >{t("\n                            Strategic partnerships built on elite talent and proven delivery\n                        ")}</p>
                     </div>
 
                     {/* CTA Button */}
                     <div className="inline-flex items-start gap-3">
-                        <a href="mailto:hello@quicksort.fr">
-                            <Button variant="signal" size={isHomepage ? "qs-hero" : "qs"}>
-                                Get in touch
-                            </Button>
+                        <a href={localize("mailto:hello@quicksort.fr")}>
+                            <Button variant="signal" size={isHomepage ? "qs-hero" : "qs"}>{t("\n                                Get in touch\n                            ")}</Button>
                         </a>
                     </div>
                 </div>
@@ -167,9 +161,7 @@ export const SiteFooter = ({
                             ? "relative text-sm sm:text-[length:var(--text-md-regular-font-size)] order-3 sm:order-1"
                             : "text-[length:var(--text-md-regular-font-size)]"
                             }`}
-                    >
-                        © {new Date().getFullYear()} Copyright Quicksort
-                    </p>
+                    >{t("\n                        © ")}{new Date().getFullYear()}{t(" Copyright Quicksort\n                    ")}</p>
 
                     {/* Navigation Links */}
                     <nav
@@ -188,18 +180,18 @@ export const SiteFooter = ({
                                         : "text-[length:var(--text-md-regular-font-size)]"
                                         }`}
                                 >
-                                    {link.label}
+                                    {t(link.label)}
                                 </Link>
                             ) : (
                                 <a
                                     key={index}
-                                    href={link.href}
+                                    href={localize(link.href)}
                                     className={`w-fit mt-[-1.00px] font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-ink-muted tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] whitespace-nowrap [font-style:var(--text-md-regular-font-style)] hover:text-ink transition-colors ${isHomepage
                                         ? "relative text-sm sm:text-[length:var(--text-md-regular-font-size)]"
                                         : "text-[length:var(--text-md-regular-font-size)]"
                                         }`}
                                 >
-                                    {link.label}
+                                    {t(link.label)}
                                 </a>
                             )
                         )}
@@ -222,12 +214,12 @@ export const SiteFooter = ({
                             >
                                 {info.isLink ? (
                                     <a
-                                        href={info.href}
+                                        href={localize(info.href)}
                                         rel="noopener noreferrer"
                                         target="_blank"
                                         className="underline hover:text-ink transition-colors"
                                     >
-                                        {info.label}
+                                        {t(info.label)}
                                     </a>
                                 ) : (
                                     info.label

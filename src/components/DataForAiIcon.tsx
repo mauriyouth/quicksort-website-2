@@ -1,3 +1,4 @@
+import { useLocale } from '@lib/i18n';
 interface DataForAiIconProps {
   className?: string;
   width?: number;
@@ -9,6 +10,7 @@ export const DataForAiIcon = ({
   width = 436,
   height = 388,
 }: DataForAiIconProps): JSX.Element => {
+  const { t, localize } = useLocale();
   // Path data ordered from bottom ring (index 0, highest Y) to top ring (index 14, lowest Y)
   const pathData = [
     "M217.75 385.6C157.804 385.6 103.607 373.447 64.4536 353.87C25.2095 334.248 1.51227 307.42 1.51222 278.236C1.51222 249.053 25.2095 222.225 64.4536 202.603C103.607 183.026 157.804 170.873 217.751 170.873C277.697 170.873 331.893 183.026 371.046 202.603C410.291 222.225 433.989 249.053 433.989 278.236C433.989 307.42 410.291 334.248 371.046 353.87C331.893 373.447 277.696 385.6 217.75 385.6Z",
@@ -58,7 +60,7 @@ export const DataForAiIcon = ({
         </linearGradient>
 
         <style>
-          {`
+          {t(`
             .cylinder-ring {
               fill: none;
               stroke-width: 3.02;
@@ -93,7 +95,7 @@ export const DataForAiIcon = ({
             
             .clip-back { clip-path: inset(0 0 50% 0); }
             .clip-front { clip-path: inset(50% 0 0 0); }
-          `}
+          `)}
         </style>
       </defs>
 

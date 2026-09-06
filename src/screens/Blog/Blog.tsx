@@ -1,14 +1,16 @@
+import { useLocale } from '@lib/i18n';
 import { BlogPostsGridSection } from "./sections/BlogPostsGridSection";
 import { MainNavigationSection } from "@components/MainNavigationSection";
 import { PageHeaderSection } from "./sections/PageHeaderSection";
 import { SiteFooter } from "@components/SiteFooter";
 
 export const Blog = (): JSX.Element => {
+  const { t, localize } = useLocale();
   return (
     <main className="flex flex-col w-full items-center relative bg-surface overflow-x-hidden">
       <img
         className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1440px] h-[722px] pointer-events-none"
-        alt="Background pattern"
+        alt={t("")}
         src="/background-pattern.svg"
       />
 

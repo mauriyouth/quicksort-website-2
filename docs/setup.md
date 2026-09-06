@@ -32,12 +32,12 @@ No initial administrator has been selected yet. Do not use user metadata to gran
 
 ## Auth configuration
 
-In Supabase Authentication, keep Email/password enabled. Set the Site URL to the candidate portal's final HTTPS origin. Add the exact following redirect URLs for both deployed portals and local development:
+In Supabase Authentication, keep Email/password enabled. Set the Site URL to `https://quicksort-candidate.vercel.app`. Add the exact following redirect URLs for both deployed portals and local development:
 
-- `https://ADMIN_HOST/`
-- `https://ADMIN_HOST/?account=password`
-- `https://CANDIDATE_HOST/`
-- `https://CANDIDATE_HOST/?account=password`
+- `https://quicksort-admin.vercel.app/`
+- `https://quicksort-admin.vercel.app/?account=password`
+- `https://quicksort-candidate.vercel.app/`
+- `https://quicksort-candidate.vercel.app/?account=password`
 - `http://127.0.0.1:5174/` and `http://127.0.0.1:5174/?account=password`
 - `http://127.0.0.1:5175/` and `http://127.0.0.1:5175/?account=password`
 
@@ -47,7 +47,14 @@ The live redirect/SMTP settings must be configured for the final portal domains;
 
 ## Vercel
 
-Import `mauriyouth/quicksort-website-2` into three Vercel projects. Enable source files outside each Root Directory so workspace dependencies can be bundled. Use automatic pnpm workspace installation from the committed lockfile.
+The two new Vercel projects have been created in the existing website team (`team_msiIWIErbrbRMcWEWv69WUdJ`). Their initial deployments use this checkout:
+
+- Admin: https://quicksort-admin.vercel.app
+- Candidate: https://quicksort-candidate.vercel.app
+
+The Vercel account could not connect the GitHub repository to these new projects because its GitHub integration is missing. A repository owner must connect `mauriyouth/quicksort-website-2` in each project's Git settings to enable automatic deployments. The source is already pushed to `feat/workforce-monorepo` in that repository.
+
+The existing production website project has not been changed. Its Root Directory update must be coordinated with merging the monorepo branch. Enable source files outside each Root Directory so workspace dependencies can be bundled. Use automatic pnpm workspace installation from the committed lockfile.
 
 | Project | Root Directory | Build command | Output |
 | --- | --- | --- | --- |
@@ -55,7 +62,7 @@ Import `mauriyouth/quicksort-website-2` into three Vercel projects. Enable sourc
 | `quicksort-admin` | `apps/admin` | `pnpm build` | `dist` |
 | `quicksort-candidate` | `apps/candidate` | `pnpm build` | `dist` |
 
-Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` on all three projects for the intended environments. Use the public publishable key, never a secret/service-role key. Environment changes require a new Vite build.
+The two new portal projects already have their public Supabase environment variables. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` on the existing website project for the intended environments. Use the public publishable key, never a secret/service-role key. Environment changes require a new Vite build.
 
 Coordinate changing the existing website Root Directory with merging the monorepo commit. The old website revision cannot build from `apps/web`, and the monorepo revision should not build as the old root app. The local `.vercel` website link lives in `apps/web/.vercel`.
 

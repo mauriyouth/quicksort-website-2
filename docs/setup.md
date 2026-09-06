@@ -28,7 +28,7 @@ returning user_id, role;
 
 3. Refresh the admin app. Until the role is granted, the app displays an access-pending screen and the database rejects administrative operations.
 
-No initial administrator has been selected yet. Do not use user metadata to grant privileges. Granting/revoking roles remains a trusted database-owner operation.
+The confirmed account `jermiah@quicksort.fr` was granted the initial admin role on 2026-09-06. Do not use user metadata to grant privileges. Granting/revoking roles remains a trusted database-owner operation.
 
 ## Auth configuration
 

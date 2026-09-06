@@ -1,4 +1,4 @@
-import '@quicksort/ui/brand.css';
+// Website colors come from tailwind.css; portal brand tokens override both themes.
 import { StrictMode } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";

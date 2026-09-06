@@ -11,6 +11,7 @@ import {
 import { Button } from "@components/ui/button";
 import { MainNavigationSection } from "@components/MainNavigationSection";
 import { SiteFooter } from "@components/SiteFooter";
+import { JobDescription } from "./JobDescription";
 export const JobDetail = (): JSX.Element => {
   const { slug } = useParams();
   const { t } = useLocale();
@@ -78,8 +79,11 @@ export const JobDetail = (): JSX.Element => {
                 {job.employment_type}
               </span>
             </div>
-            <div className="text-ink-muted text-lg leading-relaxed whitespace-pre-wrap break-words mb-12">
-              {job.description}
+            <a href={job.linkedin_url} target="_blank" rel="noopener noreferrer" className="inline-flex self-start items-center gap-2 rounded-lg bg-ink text-surface px-6 py-3 font-semibold mb-10">
+              {t("Apply on LinkedIn")} <ArrowUpRightIcon size={18} />
+            </a>
+            <div className="border-t border-line pt-8 mb-12">
+              <JobDescription text={job.description} />
             </div>
             <div>
               <a

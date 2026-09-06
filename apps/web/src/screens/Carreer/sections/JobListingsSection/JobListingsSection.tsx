@@ -163,7 +163,7 @@ export const JobListingsSection = (): JSX.Element => {
                     <div className="flex-col items-start gap-1 min-w-0 sm:flex-1 flex">
                       <div className="flex flex-wrap items-center gap-2 w-full">
                         <h3 className="mt-[-1.00px] font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-ink text-[length:var(--text-lg-semibold-font-size)] tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
-                          {t(job.title)}
+                          <Link to={`/career/${job.slug}`} className="hover:underline break-words">{job.title}</Link>
                         </h3>
 
                         <Badge
@@ -185,15 +185,11 @@ export const JobListingsSection = (): JSX.Element => {
                     </div>
 
                     <Link to={`/career/${job.slug}`} className="gap-1.5 inline-flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity">
-                      <span className="mt-[-1.00px] font-text-sm-semibold font-[number:var(--text-sm-semibold-font-weight)] text-ink-2 text-[length:var(--text-sm-semibold-font-size)] tracking-[var(--text-sm-semibold-letter-spacing)] leading-[var(--text-sm-semibold-line-height)] whitespace-nowrap [font-style:var(--text-sm-semibold-font-style)]">{t("\n                        View job\n                      ")}</span>
+                      <span className="text-ink text-sm font-semibold whitespace-nowrap">{t("Know More")}</span>
 
                       <ArrowUpRightIcon className="w-5 h-5" />
                     </Link>
                   </div>
-
-                  <p className="font-text-md-regular font-[number:var(--text-md-regular-font-weight)] text-ink-muted text-[length:var(--text-md-regular-font-size)] tracking-[var(--text-md-regular-letter-spacing)] leading-[var(--text-md-regular-line-height)] [font-style:var(--text-md-regular-font-style)]">
-                    {t(job.description)}
-                  </p>
 
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-3 w-full">
                     <div className="inline-flex items-center gap-2">
@@ -212,6 +208,9 @@ export const JobListingsSection = (): JSX.Element => {
                       </span>
                     </div>
                   </div>
+                  <a href={job.linkedin_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-surface transition-colors">
+                    {t("Apply on LinkedIn")} <ArrowUpRightIcon size={16} />
+                  </a>
                 </CardContent>
               </Card>
             ))}

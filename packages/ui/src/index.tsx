@@ -10,7 +10,15 @@ import { db, configured, errorMessage } from "@quicksort/db";
 import type { AuthState } from "@quicksort/db/auth";
 export function Brand() {
   return (
-    <a className="brand" href="https://www.quicksort.fr" aria-label="Quicksort home"><img src={new URL("./assets/quicksort-wordmark.svg", import.meta.url).href} alt="Quicksort" width="176" height="36" /></a>
+    <a className="brand" href="https://www.quicksort.fr" aria-label="Quicksort home">
+      {/* Exact geometry and lettering from the live Quicksort.fr header. */}
+      <span className="brand-word">Quicksort</span>
+      <span className="brand-symbol" aria-hidden="true">
+        <span className="brand-disc" />
+        <span className="brand-cut" />
+        <span className="brand-dot" />
+      </span>
+    </a>
   );
 }
 export function Notice({

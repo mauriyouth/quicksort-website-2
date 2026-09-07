@@ -6,7 +6,6 @@ export function LanguageSwitcher() {
   const { pathname, search, hash } = useLocation();
   const { locale, t } = useLocale();
   const names = { en: 'English', fr: 'Français' };
-  if (splitLocale(pathname).path === '/design-system') return null;
   return <details className="language-switcher">
     <summary aria-label={t('Change language')}><span aria-hidden="true">◎</span> {names[locale]} <span aria-hidden="true">⌄</span></summary>
     <nav aria-label={t('Language')}>

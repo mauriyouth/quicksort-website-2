@@ -15,7 +15,6 @@ const englishPages: PageSeo[] = [
   { path: '/blog', name: 'Blog', title: 'Enterprise AI Insights | Quicksort', description: 'Read Quicksort insights on human and AI collaboration, agentic systems and enterprise engineering. Explore ideas behind our approach to AI delivery.' },
   { path: '/career', name: 'Careers', title: 'AI Engineering Careers | Quicksort', description: 'Explore careers at Quicksort and help build enterprise AI systems. Discover our open roles, engineering approach and opportunities to join the team.' },
   ...blogPosts.map(post => ({ path: `/blog/${post.slug}`, name: post.title, title: `${post.title} | Quicksort`, description: post.description, type: 'BlogPosting' })),
-  { path: '/design-system', name: 'Design system', title: 'Design System | Quicksort', description: 'Quicksort design tokens, typography, components and themes.', noindex: true },
   { path: '/email-signature', name: 'Email signature', title: 'Email Signature Generator | Quicksort', description: 'Create a Quicksort email signature.', noindex: true },
 ];
 export const pages: PageSeo[] = englishPages.flatMap(page => page.noindex ? [page] : locales.map(locale => ({

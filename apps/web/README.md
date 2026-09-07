@@ -16,12 +16,10 @@ npm run build
 
 ## Design system
 
-**Everything about how this site looks lives at [`/design-system`](http://localhost:5173/design-system).**
-
-That page is the single source of truth for colour, typography, spacing,
-shape, motion and components. It renders the real components from `src/`, so
-it cannot drift from what ships — if a button looks wrong there, it is wrong
-on the site.
+**Tokens are the single source of truth for colour, typography, spacing,
+shape and motion.** They are defined in `tailwind.css` and exposed as
+Tailwind names in `tailwind.config.js`; the components that consume them
+live in `src/components/ui/`.
 
 Two rules follow from that:
 
@@ -32,11 +30,9 @@ Two rules follow from that:
   light theme behind a toggle. A component written against tokens supports
   both for free; one written against a hex supports neither.
 
-Tokens are defined in `tailwind.css` and exposed as Tailwind names in
-`tailwind.config.js`. The design rationale — why Signal Lime is the only
-accent, why it darkens as text, where the category hues are a deliberate
-exception — is documented on the page itself and in
-`docs/superpowers/specs/`.
+The design rationale — why Signal Lime is the only accent, why it darkens as
+text, where the category hues are a deliberate exception — is documented in
+`docs/superpowers/specs/` and in comments on the components themselves.
 
 The brand source material this system was derived from is in
 `quicksort-design-system/`.

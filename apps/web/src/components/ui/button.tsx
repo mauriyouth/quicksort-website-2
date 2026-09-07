@@ -19,7 +19,7 @@ import { cn } from "@lib/utils";
  * Secondary, `quiet` is Ghost. States follow the bundle's States section —
  * hover shifts the fill ~8%, press darkens 12% with no shrink, focus is a
  * 2px Signal Lime ring offset 2px. Radius is the one deliberate departure:
- * the bundle draws pills, the site ships 8px. See the design-system page.
+ * the bundle draws pills, the site ships 8px.
  *
  * Focus is deliberately *not* styled here. `:focus-visible` in tailwind.css
  * already draws the bundle's 2px Signal Lime outline at 2px offset on every

@@ -1,4 +1,3 @@
-import { DesignSystem } from './screens/DesignSystem';
 import { ThemeProvider } from './lib/theme';
 import { LocaleProvider, LocaleLink as Link, useLocale } from './lib/i18n';
 import { splitLocale } from './lib/locales';
@@ -35,7 +34,6 @@ const AppContent = () => {
         <Route path="/career/:slug" element={<JobDetail />} />
         <Route path="/infrastructure-for-ai" element={<InfrastructureFor />} />
         <Route path="/voice-ai" element={<VoiceAi />} />
-        <Route path="/design-system" element={<DesignSystem />} />
         <Route path="/email-signature" element={<EmailSignature />} />
         <Route path="*" element={<main className="min-h-screen bg-surface text-ink px-8 py-24"><h1 className="text-4xl mb-6">{t("Page not found")}</h1><p className="mb-6">{t("The page you requested could not be found.")}</p><Link className="underline" to="/">{t("Back to Quicksort")}</Link></main>} />
       </Routes>

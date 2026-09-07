@@ -1,6 +1,5 @@
 User-agent: *
 Allow: /
 
-# Internal reference surfaces — reachable by URL, kept out of search.
-Disallow: /design-system
+# Internal utility surface — reachable by URL, kept out of search.
 Disallow: /email-signature

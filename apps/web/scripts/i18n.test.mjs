@@ -49,17 +49,12 @@ test('localized missing routes stay 404 and content negotiation does not redirec
  }finally{await new Promise(done=>server.close(done));}
 });
 
-test('latest client logo assets and design-system remain available', async () => {
+test('latest client logo assets and theme bootstrap remain available', async () => {
  for(const name of ['airbus','bnp-paribas','capgemini','club-med']){
   const source=await readFile(`public/client-logos/${name}.png`);
   const deployed=await readFile(`dist/client-logos/${name}.png`);
   assert.deepEqual(deployed,source,'original logo bytes retained');
   assert.ok(source.readUInt32BE(16)>=400,`${name}: high-resolution source retained`);
  }
- const design=await readFile('dist/design-system.html','utf8');
- assert.ok(design.includes('Design system'));
- assert.ok(design.includes('noindex, follow'));
- assert.ok(design.includes('/theme-init.js'));
- assert.ok(!(await readFile('dist/sitemap.xml','utf8')).includes('/design-system'));
  assert.ok((await readFile('dist/theme-init.js','utf8')).includes('qs-theme'));
 });

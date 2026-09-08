@@ -2,13 +2,8 @@ import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useLocale, LocaleLink as Link } from "@lib/i18n";
 import { usePublishedJobs } from "@lib/usePublishedJobs";
-import {
-  ArrowLeftIcon,
-  ArrowUpRightIcon,
-  MapPinIcon,
-  BriefcaseIcon,
-} from "lucide-react";
 import { Button } from "@components/ui/button";
+import { ArrowGlyph, SignalChip } from "@components/QsMarks";
 import { MainNavigationSection } from "@components/MainNavigationSection";
 import { SiteFooter } from "@components/SiteFooter";
 import { JobDescription } from "./JobDescription";
@@ -39,7 +34,7 @@ export const JobDetail = (): JSX.Element => {
           to="/career"
           className="text-ink-muted inline-flex items-center gap-2 mb-8"
         >
-          <ArrowLeftIcon size={18} />
+          <span aria-hidden="true">←</span>
           {t("Back to Careers")}
         </Link>
         {loading ? (
@@ -65,22 +60,25 @@ export const JobDetail = (): JSX.Element => {
           </>
         ) : (
           <>
-            <p className="text-signal-text mb-3">{job.department}</p>
-            <h1 className="text-ink text-3xl sm:text-5xl font-semibold mb-6">
+            <div className="mb-4">
+              <SignalChip>{job.department}</SignalChip>
+            </div>
+            <h1 className="font-qs-display font-normal text-ink text-3xl sm:text-5xl leading-[1.08] tracking-[-0.02em] text-pretty mb-5">
               {job.title}
             </h1>
-            <div className="flex flex-wrap gap-6 text-ink-muted mb-10">
-              <span className="inline-flex gap-2">
-                <MapPinIcon size={20} />
-                {job.location}
-              </span>
-              <span className="inline-flex gap-2">
-                <BriefcaseIcon size={20} />
-                {job.employment_type}
-              </span>
-            </div>
-            <a href={job.linkedin_url} target="_blank" rel="noopener noreferrer" className="inline-flex self-start items-center gap-2 rounded-lg bg-ink text-surface px-6 py-3 font-semibold mb-10">
-              {t("Apply on LinkedIn")} <ArrowUpRightIcon size={18} />
+            <p className="flex flex-wrap items-center gap-2 font-qs-mono text-[12px] leading-[1.4] text-ink-muted mb-10">
+              {job.location}
+              <span className="text-ink-faint" aria-hidden="true">·</span>
+              {job.employment_type}
+            </p>
+            <a
+              href={job.linkedin_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="self-start inline-flex items-center gap-[9px] py-[9px] px-[15px] mb-10 rounded-qs-pill border border-line-strong bg-transparent font-qs-sans font-medium text-[13px] leading-none text-ink transition-colors duration-qs-2 ease-qs hover:bg-surface-sunken"
+            >
+              {t("Apply on LinkedIn")}
+              <ArrowGlyph />
             </a>
             <div className="border-t border-line pt-8 mb-12">
               <JobDescription text={job.description} />
@@ -93,7 +91,7 @@ export const JobDetail = (): JSX.Element => {
               >
                 <Button variant="signal" size="qs-lg">
                   {t("Apply on LinkedIn")}
-                  <ArrowUpRightIcon size={18} />
+                  <ArrowGlyph />
                 </Button>
               </a>
             </div>

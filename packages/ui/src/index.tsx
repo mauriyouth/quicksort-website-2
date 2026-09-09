@@ -10,10 +10,15 @@ import { db, configured, errorMessage } from "@quicksort/db";
 import type { AuthState } from "@quicksort/db/auth";
 export function Brand() {
   return (
-    <div className="brand">
-      <span className="brand-mark">»</span>quicksort
-      <span style={{ color: "var(--qs-lime)" }}>.</span>
-    </div>
+    <a className="brand" href="https://www.quicksort.fr" aria-label="Quicksort home">
+      {/* Exact geometry and lettering from the live Quicksort.fr header. */}
+      <span className="brand-word">Quicksort</span>
+      <span className="brand-symbol" aria-hidden="true">
+        <span className="brand-disc" />
+        <span className="brand-cut" />
+        <span className="brand-dot" />
+      </span>
+    </a>
   );
 }
 export function Notice({
@@ -246,9 +251,9 @@ function AuthLayout({
         <div>
           <div className="eyebrow">Human + AI. Better, together.</div>
           <h1>
-            {admin ? "A little structure." : "Your next chapter."}
+            {admin ? "Great teams." : "Your next chapter."}
             <br />
-            <span>{admin ? "A lot of possibility." : "All in one place."}</span>
+            <span>{admin ? "Start here." : "Starts here."}</span>
           </h1>
           <p>
             {admin

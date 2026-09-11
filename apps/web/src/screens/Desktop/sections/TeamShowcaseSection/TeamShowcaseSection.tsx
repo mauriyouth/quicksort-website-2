@@ -14,6 +14,8 @@ gsap.registerPlugin(ScrollTrigger);
 // Frames measured against the supplied 1344 × 1881 portrait previews.
 // Keep the crown at ~7% and crown-to-chin height at ~42% of each card.
 const portraitFrames: Record<string, { file: string; x: number; y: number; width: number; height: number }> = {
+  "Nader Sadek": { file: "nader-sadek", x: 249, y: 139, width: 890, height: 1335 },
+  "Dimitry Akulov": { file: "dimitry-akulov", x: 170, y: 45, width: 1000, height: 1500 },
   "Murad Mustafayev": { file: "murad", x: 279, y: 173, width: 834, height: 1251 },
   "Mohamed Ahmednah": { file: "mohamed", x: 208, y: 92, width: 971, height: 1457 },
   "Renaud Granier": { file: "renaud", x: 100, y: 168, width: 1140, height: 1710 },
@@ -131,6 +133,27 @@ const teamMembers = [
     imageHeight: 1470,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/murad-mustafayev/",
+  },
+  {
+    name: "Nader Sadek",
+    role: "Machine Learning Engineer",
+    description: "Machine learning professional with R&D experience in graph neural networks and natural language processing.",
+    image: "/team/portraits/nader-sadek.JPG",
+    imageSet: undefined,
+    imageWidth: 1000,
+    imageHeight: 1400,
+    hasArrow: false,
+    linkedinUrl: "https://www.linkedin.com/in/sadek-nader/",
+  },
+  {
+    name: "Dimitry Akulov",
+    role: "AI Research Engineer",
+    description: "",
+    image: "/team/portraits/dimitry-akulov.JPG",
+    imageSet: undefined,
+    imageWidth: 1000,
+    imageHeight: 1400,
+    hasArrow: false,
   },
   {
     name: "Nageeta Kumari",

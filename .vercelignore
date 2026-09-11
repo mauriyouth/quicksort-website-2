@@ -6,9 +6,3 @@
 .vite/**
 test-results/**
 playwright-report/**
-.git
-**/*.local.*
-.pnpm-store/**
-.playwright-mcp/**
-# HD photos stay out of Git but are bundled in the authenticated server function.
-!apps/candidate/private/team-photos/**

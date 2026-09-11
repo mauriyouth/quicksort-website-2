@@ -33,6 +33,3 @@ test-results/
 supabase/.temp/
 
 .vite/
-
-# Candidate HD portraits are deployed privately, never committed.
-/apps/candidate/private/

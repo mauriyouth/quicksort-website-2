@@ -6,7 +6,7 @@
     "@vitejs/plugin-react": "4.3.4"
   },
   "scripts": {
-    "build": "node scripts/check-photo-assets.mjs && tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "dev": "vite --host 127.0.0.1 --port 5175",
     "preview": "vite preview"

@@ -1,0 +1,21 @@
+{
+  "name": "@quicksort/candidate-db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth": "./src/auth.tsx",
+    "./validation": "./src/validation.ts"
+  },
+  "dependencies": {
+    "@clerk/react": "6.15.1",
+    "@supabase/supabase-js": "2.115.0"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.0"
+  }
+}

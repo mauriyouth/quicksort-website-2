@@ -3,6 +3,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/team-photo",
+      "destination": "/api/team-photo"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
@@ -33,9 +37,14 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://kupbvrnjppcwqxmzxasi.supabase.co; object-src blob:; frame-src blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self' https://blessed-midge-8591.clerk.accounts.dev https://challenges.cloudflare.com https://*.protect.clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://img.clerk.com; connect-src 'self' https://blessed-midge-8591.clerk.accounts.dev https://*.protect.clerk.com:* https://clerk-telemetry.com https://kupbvrnjppcwqxmzxasi.supabase.co; object-src blob:; worker-src 'self' blob:; frame-src blob: https://challenges.cloudflare.com https://*.protect.clerk.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/team-photo.mjs": {
+      "includeFiles": "private/team-photos/**"
+    }
+  }
 }

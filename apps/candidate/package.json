@@ -1,12 +1,12 @@
 {
   "devDependencies": {
-    "vite": "6.0.4",
-    "@types/react-dom": "18.2.0",
     "@types/react": "18.2.0",
-    "@vitejs/plugin-react": "4.3.4"
+    "@types/react-dom": "18.2.0",
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "6.0.4"
   },
   "scripts": {
-    "build": "tsc --noEmit && vite build",
+    "build": "node scripts/check-photo-assets.mjs && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "dev": "vite --host 127.0.0.1 --port 5175",
     "preview": "vite preview"
@@ -16,11 +16,12 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@quicksort/db": "workspace:*",
-    "react-dom": "18.3.1",
+    "@clerk/react": "6.15.1",
+    "lucide-react": "0.453.0",
     "react": "18.3.1",
-    "@quicksort/ui": "workspace:*",
-    "lucide-react": "0.453.0"
+    "react-dom": "18.3.1",
+    "@quicksort/candidate-db": "workspace:*",
+    "@quicksort/candidate-ui": "workspace:*"
   },
   "engines": {
     "node": "22.x"

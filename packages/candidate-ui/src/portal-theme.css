@@ -1,0 +1,13 @@
+:root {
+  color-scheme: dark;
+  --qs-bg: #0a0a0a;
+  --qs-paper: #141414;
+  --qs-ink: #fafafa;
+  --qs-muted: #a3a3a3;
+  --qs-line: #303030;
+  --qs-lime: #ffffff;
+  --qs-deep: #000000;
+  --qs-danger: #ffffff;
+  --qs-font: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --qs-radius: 10px;
+}

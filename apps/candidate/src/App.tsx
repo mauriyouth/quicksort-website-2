@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Check,
   Download,
+  Images,
 } from "lucide-react";
 import {
   db,
@@ -15,25 +16,27 @@ import {
   saveBlob,
   errorMessage,
   type Row,
-} from "@quicksort/db";
-import { validateFile } from "@quicksort/db/validation";
-import { useAuth } from "@quicksort/db/auth";
+} from "@quicksort/candidate-db";
+import { validateFile } from "@quicksort/candidate-db/validation";
+import { useAuth } from "@quicksort/candidate-db/auth";
 import {
   AuthGate,
+  AccountSecurity,
   Shell,
   Heading,
   Stat,
   Notice,
   Empty,
   Pill,
-  PasswordForm,
   formatDate,
-} from "@quicksort/ui";
+} from "@quicksort/candidate-ui";
+import { TeamPhotos } from './TeamPhotos';
 const nav = [
   { id: "overview", label: "My onboarding", icon: LayoutDashboard },
   { id: "documents", label: "My documents", icon: Upload },
   { id: "contracts", label: "My contracts", icon: FileText },
   { id: "requests", label: "Tool access", icon: KeyRound },
+  { id: "photos", label: "Team photos", icon: Images },
   { id: "account", label: "Account", icon: Settings },
 ];
 export default function App() {
@@ -201,6 +204,7 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
     >
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
+      {tab === "photos" && <TeamPhotos />}
       {tab === "overview" && (
         <>
           <Heading
@@ -700,7 +704,7 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
               </form>
             </section>
             <section className="panel">
-              <PasswordForm />
+              <AccountSecurity />
             </section>
           </div>
         </>

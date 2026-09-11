@@ -1,0 +1,22 @@
+{
+  "name": "@quicksort/candidate-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./styles.css": "./src/styles.css",
+    "./brand.css": "./src/brand.css"
+  },
+  "dependencies": {
+    "@clerk/react": "6.15.1",
+    "lucide-react": "0.453.0",
+    "@quicksort/candidate-db": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.0"
+  }
+}

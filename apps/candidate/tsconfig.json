@@ -1,1 +1,8 @@
-{"extends":"../../tsconfig.base.json","include":["src","../../packages/db/src","../../packages/ui/src"]}
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "src",
+    "../../packages/candidate-db/src",
+    "../../packages/candidate-ui/src"
+  ]
+}

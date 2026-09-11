@@ -14,6 +14,7 @@ gsap.registerPlugin(ScrollTrigger);
 // Frames measured against the supplied 1344 × 1881 portrait previews.
 // Keep the crown at ~7% and crown-to-chin height at ~42% of each card.
 const portraitFrames: Record<string, { file: string; x: number; y: number; width: number; height: number }> = {
+  "Frimpong Adotri": { file: "frimpong-adotri", x: 172, y: 72, width: 992, height: 1488 },
   "Issa Hammoud": { file: "issa-hammoud", x: 210, y: 160, width: 914, height: 1371 },
   "Nader Sadek": { file: "nader-sadek", x: 249, y: 139, width: 890, height: 1335 },
   "Dimitry Akulov": { file: "dimitry-akulov", x: 170, y: 45, width: 1000, height: 1500 },
@@ -166,6 +167,17 @@ const teamMembers = [
     imageHeight: 1400,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/issa-hammoud/",
+  },
+  {
+    name: "Frimpong Adotri",
+    role: "Data Engineer",
+    description: "",
+    image: "/team/portraits/frimpong-adotri.JPG",
+    imageSet: undefined,
+    imageWidth: 1000,
+    imageHeight: 1400,
+    hasArrow: false,
+    linkedinUrl: "https://www.linkedin.com/in/michel-ange-frimpong-a-127aa219a/",
   },
   {
     name: "Nageeta Kumari",

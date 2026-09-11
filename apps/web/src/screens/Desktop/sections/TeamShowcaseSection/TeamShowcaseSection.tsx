@@ -11,6 +11,20 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
+// Frames measured against the supplied 1344 × 1881 portrait previews.
+// Keep the crown at ~7% and crown-to-chin height at ~42% of each card.
+const portraitFrames: Record<string, { file: string; x: number; y: number; width: number; height: number }> = {
+  "Murad Mustafayev": { file: "murad", x: 279, y: 173, width: 834, height: 1251 },
+  "Mohamed Ahmednah": { file: "mohamed", x: 208, y: 92, width: 971, height: 1457 },
+  "Renaud Granier": { file: "renaud", x: 100, y: 168, width: 1140, height: 1710 },
+  "Alexandra Beljakov": { file: "alexandra", x: 246, y: 133, width: 868, height: 1302 },
+  "Mirette Moawad": { file: "mirette", x: 210, y: 93, width: 924, height: 1386 },
+  "Amadou Ngam": { file: "amadou", x: 235, y: 105, width: 946, height: 1419 },
+  "Aicha Dridi": { file: "aicha", x: 142, y: 43, width: 1016, height: 1524 },
+  "Asmae Karmouchi": { file: "asmae", x: 265, y: 222, width: 851, height: 1276 },
+  "Jermiah Jerome": { file: "jermiah", x: 208, y: 91, width: 946, height: 1419 },
+};
+
 const teamMembers = [
   {
     name: "Mohamed Ahmednah",
@@ -39,7 +53,8 @@ const teamMembers = [
   {
     name: "Alexandra Beljakov",
     role: "AI Strategist",
-    description: "15 years+ Data & Strategy @ Mercedes Â· MBA EDHEC",
+    description: "15+ years of experience in data and strategy, including at Mercedes and BNP Paribas. MBA, EDHEC.",
+    linkedinUrl: "https://www.linkedin.com/in/alexandra-beljakov-0a8455203/",
     image: "/team/alexandra-beljakov-640.webp",
     imageSet: "/team/alexandra-beljakov-320.webp 320w, /team/alexandra-beljakov-640.webp 407w",
     imageWidth: 407,
@@ -57,18 +72,6 @@ const teamMembers = [
     imageHeight: 2579,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/mirettemoawad/",
-  },
-  {
-    name: "Nageeta Kumari",
-    role: "AI Engineer",
-    description:
-      "Focused on machine learning and computer vision, bridging academic research with real-world applications.",
-    image: "/team/nageeta-640.webp",
-    imageSet: "/team/nageeta-320.webp 320w, /team/nageeta-640.webp 640w",
-    imageWidth: 1452,
-    imageHeight: 2579,
-    hasArrow: false,
-    linkedinUrl: "https://www.linkedin.com/in/nageeta124/",
   },
   {
     name: "Amadou Ngam",
@@ -95,6 +98,17 @@ const teamMembers = [
     linkedinUrl: "https://www.linkedin.com/in/aicha-dridi/",
   },
   {
+    name: "Jermiah Jerome",
+    role: "Voice AI Engineer",
+    description: "Voice AI engineer with 6+ years of experience, including work in regulated industries and at Foundever, delivering voice agents and bots for enterprise clients.",
+    linkedinUrl: "https://www.linkedin.com/in/jermiah-jerome/",
+    image: "/team/portraits/jermiah.JPG",
+    imageSet: undefined,
+    imageWidth: 1000,
+    imageHeight: 1400,
+    hasArrow: false,
+  },
+  {
     name: "Asmae Karmouchi",
     role: "AI Engineer",
     description:
@@ -117,6 +131,18 @@ const teamMembers = [
     imageHeight: 1470,
     hasArrow: false,
     linkedinUrl: "https://www.linkedin.com/in/murad-mustafayev/",
+  },
+  {
+    name: "Nageeta Kumari",
+    role: "AI Engineer",
+    description:
+      "Focused on machine learning and computer vision, bridging academic research with real-world applications.",
+    image: "/team/nageeta-640.webp",
+    imageSet: "/team/nageeta-320.webp 320w, /team/nageeta-640.webp 640w",
+    imageWidth: 1452,
+    imageHeight: 2579,
+    hasArrow: false,
+    linkedinUrl: "https://www.linkedin.com/in/nageeta124/",
   },
 ];
 
@@ -229,14 +255,16 @@ export const TeamShowcaseSection = (): JSX.Element => {
               className="flex w-full items-start gap-4 sm:gap-6 md:gap-8 overflow-x-auto scroll-smooth scrollbar-hide"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
-              {teamMembers.map((member, index) => (
+              {teamMembers.map((member) => {
+                const frame = portraitFrames[member.name];
+                return (
                 <Card
-                  key={index}
-                  className="team-card group flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] h-[400px] sm:h-[450px] md:h-[480px] border-0 rounded-lg overflow-hidden relative"
+                  key={member.name}
+                  className="team-card group flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] aspect-[2/3] border-0 rounded-lg overflow-hidden relative"
                 >
                   <img
-                    src={member.image}
-                    srcSet={member.imageSet}
+                    src={frame ? `/team/portraits/${frame.file}.JPG` : member.image}
+                    srcSet={frame ? undefined : member.imageSet}
                     sizes="(min-width: 768px) 320px, (min-width: 640px) 300px, 280px"
                     width={member.imageWidth}
                     height={member.imageHeight}
@@ -244,6 +272,13 @@ export const TeamShowcaseSection = (): JSX.Element => {
                     decoding="async"
                     alt={t(member.name)}
                     className="absolute inset-0 w-full h-full object-cover"
+                    style={frame ? {
+                      maxWidth: "none",
+                      width: `${1344 / frame.width * 100}%`,
+                      height: `${1881 / frame.height * 100}%`,
+                      left: `${-frame.x / frame.width * 100}%`,
+                      top: `${-frame.y / frame.height * 100}%`,
+                    } : undefined}
                   />
                   <CardContent className="relative flex flex-col w-full h-full items-center justify-end p-0 z-10">
                     {/* Overlay container, anchored to bottom, slides up on hover */}
@@ -254,16 +289,16 @@ export const TeamShowcaseSection = (): JSX.Element => {
                       <div className="h-16 sm:h-20 bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,0.6)_100%)] pointer-events-none" />
 
                       {/* Content panel */}
-                      <div className="flex flex-col items-start gap-4 sm:gap-5 pt-4 sm:pt-5 pb-5 sm:pb-6 px-4 sm:px-6 w-full bg-photo-scrim border-t [border-top-style:solid] backdrop-blur-md backdrop-brightness-[100%] [-webkit-backdrop-filter:blur(12px)_brightness(100%)]">
+                      <div className="flex flex-col items-start min-h-[166px] sm:min-h-[170px] gap-4 sm:gap-5 pt-4 sm:pt-5 pb-5 sm:pb-6 px-4 sm:px-6 w-full bg-photo-scrim border-t [border-top-style:solid] backdrop-blur-md backdrop-brightness-[100%] [-webkit-backdrop-filter:blur(12px)_brightness(100%)]">
                         {/* Name */}
                         <h3 className="font-display-sm-semibold font-[number:var(--display-sm-semibold-font-weight)] text-on-fill text-lg sm:text-xl md:text-2xl tracking-[var(--display-sm-semibold-letter-spacing)] leading-[1.2] [font-style:var(--display-sm-semibold-font-style)]">
                           {t(member.name)}
                         </h3>
 
                         {/* Role */}
-                        <div className="font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-on-fill/70 text-sm sm:text-base md:text-lg tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
+                        {member.role && <div className="font-text-lg-semibold font-[number:var(--text-lg-semibold-font-weight)] text-on-fill/70 text-sm sm:text-base md:text-lg tracking-[var(--text-lg-semibold-letter-spacing)] leading-[var(--text-lg-semibold-line-height)] [font-style:var(--text-lg-semibold-font-style)]">
                           {t(member.role)}
-                        </div>
+                        </div>}
 
                         {/* Description, only visible when hovered */}
                         {member.description && (
@@ -293,7 +328,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              );})}
             </div>
           </div>
         </div>

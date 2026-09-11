@@ -78,6 +78,17 @@ const teamMembers = [
     linkedinUrl: "https://www.linkedin.com/in/mirettemoawad/",
   },
   {
+    name: "Issa Hammoud",
+    role: "Senior AI/ML Engineer",
+    description: "",
+    image: "/team/portraits/issa-hammoud.JPG",
+    imageSet: undefined,
+    imageWidth: 1000,
+    imageHeight: 1400,
+    hasArrow: false,
+    linkedinUrl: "https://www.linkedin.com/in/issa-hammoud/",
+  },
+  {
     name: "Amadou Ngam",
     role: "AI Engineer",
     description:
@@ -156,17 +167,6 @@ const teamMembers = [
     imageWidth: 1000,
     imageHeight: 1400,
     hasArrow: false,
-  },
-  {
-    name: "Issa Hammoud",
-    role: "Senior AI/ML Engineer",
-    description: "",
-    image: "/team/portraits/issa-hammoud.JPG",
-    imageSet: undefined,
-    imageWidth: 1000,
-    imageHeight: 1400,
-    hasArrow: false,
-    linkedinUrl: "https://www.linkedin.com/in/issa-hammoud/",
   },
   {
     name: "Frimpong Adotri",

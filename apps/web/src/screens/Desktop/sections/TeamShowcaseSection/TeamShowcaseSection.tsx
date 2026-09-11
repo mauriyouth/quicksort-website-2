@@ -21,7 +21,7 @@ const portraitFrames: Record<string, { file: string; x: number; y: number; width
   "Mirette Moawad": { file: "mirette", x: 210, y: 93, width: 924, height: 1386 },
   "Amadou Ngam": { file: "amadou", x: 235, y: 105, width: 946, height: 1419 },
   "Aicha Dridi": { file: "aicha", x: 142, y: 43, width: 1016, height: 1524 },
-  "Asmae Karmouchi": { file: "asmae", x: 265, y: 222, width: 851, height: 1276 },
+  "Asmae Karmouchi": { file: "asmae", x: 196, y: 145, width: 914, height: 1371 },
   "Jermiah Jerome": { file: "jermiah", x: 208, y: 91, width: 946, height: 1419 },
 };
 

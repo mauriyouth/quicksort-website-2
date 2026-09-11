@@ -80,7 +80,7 @@ const teamMembers = [
   {
     name: "Issa Hammoud",
     role: "Senior AI/ML Engineer",
-    description: "",
+    description: "AI/ML engineer specializing in computer vision and visual question answering.",
     image: "/team/portraits/issa-hammoud.JPG",
     imageSet: undefined,
     imageWidth: 1000,
@@ -161,12 +161,13 @@ const teamMembers = [
   {
     name: "Dimitry Akulov",
     role: "AI Research Engineer",
-    description: "",
+    description: "AI research engineer with a background at École Polytechnique and experience at iVolga Technologies.",
     image: "/team/portraits/dimitry-akulov.JPG",
     imageSet: undefined,
     imageWidth: 1000,
     imageHeight: 1400,
     hasArrow: false,
+    linkedinUrl: "https://www.linkedin.com/in/akulyat",
   },
   {
     name: "Frimpong Adotri",

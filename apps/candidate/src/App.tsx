@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Check,
   Download,
+  Images,
 } from "lucide-react";
 import {
   db,
@@ -29,11 +30,13 @@ import {
   PasswordForm,
   formatDate,
 } from "@quicksort/ui";
+import { TeamPhotos } from './TeamPhotos';
 const nav = [
   { id: "overview", label: "My onboarding", icon: LayoutDashboard },
   { id: "documents", label: "My documents", icon: Upload },
   { id: "contracts", label: "My contracts", icon: FileText },
   { id: "requests", label: "Tool access", icon: KeyRound },
+  { id: "photos", label: "Team photos", icon: Images },
   { id: "account", label: "Account", icon: Settings },
 ];
 export default function App() {
@@ -201,6 +204,7 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
     >
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
+      {tab === "photos" && <TeamPhotos />}
       {tab === "overview" && (
         <>
           <Heading

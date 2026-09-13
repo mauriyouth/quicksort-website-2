@@ -13,7 +13,7 @@ gsap.registerPlugin(ScrollTrigger);
 
 // Frames measured against the supplied 1344 × 1881 portrait previews.
 // Keep the crown at ~7% and crown-to-chin height at ~42% of each card.
-const portraitFrames: Record<string, { file: string; src?: string; x: number; y: number; width: number; height: number }> = {
+const portraitFrames: Record<string, { file: string; x: number; y: number; width: number; height: number }> = {
   "Frimpong Adotri": { file: "frimpong-adotri", x: 172, y: 72, width: 992, height: 1488 },
   "Issa Hammoud": { file: "issa-hammoud", x: 210, y: 160, width: 914, height: 1371 },
   "Nader Sadek": { file: "nader-sadek", x: 249, y: 139, width: 890, height: 1335 },
@@ -22,11 +22,21 @@ const portraitFrames: Record<string, { file: string; src?: string; x: number; y:
   "Mohamed Ahmednah": { file: "mohamed", x: 208, y: 92, width: 971, height: 1457 },
   "Renaud Granier": { file: "renaud", x: 100, y: 168, width: 1140, height: 1710 },
   "Alexandra Beljakov": { file: "alexandra", x: 246, y: 133, width: 868, height: 1302 },
-  "Mirette Moawad": { file: "mirette", src: "/team/portraits/mirette-clean.png", x: 210, y: 93, width: 924, height: 1386 },
+  "Mirette Moawad": { file: "mirette", x: 210, y: 93, width: 924, height: 1386 },
   "Amadou Ngam": { file: "amadou", x: 235, y: 105, width: 946, height: 1419 },
-  "Aicha Dridi": { file: "aicha", src: "/team/portraits/aicha-clean.png", x: 142, y: 43, width: 1016, height: 1524 },
+  "Aicha Dridi": { file: "aicha", x: 142, y: 43, width: 1016, height: 1524 },
   "Asmae Karmouchi": { file: "asmae", x: 196, y: 145, width: 914, height: 1371 },
   "Jermiah Jerome": { file: "jermiah", x: 208, y: 91, width: 946, height: 1419 },
+};
+
+// Conservative exposure corrections after visual review; do not equalize skin tones.
+// The original image remains intact; masking removes only its backdrop.
+const portraitBrightness: Record<string, number> = {
+  "aicha": 1.04,
+  "asmae": 1.03,
+  "dimitry-akulov": 1.03,
+  "frimpong-adotri": 1.06,
+  "nageeta": 1.03,
 };
 
 const teamMembers = [
@@ -255,6 +265,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
   return (
     <section
       ref={sectionRef}
+      id="team"
       className="relative flex flex-col items-center gap-8 sm:gap-12 md:gap-16 w-full bg-surface"
     >
       <SectionGridOverlay showCenterLine={false} />
@@ -305,13 +316,15 @@ export const TeamShowcaseSection = (): JSX.Element => {
             >
               {teamMembers.map((member) => {
                 const frame = portraitFrames[member.name];
+                const portraitFile = frame?.file ?? "nageeta";
                 return (
                 <Card
                   key={member.name}
+                  style={{ backgroundColor: "#b9b6ad" }}
                   className="team-card group flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] aspect-[2/3] border-0 rounded-lg overflow-hidden relative"
                 >
                   <img
-                    src={frame ? (frame.src ?? `/team/portraits/${frame.file}.JPG`) : member.image}
+                    src={frame ? `/team/portraits/${frame.file}.JPG` : member.image}
                     srcSet={frame ? undefined : member.imageSet}
                     sizes="(min-width: 768px) 320px, (min-width: 640px) 300px, 280px"
                     width={member.imageWidth}
@@ -320,13 +333,21 @@ export const TeamShowcaseSection = (): JSX.Element => {
                     decoding="async"
                     alt={t(member.name)}
                     className="absolute inset-0 w-full h-full object-cover"
-                    style={frame ? {
-                      maxWidth: "none",
-                      width: `${1344 / frame.width * 100}%`,
-                      height: `${1881 / frame.height * 100}%`,
-                      left: `${-frame.x / frame.width * 100}%`,
-                      top: `${-frame.y / frame.height * 100}%`,
-                    } : undefined}
+                    style={{
+                      maskImage: `url(/team/masks/${portraitFile}.png)`,
+                      maskMode: "luminance",
+                      maskSize: frame ? "100% 100%" : "cover",
+                      maskPosition: "center",
+                      maskRepeat: "no-repeat",
+                      filter: `brightness(${portraitBrightness[portraitFile] ?? 1})`,
+                      ...(frame ? {
+                        maxWidth: "none",
+                        width: `${1344 / frame.width * 100}%`,
+                        height: `${1881 / frame.height * 100}%`,
+                        left: `${-frame.x / frame.width * 100}%`,
+                        top: `${-frame.y / frame.height * 100}%`,
+                      } : {}),
+                    }}
                   />
                   <CardContent className="relative flex flex-col w-full h-full items-center justify-end p-0 z-10">
                     {/* Overlay container, anchored to bottom, slides up on hover */}

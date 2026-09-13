@@ -130,11 +130,6 @@ export const JobListingsSection = (): JSX.Element => {
                 <img src={image.src} alt="" loading="lazy" decoding="async"
                   className="absolute inset-0 w-full h-full object-cover"
                   style={image.frame ? {
-                    maskImage: `url(/team/masks/${image.file}.png)`,
-                    maskMode: "luminance",
-                    maskSize: "100% 100%",
-                    maskPosition: "center",
-                    maskRepeat: "no-repeat",
                     filter: `brightness(${portraitBrightness[image.file] ?? 1})`,
                     maxWidth: "none",
                     width: `${1344 / image.frame.width * 100}%`,

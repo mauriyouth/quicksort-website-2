@@ -325,13 +325,8 @@ export const TeamShowcaseSection = (): JSX.Element => {
                     alt={t(member.name)}
                     className="absolute inset-0 w-full h-full object-cover"
                     style={{
-                      maskImage: `url(/team/masks/${portraitFile}.png)`,
-                      maskMode: "luminance",
-                      maskSize: frame ? "100% 100%" : "cover",
-                      // Keep the photo and its mask aligned when raising Nageeta within the card.
+                      // Preserve the approved headroom while retaining the full original photo.
                       objectPosition: frame ? "center" : "center bottom",
-                      maskPosition: frame ? "center" : "center bottom",
-                      maskRepeat: "no-repeat",
                       filter: `brightness(${portraitBrightness[portraitFile] ?? 1})`,
                       ...(frame ? {
                         maxWidth: "none",

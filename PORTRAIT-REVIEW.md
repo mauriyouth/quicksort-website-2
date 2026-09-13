@@ -1,12 +1,16 @@
-# Homepage portrait review
+# Natural portrait detail review
 
-Local branch: `portrait-background-review`
-Base: `8d35ea6` (main was pulled before this work).
+Branch: `portrait-natural-detail-review`
+Base: `650357f`, pulled from main before editing.
 
-All 14 homepage portraits use their original photographs, with generated grayscale silhouette masks and one neutral background (`#b9b6ad`). Faces, expressions, pose, clothing and existing card crops are not regenerated. The originals remain untouched.
+The generated silhouette masks introduce uneven fringes and clipped fine edges. Comparing Mohamed and Renaud with their original full-resolution photos confirms that the background mask, rather than the existing card crop, is responsible.
 
-Visual exposure review: Aicha +4%, Asmae +3%, Dimitry +3%, Frimpong +6%, Nageeta +3%; other portraits remain at original exposure. These modest CSS adjustments are reversible and are not intended to equalize different skin tones.
+This local comparison removes silhouette masking from all homepage portraits and the five Careers portraits. It retains the original source photos, existing card frames, Nageeta's approved headroom, and the previously approved small exposure corrections. Original backgrounds and plants are visible again. No facial features are regenerated.
 
-Preview: http://127.0.0.1:5193/#team
+This is a review baseline. A uniform-background version is not claimed to be fixed by this change. The user has been asked whether to prioritize original backgrounds with intact detail or retain the matching background and refine edges.
 
-Only the homepage team section is changed. Nothing has been pushed or deployed. Review the hair outlines and brightness in the local preview before merging; generated masks can need edge refinements.
+Local URLs:
+- http://127.0.0.1:5193/#team
+- http://127.0.0.1:5193/career
+
+Validation: homepage and Careers screenshots reviewed; website build, prerender and theme checks passed. Nothing pushed or deployed.

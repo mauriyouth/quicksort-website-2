@@ -1,3 +1,8 @@
+import { AnalysisHistory } from "./AnalysisHistory";
+import { BlogManager } from "./BlogManager";
+import { CvAnalyzer } from "./CvAnalyzer";
+import { AiSettings } from "./AiSettings";
+import { AccessManager } from "./AccessManager";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   BriefcaseBusiness,
@@ -18,10 +23,11 @@ import {
   errorMessage,
   type Job,
   type Row,
-} from "@quicksort/db";
-import { isLinkedInUrl, slugify, validateFile } from "@quicksort/db/validation";
-import { useAuth } from "@quicksort/db/auth";
+} from "@quicksort/candidate-db";
+import { isLinkedInUrl, slugify, validateFile } from "@quicksort/candidate-db/validation";
+import { useAuth } from "@quicksort/candidate-db/auth";
 import {
+  usePortalRoute,
   AuthGate,
   Shell,
   Heading,
@@ -29,27 +35,32 @@ import {
   Notice,
   Empty,
   Pill,
-  PasswordForm,
+  AccountSecurity,
   formatDate,
-} from "@quicksort/ui";
+} from "@quicksort/candidate-ui";
 const nav = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "jobs", label: "Job posts", icon: BriefcaseBusiness },
-  { id: "people", label: "Candidates", icon: Users },
-  { id: "contracts", label: "Contracts", icon: FileText },
-  { id: "requests", label: "Tool requests", icon: KeyRound },
-  { id: "account", label: "Account", icon: Settings },
+  { id: "overview", href: "/overview", label: "Overview", icon: LayoutDashboard },
+  { id: "jobs", href: "/jobs", label: "Job posts", icon: BriefcaseBusiness },
+  { id: "analyzer", href: "/cv-analyzer", label: "CV analyzer", icon: FileText },
+  { id: "history", href: "/analysis-history", label: "Analysis history", icon: FileText },
+  { id: "blogs", href: "/blog-posts", label: "Blog posts", icon: FileText },
+  { id: "people", href: "/candidates", label: "Candidates", icon: Users },
+  { id: "contracts", href: "/contracts", label: "Contracts", icon: FileText },
+  { id: "requests", href: "/tool-requests", label: "Tool requests", icon: KeyRound },
+  { id: "account", href: "/settings", label: "Settings", icon: Settings },
 ];
+const ownerNav = [...nav, {id:"access",href:"/admin-access",label:"Admin access",icon:KeyRound}];
 export default function App() {
   const auth = useAuth();
   return (
     <AuthGate auth={auth} admin>
-      {auth.session && <Admin email={auth.session.user.email || ""} />}
+      {auth.session && <Admin email={auth.session.user.email || ""} isOwner={auth.isOwner} />}
     </AuthGate>
   );
 }
-function Admin({ email }: { email: string }) {
-  const [tab, setTab] = useState("overview"),
+function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
+  const [tab, setTab] = usePortalRoute(isOwner ? ownerNav : nav);
+  const
     [jobs, setJobs] = useState<Job[]>([]),
     [people, setPeople] = useState<Row<"profiles">[]>([]),
     [contracts, setContracts] = useState<Row<"contracts">[]>([]),
@@ -122,6 +133,7 @@ function Admin({ email }: { email: string }) {
     people.find((p) => p.id === id)?.email ||
     "Candidate";
   const pending = requests.filter((r) => r.status === "pending");
+  useEffect(() => { setEditing(undefined); setError(""); setMessage(""); setSearch(""); }, [tab]);
   function navigate(id: string) {
     setTab(id);
     setEditing(undefined);
@@ -194,12 +206,16 @@ function Admin({ email }: { email: string }) {
     <Shell
       portal="Admin"
       email={email}
-      nav={nav}
+      nav={isOwner ? ownerNav : nav}
       current={tab}
       onNavigate={navigate}
     >
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
+      {tab === "access" && isOwner && <AccessManager />}
+      {tab === "blogs" && <BlogManager />}
+      {tab === "history" && <AnalysisHistory />}
+      <div hidden={tab !== "analyzer"}><CvAnalyzer jobs={jobs} documents={documents} people={people} /></div>
       {tab === "overview" && (
         <>
           <Heading
@@ -290,7 +306,7 @@ function Admin({ email }: { email: string }) {
               {[
                 {
                   title: "Welcome your candidates",
-                  text: "Candidates create an account with their email and password.",
+                  text: "Candidates sign in with their Google account.",
                 },
                 {
                   title: "Share the essentials",
@@ -782,13 +798,14 @@ function Admin({ email }: { email: string }) {
       )}
       {tab === "account" && (
         <>
-          <Heading eyebrow="Your workspace" title="Account">
-            Manage your password and access.
+          <Heading eyebrow="Your workspace" title="Settings">
+            Manage your account and access.
           </Heading>
           <section className="panel" style={{ maxWidth: 550 }}>
             <p className="muted">Signed in as {email}</p>
-            <PasswordForm />
+            <AccountSecurity />
           </section>
+          <AiSettings isOwner={isOwner} />
         </>
       )}
       {loading && (

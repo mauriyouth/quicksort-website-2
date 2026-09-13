@@ -1,1 +1,1 @@
-{"extends":"../../tsconfig.base.json","include":["src","../../packages/db/src","../../packages/ui/src"]}
+{"extends":"../../tsconfig.base.json","compilerOptions":{"types":["vite/client","node"],"allowImportingTsExtensions":true,"rewriteRelativeImportExtensions":true},"include":["src","api","../../packages/candidate-db/src","../../packages/candidate-ui/src"]}

@@ -20,6 +20,7 @@ import {
 import { validateFile } from "@quicksort/candidate-db/validation";
 import { useAuth } from "@quicksort/candidate-db/auth";
 import {
+  usePortalRoute,
   AuthGate,
   AccountSecurity,
   Shell,
@@ -32,12 +33,12 @@ import {
 } from "@quicksort/candidate-ui";
 import { TeamPhotos } from './TeamPhotos';
 const nav = [
-  { id: "overview", label: "My onboarding", icon: LayoutDashboard },
-  { id: "documents", label: "My documents", icon: Upload },
-  { id: "contracts", label: "My contracts", icon: FileText },
-  { id: "requests", label: "Tool access", icon: KeyRound },
-  { id: "photos", label: "Team photos", icon: Images },
-  { id: "account", label: "Account", icon: Settings },
+  { id: "overview", href: "/onboarding", label: "My onboarding", icon: LayoutDashboard },
+  { id: "documents", href: "/documents", label: "My documents", icon: Upload },
+  { id: "contracts", href: "/contracts", label: "My contracts", icon: FileText },
+  { id: "requests", href: "/tool-access", label: "Tool access", icon: KeyRound },
+  { id: "photos", href: "/team-photos", label: "Team photos", icon: Images },
+  { id: "account", href: "/account", label: "Account", icon: Settings },
 ];
 export default function App() {
   const auth = useAuth();
@@ -53,7 +54,8 @@ export default function App() {
   );
 }
 function Candidate({ userId, email }: { userId: string; email: string }) {
-  const [tab, setTab] = useState("overview"),
+  const [tab, setTab] = usePortalRoute(nav);
+  const
     [profile, setProfile] = useState<Row<"profiles"> | null>(null),
     [documents, setDocuments] = useState<Row<"candidate_documents">[]>([]),
     [contracts, setContracts] = useState<Row<"contracts">[]>([]),
@@ -123,6 +125,7 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
       setBusy(false);
     }
   }
+  useEffect(() => { setError(""); setMessage(""); setReview(null); setPreview(""); }, [tab]);
   function navigate(id: string) {
     setTab(id);
     setError("");

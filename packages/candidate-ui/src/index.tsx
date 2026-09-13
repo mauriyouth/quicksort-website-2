@@ -1,3 +1,4 @@
+export { usePortalRoute } from './routes';
 import { SignIn, useClerk } from "@clerk/react";
 import { useEffect, useState, type ReactNode } from "react";
 import {
@@ -90,7 +91,7 @@ export function Shell({
 }: {
   portal: string;
   email: string;
-  nav: { id: string; label: string; icon: LucideIcon }[];
+  nav: { id: string; href: string; label: string; icon: LucideIcon }[];
   current: string;
   onNavigate: (id: string) => void;
   children: ReactNode;
@@ -106,16 +107,20 @@ export function Shell({
         <Brand />
         <div className="portal-label">{portal} workspace</div>
         <nav className="nav" aria-label="Main navigation">
-          {nav.map(({ id, label, icon: Icon }) => (
-            <button
+          {nav.map(({ id, href, label, icon: Icon }) => (
+            <a href={href}
               key={id}
               className={current === id ? "active" : ""}
               aria-current={current === id ? "page" : undefined}
-              onClick={() => onNavigate(id)}
+              onClick={(event) => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                onNavigate(id);
+              }}
             >
               <Icon size={18} />
               {label}
-            </button>
+            </a>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -135,7 +140,7 @@ export function Shell({
       <div className="workspace">
         <header className="topbar">
           <strong>
-            {portal} / {nav.find((n) => n.id === current)?.label}
+            {portal} / {nav.find((n) => n.id === current)?.label ?? "Page not found"}
           </strong>
           <button className="link-button" onClick={signOut}>
             Sign out
@@ -143,7 +148,7 @@ export function Shell({
         </header>
         <main className="content">
           <Notice error>{error}</Notice>
-          {children}
+          {current === 'not-found' ? <Empty title="Page not found" action={<a href={nav[0].href}>Return to your workspace</a>}>Choose a section from the navigation.</Empty> : children}
         </main>
       </div>
     </div>
@@ -246,7 +251,7 @@ function AuthLayout({
 function AuthForm({ admin }: { admin: boolean }) {
   return <><div className="eyebrow">{admin ? "Admin" : "Candidate"} portal</div>
     <h2>Welcome to Quicksort.</h2><p className="muted">{admin ? "Continue with Google. Workspace access requires owner approval." : "Continue with Google to view your contracts and start onboarding."}</p>
-    <SignIn routing="hash" forceRedirectUrl={location.origin + "/"} signUpForceRedirectUrl={location.origin + "/"} />
+    <SignIn routing="hash" forceRedirectUrl={location.origin + location.pathname + location.search} signUpForceRedirectUrl={location.origin + location.pathname + location.search} />
   </>;
 }
 export function AccountSecurity() {

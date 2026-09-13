@@ -66,7 +66,7 @@ button:disabled {
   display: grid;
   gap: 6px;
 }
-.nav button {
+.nav a {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -78,12 +78,12 @@ button:disabled {
   padding: 13px 14px;
   border-radius: 9px;
 }
-.nav button.active {
+.nav a.active {
   background: var(--qs-lime);
   color: var(--qs-deep);
   font-weight: 650;
 }
-.nav button:hover:not(.active) {
+.nav a:hover:not(.active) {
   background: #ffffff0b;
   color: white;
 }
@@ -554,7 +554,7 @@ input[type="checkbox"] {
     gap: 5px;
     padding-bottom: 4px;
   }
-  .nav button {
+  .nav a {
     width: auto;
     white-space: nowrap;
     padding: 10px;
@@ -633,7 +633,7 @@ input[type="checkbox"] {
 /* Quicksort website typography and monochrome portal surfaces. */
 h1, h2, h3 { font-family: "Hanken Grotesk", var(--qs-font); }
 .sidebar { border-right: 1px solid var(--qs-line); }
-.btn, .nav button, .link-button { transition: background 150ms ease, color 150ms ease, border-color 150ms ease; }
+.btn, .nav a, .link-button { transition: background 150ms ease, color 150ms ease, border-color 150ms ease; }
 .btn:hover:not(:disabled) { background: #d4d4d4; color: #141414; border-color: #d4d4d4; }
 .btn.secondary:hover:not(:disabled), .btn.danger:hover:not(:disabled) { background: #262626; color: #fff; border-color: #737373; }
 .link-button:hover { color: #fff; }
@@ -667,3 +667,5 @@ input::placeholder, textarea::placeholder { color: #929292; }
 .google-letter { font-family:Arial,sans-serif; font-weight:700; font-size:20px; }
 .auth-divider { display:flex; align-items:center; gap:16px; color:var(--qs-muted); font-size:12px; margin:24px 0; }
 .auth-divider::before,.auth-divider::after { content:""; flex:1; height:1px; background:var(--qs-line); }
+
+.nav a { text-decoration: none; }

@@ -1,3 +1,4 @@
+import { portraitBackground, portraitBrightness } from "@lib/portraits";
 import { usePublishedJobs } from '@lib/usePublishedJobs';
 import { useLocale } from '@lib/i18n';
 import { LocaleLink as Link } from '@lib/i18n';
@@ -39,6 +40,7 @@ const teamImages = [
     position: "top-0 left-[51.39%]",
     size: "w-[27.78%] h-[48.39%]",
     name: "Mohamed Ahmednah",
+    file: "mohamed",
     src: "/team/portraits/mohamed.JPG",
     frame: { x: 208, y: 92, width: 971, height: 1457 },
   },
@@ -46,13 +48,15 @@ const teamImages = [
     position: "top-[51.61%] left-[66.67%]",
     size: "w-1/3 h-[35.48%]",
     name: "Mirette Moawad",
-    src: "/team/portraits/mirette-clean.png",
+    file: "mirette",
+    src: "/team/portraits/mirette.JPG",
     frame: { x: 72, y: 105, width: 1200, height: 1100 },
   },
   {
     position: "top-[51.61%] left-0",
     size: "w-1/3 h-[38.71%]",
     name: "Alexandra Beljakov",
+    file: "alexandra",
     src: "/team/portraits/alexandra.JPG",
     frame: { x: 190, y: 145, width: 1000, height: 1000 },
   },
@@ -60,6 +64,7 @@ const teamImages = [
     position: "top-[51.61%] left-[36.11%]",
     size: "w-[27.78%] h-[48.39%]",
     name: "Amadou Ngam",
+    file: "amadou",
     src: "/team/portraits/amadou.JPG",
     frame: { x: 235, y: 105, width: 946, height: 1419 },
   },
@@ -67,7 +72,8 @@ const teamImages = [
     position: "top-[16.13%] left-[20.83%]",
     size: "w-[27.78%] h-[32.26%]",
     name: "Aicha Dridi",
-    src: "/team/portraits/aicha-clean.png",
+    file: "aicha",
+    src: "/team/portraits/aicha.JPG",
     frame: { x: 70, y: 65, width: 1204, height: 1204 },
   },
 ];
@@ -118,11 +124,18 @@ export const JobListingsSection = (): JSX.Element => {
             {teamImages.map((image) => (
               <div
                 key={image.name}
+                style={{ backgroundColor: portraitBackground }}
                 className={`absolute overflow-hidden ${image.position} ${image.size}`}
               >
                 <img src={image.src} alt="" loading="lazy" decoding="async"
                   className="absolute inset-0 w-full h-full object-cover"
                   style={image.frame ? {
+                    maskImage: `url(/team/masks/${image.file}.png)`,
+                    maskMode: "luminance",
+                    maskSize: "100% 100%",
+                    maskPosition: "center",
+                    maskRepeat: "no-repeat",
+                    filter: `brightness(${portraitBrightness[image.file] ?? 1})`,
                     maxWidth: "none",
                     width: `${1344 / image.frame.width * 100}%`,
                     height: `${1881 / image.frame.height * 100}%`,

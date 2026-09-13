@@ -1,3 +1,4 @@
+import { portraitBackground, portraitBrightness } from "@lib/portraits";
 import { useLocale } from '@lib/i18n';
 import { useEffect, useRef } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
@@ -27,16 +28,6 @@ const portraitFrames: Record<string, { file: string; x: number; y: number; width
   "Aicha Dridi": { file: "aicha", x: 142, y: 43, width: 1016, height: 1524 },
   "Asmae Karmouchi": { file: "asmae", x: 196, y: 145, width: 914, height: 1371 },
   "Jermiah Jerome": { file: "jermiah", x: 208, y: 91, width: 946, height: 1419 },
-};
-
-// Conservative exposure corrections after visual review; do not equalize skin tones.
-// The original image remains intact; masking removes only its backdrop.
-const portraitBrightness: Record<string, number> = {
-  "aicha": 1.04,
-  "asmae": 1.03,
-  "dimitry-akulov": 1.03,
-  "frimpong-adotri": 1.06,
-  "nageeta": 1.03,
 };
 
 const teamMembers = [
@@ -320,7 +311,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
                 return (
                 <Card
                   key={member.name}
-                  style={{ backgroundColor: "#b9b6ad" }}
+                  style={{ backgroundColor: portraitBackground }}
                   className="team-card group flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] aspect-[2/3] border-0 rounded-lg overflow-hidden relative"
                 >
                   <img

@@ -172,7 +172,7 @@ const teamMembers = [
   {
     name: "Frimpong Adotri",
     role: "Data Engineer",
-    description: "",
+    description: "Builds data pipelines and lakehouse platforms, with a focus on orchestration, SQL, and analytics.",
     image: "/team/portraits/frimpong-adotri.JPG",
     imageSet: undefined,
     imageWidth: 1000,
@@ -331,13 +331,13 @@ export const TeamShowcaseSection = (): JSX.Element => {
                   <CardContent className="relative flex flex-col w-full h-full items-center justify-end p-0 z-10">
                     {/* Overlay container, anchored to bottom, slides up on hover */}
                     <div
-                      className="absolute bottom-0 left-0 right-0 flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] translate-y-[calc(100%-230px)] sm:translate-y-[calc(100%-250px)] group-hover:translate-y-0"
+                      className="absolute bottom-0 left-0 right-0 flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] translate-y-[calc(100%-230px)] sm:translate-y-[calc(100%-250px)] group-hover:translate-y-0 group-focus-within:translate-y-0"
                     >
                       {/* Gradient fade above the content */}
                       <div className="h-16 sm:h-20 bg-[linear-gradient(180deg,rgba(0,0,0,0)_0%,rgba(0,0,0,0.6)_100%)] pointer-events-none" />
 
                       {/* Content panel */}
-                      <div className="flex flex-col items-start min-h-[166px] sm:min-h-[170px] gap-4 sm:gap-5 pt-4 sm:pt-5 pb-5 sm:pb-6 px-4 sm:px-6 w-full bg-photo-scrim border-t [border-top-style:solid] backdrop-blur-md backdrop-brightness-[100%] [-webkit-backdrop-filter:blur(12px)_brightness(100%)]">
+                      <div className="flex flex-col items-start min-h-[166px] sm:min-h-[170px] gap-4 sm:gap-5 pt-4 sm:pt-5 pb-16 sm:pb-16 px-4 sm:px-6 w-full bg-photo-scrim border-t [border-top-style:solid] backdrop-blur-md backdrop-brightness-[100%] [-webkit-backdrop-filter:blur(12px)_brightness(100%)]">
                         {/* Name */}
                         <h3 className="font-display-sm-semibold font-[number:var(--display-sm-semibold-font-weight)] text-on-fill text-lg sm:text-xl md:text-2xl tracking-[var(--display-sm-semibold-letter-spacing)] leading-[1.2] [font-style:var(--display-sm-semibold-font-style)]">
                           {t(member.name)}
@@ -350,30 +350,23 @@ export const TeamShowcaseSection = (): JSX.Element => {
 
                         {/* Description, only visible when hovered */}
                         {member.description && (
-                          <p className="text-on-fill/85 text-sm sm:text-base leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
+                          <p className="text-on-fill/85 text-sm sm:text-base leading-relaxed opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-500 delay-100">
                             {t(member.description)}
                           </p>
                         )}
-
-                        {/* LinkedIn */}
-                        {member.linkedinUrl && (
-                          <div className="flex items-center gap-4 sm:gap-5 w-full pt-1">
-                            <a
-                              href={localize(member.linkedinUrl)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="hover:opacity-80 transition-opacity"
-                            >
-                              <img
-                                className="w-5 h-5 sm:w-6 sm:h-6"
-                                alt={t("LinkedIn")}
-                                src="/social-icon-1.svg"
-                              />
-                            </a>
-                          </div>
-                        )}
                       </div>
                     </div>
+                    {member.linkedinUrl && (
+                      <a
+                        href={localize(member.linkedinUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`LinkedIn — ${member.name}`}
+                        className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-20 flex h-11 w-11 items-center justify-center rounded-md bg-black/60 hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white transition-colors"
+                      >
+                        <img className="w-5 h-5 sm:w-6 sm:h-6" alt="" src="/social-icon-1.svg" />
+                      </a>
+                    )}
                   </CardContent>
                 </Card>
               );})}

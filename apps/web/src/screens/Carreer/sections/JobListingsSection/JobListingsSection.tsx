@@ -46,14 +46,15 @@ const teamImages = [
     position: "top-[51.61%] left-[66.67%]",
     size: "w-1/3 h-[35.48%]",
     name: "Mirette Moawad",
-    src: "/team/portraits/mirette.JPG",
+    src: "/team/portraits/mirette-clean.png",
     frame: { x: 72, y: 105, width: 1200, height: 1100 },
   },
   {
     position: "top-[51.61%] left-0",
     size: "w-1/3 h-[38.71%]",
-    name: "Nageeta Kumari",
-    src: "/team/nageeta-640.webp",
+    name: "Alexandra Beljakov",
+    src: "/team/portraits/alexandra.JPG",
+    frame: { x: 190, y: 145, width: 1000, height: 1000 },
   },
   {
     position: "top-[51.61%] left-[36.11%]",
@@ -66,7 +67,7 @@ const teamImages = [
     position: "top-[16.13%] left-[20.83%]",
     size: "w-[27.78%] h-[32.26%]",
     name: "Aicha Dridi",
-    src: "/team/portraits/aicha.JPG",
+    src: "/team/portraits/aicha-clean.png",
     frame: { x: 70, y: 65, width: 1204, height: 1204 },
   },
 ];

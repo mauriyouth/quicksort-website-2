@@ -1,16 +1,7 @@
-# Natural portrait detail review
+# Matching portrait backgrounds
 
-Branch: `portrait-natural-detail-review`
-Base: `650357f`, pulled from main before editing.
+The homepage and Careers collage use the same neutral background (#b9b6ad) and original photo RGB. Existing crops, Nageeta's raised position and the small approved brightness corrections remain.
 
-The generated silhouette masks introduce uneven fringes and clipped fine edges. Comparing Mohamed and Renaud with their original full-resolution photos confirms that the background mask, rather than the existing card crop, is responsible.
+The `*-soft.svg` masks wrap the original generated grayscale masks with an SVG filter: clamp low-level grayscale noise, contract the edge by 2 mask pixels, and antialias by 0.6 pixels. This reduces the old wall fringe without regenerating faces. Renaud's fine hair area retains the original matte rather than the contracted boundary. Original source images and masks remain available.
 
-This local comparison removes silhouette masking from all homepage portraits and the five Careers portraits. It retains the original source photos, existing card frames, Nageeta's approved headroom, and the previously approved small exposure corrections. Original backgrounds and plants are visible again. No facial features are regenerated.
-
-This is a review baseline. A uniform-background version is not claimed to be fixed by this change. The user has been asked whether to prioritize original backgrounds with intact detail or retain the matching background and refine edges.
-
-Local URLs:
-- http://127.0.0.1:5193/#team
-- http://127.0.0.1:5193/career
-
-Validation: homepage and Careers screenshots reviewed; website build, prerender and theme checks passed. Nothing pushed or deployed.
+These are still background mattes, not pixel-exact manual retouching of every hair. Enlarged edge comparisons and both page previews were checked locally. The website build and prerender/theme checks passed before release.

@@ -325,6 +325,11 @@ export const TeamShowcaseSection = (): JSX.Element => {
                     alt={t(member.name)}
                     className="absolute inset-0 w-full h-full object-cover"
                     style={{
+                      maskImage: `url(/team/masks/${portraitFile}-soft.svg)`,
+                      maskMode: "luminance",
+                      maskSize: frame ? "100% 100%" : "cover",
+                      maskPosition: frame ? "center" : "center bottom",
+                      maskRepeat: "no-repeat",
                       // Preserve the approved headroom while retaining the full original photo.
                       objectPosition: frame ? "center" : "center bottom",
                       filter: `brightness(${portraitBrightness[portraitFile] ?? 1})`,

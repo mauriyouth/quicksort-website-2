@@ -1,5 +1,5 @@
 // Conservative exposure corrections after visual review; do not equalize skin tones.
-// Use the original photograph without a silhouette mask to retain natural edges.
+// Preserve original photo RGB; background masks affect only edge transparency.
 export const portraitBrightness: Record<string, number> = {
   "aicha": 1.04,
   "asmae": 1.03,

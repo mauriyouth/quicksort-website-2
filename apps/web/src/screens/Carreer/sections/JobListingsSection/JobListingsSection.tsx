@@ -38,27 +38,36 @@ const teamImages = [
   {
     position: "top-0 left-[51.39%]",
     size: "w-[27.78%] h-[48.39%]",
-    style: "[background:url(/team/ahmednah-320.webp)_50%_50%_/_cover]",
+    name: "Mohamed Ahmednah",
+    src: "/team/portraits/mohamed.JPG",
+    frame: { x: 208, y: 92, width: 971, height: 1457 },
   },
   {
     position: "top-[51.61%] left-[66.67%]",
     size: "w-1/3 h-[35.48%]",
-    style: "[background:url(/team/mirette-320.webp)_50%_50%_/_cover]",
+    name: "Mirette Moawad",
+    src: "/team/portraits/mirette.JPG",
+    frame: { x: 72, y: 105, width: 1200, height: 1100 },
   },
   {
     position: "top-[51.61%] left-0",
     size: "w-1/3 h-[38.71%]",
-    style: "[background:url(/team/nageeta-320.webp)_50%_50%_/_cover]",
+    name: "Nageeta Kumari",
+    src: "/team/nageeta-640.webp",
   },
   {
     position: "top-[51.61%] left-[36.11%]",
     size: "w-[27.78%] h-[48.39%]",
-    style: "[background:url(/team/amadou-320.webp)_50%_50%_/_cover]",
+    name: "Amadou Ngam",
+    src: "/team/portraits/amadou.JPG",
+    frame: { x: 235, y: 105, width: 946, height: 1419 },
   },
   {
     position: "top-[16.13%] left-[20.83%]",
     size: "w-[27.78%] h-[32.26%]",
-    style: "[background:url(/team/dridi-320.webp)_50%_50%_/_cover]",
+    name: "Aicha Dridi",
+    src: "/team/portraits/aicha.JPG",
+    frame: { x: 70, y: 65, width: 1204, height: 1204 },
   },
 ];
 
@@ -107,9 +116,20 @@ export const JobListingsSection = (): JSX.Element => {
           <div className="relative min-w-0 w-full max-w-xl mx-auto aspect-[576/496]" aria-hidden="true">
             {teamImages.map((image) => (
               <div
-                key={image.style}
-                className={`absolute ${image.position} ${image.size} ${image.style}`}
-              />
+                key={image.name}
+                className={`absolute overflow-hidden ${image.position} ${image.size}`}
+              >
+                <img src={image.src} alt="" loading="lazy" decoding="async"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={image.frame ? {
+                    maxWidth: "none",
+                    width: `${1344 / image.frame.width * 100}%`,
+                    height: `${1881 / image.frame.height * 100}%`,
+                    left: `${-image.frame.x / image.frame.width * 100}%`,
+                    top: `${-image.frame.y / image.frame.height * 100}%`,
+                  } : undefined}
+                />
+              </div>
             ))}
           </div>
         </div>

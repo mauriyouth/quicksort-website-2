@@ -337,7 +337,9 @@ export const TeamShowcaseSection = (): JSX.Element => {
                       maskImage: `url(/team/masks/${portraitFile}.png)`,
                       maskMode: "luminance",
                       maskSize: frame ? "100% 100%" : "cover",
-                      maskPosition: "center",
+                      // Keep the photo and its mask aligned when raising Nageeta within the card.
+                      objectPosition: frame ? "center" : "center bottom",
+                      maskPosition: frame ? "center" : "center bottom",
                       maskRepeat: "no-repeat",
                       filter: `brightness(${portraitBrightness[portraitFile] ?? 1})`,
                       ...(frame ? {

@@ -28,8 +28,8 @@ inside x=1280..1460, y=1870..2310 at the normalized resolution. The alpha solver
 then recovered the surrounding sleeve edge. No subject contour was hand-drawn.
 
 Exports are lossless WebP, approximately 31 MB for the full set. Most are
-1800 x 2520; Mirette is 1800 x 2519. Nageeta's available source is only 640 x 1137
-and was not upscaled. Fine hair remains limited by the source photo and matting
+1800 x 2520; Mirette is 1800 x 2519. The first Nageeta export used a 640 x 1137
+derivative; the follow-up below replaces it from a larger source. Fine hair remains limited by the source photo and matting
 estimate, so review enlarged edges before approving publication.
 
 Local working files are in `../output/matting-review` (normalized sources/coarse
@@ -42,3 +42,19 @@ Review URLs, while the local servers are running:
 - http://127.0.0.1:5193/#team
 - http://127.0.0.1:5193/career
 - http://127.0.0.1:5196/portrait-review.html
+
+## Nageeta hair refinement — local review, 2026-09-14
+
+Branch `fix/nageeta-natural-hair` changes only Nageeta's portrait and its metadata.
+The larger existing `apps/web/public/nageeta.webp` source is 1452 x 2579 and is
+used at native resolution. Repeating the earlier wide closed-form trimap retained
+patches of the dark original wall around her crown. The selected refinement uses
+the BiRefNet portrait alpha guided by original luminance (9-pixel window,
+epsilon 0.0004), with a smooth low-confidence suppression ramp from 0 to 0.35.
+Foreground color recovery removes the old background from translucent edge
+pixels; opaque source pixels are restored with the existing 1.03 exposure factor.
+The background remains #b9b6ad. No face generation, smoothing or reshaping.
+
+Working scripts: `../output/nageeta-refine.py` and
+`../output/nageeta-coarse-cleanup.py`; comparison candidates remain in
+`../output/nageeta-refinement`. All other approved portrait files are unchanged.

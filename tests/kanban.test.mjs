@@ -14,6 +14,7 @@ test('Kanban permissions, inheritance, attribution, isolation, and revocation', 
       grant usage on schema public, private, auth to authenticated;
       create table public.profiles(id uuid primary key, full_name text, email text);
       create table public.user_roles(user_id uuid primary key, role text);
+      create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
       create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('test.actor', true), '')::uuid $$;
       create function private.current_user_id() returns uuid language sql stable security definer as $$ select auth.uid() $$;
       alter table public.profiles enable row level security;
@@ -27,10 +28,16 @@ test('Kanban permissions, inheritance, attribution, isolation, and revocation', 
     `);
     await db.exec(await readFile(new URL('../supabase/migrations/20260924182406_kanban_workspace.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/20260924213447_kanban_admin_deletion.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20260924215035_kanban_portal_access_and_creators.sql', import.meta.url), 'utf8'));
     const admin = '10000000-0000-4000-8000-000000000001';
     const candidate = '10000000-0000-4000-8000-000000000002';
     const outsider = '10000000-0000-4000-8000-000000000003';
-    const as = async id => { await db.exec('reset role'); await db.query("select set_config('test.actor', $1, false)", [id]); await db.exec('set role authenticated'); };
+    const as = async (id, origin = id === admin ? 'https://admin.quicksort.fr' : 'https://candidate.quicksort.fr') => {
+      await db.exec('reset role');
+      await db.query("select set_config('test.actor', $1, false)", [id]);
+      await db.query("select set_config('request.jwt.claims', $1, false)", [JSON.stringify(origin ? {azp: origin} : {})]);
+      await db.exec('set role authenticated');
+    };
     const insert = async (sql, args = []) => (await db.query(sql, args)).rows[0];
     const rows = async table => (await db.query(`select * from public.${table}`)).rows;
     const denied = async (sql, args = [], code = '42501') => assert.rejects(db.query(sql, args), e => e.code === code);
@@ -46,6 +53,54 @@ test('Kanban permissions, inheritance, attribution, isolation, and revocation', 
     const siblingColumn = (await rows('kanban_columns')).find(c => c.board_id === sibling.id);
     const adminCard = await insert("insert into kanban_cards(board_id,column_id,title) values($1,$2,'Admin task') returning *", [board.id, columns[0].id]);
     assert.equal(adminCard.creator_name, 'Admin Alex');
+    assert.equal(project.created_by, admin);
+    assert.equal(project.creator_name, 'Admin Alex');
+    assert.equal(board.created_by, admin);
+    assert.equal(board.creator_name, 'Admin Alex');
+    await denied("insert into kanban_projects(name,created_by) values('Spoof',$1)", [candidate]);
+    await denied("insert into kanban_boards(project_id,name,creator_name) values($1,'Spoof','Someone else')", [project.id]);
+    await denied("update kanban_boards set creator_name='Spoof' where id=$1", [board.id]);
+    // The exact same admin identity must have no candidate access by default.
+    // Neither an arbitrary request header nor a missing/unknown JWT origin grants admin access.
+    for (const origin of ['https://candidate.quicksort.fr', 'https://quicksort-candidate.vercel.app', 'http://localhost:5175', 'https://admin.quicksort.fr.attacker.invalid', null]) {
+      await as(admin, origin);
+      await db.query("select set_config('request.headers', $1, false)", [JSON.stringify({'x-quicksort-portal':'admin',origin:'https://admin.quicksort.fr'})]);
+      for (const table of ['kanban_projects','kanban_boards','kanban_columns','kanban_cards']) assert.equal((await rows(table)).length, 0, table + ' isolated for ' + origin);
+      await denied("insert into kanban_projects(name) values('Candidate admin')");
+      await denied('insert into kanban_board_members(board_id,user_id) values($1,$2)', [board.id,admin]);
+      await denied("insert into kanban_cards(board_id,column_id,title) values($1,$2,'No grant')", [board.id,columns[0].id]);
+      assert.equal((await db.query('delete from kanban_boards where id=$1 returning id', [board.id])).rows.length, 0);
+    }
+    // Explicit board grant enables that board only, even for its admin creator.
+    await as(admin);
+    await db.query('insert into kanban_board_members(board_id,user_id) values($1,$2)', [board.id,admin]);
+    await as(admin, 'https://candidate.quicksort.fr');
+    assert.deepEqual((await rows('kanban_boards')).map(b=>b.id), [board.id]);
+    assert.deepEqual((await rows('kanban_projects')).map(p=>p.id), [project.id]);
+    assert.equal((await rows('kanban_columns')).length, 4);
+    assert.equal((await rows('kanban_cards')).length, 1);
+    await db.query('update kanban_cards set column_id=$1 where id=$2', [columns[1].id,adminCard.id]);
+    await denied("insert into kanban_boards(project_id,name) values($1,'Candidate admin')", [project.id]);
+    await denied("insert into kanban_columns(board_id,name) values($1,'Candidate admin')", [board.id]);
+    assert.equal((await db.query('delete from kanban_projects where id=$1 returning id', [project.id])).rows.length, 0);
+    await as(admin);
+    await db.query('insert into kanban_project_members(project_id,user_id) values($1,$2)', [project.id,admin]);
+    await as(admin, 'https://candidate.quicksort.fr');
+    assert.equal((await rows('kanban_boards')).length, 2, 'explicit project grant includes sibling boards only');
+    await as(admin);
+    await db.query('delete from kanban_project_members where user_id=$1', [admin]);
+    await as(admin, 'https://candidate.quicksort.fr');
+    assert.equal((await rows('kanban_boards')).length, 1, 'direct grant survives project revocation');
+    await as(admin);
+    await db.query('delete from kanban_board_members where user_id=$1', [admin]);
+    await as(admin, 'https://candidate.quicksort.fr');
+    assert.equal((await rows('kanban_cards')).length, 0, 'revoking final grant removes candidate access');
+    assert.equal((await db.query('update kanban_cards set column_id=$1 where id=$2 returning id', [columns[0].id,adminCard.id])).rows.length, 0);
+    // Admin origin alone cannot upgrade a candidate identity.
+    await as(candidate, 'https://admin.quicksort.fr');
+    assert.equal((await rows('kanban_boards')).length, 0);
+    await denied('insert into kanban_board_members(board_id,user_id) values($1,$2)', [board.id,candidate]);
+    await as(admin);
     await db.query('insert into kanban_board_members(board_id,user_id) values($1,$2)', [board.id, candidate]);
     await as(candidate);
     assert.deepEqual((await rows('kanban_boards')).map(b => b.id), [board.id]);

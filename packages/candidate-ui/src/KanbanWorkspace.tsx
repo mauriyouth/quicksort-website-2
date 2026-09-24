@@ -61,7 +61,12 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       setProjects(p.data || []); setBoards(b.data || []); setColumns(c.data || []); setCards(t.data || []);
       setPeople(users.data || []); setProjectMembers(pm.data || []); setBoardMembers(bm.data || []);
     } catch (err) {
-      if (version === request.current) setError(errorMessage(err));
+      if (version === request.current) {
+        setProjects([]); setBoards([]); setColumns([]); setCards([]);
+        setPeople([]); setProjectMembers([]); setBoardMembers([]);
+        setPanel(null);
+        setError(errorMessage(err));
+      }
     } finally {
       if (version === request.current) setLoading(false);
     }
@@ -190,7 +195,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
         <label>Board<select value={board?.id || ""} disabled={busy || !projectBoards.length} onChange={e => { setBoardId(e.target.value); setCreator(""); setPanel(null); }}>
           {!projectBoards.length && <option value="">No boards yet</option>}{projectBoards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select></label>
-        {board && <label>Created by<select value={creator} onChange={e => setCreator(e.target.value)}><option value="">All creators</option>{creators.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>}
+        {board && <label>Card creator<select value={creator} onChange={e => setCreator(e.target.value)}><option value="">All card creators</option>{creators.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>}
         {admin && <div className="kanban-actions"><button className="btn secondary" disabled={busy} onClick={() => open("board")}><Plus size={16} />New board</button><button className="btn secondary" disabled={busy} onClick={() => open("access")}><Users size={16} />Manage access</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("project")}><Trash2 size={16} />Delete project</button></div>}
       </div>
     </>}
@@ -206,7 +211,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </form> : <form ref={formRef} className="form" key={`${panel}-${project?.id}-${board?.id}`} onSubmit={submit}>
         <fieldset disabled={busy}>
           {panel !== "access" ? <label>{panel === "card" ? "Card title" : "Name"}<input name="name" required maxLength={panel === "card" ? 200 : 100} placeholder={panel === "project" ? "e.g. Events" : panel === "board" ? "e.g. Paris launch" : panel === "column" ? "e.g. On hold" : "What needs to be done?"} /></label> : <>
-            <p className="muted">Project access includes every current and future board. Board access includes only the selected board. Admins can see all boards.</p>
+            <p className="muted">Project access includes every current and future board. Board access includes only the selected board. Everyone needs an explicit grant in the candidate portal, including admins and creators. Admins manage all boards only in the admin portal.</p>
             <label>Person<select name="person" required defaultValue=""><option value="" disabled>Select a person</option>{people.map(p => <option key={p.id} value={p.id}>{p.full_name || p.email} · {p.email}</option>)}</select></label>
             <label>Access level<select name="scope"><option value="project">Entire project: {project?.name}</option>{board && <option value="board">Only this board: {board.name}</option>}</select></label>
           </>}
@@ -229,7 +234,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </div>}
     </section>}
     {board && <>
-      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag a card or use its column selector to move it.</p></div>{admin && <div className="kanban-actions"><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></div>}</div>
+      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag a card or use its column selector to move it.</p></div>{admin && <div className="kanban-actions"><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></div>}</div>
       <div className="kanban-columns" aria-label={`${board.name} columns`}>
         {boardColumns.map(column => {
           const visibleCards = boardCards.filter(c => c.column_id === column.id && (!creator || c.created_by === creator));

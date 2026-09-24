@@ -13,8 +13,9 @@
     "test:browser": "playwright test"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
+    "@electric-sql/pglite": "0.5.8",
+    "@playwright/test": "1.58.2",
     "supabase": "2.116.0",
-    "@playwright/test": "1.58.2"
+    "typescript": "5.9.3"
   }
 }

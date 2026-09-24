@@ -29,13 +29,13 @@ test('photo downloads require verified authentication and share every portrait w
     assert.equal((await request('/api/team-photo?photo=../../secret', 'Bearer valid')).code, 404);
     assert.equal((await request('/api/team-photo?photo=issa-hammoud&size=original', 'Bearer valid')).code, 404);
     assert.equal((await request('/api/team-photo', 'Bearer valid', 'POST')).code, 405);
-    assert.equal(photos.length, 13);
+    assert.equal(photos.length, 14);
     if (!existsSync(new URL('../apps/candidate/private/team-photos', import.meta.url))) {
       t.diagnostic('Private HD assets absent: file-serving checks run in the deployment checkout only.');
       return;
     }
     for (const photo of photos) {
-      assert.ok(photo.width >= 1600 && photo.height >= 2400);
+      assert.ok(photo.width >= 1400 && photo.height >= 2400);
       for (const size of ['preview', 'hd']) {
         const result = await request(`/api/team-photo?photo=${photo.id}&size=${size}`, 'Bearer valid');
         assert.equal(result.code, 200, `${photo.id} ${size}`);

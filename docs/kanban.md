@@ -10,7 +10,7 @@ Both portals expose **Kanban boards** at `/kanban`. The implementation is shared
 - Removing a project grant preserves any direct board grants. Removing a board grant does not cancel project-level access. The access panel describes this explicitly.
 - Board creation preselects To do, In progress, Blocked, and Done. Admins can uncheck defaults, rename selected columns, and add custom columns. At least one uniquely named column is required. **Edit Kanban board** renames the board and its columns or adds columns in one atomic save. Column IDs stay unchanged, preserving cards and references. Both portals read these names from the same records; candidate views refresh on focus, manually, or within 30 seconds.
 - Card creators are stamped in the database with the authenticated profile ID and a display-name snapshot (email fallback). The browser cannot supply or change this attribution.
-- Both dragging and an accessible status selector move cards. Changes are saved before being shown as complete. The workspace refreshes on focus and every 30 seconds.
+- Drag cards between columns to move them. Cards do not show a movement dropdown. Changes are saved before being shown as complete. The workspace refreshes on focus and every 30 seconds.
 - Admins can delete a project or board after typing its exact name (case and spaces must match). The confirmation explains the permanent cascade to contained boards, columns, cards, and access grants. Candidates cannot delete projects or boards.
 - This scope does not include editing projects, deleting individual columns, or editing/deleting cards, card assignment, comments, attachments, or within-column ordering.
 

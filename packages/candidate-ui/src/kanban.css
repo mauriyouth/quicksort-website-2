@@ -21,8 +21,6 @@
 .kanban-card h4 { margin: 0 0 12px; font-size: 16px; font-weight: 500; line-height: 1.45; }
 .kanban-description { white-space: pre-wrap; color: var(--qs-muted); font-size: 13px; }
 .kanban-creator { display: inline-block; border: 1px solid var(--qs-line); border-radius: 16px; padding: 3px 9px; color: var(--qs-muted); font-size: 12px; }
-.kanban-move { display: grid; gap: 4px; font-size: 12px; color: var(--qs-muted); margin-top: 14px; }
-.kanban-move select { width: 100%; font-size: 13px; }
 .kanban-empty { padding: 8px 6px 22px; color: var(--qs-muted); }
 .kanban-add { display: flex; align-items: center; gap: 8px; border: 0; width: 100%; min-height: 44px; padding: 10px 6px; background: transparent; color: var(--qs-muted); border-radius: 6px; text-align: left; }
 .kanban-add:hover, .kanban-projects button:hover { color: var(--qs-ink); background: var(--qs-bg); }

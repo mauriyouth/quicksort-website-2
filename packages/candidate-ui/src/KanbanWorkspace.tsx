@@ -253,7 +253,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </div>}
     </section>}
     {board && <>
-      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag a card or use its column selector to move it.</p></div><div className="kanban-actions">{admin && <button className="btn secondary small" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
+      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag cards between columns to move them.</p></div><div className="kanban-actions">{admin && <button className="btn secondary small" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
       <div className="kanban-columns" aria-label={`${board.name} columns`}>
         {boardColumns.map(column => {
           const visibleCards = boardCards.filter(c => c.column_id === column.id && (!creator || c.created_by === creator));
@@ -262,7 +262,6 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
             {visibleCards.map(card => <article className="kanban-card" key={card.id} draggable={!busy} onDragStart={e => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; }}>
               <h4>{card.title}</h4>{card.description && <p className="kanban-description">{card.description}</p>}
               <span className="kanban-creator" title={`Created by ${card.creator_name}`}>Created by {card.creator_name}</span>
-              <label className="kanban-move">Move to<select aria-label={`Move ${card.title}`} value={card.column_id} disabled={busy} onChange={e => moveCard(card, e.target.value)}>{boardColumns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             </article>)}
             {!visibleCards.length && <p className="kanban-empty">{creator ? "No matching cards" : "No cards yet"}</p>}
             <button className="kanban-add" disabled={busy} onClick={() => { setCardColumn(column.id); open("card"); }}><Plus size={16} />Add a card</button>

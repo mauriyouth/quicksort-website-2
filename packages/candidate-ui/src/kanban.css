@@ -55,3 +55,8 @@
 .kanban-magic-draft { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--qs-line); border-radius: 12px; }
 .kanban-magic-dialog :focus-visible { outline: 2px solid var(--qs-ink); outline-offset: 3px; }
 @media (max-width: 640px) { .kanban-magic-dialog { padding: 20px; } }
+
+.kanban-column-editor legend { font-weight: 600; }
+.kanban-column-draft { display: flex; align-items: center; gap: 12px; }
+.kanban-column-draft > input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 20px; }
+.kanban-column-draft label { flex: 1; min-width: 0; }

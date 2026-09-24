@@ -26,9 +26,20 @@ const server = await createServer({
     });
     server.middlewares.use('/rest/v1', async (req,res,next) => {
       const url = new URL(req.url, 'http://localhost');
-      const table = url.pathname.slice(1); if (!(table in state)) return next();
+      const table = url.pathname.slice(1); if (!(table in state) && table !== 'rpc/save_kanban_board') return next();
       let raw=''; for await (const part of req) raw+=part;
       const body = raw ? JSON.parse(raw) : {};
+      if (table === 'rpc/save_kanban_board') {
+        let board = state.kanban_boards.find(b => b.id === body.target_board);
+        if (!board) { board = {id:crypto.randomUUID(), project_id:body.target_project}; state.kanban_boards.push(board); }
+        board.name = body.board_name;
+        body.column_drafts.forEach((draft, i) => {
+          const column = state.kanban_columns.find(c => c.id === draft.id && c.board_id === board.id);
+          if (column) column.name = draft.name;
+          else state.kanban_columns.push({id:crypto.randomUUID(), board_id:board.id, name:draft.name, position:i});
+        });
+        res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(board.id)); return;
+      }
       let records = state[table];
       const matches = row => [...url.searchParams].filter(([,v]) => v.startsWith('eq.')).every(([k,v]) => row[k] === v.slice(3));
       if(req.method==='POST') {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Columns3, Plus, RefreshCw, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Columns3, Pencil, Plus, RefreshCw, Sparkles, Trash2, Users, X } from "lucide-react";
 import { db, errorMessage, type Row } from "@quicksort/candidate-db";
 import { Empty, Heading, Notice } from "./index";
 import "./kanban.css";
@@ -9,7 +9,7 @@ type Project = Row<"kanban_projects">;
 type Board = Row<"kanban_boards">;
 type Column = Row<"kanban_columns">;
 type Card = Row<"kanban_cards">;
-type Panel = "project" | "board" | "column" | "card" | "access" | "delete-project" | "delete-board" | null;
+type Panel = "project" | "board" | "edit-board" | "column" | "card" | "access" | "delete-project" | "delete-board" | null;
 
 // Supabase caps each response; fetch all pages so larger boards are not silently truncated.
 async function readAll<T>(query: () => { range(from: number, to: number): PromiseLike<{ data: T[] | null; error: unknown }> }) {
@@ -37,6 +37,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ kind: "project" | "board"; id: string; name: string } | null>(null);
   const [confirmation, setConfirmation] = useState("");
+  const [columnDrafts, setColumnDrafts] = useState<{ key: string; id?: string; name: string; selected: boolean }[]>([]);
   const [cardColumn, setCardColumn] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -108,7 +109,10 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
     } catch (err) { setError(errorMessage(err)); }
     finally { mutation.current = false; setBusy(false); }
   }
-  function open(next: Panel) { setPanel(next); setError(""); setMessage(""); }
+  function open(next: Panel) {
+    if (next === "board") setColumnDrafts(["To do", "In progress", "Blocked", "Done"].map(name => ({ key: crypto.randomUUID(), name, selected: true })));
+    if (next === "edit-board") setColumnDrafts(boardColumns.map(c => ({ key: c.id, id: c.id, name: c.name, selected: true })));
+    setPanel(next); setError(""); setMessage(""); }
   function openDelete(kind: "project" | "board") {
     const target = kind === "project" ? project : board;
     if (!admin || !target) return;
@@ -145,15 +149,24 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
     const values = new FormData(e.currentTarget);
     const name = String(values.get("name") || "").trim();
     if (panel !== "access" && !name) { setError("Enter a name or title."); return; }
+    const selectedColumns = columnDrafts.filter(c => c.selected);
+    if (panel === "board" || panel === "edit-board") {
+      if (!selectedColumns.length || selectedColumns.some(c => !c.name.trim())) { setError("Choose at least one column and give each selected column a name."); return; }
+      if (new Set(selectedColumns.map(c => c.name.trim().toLowerCase())).size !== selectedColumns.length) { setError("Use a different name for each column."); return; }
+    }
     await action(async () => {
       if (panel === "project") {
         const result = await db().from("kanban_projects").insert({ name }).select("*").single();
         if (result.error) throw result.error;
         setProjectId(result.data.id); setBoardId("");
-      } else if (panel === "board" && project) {
-        const result = await db().from("kanban_boards").insert({ name, project_id: project.id }).select("*").single();
+      } else if ((panel === "board" || panel === "edit-board") && project) {
+        const result = await db().rpc("save_kanban_board", {
+          target_project: project.id, board_name: name,
+          target_board: panel === "edit-board" ? board!.id : undefined,
+          column_drafts: selectedColumns.map(c => ({ ...(c.id ? { id: c.id } : {}), name: c.name.trim() })),
+        });
         if (result.error) throw result.error;
-        setBoardId(result.data.id); setCreator("");
+        setBoardId(result.data!); setCreator("");
       } else if (panel === "column" && board) {
         const result = await db().from("kanban_columns").insert({ name, board_id: board.id, position: Math.max(-1, ...boardColumns.map(c => c.position)) + 1 }).select("id").single();
         if (result.error) throw result.error;
@@ -178,7 +191,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
     }, `Moved “${card.title}” to ${boardColumns.find(c => c.id === columnId)?.name}.`, false);
   }
   const deleting = panel === "delete-project" || panel === "delete-board";
-  const panelTitle = deleting ? `Delete ${deleteTarget?.kind}` : panel === "project" ? "Create a project" : panel === "board" ? "Create a board" : panel === "column" ? "Create a column" : panel === "access" ? "Manage access" : "Create a card";
+  const panelTitle = deleting ? `Delete ${deleteTarget?.kind}` : panel === "project" ? "Create a project" : panel === "board" ? "Create a board" : panel === "edit-board" ? "Edit Kanban board" : panel === "column" ? "Create a column" : panel === "access" ? "Manage access" : "Create a card";
 
   return <section className="kanban-workspace" aria-label="Kanban workspace" aria-busy={busy || loading}>
     <Heading eyebrow="Team workspace" title="Operations board" action={<div className="kanban-actions">
@@ -213,12 +226,20 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
         </fieldset>
       </form> : <form ref={formRef} className="form" key={`${panel}-${project?.id}-${board?.id}`} onSubmit={submit}>
         <fieldset disabled={busy}>
-          {panel !== "access" ? <label>{panel === "card" ? "Card title" : "Name"}<input name="name" required maxLength={panel === "card" ? 200 : 100} placeholder={panel === "project" ? "e.g. Events" : panel === "board" ? "e.g. Paris launch" : panel === "column" ? "e.g. On hold" : "What needs to be done?"} /></label> : <>
+          {panel !== "access" ? <label>{panel === "card" ? "Card title" : "Name"}<input name="name" defaultValue={panel === "edit-board" ? board?.name : undefined} required maxLength={panel === "card" ? 200 : 100} placeholder={panel === "project" ? "e.g. Events" : panel === "board" ? "e.g. Paris launch" : panel === "column" ? "e.g. On hold" : "What needs to be done?"} /></label> : <>
             <p className="muted">Project access includes every current and future board. Board access includes only the selected board. Everyone needs an explicit grant in the candidate portal, including admins and creators. Admins manage all boards only in the admin portal.</p>
             <label>Person<select name="person" required defaultValue=""><option value="" disabled>Select a person</option>{people.map(p => <option key={p.id} value={p.id}>{p.full_name || p.email} · {p.email}</option>)}</select></label>
             <label>Access level<select name="scope"><option value="project">Entire project: {project?.name}</option>{board && <option value="board">Only this board: {board.name}</option>}</select></label>
           </>}
-          {panel === "board" && <p className="muted">Starts with To do, In progress, Blocked, and Done. Add your own columns at any time.</p>}
+          {(panel === "board" || panel === "edit-board") && <fieldset className="kanban-column-editor">
+            <legend>Columns</legend>
+            <p className="muted">{panel === "board" ? "Choose your starting columns, rename them, or add your own." : "Rename columns here. Existing cards stay in their columns, and candidates see the updated names."}</p>
+            {columnDrafts.map((column, index) => <div className="kanban-column-draft" key={column.key}>
+              {!column.id && <input type="checkbox" aria-label={`Include column ${index + 1}`} checked={column.selected} onChange={e => setColumnDrafts(items => items.map(c => c.key === column.key ? { ...c, selected: e.target.checked } : c))} />}
+              <label>Column {index + 1}<input value={column.name} disabled={!column.selected} required={column.selected} maxLength={100} onChange={e => setColumnDrafts(items => items.map(c => c.key === column.key ? { ...c, name: e.target.value } : c))} /></label>
+            </div>)}
+            <button className="btn secondary" type="button" onClick={() => setColumnDrafts(items => [...items, { key: crypto.randomUUID(), name: "", selected: true }])}><Plus size={16} />Add another column</button>
+          </fieldset>}
           {panel === "card" && <><label>Description<textarea name="description" maxLength={4000} rows={3} /></label><label>Column<select name="column" defaultValue={cardColumn || boardColumns[0]?.id} required>{boardColumns.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label><p className="muted">Your name will be recorded automatically as the creator.</p></>}
           <button className="btn" type="submit">{busy ? "Saving…" : panel === "access" ? "Grant access" : "Save"}</button>
         </fieldset>
@@ -237,7 +258,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </div>}
     </section>}
     {board && <>
-      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag a card or use its column selector to move it.</p></div><div className="kanban-actions">{admin && <button className="btn secondary small" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
+      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag a card or use its column selector to move it.</p></div><div className="kanban-actions">{admin && <button className="btn secondary small" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
       <div className="kanban-columns" aria-label={`${board.name} columns`}>
         {boardColumns.map(column => {
           const visibleCards = boardCards.filter(c => c.column_id === column.id && (!creator || c.created_by === creator));

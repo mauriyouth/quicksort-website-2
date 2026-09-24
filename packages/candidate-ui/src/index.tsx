@@ -3,6 +3,8 @@ import { SignIn, useClerk } from "@clerk/react";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   ShieldCheck,
   CircleHelp,
   type LucideIcon,
@@ -97,19 +99,41 @@ export function Shell({
   children: ReactNode;
 }) {
   const [error, setError] = useState("");
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(`quicksort:${portal}:sidebar-collapsed`) === "true"; }
+    catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(`quicksort:${portal}:sidebar-collapsed`, String(collapsed)); }
+    catch { /* Navigation still works when browser storage is unavailable. */ }
+  }, [collapsed, portal]);
   const clerk = useClerk();
   async function signOut() {
     try { await clerk.signOut(); } catch (error) { setError(errorMessage(error)); }
   }
   return (
-    <div className="shell">
+    <div className={`shell${collapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
-        <Brand />
+        <div className="sidebar-header">
+          <Brand />
+          <button
+            className="sidebar-toggle"
+            onClick={() => setCollapsed((value) => !value)}
+            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+            aria-expanded={!collapsed}
+            aria-controls="workspace-navigation"
+            title={collapsed ? "Expand navigation" : "Collapse navigation"}
+          >
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+        </div>
         <div className="portal-label">{portal} workspace</div>
-        <nav className="nav" aria-label="Main navigation">
+        <nav id="workspace-navigation" className="nav" aria-label="Main navigation">
           {nav.map(({ id, href, label, icon: Icon }) => (
             <a href={href}
               key={id}
+              aria-label={label}
+              title={collapsed ? label : undefined}
               className={current === id ? "active" : ""}
               aria-current={current === id ? "page" : undefined}
               onClick={(event) => {
@@ -119,7 +143,7 @@ export function Shell({
               }}
             >
               <Icon size={18} />
-              {label}
+              <span className="nav-label">{label}</span>
             </a>
           ))}
         </nav>
@@ -131,9 +155,9 @@ export function Shell({
             Connected, from day one.
           </p>
           <p>{email}</p>
-          <button onClick={signOut}>
+          <button onClick={signOut} aria-label="Sign out" title="Sign out">
             <LogOut size={15} />
-            Sign out
+            <span className="sign-out-label">Sign out</span>
           </button>
         </div>
       </aside>

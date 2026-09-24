@@ -367,6 +367,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      kanban_undo_token: { Args: Record<string, never>; Returns: string | null };
+      undo_kanban_action: { Args: { expected_token: string }; Returns: string };
       save_kanban_board: { Args: { target_project: string; board_name: string; column_drafts: Json; target_board?: string }; Returns: string };
       sync_clerk_profile: { Args: Record<PropertyKey, never>; Returns: string };
       review_admin_access: {

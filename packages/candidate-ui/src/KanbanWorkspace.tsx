@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Columns3, Pencil, Plus, RefreshCw, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Columns3, Pencil, Plus, RefreshCw, Sparkles, Trash2, Redo2, Undo2, Users, X } from "lucide-react";
 import { db, errorMessage, type Row } from "@quicksort/candidate-db";
 import { Empty, Heading, Notice } from "./index";
 import "./kanban.css";
+import { kanbanHistoryShortcut } from "./kanbanUndo";
 import { MagicDesign } from "./MagicDesign";
 
 type Project = Row<"kanban_projects">;
@@ -45,6 +46,8 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [historyMode, setHistoryMode] = useState<"undo" | "redo">("undo");
+  const [undoToken, setUndoToken] = useState<string | null>(null);
   const request = useRef(0);
   const mutation = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -103,11 +106,35 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   }, [project?.id, board?.id]);
   const personName = (id: string) => people.find(p => p.id === id)?.full_name || people.find(p => p.id === id)?.email || "Workspace member";
 
-  async function action(work: () => Promise<void>, success: string, close = true) {
+  async function rememberUndo() {
+    const result = await db().rpc("kanban_undo_token", {});
+    if (result.data !== undoToken) setHistoryMode("undo");
+    setUndoToken(result.error ? null : result.data);
+  }
+  async function replayHistory() {
+    if (!undoToken || mutation.current || loading || magicOpen) return;
+    await action(async () => {
+      const result = await db().rpc("undo_kanban_action", { expected_token: undoToken });
+      if (result.error) throw result.error;
+      setUndoToken(result.data); setHistoryMode(historyMode === "undo" ? "redo" : "undo"); setSelectedCardId(null); setDeletingCard(null);
+    }, historyMode === "undo" ? "Last action undone." : "Last action redone.", true, false);
+  }
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!undoToken || mutation.current || loading || magicOpen || kanbanHistoryShortcut(event) !== historyMode) return;
+      event.preventDefault();
+      void replayHistory();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+
+  async function action(work: () => Promise<void>, success: string, close = true, recordUndo = true) {
     if (mutation.current) return;
     mutation.current = true; setBusy(true); setError(""); setMessage("");
     try {
       await work();
+      if (recordUndo) await rememberUndo();
       if (close) setPanel(null);
       setMessage(success);
       await load();
@@ -197,6 +224,8 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
 
   return <section className="kanban-workspace" aria-label="Kanban workspace" aria-busy={busy || loading}>
     <Heading eyebrow="Team workspace" title="Operations board" action={<div className="kanban-actions">
+      <button className="btn secondary" disabled={!undoToken || historyMode !== "undo" || busy || loading || magicOpen} onClick={() => void replayHistory()} title="Undo last action (⌘Z / Ctrl+Z)" aria-keyshortcuts="Meta+Z Control+Z"><Undo2 size={16} />Undo</button>
+      <button className="btn secondary" disabled={!undoToken || historyMode !== "redo" || busy || loading || magicOpen} onClick={() => void replayHistory()} title="Redo last action (⌘Shift+Z / Ctrl+Shift+Z)" aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z"><Redo2 size={16} />Redo</button>
       <button className="btn secondary" aria-label="Refresh boards" disabled={busy || loading} onClick={() => { setError(""); void load(); }}><RefreshCw size={16} /></button>
       {admin && <button className="btn" disabled={busy} onClick={() => open("project")}><Plus size={16} />New project</button>}
     </div>}>
@@ -222,10 +251,10 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       <div className="panel-head"><h2>{panelTitle}</h2><button className="btn secondary" aria-label="Close form" disabled={busy} onClick={() => setPanel(null)}><X size={16} /></button></div>
       {deleting && deleteTarget ? <form ref={formRef} className="form" onSubmit={submitDelete}>
         <fieldset disabled={busy}>
-          <p id="kanban-delete-warning">Permanently delete {deleteTarget.kind} <strong>{deleteTarget.name}</strong>? {deleteTarget.kind === "project" ? "All boards in this project, their columns, cards, and access grants will also be deleted." : "All columns, cards, and access grants for this board will also be deleted."} This cannot be undone.</p>
+          <p id="kanban-delete-warning">Delete {deleteTarget.kind} <strong>{deleteTarget.name}</strong>? {deleteTarget.kind === "project" ? "All boards in this project, their columns, cards, and access grants will also be deleted." : "All columns, cards, and access grants for this board will also be deleted."} You can undo this as your next action with Undo, ⌘Z, or Ctrl+Z.</p>
           <label>Type “{deleteTarget.name}” to confirm<input name="confirmation" value={confirmation} onChange={e => setConfirmation(e.target.value)} required autoComplete="off" spellCheck={false} aria-describedby="kanban-delete-warning kanban-delete-hint" /></label>
           <p id="kanban-delete-hint" className="muted">The name must match exactly, including capital letters and spaces.</p>
-          <div className="kanban-actions"><button className="btn secondary" type="button" onClick={() => setPanel(null)}>Cancel</button><button className="btn kanban-danger-solid" type="submit" disabled={busy || confirmation !== deleteTarget.name}>{busy ? "Deleting…" : `Permanently delete ${deleteTarget.kind}`}</button></div>
+          <div className="kanban-actions"><button className="btn secondary" type="button" onClick={() => setPanel(null)}>Cancel</button><button className="btn kanban-danger-solid" type="submit" disabled={busy || confirmation !== deleteTarget.name}>{busy ? "Deleting…" : `Delete ${deleteTarget.kind}`}</button></div>
         </fieldset>
       </form> : <form ref={formRef} className="form" key={`${panel}-${project?.id}-${board?.id}`} onSubmit={submit}>
         <fieldset disabled={busy}>
@@ -296,7 +325,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       setCards(items => items.filter(card => card.id !== deletingCard.id));
       setDeletingCard(null);
     }, "Card deleted.", false)} />}
-    {admin && magicOpen && board && <MagicDesign key={board.id} boardId={board.id} boardName={board.name} columns={boardColumns} onClose={() => setMagicOpen(false)} onSaved={count => { setMagicOpen(false); setCreator(""); setMessage(`${count} ${count === 1 ? "card" : "cards"} added.`); void load(); }} />}
+    {admin && magicOpen && board && <MagicDesign key={board.id} boardId={board.id} boardName={board.name} columns={boardColumns} onClose={() => setMagicOpen(false)} onSaved={count => { void rememberUndo(); setMagicOpen(false); setCreator(""); setMessage(`${count} ${count === 1 ? "card" : "cards"} added.`); void load(); }} />}
     {project && !board && !loading && <Empty title="No boards in this project">{admin ? "Create a board for your first event, initiative, or workstream." : "Your admin has not shared a board here yet."}</Empty>}
   </section>;
 }
@@ -313,7 +342,7 @@ function DeleteCardDialog({ card, busy, error, onClose, onDelete }: { card: Card
   }, []);
   return <dialog ref={dialog} className="kanban-magic-dialog" aria-labelledby="delete-card-title" onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
     <h2 id="delete-card-title">Delete card</h2>
-    <p>Permanently delete <strong>{card.title}</strong>? This cannot be undone.</p>
+    <p>Delete <strong>{card.title}</strong>? You can undo this as your next action with Undo, ⌘Z, or Ctrl+Z.</p>
     <form className="form" onSubmit={event => { event.preventDefault(); if (!busy && confirmation === "delete") onDelete(); }}>
       <label>Type delete to confirm<input value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} autoComplete="off" spellCheck={false} /></label>
       {error && <p role="alert">{error}</p>}

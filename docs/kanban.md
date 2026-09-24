@@ -11,7 +11,7 @@ Both portals expose **Kanban boards** at `/kanban`. The implementation is shared
 - Board creation preselects To do, In progress, Blocked, and Done. Admins can uncheck defaults, rename selected columns, and add custom columns. At least one uniquely named column is required. **Edit Kanban board** renames the board and its columns or adds columns in one atomic save. Column IDs stay unchanged, preserving cards and references. Both portals read these names from the same records; candidate views refresh on focus, manually, or within 30 seconds.
 - Card creators are stamped in the database with the authenticated profile ID and a display-name snapshot (email fallback). The browser cannot supply or change this attribution.
 - Drag cards between columns to move them. Cards do not show a movement dropdown. Changes are saved before being shown as complete. The workspace refreshes on focus and every 30 seconds.
-- Admins can delete a project or board after typing its exact name (case and spaces must match). The confirmation explains the permanent cascade to contained boards, columns, cards, and access grants. Candidates cannot delete projects or boards.
+- Admins can delete a project or board after typing its exact name (case and spaces must match). The confirmation explains deletion of contained boards, columns, cards, and access grants, and the one-step undo option. Candidates cannot delete projects or boards.
 - This scope does not include editing projects, deleting individual columns, or editing cards, card assignment, comments, attachments, or within-column ordering.
 
 ## Database rollout
@@ -54,3 +54,12 @@ Apply `supabase/migrations/20260924215546_kanban_board_editing.sql` before deplo
 ## Card deletion
 
 Admins see a small trash button on each card. Its confirmation dialog requires the exact word `delete` before enabling deletion. Candidates do not see the button; the `cards_delete` database policy restricts DELETE to `private.kanban_admin()`. Apply `20260924220030_kanban_admin_card_deletion.sql` before deploying this UI. The migration does not delete existing data.
+
+
+## One-step undo and redo
+
+Command Z on Mac, Control Z on Windows/Linux, or the Undo button reverses the latest successful saved action while the workspace is open. This covers project/board/card creation and deletion, board/column renames and additions, card details and moves, access grants/revocations, and a Magic design batch as one action. Command Shift Z / Control Shift Z or the Redo button reapplies the action after undo. Users can alternate undo and redo; the next successful change replaces this history and clears redo. Text fields retain native text undo and redo. Refreshing the page clears the UI's undo offer.
+
+Apply `20260924222257_kanban_undo.sql` before deploying the updated portals. It records only the latest transaction per identity and verified portal origin in private tables. Undo accepts a server-generated token, never client-supplied restoration rows. Restoring deletions retains original IDs, attribution, dates, contents, and grants. Current permissions are checked again. Changed rows or new descendants cause an atomic refusal so subsequent work is preserved. Database table locks serialize the brief restoration transaction with other writes. The migration adds no historical recovery for actions taken before it is applied.
+
+Validation includes PostgreSQL permission/conflict tests and shortcut tests, alongside portal type checks. The undo/redo migration was applied to production project `kupbvrnjppcwqxmzxasi` on 2026-09-24. Private history tables deny direct client access; anonymous execution is denied for all history functions.

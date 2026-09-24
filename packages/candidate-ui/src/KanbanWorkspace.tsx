@@ -9,7 +9,7 @@ type Project = Row<"kanban_projects">;
 type Board = Row<"kanban_boards">;
 type Column = Row<"kanban_columns">;
 type Card = Row<"kanban_cards">;
-type Panel = "project" | "board" | "edit-board" | "column" | "card" | "access" | "delete-project" | "delete-board" | null;
+type Panel = "project" | "board" | "edit-board" | "card" | "access" | "delete-project" | "delete-board" | null;
 
 // Supabase caps each response; fetch all pages so larger boards are not silently truncated.
 async function readAll<T>(query: () => { range(from: number, to: number): PromiseLike<{ data: T[] | null; error: unknown }> }) {
@@ -33,6 +33,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const [projectId, setProjectId] = useState("");
   const [boardId, setBoardId] = useState("");
   const [creator, setCreator] = useState("");
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [deletingCard, setDeletingCard] = useState<Card | null>(null);
   const [magicOpen, setMagicOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
@@ -91,11 +92,13 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const board = projectBoards.find(b => b.id === boardId) || projectBoards[0];
   const boardColumns = columns.filter(c => c.board_id === board?.id);
   const boardCards = cards.filter(c => c.board_id === board?.id);
+  const selectedCard = boardCards.find(card => card.id === selectedCardId);
   const creators = [...new Map(boardCards.map(c => [c.created_by, c.creator_name])).entries()];
   useEffect(() => {
     setPanel(null);
     setMagicOpen(false);
     setDeletingCard(null);
+    setSelectedCardId(null);
     setCreator("");
   }, [project?.id, board?.id]);
   const personName = (id: string) => people.find(p => p.id === id)?.full_name || people.find(p => p.id === id)?.email || "Workspace member";
@@ -169,11 +172,8 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
         });
         if (result.error) throw result.error;
         setBoardId(result.data!); setCreator("");
-      } else if (panel === "column" && board) {
-        const result = await db().from("kanban_columns").insert({ name, board_id: board.id, position: Math.max(-1, ...boardColumns.map(c => c.position)) + 1 }).select("id").single();
-        if (result.error) throw result.error;
       } else if (panel === "card" && board) {
-        const result = await db().from("kanban_cards").insert({ title: name, description: String(values.get("description") || "").trim(), board_id: board.id, column_id: String(values.get("column")) }).select("id").single();
+        const result = await db().from("kanban_cards").insert({ title: name, description: String(values.get("description") || "").trim(), due_at: values.get("deadline") ? new Date(String(values.get("deadline"))).toISOString() : null, board_id: board.id, column_id: String(values.get("column")) }).select("id").single();
         if (result.error) throw result.error;
         setCreator("");
       } else if (panel === "access" && project) {
@@ -193,7 +193,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
     }, `Moved “${card.title}” to ${boardColumns.find(c => c.id === columnId)?.name}.`, false);
   }
   const deleting = panel === "delete-project" || panel === "delete-board";
-  const panelTitle = deleting ? `Delete ${deleteTarget?.kind}` : panel === "project" ? "Create a project" : panel === "board" ? "Create a board" : panel === "edit-board" ? "Edit Kanban board" : panel === "column" ? "Create a column" : panel === "access" ? "Manage access" : "Create a card";
+  const panelTitle = deleting ? `Delete ${deleteTarget?.kind}` : panel === "project" ? "Create a project" : panel === "board" ? "Create a board" : panel === "edit-board" ? "Edit Kanban board" : panel === "access" ? "Manage access" : "Create a card";
 
   return <section className="kanban-workspace" aria-label="Kanban workspace" aria-busy={busy || loading}>
     <Heading eyebrow="Team workspace" title="Operations board" action={<div className="kanban-actions">
@@ -215,7 +215,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
           {!projectBoards.length && <option value="">No boards yet</option>}{projectBoards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select></label>
         {board && <label>Card creator<select value={creator} onChange={e => setCreator(e.target.value)}><option value="">All card creators</option>{creators.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>}
-        {admin && <div className="kanban-actions"><button className="btn kanban-primary" disabled={busy} onClick={() => open("board")}><Plus size={16} />New board</button><button className="btn secondary" disabled={busy} onClick={() => open("access")}><Users size={16} />Manage access</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("project")}><Trash2 size={16} />Delete project</button></div>}
+        {admin && <div className="kanban-actions"><button className="btn secondary" disabled={busy} onClick={() => open("board")}><Plus size={16} />New board</button><button className="btn secondary" disabled={busy} onClick={() => open("access")}><Users size={16} />Manage access</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("project")}><Trash2 size={16} />Delete project</button></div>}
       </div>
     </>}
     {panel && <section className="panel kanban-editor" aria-label={panelTitle}>
@@ -229,7 +229,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
         </fieldset>
       </form> : <form ref={formRef} className="form" key={`${panel}-${project?.id}-${board?.id}`} onSubmit={submit}>
         <fieldset disabled={busy}>
-          {panel !== "access" ? <label>{panel === "card" ? "Card title" : "Name"}<input name="name" defaultValue={panel === "edit-board" ? board?.name : undefined} required maxLength={panel === "card" ? 200 : 100} placeholder={panel === "project" ? "e.g. Events" : panel === "board" ? "e.g. Paris launch" : panel === "column" ? "e.g. On hold" : "What needs to be done?"} /></label> : <>
+          {panel !== "access" ? <label>{panel === "card" ? "Card title" : "Name"}<input name="name" defaultValue={panel === "edit-board" ? board?.name : undefined} required maxLength={panel === "card" ? 200 : 100} placeholder={panel === "project" ? "e.g. Events" : panel === "board" ? "e.g. Paris launch" : "What needs to be done?"} /></label> : <>
             <p className="muted">Project access includes every current and future board. Board access includes only the selected board. Everyone needs an explicit grant in the candidate portal, including admins and creators. Admins manage all boards only in the admin portal.</p>
             <label>Person<select name="person" required defaultValue=""><option value="" disabled>Select a person</option>{people.map(p => <option key={p.id} value={p.id}>{p.full_name || p.email} · {p.email}</option>)}</select></label>
             <label>Access level<select name="scope"><option value="project">Entire project: {project?.name}</option>{board && <option value="board">Only this board: {board.name}</option>}</select></label>
@@ -243,7 +243,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
             </div>)}
             <button className="btn secondary" type="button" onClick={() => setColumnDrafts(items => [...items, { key: crypto.randomUUID(), name: "", selected: true }])}><Plus size={16} />Add another column</button>
           </fieldset>}
-          {panel === "card" && <><label>Description<textarea name="description" maxLength={4000} rows={3} /></label><label>Column<select name="column" defaultValue={cardColumn || boardColumns[0]?.id} required>{boardColumns.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label><p className="muted">Your name will be recorded automatically as the creator.</p></>}
+          {panel === "card" && <><label>Description<textarea name="description" maxLength={4000} rows={3} /></label><label>Deadline (optional)<input type="datetime-local" name="deadline" /><span className="muted">Your local date and time.</span></label><label>Column<select name="column" defaultValue={cardColumn || boardColumns[0]?.id} required>{boardColumns.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label><p className="muted">Your name will be recorded automatically as the creator.</p></>}
           <button className="btn" type="submit">{busy ? "Saving…" : panel === "access" ? "Grant access" : "Save"}</button>
         </fieldset>
       </form>}
@@ -261,14 +261,15 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </div>}
     </section>}
     {board && <>
-      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag cards between columns to move them.</p></div><div className="kanban-actions">{admin && <button className="btn secondary kanban-magic" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
+      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag cards between columns to move them.</p></div><div className="kanban-actions">{admin && <button className="btn secondary kanban-magic" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
       <div className="kanban-columns" aria-label={`${board.name} columns`}>
         {boardColumns.map(column => {
           const visibleCards = boardCards.filter(c => c.column_id === column.id && (!creator || c.created_by === creator));
           return <section className="kanban-column" key={column.id} aria-label={column.name} onDragOver={e => { if (!busy) e.preventDefault(); }} onDrop={e => { e.preventDefault(); const card = boardCards.find(c => c.id === e.dataTransfer.getData("text/plain")); if (card && !busy) moveCard(card, column.id); }}>
             <header><h3>{column.name}</h3><span>{visibleCards.length}</span></header>
-            {visibleCards.map(card => <article className="kanban-card" key={card.id} draggable={!busy} onDragStart={e => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; }}>
-              <div className="kanban-card-heading"><h4>{card.title}</h4>{admin && <button className="kanban-delete-card" aria-label={`Delete card: ${card.title}`} title="Delete card" disabled={busy} onClick={() => { setError(""); setDeletingCard(card); }}><Trash2 size={14} /></button>}</div>{card.description && <p className="kanban-description">{card.description}</p>}
+            {visibleCards.map(card => <article className="kanban-card" key={card.id} onClick={() => { if (!busy) { setError(""); setSelectedCardId(card.id); } }} draggable={!busy} onDragStart={e => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; }}>
+              <div className="kanban-card-heading"><h4><button className="kanban-card-open" disabled={busy} aria-label={`Open card: ${card.title}`} onClick={event => { event.stopPropagation(); setError(""); setSelectedCardId(card.id); }}>{card.title}</button></h4>{admin && <button className="kanban-delete-card" aria-label={`Delete card: ${card.title}`} title="Delete card" disabled={busy} onClick={event => { event.stopPropagation(); setError(""); setDeletingCard(card); }}><Trash2 size={14} /></button>}</div>{card.description && <p className="kanban-description">{card.description}</p>}
+              {card.due_at && <p className="kanban-deadline">Due <time dateTime={card.due_at}>{new Date(card.due_at).toLocaleString()}</time></p>}
               <span className="kanban-creator" title={`Created by ${card.creator_name}`}>Created by {card.creator_name}</span>
             </article>)}
             {!visibleCards.length && <p className="kanban-empty">{creator ? "No matching cards" : "No cards yet"}</p>}
@@ -276,8 +277,18 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
           </section>;
         })}
       </div>
-      {!boardColumns.length && <Empty title="This board needs a column">{admin ? "Add a column to start creating cards." : "Your admin will set up the columns for this board."}</Empty>}
+      {!boardColumns.length && <Empty title="This board needs a column">{admin ? "Use Edit Kanban board to add a column and start creating cards." : "Your admin will set up the columns for this board."}</Empty>}
     </>}
+    {selectedCard && <CardDetailsDialog key={selectedCard.id} card={selectedCard} columns={boardColumns} admin={admin} busy={busy} error={error} onClose={() => setSelectedCardId(null)} onSave={async changes => {
+      let saved = false;
+      await action(async () => {
+        const result = await db().from("kanban_cards").update(changes).eq("id", selectedCard.id).eq("board_id", selectedCard.board_id).select("*").single();
+        if (result.error) throw result.error;
+        setCards(items => items.map(card => card.id === result.data.id ? result.data : card));
+        saved = true;
+      }, "Card updated.", false);
+      return saved;
+    }} />}
     {admin && deletingCard && <DeleteCardDialog card={deletingCard} busy={busy} error={error} onClose={() => setDeletingCard(null)} onDelete={() => void action(async () => {
       const result = await db().from("kanban_cards").delete().eq("id", deletingCard.id).eq("board_id", deletingCard.board_id).select("id").maybeSingle();
       if (result.error) throw result.error;
@@ -308,5 +319,68 @@ function DeleteCardDialog({ card, busy, error, onClose, onDelete }: { card: Card
       {error && <p role="alert">{error}</p>}
       <div className="kanban-actions"><button type="button" className="btn secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="btn kanban-danger-solid" disabled={busy || confirmation !== "delete"}>{busy ? "Deleting…" : "Delete card"}</button></div>
     </form>
+  </dialog>;
+}
+
+
+function localDateTime(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function CardDetailsDialog({ card, columns, admin, busy, error, onClose, onSave }: {
+  card: Card; columns: Column[]; admin: boolean; busy: boolean; error: string;
+  onClose(): void;
+  onSave(changes: { title: string; description: string; column_id: string; due_at: string | null }): Promise<boolean>;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [validation, setValidation] = useState("");
+  useEffect(() => {
+    const element = dialog.current!;
+    const opener = document.activeElement as HTMLElement | null;
+    element.showModal();
+    return () => { element.close(); opener?.focus(); };
+  }, []);
+  useEffect(() => {
+    if (editing) dialog.current?.querySelector<HTMLInputElement>('input[name="title"]')?.focus();
+  }, [editing]);
+  return <dialog ref={dialog} className="kanban-magic-dialog kanban-card-dialog" aria-labelledby="card-details-title" onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
+    <div className="panel-head">
+      <h2 id="card-details-title">{editing ? "Edit card" : card.title}</h2>
+      <div className="kanban-actions">
+        {admin && !editing && <button className="btn secondary" disabled={busy} onClick={() => { setValidation(""); setEditing(true); }}><Pencil size={14} />Edit</button>}
+        <button className="btn secondary" aria-label="Close card" disabled={busy} onClick={onClose}><X size={16} /></button>
+      </div>
+    </div>
+    {editing ? <form className="form" onSubmit={async event => {
+      event.preventDefault();
+      if (busy || !admin) return;
+      const values = new FormData(event.currentTarget);
+      const title = String(values.get("title") || "").trim();
+      if (!title) { setValidation("Enter a card title."); return; }
+      setValidation("");
+      const saved = await onSave({ title, description: String(values.get("description") || "").trim(), column_id: String(values.get("column")), due_at: values.get("deadline") ? new Date(String(values.get("deadline"))).toISOString() : null });
+      if (saved) setEditing(false);
+    }}>
+      <fieldset disabled={busy}>
+        <label>Card title<input name="title" defaultValue={card.title} required maxLength={200} /></label>
+        <label>Description<textarea name="description" defaultValue={card.description} rows={10} maxLength={4000} placeholder="Describe what needs to be done, the steps, and the expected outcome." /></label>
+        <label>Status<select name="column" defaultValue={card.column_id}>{columns.map(column => <option key={column.id} value={column.id}>{column.name}</option>)}</select></label>
+        <label>Deadline (optional)<input name="deadline" type="datetime-local" defaultValue={localDateTime(card.due_at)} /><span className="muted">Your local date and time. Clear the field to remove the deadline.</span></label>
+        {(validation || error) && <p role="alert">{validation || error}</p>}
+        <div className="kanban-actions"><button type="submit" className="btn">{busy ? "Saving…" : "Save changes"}</button><button type="button" className="btn secondary" onClick={() => setEditing(false)}>Cancel</button></div>
+      </fieldset>
+    </form> : <>
+      <dl className="kanban-card-metadata">
+        <div><dt>Status</dt><dd>{columns.find(column => column.id === card.column_id)?.name}</dd></div>
+        <div><dt>Created by</dt><dd>{card.creator_name}</dd></div>
+        <div><dt>Created</dt><dd><time dateTime={card.created_at}>{new Date(card.created_at).toLocaleString()}</time></dd></div>
+        <div><dt>Deadline</dt><dd>{card.due_at ? <time dateTime={card.due_at}>{new Date(card.due_at).toLocaleString()}</time> : "No deadline"}</dd></div>
+      </dl>
+      <h3>Description</h3>
+      <p className="kanban-full-description">{card.description || "No description yet."}</p>
+    </>}
   </dialog>;
 }

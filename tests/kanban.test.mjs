@@ -31,6 +31,7 @@ test('Kanban permissions, inheritance, attribution, isolation, and revocation', 
     await db.exec(await readFile(new URL('../supabase/migrations/20260924215339_kanban_portal_access_and_creators.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/20260924215546_kanban_board_editing.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/20260924220030_kanban_admin_card_deletion.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20260924220938_kanban_card_details.sql', import.meta.url), 'utf8'));
     const admin = '10000000-0000-4000-8000-000000000001';
     const candidate = '10000000-0000-4000-8000-000000000002';
     const outsider = '10000000-0000-4000-8000-000000000003';
@@ -81,6 +82,16 @@ test('Kanban permissions, inheritance, attribution, isolation, and revocation', 
     const siblingColumn = (await rows('kanban_columns')).find(c => c.board_id === sibling.id);
     const adminCard = await insert("insert into kanban_cards(board_id,column_id,title) values($1,$2,'Admin task') returning *", [board.id, columns[0].id]);
     assert.equal(adminCard.creator_name, 'Admin Alex');
+    const edited = await insert("update kanban_cards set title='Updated task', description=E'First step\\nSecond step', due_at='2026-10-01 15:30:00+00' where id=$1 returning *", [adminCard.id]);
+    assert.equal(edited.title, 'Updated task');
+    assert.equal(edited.description, 'First step\nSecond step');
+    assert.equal(new Date(edited.due_at).toISOString(), '2026-10-01T15:30:00.000Z');
+    assert.equal(edited.created_by, admin);
+    await denied("update kanban_cards set title=' ' where id=$1", [adminCard.id], '23514');
+    await denied("update kanban_cards set description=$1 where id=$2", ['x'.repeat(4001), adminCard.id], '23514');
+    await db.query('update kanban_cards set due_at=null where id=$1', [adminCard.id]);
+    assert.equal((await rows('kanban_cards')).find(c => c.id === adminCard.id).due_at, null);
+
     assert.equal(project.created_by, admin);
     assert.equal(project.creator_name, 'Admin Alex');
     assert.equal(board.created_by, admin);
@@ -108,6 +119,9 @@ test('Kanban permissions, inheritance, attribution, isolation, and revocation', 
     assert.equal((await rows('kanban_columns')).length, 4);
     assert.equal((await rows('kanban_cards')).length, 1);
     await db.query('update kanban_cards set column_id=$1 where id=$2', [columns[1].id,adminCard.id]);
+    await denied("update kanban_cards set title='Forbidden' where id=$1", [adminCard.id]);
+    await denied("update kanban_cards set due_at=now() where id=$1", [adminCard.id]);
+
     await denied("insert into kanban_boards(project_id,name) values($1,'Candidate admin')", [project.id]);
     await denied("insert into kanban_columns(board_id,name) values($1,'Candidate admin')", [board.id]);
     assert.equal((await db.query('delete from kanban_projects where id=$1 returning id', [project.id])).rows.length, 0);
@@ -146,10 +160,16 @@ test('Kanban permissions, inheritance, attribution, isolation, and revocation', 
     assert.equal(card.created_by, candidate); assert.equal(card.creator_name, 'Candidate Casey');
     await db.query('update kanban_cards set column_id=$1 where id=$2', [columns[1].id,card.id]);
     await db.query('update kanban_cards set column_id=$1 where id=$2', [columns[1].id,adminCard.id]);
+    await denied("update kanban_cards set title='Forbidden' where id=$1", [adminCard.id]);
+    await denied("update kanban_cards set due_at=now() where id=$1", [adminCard.id]);
+
     assert.ok((await rows('kanban_cards')).every(c => c.column_id === columns[1].id));
     await denied('update kanban_cards set column_id=$1 where id=$2', [siblingColumn.id,card.id], '23503');
     await denied("update kanban_cards set creator_name='Spoof' where id=$1", [card.id]);
     await denied("update kanban_cards set title='Edit' where id=$1", [card.id]);
+    await denied("update kanban_cards set description='Forbidden' where id=$1", [card.id]);
+    await denied("update kanban_cards set due_at=now() where id=$1", [card.id]);
+
     await denied('update kanban_cards set board_id=$1 where id=$2', [secret.id,card.id]);
     assert.equal((await db.query('delete from kanban_cards where id=$1 returning id', [card.id])).rows.length, 0, 'candidate cannot delete a card');
     for (const [table, id] of [['kanban_projects', project.id], ['kanban_boards', board.id]]) {

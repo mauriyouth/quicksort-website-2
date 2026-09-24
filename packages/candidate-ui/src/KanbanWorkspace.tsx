@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Columns3, Plus, RefreshCw, Trash2, Users, X } from "lucide-react";
+import { Columns3, Plus, RefreshCw, Sparkles, Trash2, Users, X } from "lucide-react";
 import { db, errorMessage, type Row } from "@quicksort/candidate-db";
 import { Empty, Heading, Notice } from "./index";
 import "./kanban.css";
+import { MagicDesign } from "./MagicDesign";
 
 type Project = Row<"kanban_projects">;
 type Board = Row<"kanban_boards">;
@@ -32,6 +33,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const [projectId, setProjectId] = useState("");
   const [boardId, setBoardId] = useState("");
   const [creator, setCreator] = useState("");
+  const [magicOpen, setMagicOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ kind: "project" | "board"; id: string; name: string } | null>(null);
   const [confirmation, setConfirmation] = useState("");
@@ -90,6 +92,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const creators = [...new Map(boardCards.map(c => [c.created_by, c.creator_name])).entries()];
   useEffect(() => {
     setPanel(null);
+    setMagicOpen(false);
     setCreator("");
   }, [project?.id, board?.id]);
   const personName = (id: string) => people.find(p => p.id === id)?.full_name || people.find(p => p.id === id)?.email || "Workspace member";
@@ -234,7 +237,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </div>}
     </section>}
     {board && <>
-      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag a card or use its column selector to move it.</p></div>{admin && <div className="kanban-actions"><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></div>}</div>
+      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag a card or use its column selector to move it.</p></div><div className="kanban-actions">{admin && <button className="btn secondary small" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
       <div className="kanban-columns" aria-label={`${board.name} columns`}>
         {boardColumns.map(column => {
           const visibleCards = boardCards.filter(c => c.column_id === column.id && (!creator || c.created_by === creator));
@@ -252,6 +255,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </div>
       {!boardColumns.length && <Empty title="This board needs a column">{admin ? "Add a column to start creating cards." : "Your admin will set up the columns for this board."}</Empty>}
     </>}
+    {admin && magicOpen && board && <MagicDesign key={board.id} boardId={board.id} boardName={board.name} columns={boardColumns} onClose={() => setMagicOpen(false)} onSaved={count => { setMagicOpen(false); setCreator(""); setMessage(`${count} ${count === 1 ? "card" : "cards"} added.`); void load(); }} />}
     {project && !board && !loading && <Empty title="No boards in this project">{admin ? "Create a board for your first event, initiative, or workstream." : "Your admin has not shared a board here yet."}</Empty>}
   </section>;
 }

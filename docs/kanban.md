@@ -38,3 +38,11 @@ For a reproducible local visual fixture, run `node tests/kanban-preview/server.m
 Apply `supabase/migrations/20260924213447_kanban_admin_deletion.sql` before deploying the updated admin UI. This grants parent-table DELETE only through admin RLS policies; existing foreign keys cascade child deletion atomically. No existing records are deleted by the migration.
 
 Deletion validation: database tests and portal type checks pass. Browser fixture checks verified exact-name matching for boards/projects, case and trailing-space mismatches, cancellation, and absence of deletion controls for candidates. The deletion migration was applied to production with user approval; both admin-only DELETE policies were verified.
+
+## Magic design
+
+Only admins have a small **Magic design** button beside the board actions. It opens a keyboard-accessible modal for instructions (up to 6,000 characters). Vercel AI SDK generates 1–20 card drafts using the requested language, count, content, and existing board columns. Users can edit titles, descriptions, and columns or remove drafts before adding them in one batch. Escape or the close button cancels generation; saving holds the dialog open until complete.
+
+The admin API checks the caller's session, admin role, and board access using the existing RLS policies before calling the model. Only the prompt, board name, and columns are sent to the provider. Generated column IDs and card lengths are validated. Cards are saved using the caller's database session, preserving creator attribution and permissions. No database migration is required.
+
+Magic design reuses Settings → AI configuration (including its environment fallback). Only the admin project exposes `/api/generate-cards`; candidates have no AI endpoint and cannot call the admin endpoint. Candidates can still create cards manually. No candidate AI key is needed. Use Vercel's local development environment for real API calls, since plain Vite serves only the frontend.

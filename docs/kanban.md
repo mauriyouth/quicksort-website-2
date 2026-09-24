@@ -8,11 +8,11 @@ Both portals expose **Kanban boards** at `/kanban`. The implementation is shared
 - A project grant includes every current and future board in that project. A board grant includes only that board; its parent project is visible for navigation, but sibling boards remain hidden.
 - Candidates can view accessible boards, create cards, and move any card within those boards. They cannot change project/board/column structure, edit card content, delete cards, or grant access.
 - Removing a project grant preserves any direct board grants. Removing a board grant does not cancel project-level access. The access panel describes this explicitly.
-- Every new board starts with To do, In progress, Blocked, and Done. Admins can add columns such as On hold.
+- Board creation preselects To do, In progress, Blocked, and Done. Admins can uncheck defaults, rename selected columns, and add custom columns. At least one uniquely named column is required. **Edit Kanban board** renames the board and its columns or adds columns in one atomic save. Column IDs stay unchanged, preserving cards and references. Both portals read these names from the same records; candidate views refresh on focus, manually, or within 30 seconds.
 - Card creators are stamped in the database with the authenticated profile ID and a display-name snapshot (email fallback). The browser cannot supply or change this attribution.
 - Both dragging and an accessible status selector move cards. Changes are saved before being shown as complete. The workspace refreshes on focus and every 30 seconds.
 - Admins can delete a project or board after typing its exact name (case and spaces must match). The confirmation explains the permanent cascade to contained boards, columns, cards, and access grants. Candidates cannot delete projects or boards.
-- This scope does not include editing projects/boards or editing/deleting individual columns or cards, card assignment, comments, attachments, or within-column ordering.
+- This scope does not include editing projects, deleting individual columns, or editing/deleting cards, card assignment, comments, attachments, or within-column ordering.
 
 ## Database rollout
 
@@ -46,3 +46,7 @@ Only admins have a small **Magic design** button beside the board actions. It op
 The admin API checks the caller's session, admin role, and board access using the existing RLS policies before calling the model. Only the prompt, board name, and columns are sent to the provider. Generated column IDs and card lengths are validated. Cards are saved using the caller's database session, preserving creator attribution and permissions. No database migration is required.
 
 Magic design reuses Settings → AI configuration (including its environment fallback). Only the admin project exposes `/api/generate-cards`; candidates have no AI endpoint and cannot call the admin endpoint. Candidates can still create cards manually. No candidate AI key is needed. Use Vercel's local development environment for real API calls, since plain Vite serves only the frontend.
+
+## Board editing rollout
+
+Apply `supabase/migrations/20260924215546_kanban_board_editing.sql` before deploying these UI changes. It adds an admin-only, RLS-enforced atomic save function and name-update permissions. Existing boards and cards are preserved. The creation function replaces legacy default columns within its transaction. Candidate structure edits remain forbidden. This migration was applied to production project `kupbvrnjppcwqxmzxasi` on 2026-09-24. Its invoker security, anonymous denial, and admin-only update policies were verified. Local database tests, both portal builds, and browser checks passed.

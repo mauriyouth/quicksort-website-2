@@ -27,6 +27,7 @@ test('Kanban permissions, inheritance, attribution, isolation, and revocation', 
     `);
     await db.exec(await readFile(new URL('../supabase/migrations/20260924182406_kanban_workspace.sql', import.meta.url), 'utf8'));
     await db.exec(await readFile(new URL('../supabase/migrations/20260924213447_kanban_admin_deletion.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20260924215546_kanban_board_editing.sql', import.meta.url), 'utf8'));
     const admin = '10000000-0000-4000-8000-000000000001';
     const candidate = '10000000-0000-4000-8000-000000000002';
     const outsider = '10000000-0000-4000-8000-000000000003';
@@ -40,6 +41,32 @@ test('Kanban permissions, inheritance, attribution, isolation, and revocation', 
     const board = await insert("insert into kanban_boards(project_id,name) values($1,'Event 1') returning *", [project.id]);
     const sibling = await insert("insert into kanban_boards(project_id,name) values($1,'Event 2') returning *", [project.id]);
     const secret = await insert("insert into kanban_boards(project_id,name) values($1,'Secret') returning *", [secretProject.id]);
+    const save = async (projectId, name, drafts, boardId = null) => (await db.query('select save_kanban_board($1,$2,$3::jsonb,$4) as id', [projectId, name, JSON.stringify(drafts), boardId])).rows[0].id;
+    const custom = await save(project.id, 'Custom workflow', [{name:'Queued'}, {name:'Review'}]);
+    const customColumns = (await rows('kanban_columns')).filter(c => c.board_id === custom);
+    assert.deepEqual(customColumns.map(c => c.name), ['Queued', 'Review']);
+    const linkedCard = await insert("insert into kanban_cards(board_id,column_id,title) values($1,$2,'Keep me') returning *", [custom, customColumns[0].id]);
+    await db.query('insert into kanban_board_members(board_id,user_id) values($1,$2)', [custom, candidate]);
+    const drafts = customColumns.map((c,i) => ({id:c.id, name:i === 0 ? 'Ready' : c.name}));
+    await save(project.id, 'Renamed workflow', [...drafts, {name:'Completed'}], custom);
+    await as(candidate);
+    assert.equal((await rows('kanban_boards')).find(b => b.id === custom).name, 'Renamed workflow');
+    assert.equal((await rows('kanban_columns')).find(c => c.id === linkedCard.column_id).name, 'Ready');
+    assert.equal((await rows('kanban_cards')).find(c => c.id === linkedCard.id).column_id, customColumns[0].id);
+    await assert.rejects(save(project.id, 'Forbidden', drafts, custom), e => e.code === '42501');
+    assert.equal((await db.query("update kanban_columns set name='Forbidden' where id=$1 returning id", [customColumns[0].id])).rows.length, 0);
+    assert.equal((await db.query("update kanban_boards set name='Forbidden' where id=$1 returning id", [custom])).rows.length, 0);
+    await as(admin);
+    const allDrafts = (await rows('kanban_columns')).filter(c => c.board_id === custom).map(c => ({id:c.id,name:c.name}));
+    await assert.rejects(save(project.id, 'Partial change', [...allDrafts, {id:'20000000-0000-4000-8000-000000000001', name:'Wrong board'}], custom), e => e.code === '22023');
+    assert.equal((await rows('kanban_boards')).find(b => b.id === custom).name, 'Renamed workflow', 'failed edits roll back the board name too');
+    await assert.rejects(save(project.id, 'Missing column', drafts, custom), e => e.code === '22023');
+    for (const invalid of [[], [{name:' '}], [{name:'Same'}, {name:' same '}], [{name:'x'.repeat(101)}]]) {
+      await assert.rejects(save(project.id, 'Invalid', invalid), e => e.code === '22023');
+    }
+    assert.ok(!(await rows('kanban_boards')).some(b => b.name === 'Invalid'));
+    await denied('delete from kanban_columns where id=$1', [customColumns[0].id], '23503');
+    await db.query('delete from kanban_boards where id=$1', [custom]);
     const columns = (await rows('kanban_columns')).filter(c => c.board_id === board.id);
     assert.equal(columns.length, 4, 'board and default columns are created atomically');
     const secretColumn = (await rows('kanban_columns')).find(c => c.board_id === secret.id);

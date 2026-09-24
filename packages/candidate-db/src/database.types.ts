@@ -367,6 +367,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      save_kanban_board: { Args: { target_project: string; board_name: string; column_drafts: Json; target_board?: string }; Returns: string };
       sync_clerk_profile: { Args: Record<PropertyKey, never>; Returns: string };
       review_admin_access: {
         Args: { decision: string; target_email: string }

@@ -1,14 +1,16 @@
+import { APICallError, generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { encryptApiKey, settingsReady } from "../server/ai-settings.ts";
+import { encryptApiKey, loadAiSettings, settingsReady } from "../server/ai-settings.ts";
 
 type Request = { method?: string; headers: Record<string, string | string[] | undefined>; body: unknown };
 type Response = { setHeader(name: string, value: string): void; status(code: number): Response; json(body: unknown): void };
-const inputSchema = z.object({ apiKey: z.string().trim().min(20).max(1000).regex(/^sk-[^\s]+$/), model: z.string().trim().min(1).max(120).regex(/^[a-zA-Z0-9._-]+$/) });
-export function createSettingsHandler(deps = { createClient }) {
+const inputSchema = z.object({ apiKey: z.string().trim().min(20).max(1000).regex(/^sk-[^\s]+$/).optional(), model: z.string().trim().min(1).max(120).regex(/^[a-zA-Z0-9._-]+$/) });
+export function createSettingsHandler(deps = { createClient, generateText, loadAiSettings }) {
   return async (req: Request, res: Response) => {
     res.setHeader("Cache-Control", "no-store");
-    if (!["GET", "PUT", "DELETE"].includes(req.method || "")) { res.setHeader("Allow", "GET, PUT, DELETE"); return res.status(405).json({ error: "Method not allowed." }); }
+    if (!["GET", "PUT", "POST", "DELETE"].includes(req.method || "")) { res.setHeader("Allow", "GET, PUT, POST, DELETE"); return res.status(405).json({ error: "Method not allowed." }); }
     const token = req.headers.authorization;
     if (typeof token !== "string" || !token.startsWith("Bearer ")) return res.status(401).json({ error: "Sign in to manage AI settings." });
     const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -30,9 +32,36 @@ export function createSettingsHandler(deps = { createClient }) {
         if (result.error) throw result.error;
         return res.status(200).json({ saved: false });
       }
-      if (!settingsReady()) return res.status(503).json({ error: "Set AI_SETTINGS_ENCRYPTION_KEY on the server before saving API keys." });
       const parsed = inputSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "Enter an OpenAI API key starting with sk- and a valid model ID." });
+      if (req.method === "POST") {
+        const apiKey = parsed.data.apiKey || (await deps.loadAiSettings(client)).apiKey;
+        if (!apiKey) return res.status(400).json({ error: "Add an API key before testing the connection." });
+        try {
+          await deps.generateText({
+            model: createOpenAI({ apiKey })(parsed.data.model),
+            prompt: "Reply with OK.", maxOutputTokens: 128, maxRetries: 0,
+            abortSignal: AbortSignal.timeout(20000),
+            providerOptions: { openai: { store: false } },
+          });
+          return res.status(200).json({ connected: true, model: parsed.data.model });
+        } catch (error) {
+          const code = APICallError.isInstance(error) ? error.statusCode : undefined;
+          const message = code === 401 ? "OpenAI rejected the API key. Check or replace it."
+            : code === 403 || code === 404 ? "The selected model is unavailable to this API key. Check the model ID and access."
+            : code === 429 ? "OpenAI quota or rate limit reached. Check billing and try again."
+            : code === 400 ? "OpenAI rejected the request. Check that the model supports text responses."
+            : "Could not connect to OpenAI. The request may have timed out; try again.";
+          return res.status(502).json({ error: message });
+        }
+      }
+      if (!settingsReady()) return res.status(503).json({ error: "Set AI_SETTINGS_ENCRYPTION_KEY on the server before saving API keys." });
+      if (!parsed.data.apiKey) {
+        const { data, error } = await client.from("ai_settings").update({ model: parsed.data.model, updated_at: new Date().toISOString() }).eq("id", "cv-analyzer").select("id").maybeSingle();
+        if (error) throw error;
+        if (!data) return res.status(400).json({ error: "Save an API key before changing the model." });
+        return res.status(200).json({ saved: true });
+      }
       const result = await client.from("ai_settings").upsert({ id: "cv-analyzer", encrypted_key: encryptApiKey(parsed.data.apiKey), model: parsed.data.model, updated_at: new Date().toISOString() }, { onConflict: "id" });
       if (result.error) throw result.error;
       return res.status(200).json({ saved: true });

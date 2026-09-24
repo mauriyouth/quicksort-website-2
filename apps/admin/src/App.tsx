@@ -1,3 +1,4 @@
+import { KanbanWorkspace } from "@quicksort/candidate-ui/kanban";
 import { AnalysisHistory } from "./AnalysisHistory";
 import { BlogManager } from "./BlogManager";
 import { CvAnalyzer } from "./CvAnalyzer";
@@ -10,6 +11,7 @@ import {
   FileText,
   KeyRound,
   LayoutDashboard,
+  Columns3,
   Plus,
   Search,
   ArrowUpRight,
@@ -40,6 +42,7 @@ import {
 } from "@quicksort/candidate-ui";
 const nav = [
   { id: "overview", href: "/overview", label: "Overview", icon: LayoutDashboard },
+  { id: "kanban", href: "/kanban", label: "Kanban boards", icon: Columns3 },
   { id: "jobs", href: "/jobs", label: "Job posts", icon: BriefcaseBusiness },
   { id: "analyzer", href: "/cv-analyzer", label: "CV analyzer", icon: FileText },
   { id: "history", href: "/analysis-history", label: "Analysis history", icon: FileText },
@@ -210,6 +213,7 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       current={tab}
       onNavigate={navigate}
     >
+      {tab === "kanban" && <KanbanWorkspace admin={true} />}
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
       {tab === "access" && isOwner && <AccessManager />}

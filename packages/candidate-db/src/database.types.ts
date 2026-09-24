@@ -15,6 +15,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      kanban_projects: { Row: { id: string; name: string; created_at: string }; Insert: { name: string }; Update: { name?: string }; Relationships: [] };
+      kanban_boards: { Row: { id: string; project_id: string; name: string; created_at: string }; Insert: { project_id: string; name: string }; Update: { name?: string }; Relationships: [] };
+      kanban_columns: { Row: { id: string; board_id: string; name: string; position: number }; Insert: { board_id: string; name: string; position: number }; Update: { name?: string; position?: number }; Relationships: [] };
+      kanban_cards: { Row: { id: string; board_id: string; column_id: string; title: string; description: string; created_by: string; creator_name: string; created_at: string }; Insert: { board_id: string; column_id: string; title: string; description?: string }; Update: { column_id?: string }; Relationships: [] };
+      kanban_project_members: { Row: { project_id: string; user_id: string }; Insert: { project_id: string; user_id: string }; Update: never; Relationships: [] };
+      kanban_board_members: { Row: { board_id: string; user_id: string }; Insert: { board_id: string; user_id: string }; Update: never; Relationships: [] };
       blog_posts: { Row: BlogRecord; Insert: BlogInsert; Update: Partial<BlogRecord>; Relationships: [] };
       admin_access_audit: {
         Row: {

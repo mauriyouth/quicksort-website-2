@@ -1,6 +1,8 @@
+import { KanbanWorkspace } from "@quicksort/candidate-ui/kanban";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   LayoutDashboard,
+  Columns3,
   Upload,
   FileText,
   KeyRound,
@@ -34,6 +36,7 @@ import {
 import { TeamPhotos } from './TeamPhotos';
 const nav = [
   { id: "overview", href: "/onboarding", label: "My onboarding", icon: LayoutDashboard },
+  { id: "kanban", href: "/kanban", label: "Kanban boards", icon: Columns3 },
   { id: "documents", href: "/documents", label: "My documents", icon: Upload },
   { id: "contracts", href: "/contracts", label: "My contracts", icon: FileText },
   { id: "requests", href: "/tool-access", label: "Tool access", icon: KeyRound },
@@ -205,6 +208,7 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
       current={tab}
       onNavigate={navigate}
     >
+      {tab === "kanban" && <KanbanWorkspace admin={false} />}
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
       {tab === "photos" && <TeamPhotos />}

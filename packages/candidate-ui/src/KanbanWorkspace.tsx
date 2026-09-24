@@ -33,6 +33,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const [projectId, setProjectId] = useState("");
   const [boardId, setBoardId] = useState("");
   const [creator, setCreator] = useState("");
+  const [deletingCard, setDeletingCard] = useState<Card | null>(null);
   const [magicOpen, setMagicOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ kind: "project" | "board"; id: string; name: string } | null>(null);
@@ -64,7 +65,12 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       setProjects(p.data || []); setBoards(b.data || []); setColumns(c.data || []); setCards(t.data || []);
       setPeople(users.data || []); setProjectMembers(pm.data || []); setBoardMembers(bm.data || []);
     } catch (err) {
-      if (version === request.current) setError(errorMessage(err));
+      if (version === request.current) {
+        setProjects([]); setBoards([]); setColumns([]); setCards([]);
+        setPeople([]); setProjectMembers([]); setBoardMembers([]);
+        setPanel(null);
+        setError(errorMessage(err));
+      }
     } finally {
       if (version === request.current) setLoading(false);
     }
@@ -89,6 +95,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   useEffect(() => {
     setPanel(null);
     setMagicOpen(false);
+    setDeletingCard(null);
     setCreator("");
   }, [project?.id, board?.id]);
   const personName = (id: string) => people.find(p => p.id === id)?.full_name || people.find(p => p.id === id)?.email || "Workspace member";
@@ -195,7 +202,8 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
     </div>}>
       {admin ? "Organize work across projects. Give your team access to the boards they need." : "Your shared projects and boards. Create cards and keep work moving."}
     </Heading>
-    <Notice error>{error}</Notice><Notice>{message}</Notice>
+    <Notice error>{error}</Notice>
+    <span className="kanban-announcement" role="status">{message}</span>
     {loading && <p role="status">Loading your boards…</p>}
     {!loading && !projects.length && !error && <Empty title={admin ? "A space for every project" : "No boards shared yet"}>
       {admin ? "Create your first project for sales, events, marketing, or internal work." : "Your admin can give you access to a project or a specific board."}
@@ -206,8 +214,8 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
         <label>Board<select value={board?.id || ""} disabled={busy || !projectBoards.length} onChange={e => { setBoardId(e.target.value); setCreator(""); setPanel(null); }}>
           {!projectBoards.length && <option value="">No boards yet</option>}{projectBoards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select></label>
-        {board && <label>Created by<select value={creator} onChange={e => setCreator(e.target.value)}><option value="">All creators</option>{creators.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>}
-        {admin && <div className="kanban-actions"><button className="btn secondary" disabled={busy} onClick={() => open("board")}><Plus size={16} />New board</button><button className="btn secondary" disabled={busy} onClick={() => open("access")}><Users size={16} />Manage access</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("project")}><Trash2 size={16} />Delete project</button></div>}
+        {board && <label>Card creator<select value={creator} onChange={e => setCreator(e.target.value)}><option value="">All card creators</option>{creators.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>}
+        {admin && <div className="kanban-actions"><button className="btn kanban-primary" disabled={busy} onClick={() => open("board")}><Plus size={16} />New board</button><button className="btn secondary" disabled={busy} onClick={() => open("access")}><Users size={16} />Manage access</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("project")}><Trash2 size={16} />Delete project</button></div>}
       </div>
     </>}
     {panel && <section className="panel kanban-editor" aria-label={panelTitle}>
@@ -222,7 +230,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </form> : <form ref={formRef} className="form" key={`${panel}-${project?.id}-${board?.id}`} onSubmit={submit}>
         <fieldset disabled={busy}>
           {panel !== "access" ? <label>{panel === "card" ? "Card title" : "Name"}<input name="name" defaultValue={panel === "edit-board" ? board?.name : undefined} required maxLength={panel === "card" ? 200 : 100} placeholder={panel === "project" ? "e.g. Events" : panel === "board" ? "e.g. Paris launch" : panel === "column" ? "e.g. On hold" : "What needs to be done?"} /></label> : <>
-            <p className="muted">Project access includes every current and future board. Board access includes only the selected board. Admins can see all boards.</p>
+            <p className="muted">Project access includes every current and future board. Board access includes only the selected board. Everyone needs an explicit grant in the candidate portal, including admins and creators. Admins manage all boards only in the admin portal.</p>
             <label>Person<select name="person" required defaultValue=""><option value="" disabled>Select a person</option>{people.map(p => <option key={p.id} value={p.id}>{p.full_name || p.email} · {p.email}</option>)}</select></label>
             <label>Access level<select name="scope"><option value="project">Entire project: {project?.name}</option>{board && <option value="board">Only this board: {board.name}</option>}</select></label>
           </>}
@@ -253,14 +261,14 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </div>}
     </section>}
     {board && <>
-      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag cards between columns to move them.</p></div><div className="kanban-actions">{admin && <button className="btn secondary small" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
+      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag cards between columns to move them.</p></div><div className="kanban-actions">{admin && <button className="btn secondary kanban-magic" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary" disabled={busy} onClick={() => open("column")}><Plus size={16} />Add column</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
       <div className="kanban-columns" aria-label={`${board.name} columns`}>
         {boardColumns.map(column => {
           const visibleCards = boardCards.filter(c => c.column_id === column.id && (!creator || c.created_by === creator));
           return <section className="kanban-column" key={column.id} aria-label={column.name} onDragOver={e => { if (!busy) e.preventDefault(); }} onDrop={e => { e.preventDefault(); const card = boardCards.find(c => c.id === e.dataTransfer.getData("text/plain")); if (card && !busy) moveCard(card, column.id); }}>
             <header><h3>{column.name}</h3><span>{visibleCards.length}</span></header>
             {visibleCards.map(card => <article className="kanban-card" key={card.id} draggable={!busy} onDragStart={e => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; }}>
-              <h4>{card.title}</h4>{card.description && <p className="kanban-description">{card.description}</p>}
+              <div className="kanban-card-heading"><h4>{card.title}</h4>{admin && <button className="kanban-delete-card" aria-label={`Delete card: ${card.title}`} title="Delete card" disabled={busy} onClick={() => { setError(""); setDeletingCard(card); }}><Trash2 size={14} /></button>}</div>{card.description && <p className="kanban-description">{card.description}</p>}
               <span className="kanban-creator" title={`Created by ${card.creator_name}`}>Created by {card.creator_name}</span>
             </article>)}
             {!visibleCards.length && <p className="kanban-empty">{creator ? "No matching cards" : "No cards yet"}</p>}
@@ -270,7 +278,35 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </div>
       {!boardColumns.length && <Empty title="This board needs a column">{admin ? "Add a column to start creating cards." : "Your admin will set up the columns for this board."}</Empty>}
     </>}
+    {admin && deletingCard && <DeleteCardDialog card={deletingCard} busy={busy} error={error} onClose={() => setDeletingCard(null)} onDelete={() => void action(async () => {
+      const result = await db().from("kanban_cards").delete().eq("id", deletingCard.id).eq("board_id", deletingCard.board_id).select("id").maybeSingle();
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error("This card is no longer available or you no longer have permission to delete it.");
+      setCards(items => items.filter(card => card.id !== deletingCard.id));
+      setDeletingCard(null);
+    }, "Card deleted.", false)} />}
     {admin && magicOpen && board && <MagicDesign key={board.id} boardId={board.id} boardName={board.name} columns={boardColumns} onClose={() => setMagicOpen(false)} onSaved={count => { setMagicOpen(false); setCreator(""); setMessage(`${count} ${count === 1 ? "card" : "cards"} added.`); void load(); }} />}
     {project && !board && !loading && <Empty title="No boards in this project">{admin ? "Create a board for your first event, initiative, or workstream." : "Your admin has not shared a board here yet."}</Empty>}
   </section>;
+}
+
+function DeleteCardDialog({ card, busy, error, onClose, onDelete }: { card: Card; busy: boolean; error: string; onClose(): void; onDelete(): void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [confirmation, setConfirmation] = useState("");
+  useEffect(() => {
+    const element = dialog.current!;
+    const opener = document.activeElement as HTMLElement | null;
+    element.showModal();
+    element.querySelector<HTMLInputElement>("input")?.focus();
+    return () => { element.close(); opener?.focus(); };
+  }, []);
+  return <dialog ref={dialog} className="kanban-magic-dialog" aria-labelledby="delete-card-title" onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
+    <h2 id="delete-card-title">Delete card</h2>
+    <p>Permanently delete <strong>{card.title}</strong>? This cannot be undone.</p>
+    <form className="form" onSubmit={event => { event.preventDefault(); if (!busy && confirmation === "delete") onDelete(); }}>
+      <label>Type delete to confirm<input value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} autoComplete="off" spellCheck={false} /></label>
+      {error && <p role="alert">{error}</p>}
+      <div className="kanban-actions"><button type="button" className="btn secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="btn kanban-danger-solid" disabled={busy || confirmation !== "delete"}>{busy ? "Deleting…" : "Delete card"}</button></div>
+    </form>
+  </dialog>;
 }

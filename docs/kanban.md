@@ -12,7 +12,7 @@ Both portals expose **Kanban boards** at `/kanban`. The implementation is shared
 - Card creators are stamped in the database with the authenticated profile ID and a display-name snapshot (email fallback). The browser cannot supply or change this attribution.
 - Drag cards between columns to move them. Cards do not show a movement dropdown. Changes are saved before being shown as complete. The workspace refreshes on focus and every 30 seconds.
 - Admins can delete a project or board after typing its exact name (case and spaces must match). The confirmation explains the permanent cascade to contained boards, columns, cards, and access grants. Candidates cannot delete projects or boards.
-- This scope does not include editing projects, deleting individual columns, or editing/deleting cards, card assignment, comments, attachments, or within-column ordering.
+- This scope does not include editing projects, deleting individual columns, or editing cards, card assignment, comments, attachments, or within-column ordering.
 
 ## Database rollout
 
@@ -50,3 +50,7 @@ Magic design reuses Settings → AI configuration (including its environment fal
 ## Board editing rollout
 
 Apply `supabase/migrations/20260924215546_kanban_board_editing.sql` before deploying these UI changes. It adds an admin-only, RLS-enforced atomic save function and name-update permissions. Existing boards and cards are preserved. The creation function replaces legacy default columns within its transaction. Candidate structure edits remain forbidden. This migration was applied to production project `kupbvrnjppcwqxmzxasi` on 2026-09-24. Its invoker security, anonymous denial, and admin-only update policies were verified. Local database tests, both portal builds, and browser checks passed.
+
+## Card deletion
+
+Admins see a small trash button on each card. Its confirmation dialog requires the exact word `delete` before enabling deletion. Candidates do not see the button; the `cards_delete` database policy restricts DELETE to `private.kanban_admin()`. Apply `20260924220030_kanban_admin_card_deletion.sql` before deploying this UI. The migration does not delete existing data.

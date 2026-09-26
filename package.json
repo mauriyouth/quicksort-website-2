@@ -5,7 +5,7 @@
   "scripts": {
     "dev:web": "pnpm --filter @quicksort/web dev",
     "dev:admin": "pnpm --filter @quicksort/admin dev",
-    "dev:candidate": "pnpm --filter @quicksort/candidate dev",
+    "dev": "pnpm --filter @quicksort/admin dev",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",

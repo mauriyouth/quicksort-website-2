@@ -1,0 +1,91 @@
+/* Unified section header (src/SectionHeader.tsx) — the same top menu on
+   every page, replacing the shell's breadcrumb top bar and the former
+   per-section tab rows.
+
+   The header lives inside .content (max-width: 1320px, centered, padded
+   44px). The hairline must touch the left and right edges of the
+   workspace, so the header breaks out of the content box: it negates the
+   content padding plus, on very wide screens where the content column is
+   centered, half the leftover gap — computed from the viewport and the
+   sidebar width (248px, 76px collapsed, 210px below 1050px; below 700px
+   the content is never capped so no bleed is needed). .workspace clips
+   any sub-pixel overshoot from the 100vw math so no horizontal scrollbar
+   can appear. Links get text-decoration: none (the global reset only sets
+   color on anchors). The hairline is painted inside the content box so
+   the active tab's 2px border sits ON the line. */
+.section-header {
+  --sb: 248px;
+  --edge: 44px;
+  --bleed: max(0px, (100vw - var(--sb) - 1320px) / 2);
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  margin: -6px calc(-1 * (var(--edge) + var(--bleed))) 30px;
+  padding: 0 calc(var(--edge) + var(--bleed));
+  background: linear-gradient(var(--qs-line), var(--qs-line)) bottom / 100% 1px no-repeat;
+  overflow-x: auto;
+}
+.shell-collapsed .section-header {
+  --sb: 76px;
+}
+.section-header-label {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+  color: var(--qs-ink);
+  padding: 15px 0;
+  white-space: nowrap;
+}
+.section-header-divider {
+  width: 1px;
+  height: 20px;
+  flex-shrink: 0;
+  background: var(--qs-border-strong, var(--qs-line));
+}
+.section-header a {
+  display: inline-flex;
+  align-items: center;
+  padding: 15px 2px;
+  border-bottom: 2px solid transparent;
+  text-decoration: none;
+  color: var(--qs-muted);
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color var(--qs-dur-2) var(--qs-ease), border-color var(--qs-dur-2) var(--qs-ease);
+}
+.section-header a.active {
+  color: var(--qs-ink);
+  font-weight: 650;
+  border-bottom-color: var(--qs-ink);
+}
+.section-header a:hover:not(.active) {
+  color: var(--qs-ink);
+}
+.section-header-spacer {
+  flex: 1;
+}
+.section-header-actions {
+  display: inline-flex;
+  align-items: center;
+  padding: 15px 0;
+  margin-left: 34px;
+}
+.workspace {
+  overflow-x: clip;
+}
+@media (max-width: 1050px) {
+  .section-header {
+    --sb: 210px;
+    --edge: 25px;
+  }
+  .shell-collapsed .section-header {
+    --sb: 76px;
+  }
+}
+@media (max-width: 700px) {
+  .section-header {
+    --edge: 18px;
+    gap: 22px;
+  }
+}

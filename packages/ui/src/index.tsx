@@ -1,3 +1,14 @@
+// Design-system library — re-exported so consumers depend on one package.
+export {
+  ThemeToggle,
+  Logo,
+  LogoMark,
+  getTheme,
+  setTheme,
+  restoreTheme,
+  type QuicksortTheme,
+} from "@quicksort/design-system";
+import { ThemeToggle } from "@quicksort/design-system";
 import { useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowUpRight,
@@ -132,9 +143,12 @@ export function Shell({
           <strong>
             {portal} / {nav.find((n) => n.id === current)?.label}
           </strong>
-          <button className="link-button" onClick={signOut}>
-            Sign out
-          </button>
+          <div className="topbar-actions">
+            <ThemeToggle size="sm" />
+            <button className="link-button" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
         </header>
         <main className="content">
           <Notice error>{error}</Notice>

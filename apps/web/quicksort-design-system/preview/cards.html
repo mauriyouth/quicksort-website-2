@@ -1,0 +1,61 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Cards" subtitle="Five variants — raised, outlined, inset, accent, contrast" viewport="700x490" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+.cd{flex:1;min-width:0;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:8px}
+.cd .ey{font:500 11px/1 var(--qs-font-sans);letter-spacing:.12em;text-transform:uppercase}
+.cd .ti{font:400 21px/1.12 var(--qs-font-display);letter-spacing:-.01em;text-wrap:pretty}
+.cd .bd{font:400 13px/1.5 var(--qs-font-sans);text-wrap:pretty;margin-top:2px}
+.cd .ft{font:400 11px/1 var(--qs-font-mono);margin-top:auto;padding-top:14px}
+.raised{background:var(--qs-bg-1);box-shadow:var(--qs-shadow-2)}
+.raised .ey{color:var(--qs-fg-3)}.raised .ti{color:var(--qs-fg-1)}.raised .bd{color:var(--qs-fg-2)}.raised .ft{color:var(--qs-fg-4)}
+.outlined{background:var(--qs-bg-0);border:1px solid var(--qs-border)}
+.outlined .ey{color:var(--qs-fg-3)}.outlined .ti{color:var(--qs-fg-1)}.outlined .bd{color:var(--qs-fg-2)}.outlined .ft{color:var(--qs-fg-4)}
+.inset{background:var(--qs-bg-2)}
+.inset .ey{color:var(--qs-fg-4)}.inset .ti{color:var(--qs-fg-1)}.inset .bd{color:var(--qs-fg-2)}.inset .ft{color:var(--qs-fg-4)}
+.accent{background:var(--qs-accent);color:var(--qs-accent-fg)}
+.accent .ey{color:rgba(0,7,16,.62)}.accent .ti{color:var(--qs-accent-fg)}.accent .bd{color:rgba(0,7,16,.78)}.accent .ft{color:rgba(0,7,16,.55)}
+.contrast{background:var(--qs-bg-dark);color:var(--qs-fg-inv);border:1px solid var(--qs-border-inv)}
+.contrast .ey{color:var(--qs-fg-inv-3)}.contrast .ti{color:var(--qs-fg-inv)}.contrast .bd{color:var(--qs-fg-inv-2)}.contrast .ft{color:var(--qs-fg-inv-3)}
+.contrast .rule{height:2px;width:32px;background:var(--qs-accent);border-radius:2px}
+.grp{margin-bottom:6px}
+.cap{font:400 11px/1 var(--qs-font-mono);color:var(--qs-fg-4);margin:8px 0 14px}
+</style>
+</head>
+<body><div class="card">
+  <div class="row grp" style="gap:12px">
+    <div class="cd raised">
+      <div class="ey">Capability</div>
+      <div class="ti">Plan work with a partner, not a prompt.</div>
+      <div class="bd">Quicksort sits in your workflow, proposes next steps, and hands back control.</div>
+      <div class="ft">.raised — bg-1 + shadow-2</div>
+    </div>
+    <div class="cd outlined">
+      <div class="ey">Capability</div>
+      <div class="ti">Every decision leaves a trace.</div>
+      <div class="bd">Default for dense grids. The hairline reads quieter than a shadow at small sizes.</div>
+      <div class="ft">.outlined — bg-0 + border</div>
+    </div>
+  </div>
+  <div class="row grp" style="gap:12px">
+    <div class="cd inset">
+      <div class="ey">Supporting</div>
+      <div class="ti">Sunken, for nested content.</div>
+      <div class="bd">Sits one step behind the page ground.</div>
+      <div class="ft">.inset — bg-2</div>
+    </div>
+    <div class="cd accent">
+      <div class="ey">Signal</div>
+      <div class="ti">One lime card per composition.</div>
+      <div class="bd">Ink on lime, never Seasalt on lime.</div>
+      <div class="ft">.accent + accent-fg</div>
+    </div>
+    <div class="cd contrast">
+      <div class="rule"></div>
+      <div class="ey">Signal</div>
+      <div class="ti">Ink ground, lime rule.</div>
+      <div class="bd">Lime as a mark, not a wash.</div>
+      <div class="ft">.contrast — bg-dark</div>
+    </div>
+  </div>
+  <div class="mono" style="margin-top:14px">Raised and outlined are the workhorses. Accent and contrast are signals: at most one per view, and they carry the lime — use one or the other, not both.</div>
+</div></body></html>

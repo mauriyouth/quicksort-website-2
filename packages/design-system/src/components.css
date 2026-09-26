@@ -1,0 +1,279 @@
+/* ─────────────────────────────────────────────────────────────────
+   QUICKSORT · DESIGN SYSTEM · COMPONENTS
+   Product-surface primitives built exclusively on design-system
+   tokens. Class prefix .qs-*, React wrappers in src/primitives.tsx.
+
+   States (from the identity system):
+   - Hover   : brighten ~8% (no scale)
+   - Press   : darken ~12% (no shrink)
+   - Focus   : 2px Signal Lime outline, offset 2px, always visible
+   - Disabled: 40% opacity, not-allowed cursor
+   ───────────────────────────────────────────────────────────────── */
+
+/* ── Button ─────────────────────────────────────────────────── */
+.qs-btn {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--qs-space-2);
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--qs-radius-md);
+  font-family: var(--qs-font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--qs-dur-2) var(--qs-ease),
+    border-color var(--qs-dur-2) var(--qs-ease),
+    filter var(--qs-dur-2) var(--qs-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.qs-btn:focus-visible {
+  outline: 2px solid var(--qs-accent);
+  outline-offset: 2px;
+}
+.qs-btn:disabled,
+.qs-btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* The signature move: Signal Lime with Rich Black text. */
+.qs-btn--primary {
+  background: var(--qs-accent);
+  border-color: var(--qs-accent);
+  color: var(--qs-accent-fg);
+}
+.qs-btn--primary:hover:not(:disabled) { filter: brightness(1.08); }
+.qs-btn--primary:active:not(:disabled) { filter: brightness(0.88); }
+/* Secondary: raised hairline card. */
+.qs-btn--secondary {
+  background: var(--qs-bg-1);
+  border-color: var(--qs-border-strong);
+  color: var(--qs-fg-1);
+}
+.qs-btn--secondary:hover:not(:disabled) { filter: brightness(1.04); }
+.qs-btn--secondary:active:not(:disabled) { filter: brightness(0.9); }
+/* Ghost: text-first, surface only on hover. */
+.qs-btn--ghost {
+  background: transparent;
+  color: var(--qs-fg-2);
+}
+.qs-btn--ghost:hover:not(:disabled) {
+  background: var(--qs-bg-1);
+  color: var(--qs-fg-1);
+}
+.qs-btn--sm {
+  padding: 7px 11px;
+  font-size: 12px;
+}
+
+/* ── Surfaces ───────────────────────────────────────────────── */
+.qs-card {
+  background: var(--qs-bg-1);
+  border: 1px solid var(--qs-border);
+  border-radius: var(--qs-radius-lg);
+  box-shadow: var(--qs-shadow-1);
+  padding: var(--qs-space-5);
+  transition: box-shadow var(--qs-dur-2) var(--qs-ease);
+}
+.qs-card--interactive {
+  cursor: pointer;
+}
+.qs-card--interactive:hover {
+  box-shadow: var(--qs-shadow-2);
+  border-color: var(--qs-border-strong);
+}
+.qs-card--interactive:focus-visible {
+  outline: 2px solid var(--qs-accent);
+  outline-offset: 2px;
+}
+
+.qs-panel {
+  background: var(--qs-bg-1);
+  border: 1px solid var(--qs-border);
+  border-radius: var(--qs-radius-lg);
+  padding: var(--qs-space-6);
+}
+
+/* Deliberately dark panel, regardless of mode (identity system
+   allows one dark panel inside a light page). */
+.qs-panel--dark {
+  background: var(--qs-bg-dark);
+  border-color: var(--qs-border-inv);
+  color: var(--qs-fg-inv);
+}
+
+/* ── Pill ───────────────────────────────────────────────────── */
+.qs-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: var(--qs-radius-pill);
+  font-family: var(--qs-font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  background: var(--qs-bg-2);
+  color: var(--qs-fg-2);
+}
+.qs-pill--accent {
+  background: var(--qs-accent);
+  color: var(--qs-accent-fg);
+}
+.qs-pill--outline {
+  background: transparent;
+  border: 1px solid var(--qs-border-strong);
+  color: var(--qs-fg-2);
+}
+
+/* ── Stat ───────────────────────────────────────────────────── */
+.qs-stat {
+  background: var(--qs-bg-1);
+  border: 1px solid var(--qs-border);
+  border-radius: var(--qs-radius-lg);
+  padding: var(--qs-space-5) var(--qs-space-6);
+}
+.qs-stat-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--qs-fg-3);
+  font-family: var(--qs-font-sans);
+  font-size: 13px;
+}
+.qs-stat-value {
+  display: block;
+  font-family: var(--qs-font-sans);
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: var(--qs-tracking-snug);
+  color: var(--qs-fg-1);
+  margin-top: var(--qs-space-3);
+}
+.qs-stat-detail {
+  color: var(--qs-fg-3);
+  font-family: var(--qs-font-sans);
+  font-size: 12px;
+}
+
+/* ── Notice ─────────────────────────────────────────────────── */
+.qs-notice {
+  padding: 13px 16px;
+  border-radius: var(--qs-radius-md);
+  background: var(--qs-bg-1);
+  border: 1px solid var(--qs-border-strong);
+  color: var(--qs-fg-1);
+  font-family: var(--qs-font-sans);
+  font-size: 13px;
+  line-height: var(--qs-leading-normal);
+  overflow-wrap: anywhere;
+}
+.qs-notice--error {
+  border-color: color-mix(in srgb, #a52932 45%, transparent);
+  background: color-mix(in srgb, #a52932 10%, var(--qs-bg-1));
+  color: var(--qs-fg-1);
+}
+
+/* ── Empty state ────────────────────────────────────────────── */
+.qs-empty {
+  text-align: center;
+  padding: var(--qs-space-7) var(--qs-space-5);
+  border: 1px dashed var(--qs-border-strong);
+  border-radius: var(--qs-radius-lg);
+  color: var(--qs-fg-2);
+  font-family: var(--qs-font-sans);
+}
+.qs-empty svg {
+  color: var(--qs-fg-3);
+  margin-bottom: var(--qs-space-3);
+}
+.qs-empty h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--qs-fg-1);
+  margin: 0 0 var(--qs-space-2);
+}
+.qs-empty p {
+  color: var(--qs-fg-3);
+  max-width: 400px;
+  margin: 0 auto var(--qs-space-4);
+  font-size: 13px;
+}
+
+/* ── Fields ─────────────────────────────────────────────────── */
+.qs-label {
+  display: grid;
+  gap: 7px;
+  font-family: var(--qs-font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--qs-fg-1);
+}
+.qs-input,
+.qs-field select,
+.qs-field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--qs-border-strong);
+  border-radius: var(--qs-radius-md);
+  background: var(--qs-bg-1);
+  color: var(--qs-fg-1);
+  font-family: var(--qs-font-sans);
+  font-size: 14px;
+  transition: border-color var(--qs-dur-2) var(--qs-ease);
+}
+.qs-field textarea {
+  resize: vertical;
+  min-height: 115px;
+}
+.qs-input::placeholder,
+.qs-field input::placeholder,
+.qs-field textarea::placeholder {
+  color: var(--qs-fg-3);
+}
+.qs-input:focus-visible,
+.qs-field input:focus-visible,
+.qs-field select:focus-visible,
+.qs-field textarea:focus-visible {
+  outline: 2px solid var(--qs-accent);
+  outline-offset: 2px;
+  border-color: var(--qs-border-strong);
+}
+.qs-field {
+  display: grid;
+  gap: 7px;
+  font-family: var(--qs-font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--qs-fg-1);
+}
+.qs-field-hint {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--qs-fg-3);
+}
+.qs-field-error {
+  font-weight: 500;
+  font-size: 12px;
+  color: #a52932;
+}
+
+/* ── List row ───────────────────────────────────────────────── */
+.qs-list-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--qs-space-5);
+  padding: var(--qs-space-4) 0;
+  border-bottom: 1px solid var(--qs-border);
+  font-family: var(--qs-font-sans);
+}
+.qs-list-row:last-child {
+  border-bottom: 0;
+}

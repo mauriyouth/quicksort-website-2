@@ -1,12 +1,17 @@
+/* Alias layer over @quicksort/design-system tokens.
+   The portal keeps its legacy variable names, but they now resolve to
+   design-system semantic tokens (light by default — flip with
+   data-theme="dark" on <html> or any subtree). */
 :root {
-  --qs-bg: #f5f6f2;
-  --qs-paper: #ffffff;
-  --qs-ink: #18221c;
-  --qs-muted: #677269;
-  --qs-line: #e0e5dc;
-  --qs-lime: #ccff00;
-  --qs-deep: #14271e;
-  --qs-danger: #a52932;
-  --qs-font: "Inter", "Segoe UI", sans-serif;
-  --qs-radius: 16px;
+  --qs-bg: var(--qs-bg-0);            /* page ground */
+  --qs-paper: var(--qs-bg-1);         /* raised / card */
+  --qs-ink: var(--qs-fg-1);           /* primary text */
+  --qs-muted: var(--qs-fg-3);         /* muted labels */
+  --qs-line: var(--qs-border);        /* hairlines */
+  /* --qs-lime is NOT aliased — the portal inherits the DS primitive, which
+     also keeps --qs-accent: var(--qs-lime) resolvable (no reference cycle). */
+  --qs-deep: var(--qs-bg-dark);       /* always-dark surfaces (sidebar, hero) */
+  --qs-danger: #a52932;               /* outside the brand palette — portal semantic */
+  --qs-font: var(--qs-font-sans);
+  --qs-radius: var(--qs-radius-lg);
 }

@@ -1,3 +1,5 @@
+@import "@quicksort/design-system/tokens.css";
+@import "@quicksort/design-system/components.css";
 @import "./brand.css";
 * {
   box-sizing: border-box;
@@ -134,6 +136,11 @@ button:disabled {
 .topbar span {
   color: var(--qs-muted);
   font-size: 12px;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--qs-space-4);
 }
 .topbar strong {
   font-size: 13px;

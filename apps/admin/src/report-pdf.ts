@@ -1,7 +1,7 @@
 import pdfMake from "pdfmake/build/pdfmake";
 import fonts from "pdfmake/build/vfs_fonts";
 import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
-import { saveBlob } from "@quicksort/candidate-db";
+import { saveBlob } from "@quicksort/hr-db";
 import { matchMetrics, type CandidateResult, type Evaluation } from "./analysis";
 
 pdfMake.addVirtualFileSystem(fonts);

@@ -1,0 +1,34 @@
+/* Portal theme for the admin/HR portals.
+   Alias layer over @quicksort/design-system tokens: the portal keeps its
+   legacy variable names, but they now resolve to design-system semantic
+   tokens, so the whole portal flips with data-theme.
+
+   Dark is the portal default — set by the boot script in each app's
+   index.html (reads localStorage["qs-theme"], falls back to "dark");
+   ThemeToggle in the Shell topbar flips and persists it. */
+:root {
+  --qs-bg: var(--qs-bg-0);            /* page ground */
+  --qs-paper: var(--qs-bg-1);         /* raised / card */
+  --qs-ink: var(--qs-fg-1);           /* primary text */
+  --qs-muted: var(--qs-fg-3);         /* muted labels */
+  --qs-line: var(--qs-border);        /* hairlines */
+  /* --qs-lime is NOT aliased — the portal inherits the DS primitive, which
+     also keeps --qs-accent: var(--qs-lime) resolvable (no reference cycle). */
+  --qs-deep: var(--qs-bg-dark);       /* always-dark surfaces (sidebar, hero) */
+  --qs-danger: #a52932;               /* outside the brand palette — portal semantic */
+  --qs-font: var(--qs-font-sans);
+  --qs-radius: var(--qs-radius-lg);
+  /* Surfaces one interactive step above --qs-paper: kanban cards sitting on
+     a raised column, hover washes, active segment wells. Mode-aware. */
+  --qs-lift: #ffffff;
+  --qs-hover: rgba(0, 7, 14, 0.05);
+  --qs-active: rgba(0, 7, 14, 0.08);
+}
+
+/* Danger reads too dark on the dark ground — lighten it in dark mode. */
+[data-theme="dark"] {
+  --qs-danger: #e5484d;
+  --qs-lift: #232323;
+  --qs-hover: rgba(250, 250, 250, 0.06);
+  --qs-active: rgba(250, 250, 250, 0.10);
+}

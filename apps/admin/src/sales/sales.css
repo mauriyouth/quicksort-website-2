@@ -1,0 +1,468 @@
+/* Sales pipeline kanban (src/sales/PipelineBoard.tsx). */
+.kanban {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 1fr);
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  align-items: start;
+}
+.kanban-column {
+  background: var(--surface, rgba(148, 163, 184, 0.08));
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 120px;
+}
+.kanban-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  border-top: 3px solid transparent;
+  padding-top: 6px;
+}
+.kanban-head h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.deal-card {
+  background: var(--card, rgba(148, 163, 184, 0.12));
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.deal-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.deal-card-top h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.deal-amount {
+  margin: 4px 0 0;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.deal-move {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.deal-move select {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 0.8rem;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat {
+  background: var(--surface, rgba(148, 163, 184, 0.08));
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.stat-value {
+  font-size: 1.3rem;
+}
+.stat-detail {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+@media (max-width: 900px) {
+  .kanban {
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Clients directory, Client 360 and People directory
+ * (src/sales/Clients.tsx, ClientDetail.tsx, People.tsx). */
+.client-row {
+  cursor: pointer;
+}
+.client-row:hover,
+.client-row:focus-visible {
+  background: rgba(148, 163, 184, 0.1);
+  outline: none;
+}
+.client-metrics {
+  display: flex;
+  gap: 20px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.client-metrics span {
+  display: flex;
+  flex-direction: column;
+}
+.client-metrics strong {
+  font-size: 1rem;
+}
+.detail-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.client-head h1 {
+  margin: 4px 0;
+}
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px 16px;
+  margin-bottom: 10px;
+}
+.info-grid p {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+.panel-inset {
+  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 4px 0 10px;
+}
+.pill.tag {
+  background: rgba(148, 163, 184, 0.25);
+  margin: 0 4px 4px 0;
+}
+.section-subhead,
+.drawer-section {
+  margin: 18px 0 8px;
+  font-size: 0.95rem;
+}
+.stale-flag {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+.timeline-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+.timeline-composer input {
+  flex: 1;
+}
+
+/* Person drawer (sales.md §8.5): /sales/people?focus=<personId> */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+}
+.drawer {
+  background: var(--card, #1a1a1a);
+  border-left: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  width: min(480px, 100vw);
+  height: 100%;
+  overflow-y: auto;
+  padding: 18px;
+}
+.drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.drawer-head h2 {
+  margin: 2px 0;
+}
+@media (max-width: 700px) {
+  .client-metrics {
+    gap: 12px;
+  }
+  .timeline-composer {
+    flex-wrap: wrap;
+  }
+  .drawer {
+    width: 100vw;
+  }
+}
+
+/* Clients directory redesign (src/sales/Clients.tsx).
+   Visual source: apps/Pipeline Redesign.html — display title + right stat
+   rail, search well + filter chips, raised table rows, tinted initial
+   avatars, health dots, list/grid toggle. Tokens come from the portal
+   theme so the screen flips with data-theme. */
+
+/* Header — the "New client" action sits above the stat rail, right-aligned. */
+.clients-head-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-left: auto;
+  align-items: flex-end;
+}
+.clients-stat-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Active filter chip ("Has open deals") — lime tint like the board's
+   drop-target state. */
+.pipeline-filter.on {
+  border-color: color-mix(in srgb, var(--qs-lime) 55%, transparent);
+  background: color-mix(in srgb, var(--qs-lime) 12%, transparent);
+  color: var(--qs-ink);
+}
+
+/* "N of M clients" line above the table. */
+.clients-count {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--qs-muted);
+}
+
+/* Table */
+.clients-table {
+  min-width: 860px;
+}
+tr.clients-row {
+  cursor: pointer;
+  transition: background var(--qs-dur-2) var(--qs-ease);
+}
+tr.clients-row:hover {
+  background: var(--qs-hover);
+}
+tr.clients-row:focus-visible {
+  outline: 2px solid var(--qs-accent);
+  outline-offset: -2px;
+}
+.clients-client {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.clients-tag {
+  display: inline-flex;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--qs-active);
+  color: var(--qs-fg-2);
+  white-space: nowrap;
+}
+.clients-deals {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.clients-deal-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: 0 0 6px;
+}
+.clients-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--qs-fg-2);
+  white-space: nowrap;
+}
+.clients-health-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: 0 0 7px;
+}
+.clients-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--qs-fg-2);
+  white-space: nowrap;
+}
+
+/* Initial avatars — deterministic tinted discs. */
+.clients-avatar {
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.clients-stack {
+  display: inline-flex;
+  align-items: center;
+  /* Ring colour follows the surface the stack sits on. */
+  --clients-ring: var(--qs-paper);
+}
+.clients-stack .clients-avatar {
+  margin-left: -6px;
+  box-shadow: 0 0 0 2px var(--clients-ring);
+}
+.clients-stack .clients-avatar:first-child {
+  margin-left: 0;
+}
+.clients-stack-more {
+  font-size: 10.5px;
+  color: var(--qs-muted);
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+/* Grid view cards */
+.clients-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+.client-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--qs-lift);
+  border: 1px solid var(--qs-border);
+  cursor: pointer;
+  transition: border-color var(--qs-dur-2) var(--qs-ease);
+}
+.client-card:hover {
+  border-color: var(--qs-border-strong);
+}
+.client-card:focus-visible {
+  outline: 2px solid var(--qs-accent);
+  outline-offset: 2px;
+}
+.client-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.client-card-top .clients-health-dot {
+  margin-left: auto;
+}
+.client-card-title {
+  min-width: 0;
+}
+.client-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 20px;
+  align-items: center;
+}
+.client-card-metrics {
+  display: flex;
+  gap: 18px;
+  padding: 10px 0;
+  border-top: 1px solid var(--qs-line);
+  border-bottom: 1px solid var(--qs-line);
+}
+.client-card-metrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.client-card-metrics strong {
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.client-card-metrics small {
+  font-size: 10.5px;
+  color: var(--qs-muted);
+  white-space: nowrap;
+}
+.client-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.client-card-foot .clients-stack {
+  --clients-ring: var(--qs-lift);
+}
+
+/* Right-aligned action row that replaced the old page headers (eyebrow +
+   title + lede) — the sales tabs now name the current screen. */
+.sales-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 22px;
+}
+
+/* Dashboard stats (src/sales/SalesDashboard.tsx) — three headline stat
+   cards (Open pipeline, Weighted forecast, Régie) right under the sales
+   tabs. Visual source: sales screen redesign. */
+.stats.stats-head {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.stats-head .stat {
+  padding: 22px 26px;
+  border-radius: 16px;
+  gap: 12px;
+  background: var(--qs-lift, var(--surface, rgba(148, 163, 184, 0.08)));
+  border: 1px solid var(--qs-border, var(--border, rgba(148, 163, 184, 0.2)));
+}
+.stats-head .stat-label {
+  font-size: 15px;
+}
+.stats-head .stat-value {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) {
+  .stats.stats-head {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .clients-head-actions {
+    align-items: flex-start;
+  }
+  .clients-grid {
+    grid-template-columns: 1fr;
+  }
+}

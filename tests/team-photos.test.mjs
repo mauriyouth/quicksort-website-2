@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import handler from '../apps/candidate/api/team-photo.mjs';
-import photos from '../apps/candidate/src/teamPhotos.json' with { type: 'json' };
+import handler from '../apps/admin/api/team-photo.mjs';
+import photos from '../apps/admin/src/portal/teamPhotos.json' with { type: 'json' };
 
 test('photo downloads require verified authentication and share every portrait with signed-in users', async (t) => {
   const originalFetch = globalThis.fetch;
@@ -30,7 +30,7 @@ test('photo downloads require verified authentication and share every portrait w
     assert.equal((await request('/api/team-photo?photo=issa-hammoud&size=original', 'Bearer valid')).code, 404);
     assert.equal((await request('/api/team-photo', 'Bearer valid', 'POST')).code, 405);
     assert.equal(photos.length, 13);
-    if (!existsSync(new URL('../apps/candidate/private/team-photos', import.meta.url))) {
+    if (!existsSync(new URL('../apps/admin/private/team-photos', import.meta.url))) {
       t.diagnostic('Private HD assets absent: file-serving checks run in the deployment checkout only.');
       return;
     }

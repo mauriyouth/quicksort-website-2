@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Quicksort AI Automation Intern — Assignment</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+doc-page:not(:defined){visibility:hidden}
+:root{--pad:64px}
+body{margin:0;font-family:var(--qs-font-sans);color:var(--qs-fg-1)}
+.page{position:relative;background:var(--qs-bg-0);padding:var(--pad);box-sizing:border-box;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11"}
+.mast{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--qs-border)}
+.mast img{height:15px;display:block}
+.mast .who{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--qs-fg-3)}
+.eyebrow{font-size:10.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--qs-fg-1);display:flex;align-items:center;gap:10px;margin-top:34px}
+.eyebrow::before{content:"";width:22px;height:8px;border-radius:999px;background:var(--qs-lime)}
+h1{font-family:var(--qs-font-display);font-weight:500;font-size:40px;line-height:1.04;letter-spacing:-.02em;margin:14px 0 0;text-wrap:balance}
+.lead{font-size:14.5px;line-height:1.5;color:var(--qs-fg-2);margin:12px 0 0;max-width:60ch}
+h2{font-family:var(--qs-font-sans);font-weight:600;font-size:15px;line-height:1.2;letter-spacing:-.01em;margin:0 0 10px}
+p{margin:0;font-size:13px;line-height:1.55;color:var(--qs-fg-2);text-wrap:pretty}
+section.block{margin-top:26px}
+ul{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+li{font-size:13px;line-height:1.5;color:var(--qs-fg-2);padding-left:16px;position:relative}
+li::before{content:"";position:absolute;left:0;top:8px;width:5px;height:5px;border-radius:50%;background:var(--qs-fg-1)}
+li b{color:var(--qs-fg-1);font-weight:600}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.flow span{font-size:12px;font-weight:500;color:var(--qs-fg-1);background:var(--qs-bg-1);border:1px solid var(--qs-border);border-radius:999px;padding:7px 14px}
+.flow i{font-style:normal;color:var(--qs-lime);font-weight:700;font-size:12px;-webkit-text-stroke:.4px var(--qs-fg-3)}
+.stack{display:grid;gap:10px;margin-top:12px}
+.tech{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+.tech div{background:var(--qs-bg-1);border:1px solid var(--qs-border);border-radius:var(--qs-radius-md);padding:12px 14px;font-size:12.5px;line-height:1.45;color:var(--qs-fg-2)}
+.tech b{display:block;color:var(--qs-fg-1);font-weight:600;font-size:13px;margin-bottom:2px}
+.note{margin-top:22px;border-left:2px solid var(--qs-lime);padding:2px 0 2px 14px;font-size:13px;line-height:1.5;color:var(--qs-fg-1);max-width:62ch}
+pre{margin:12px 0 0;background:var(--qs-bg-1);border:1px solid var(--qs-border);border-radius:var(--qs-radius-md);padding:14px 16px;font-family:var(--qs-font-mono);font-size:10.5px;line-height:1.55;color:var(--qs-fg-1);white-space:pre;overflow:hidden}
+pre .k{color:var(--qs-fg-3)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--qs-border);display:flex;justify-content:space-between;align-items:baseline;font-size:10.5px;letter-spacing:.08em;color:var(--qs-fg-4)}
+.foot .n{font-family:var(--qs-font-mono);color:var(--qs-fg-1)}
+a{color:var(--qs-link)}a:hover{color:var(--qs-fg-1)}
+</style></head><body>
+<doc-page size="a4">
+
+<section class="page" data-screen-label="01">
+<div class="mast"><img src="../assets/logo-wordmark-light.svg" alt="Quicksort"><div class="who">Quicksort AI Automation Intern</div></div>
+<div class="eyebrow">The assignment</div>
+<h1>AI CV Analyzer Agent</h1>
+<p class="lead">Build and deploy an AI application using Next.js, Vercel AI SDK, and Supabase.</p>
+
+<section class="block"><h2>Your objective</h2>
+<p>Create a web application where a user uploads a CV and pastes a job description. The AI agent analyzes the candidate against the role, displays a structured result, and stores the analysis in Supabase.</p></section>
+
+<section class="block"><h2>Application flow</h2>
+<div class="flow"><span>Upload CV</span><i>→</i><span>Enter job description</span><i>→</i><span>Analyze CV</span><i>→</i><span>Display results</span><i>→</i><span>Save to Supabase</span></div></section>
+
+<section class="block"><h2>What the analysis must include</h2>
+<ul>
+<li><b>Candidate overview:</b> name, concise summary, and years of experience.</li>
+<li><b>Skills and technologies:</b> key skills detected, relevant technologies, and skills that match the job description.</li>
+<li><b>Fit assessment:</b> strengths, missing skills, and a match score out of 100.</li>
+<li><b>Short recommendation:</b> Strong Match / Potential Match / Not a Match.</li>
+</ul></section>
+
+<section class="block"><h2>Keep the interface simple</h2>
+<p>Include a CV upload control, a job description text area, and an Analyze CV button. Show the structured analysis, a prominent match score, detected skills, and missing skills. No complex UI is required.</p></section>
+
+<section class="block"><h2>Required technology</h2>
+<div class="tech">
+<div><b>Next.js</b>for the web application</div>
+<div><b>Vercel AI SDK</b>to build the CV Analyzer Agent</div>
+<div><b>Supabase</b>for database persistence</div>
+<div><b>Vercel</b>for the live deployment</div>
+</div></section>
+
+<p class="note">The goal: demonstrate how quickly you can take an AI application from idea to production using AI coding tools, Vercel, and Supabase.</p>
+
+<div class="foot"><span>Quicksort / Technical assignment</span><span class="n">1 / 3</span></div>
+</section>
+
+<section class="page" data-screen-label="02">
+<div class="mast"><img src="../assets/logo-wordmark-light.svg" alt="Quicksort"><div class="who">Quicksort AI Automation Intern</div></div>
+<div class="eyebrow">Implementation requirements</div>
+<h1>Agent, data &amp; automation</h1>
+<p class="lead">Use Claude Code throughout development and automate setup and deployment wherever possible.</p>
+
+<section class="block"><h2>Develop with Claude Code</h2>
+<p>Use Claude Code heavily to generate, debug, and improve the application. Use Claude Code skills for Vercel, Supabase, and Next.js. Document the skills used and how they supported your development workflow.</p></section>
+
+<section class="block"><h2>Configure and deploy with the CLIs</h2>
+<ul>
+<li>Use Vercel CLI to configure and deploy the application.</li>
+<li>Use Supabase CLI to create/link the project, create database migrations and required tables, push database changes, and configure the project.</li>
+</ul></section>
+
+<section class="block"><h2>Persist results in Supabase</h2>
+<p>Store candidate name, CV file reference, job description, match score, skills detected, missing skills, AI recommendation, full analysis, and created date. Bonus: store uploaded CV files in Supabase Storage.</p></section>
+
+<section class="block"><h2>Return structured AI output</h2>
+<p>Use the Vercel AI SDK to return structured data similar to the example below. Include relevant technologies and strengths alongside the core fields.</p>
+<pre>{
+  <span class="k">"candidate_name"</span>: "John Doe",
+  <span class="k">"summary"</span>: "Data scientist with 3 years of experience...",
+  <span class="k">"skills"</span>: ["Python", "SQL", "Machine Learning"],
+  <span class="k">"experience_years"</span>: 3,
+  <span class="k">"technologies"</span>: ["Python", "PostgreSQL", "scikit-learn"],
+  <span class="k">"strengths"</span>: ["Hands-on machine learning experience"],
+  <span class="k">"matching_skills"</span>: ["Python", "SQL"],
+  <span class="k">"missing_skills"</span>: ["AWS", "Docker"],
+  <span class="k">"match_score"</span>: 78,
+  <span class="k">"recommendation"</span>: "Potential Match"
+}</pre></section>
+
+<div class="foot"><span>Quicksort / Technical assignment</span><span class="n">2 / 3</span></div>
+</section>
+
+<section class="page" data-screen-label="03">
+<div class="mast"><img src="../assets/logo-wordmark-light.svg" alt="Quicksort"><div class="who">Quicksort AI Automation Intern</div></div>
+<div class="eyebrow">Submission &amp; evaluation</div>
+<h1>Ship a working application</h1>
+<p class="lead">Prioritize a complete end-to-end experience before adding optional features.</p>
+
+<section class="block"><h2>Required deliverables</h2>
+<ul>
+<li><b>GitHub repository:</b> application source code and database migrations.</li>
+<li><b>Live Vercel application URL:</b> a working, deployed application reviewers can test.</li>
+<li><b>README:</b> setup steps, environment variable names, local development instructions, and deployment steps.</li>
+<li><b>Architecture overview:</b> explain the CV processing flow, the AI agent, and how data is stored in Supabase.</li>
+<li><b>Claude Code skills used:</b> list the skills and explain how Claude Code helped generate, debug, and improve the application.</li>
+</ul></section>
+
+<section class="block"><h2>How we will evaluate your work</h2>
+<ul>
+<li><b>End-to-end functionality:</b> upload a CV, analyze it against a job description, display the result, and persist it.</li>
+<li><b>Effective use of Claude Code:</b> practical use of AI coding tools and relevant skills throughout development.</li>
+<li><b>Understanding of AI agents:</b> a clear analysis workflow and useful structured output through the Vercel AI SDK.</li>
+<li><b>Supabase integration:</b> working persistence and reproducible database setup.</li>
+<li><b>Independent debugging and deployment quality:</b> resolve issues and deliver a functioning live application.</li>
+</ul></section>
+
+<div class="two" style="margin-top:26px">
+<section><h2>Bonus features — if you finish early</h2>
+<p>Analyze multiple CVs against one job description; rank candidates by match score; add Supabase authentication; show previous analysis history; or generate interview questions based on missing skills.</p></section>
+<section><h2>Before submitting</h2>
+<p>Test the full flow on the deployed URL and confirm the analysis appears in Supabase. Make sure the repository and live application are accessible to reviewers, and that the README explains how to reproduce your setup.</p></section>
+</div>
+
+<div class="foot"><span>Quicksort / Technical assignment</span><span class="n">3 / 3</span></div>
+</section>
+
+</doc-page>
+<script src="./doc-page.js"></script>
+</body></html>

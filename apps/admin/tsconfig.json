@@ -1,1 +1,1 @@
-{"extends":"../../tsconfig.base.json","compilerOptions":{"types":["vite/client","node"],"allowImportingTsExtensions":true,"rewriteRelativeImportExtensions":true},"include":["src","api","../../packages/candidate-db/src","../../packages/candidate-ui/src"]}
+{"extends":"../../tsconfig.base.json","compilerOptions":{"types":["vite/client","node"],"allowImportingTsExtensions":true,"rewriteRelativeImportExtensions":true},"include":["src","api","../../packages/hr-db/src","../../packages/hr-ui/src"]}

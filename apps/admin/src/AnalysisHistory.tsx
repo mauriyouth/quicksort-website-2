@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@clerk/react";
-import { Heading, Notice } from "@quicksort/candidate-ui";
+import { Notice } from "@quicksort/hr-ui";
 import { CandidateDetail } from "./CvAnalyzer";
 import { evaluationSchema, type CandidateResult } from "./analysis";
 
@@ -12,7 +12,7 @@ export function AnalysisHistory() {
   const [version, setVersion] = useState(0), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [selected, setSelected] = useState<CandidateResult | null>(null);
   async function request(query: string, signal?: AbortSignal) {
-    const token = await session?.getToken();
+    const token = await session?.getToken({ template: "supabase" });
     if (!token) throw new Error("Sign in again to view history.");
     const response = await fetch(`/api/analysis-history?${query}`, { headers: { Authorization: `Bearer ${token}` }, signal });
     if (!response.headers.get("content-type")?.includes("application/json")) throw new Error("Analysis history is unavailable.");
@@ -49,7 +49,6 @@ export function AnalysisHistory() {
   }
   if (selected) return <CandidateDetail candidate={selected} backLabel="Analysis history" onBack={() => setSelected(null)} />;
   return <div className="cv-workspace">
-    <Heading eyebrow="Recruiting workspace" title="Analysis history">Saved evaluations shared with all approved admins.</Heading>
     <Notice error>{error}</Notice>
     <form className="cv-card cv-history-search" onSubmit={e => { e.preventDefault(); setPage(0); setFilter(search); setVersion(v => v + 1); }}>
       <label htmlFor="history-search">Search candidate, job or file</label>

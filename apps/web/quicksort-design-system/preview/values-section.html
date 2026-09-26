@@ -1,0 +1,90 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Values section" subtitle="Three-up editorial section — numeral and icon-slot directions" viewport="700x910" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+.sec{padding:30px 26px 26px;border-radius:18px;background:var(--qs-bg-0);color:var(--qs-fg-1)}
+.hd{max-width:34ch;margin-bottom:26px}
+.hd .ey{display:inline-flex;align-items:center;gap:8px;font:500 11px/1 var(--qs-font-sans);letter-spacing:.14em;text-transform:uppercase;color:var(--qs-fg-3);margin-bottom:12px}
+.hd .ey::before{content:"";width:5px;height:5px;border-radius:999px;background:var(--qs-accent);flex-shrink:0}
+.hd .h{font:400 34px/1.08 var(--qs-font-display);letter-spacing:-.02em;color:var(--qs-fg-1);text-wrap:pretty}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.v{display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:14px;background:var(--qs-bg-1);border:1px solid var(--qs-border)}
+.v .t{font:400 17px/1.2 var(--qs-font-display);letter-spacing:-.01em;color:var(--qs-fg-1);text-wrap:pretty}
+.v .b{font:400 13px/1.5 var(--qs-font-sans);color:var(--qs-fg-2);text-wrap:pretty}
+.num{font:400 13px/1 var(--qs-font-mono);color:var(--qs-fg-4);padding-bottom:14px;border-bottom:1px solid var(--qs-border)}
+.v.sig{background:var(--qs-accent);border-color:transparent}
+.v.sig .num{color:rgba(0,7,16,.5);border-bottom-color:rgba(0,7,16,.18)}
+.v.sig .t{color:var(--qs-accent-fg)}
+.v.sig .b{color:rgba(0,7,16,.78)}
+.slot{width:34px;height:34px;border-radius:9px;border:1px dashed var(--qs-border-strong);display:grid;place-items:center;font:400 10px/1 var(--qs-font-mono);color:var(--qs-fg-4);letter-spacing:.06em}
+.lab{font:500 10px/1 var(--qs-font-sans);letter-spacing:.14em;text-transform:uppercase;color:var(--qs-fg-3);margin:0 0 10px}
+</style><style>
+.modebar{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:14px}
+.modebar .seg{display:inline-flex;padding:3px;border-radius:999px;border:1px solid var(--qs-border-strong);background:var(--qs-bg-2)}
+.modebar button{appearance:none;border:0;background:transparent;padding:6px 14px;border-radius:999px;font:500 12px/1 var(--qs-font-sans);letter-spacing:.02em;color:var(--qs-fg-3);cursor:pointer;transition:background var(--qs-dur-2) var(--qs-ease),color var(--qs-dur-2) var(--qs-ease)}
+.modebar button[aria-pressed="true"]{background:var(--qs-fg-1);color:var(--qs-bg-0)}
+.sec{transition:background var(--qs-dur-3) var(--qs-ease),color var(--qs-dur-3) var(--qs-ease)}
+</style>
+</head>
+<body><div class="card">
+  <div class="modebar"><div class="seg"><button type="button" data-set="light" aria-pressed="true">Light</button><button type="button" data-set="dark" aria-pressed="false">Dark</button></div></div>
+  <div class="lab">A · Numeral — no icon dependency</div>
+  <div class="sec" data-theme="light">
+    <div class="hd">
+      <div class="ey">Our values</div>
+      <div class="h">Some of our core values</div>
+    </div>
+    <div class="three">
+      <div class="v">
+        <div class="num">01</div>
+        <div class="t">Move with intent</div>
+        <div class="b">Every decision leaves a trace. We choose direction before speed.</div>
+      </div>
+      <div class="v sig">
+        <div class="num">02</div>
+        <div class="t">Human in the loop</div>
+        <div class="b">The system proposes. The person decides, and can always take back control.</div>
+      </div>
+      <div class="v">
+        <div class="num">03</div>
+        <div class="t">Earn the trust</div>
+        <div class="b">Show the work. Nothing happens that can't be inspected or undone.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lab" style="margin-top:26px">B · Icon slots — bring your own set</div>
+  <div class="sec" data-theme="light">
+    <div class="hd">
+      <div class="ey">Our values</div>
+      <div class="h">Some of our core values</div>
+    </div>
+    <div class="three">
+      <div class="v">
+        <div class="slot">ICON</div>
+        <div class="t">Move with intent</div>
+        <div class="b">Every decision leaves a trace. We choose direction before speed.</div>
+      </div>
+      <div class="v">
+        <div class="slot">ICON</div>
+        <div class="t">Human in the loop</div>
+        <div class="b">The system proposes. The person decides, and can always take back control.</div>
+      </div>
+      <div class="v">
+        <div class="slot">ICON</div>
+        <div class="t">Earn the trust</div>
+        <div class="b">Show the work. Nothing happens that can't be inspected or undone.</div>
+      </div>
+    </div>
+  </div>
+  <div class="mono" style="margin-top:14px">Left-aligned, one accent per section. Icons are a slot, not an asset — the system ships none. Both directions are built from the mode tokens — the switch above sets data-theme on each section; nothing is a hardcoded black or white.</div>
+</div>
+<script>
+const secs = document.querySelectorAll('.sec');
+const btns = document.querySelectorAll('.modebar button');
+for (const b of btns) b.addEventListener('click', () => {
+  for (const o of btns) o.setAttribute('aria-pressed', String(o === b));
+  for (const s of secs) s.setAttribute('data-theme', b.dataset.set);
+});
+</script>
+</body>
+</html>

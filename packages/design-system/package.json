@@ -1,0 +1,20 @@
+{
+  "name": "@quicksort/design-system",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Quicksort design system — brand tokens (light/dark), theme helpers, ThemeToggle, Logo, and UI primitives. Extracted from the Quicksort identity system (apps/web/quicksort-design-system).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css",
+    "./components.css": "./src/components.css",
+    "./styles.css": "./src/styles.css",
+    "./assets/*": "./assets/*"
+  },
+  "peerDependencies": {
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.0"
+  }
+}

@@ -1,0 +1,7 @@
+.intake-drop{border:1px dashed var(--qs-line);border-radius:var(--qs-radius-md);background:var(--qs-bg-1);padding:26px 16px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;cursor:pointer;position:relative}
+.intake-drop svg{color:var(--qs-accent)}
+.intake-drop .intake-spin{animation:intake-spin 1s linear infinite}
+.intake-drop:hover,.intake-drop.drag-over{border-color:var(--qs-accent);background:color-mix(in srgb,var(--qs-accent) 7%,var(--qs-bg-1))}
+.intake-drop input[type=file]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.intake-hint{font-size:12px;color:var(--qs-muted);margin:10px 0 0}
+@keyframes intake-spin{to{transform:rotate(360deg)}}

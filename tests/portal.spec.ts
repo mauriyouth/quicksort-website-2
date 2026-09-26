@@ -48,6 +48,8 @@ async function mock(page: Page, role = "admin") {
     candidate_documents: [],
     tool_requests: [],
     contract_signatures: [],
+    my_application: [],
+    my_application_events: [],
   };
   await page.route(
     "https://kupbvrnjppcwqxmzxasi.supabase.co/**",
@@ -125,7 +127,7 @@ async function mock(page: Page, role = "admin") {
       if (url.searchParams.get("published") === "eq.true")
         rows = rows.filter((r: any) => r.published);
       return reply(
-        request.headers()["accept"]?.includes("object") ? rows[0] : rows,
+        request.headers()["accept"]?.includes("object") ? (rows[0] ?? null) : rows,
       );
     },
   );
@@ -179,15 +181,26 @@ test("candidate uploads, signs, downloads and requests access", async ({
   page,
 }) => {
   const state = await mock(page, "candidate");
+  // Offer accepted: onboarding sections are open.
+  state.my_application = [
+    {
+      id: "app-1",
+      full_name: "Alex Morgan",
+      stage: "preboarding",
+      start_date: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ];
   await login(page, 5175);
   await expect(
     page.getByRole("heading", { name: "Welcome, Alex." }),
   ).toBeVisible();
   await page.screenshot({
-    path: "test-results/candidate-overview.png",
+    path: "test-results/hr-overview.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "My documents", exact: true }).click();
+  await page.getByRole("link", { name: "My documents", exact: true }).click();
   await page
     .getByLabel("Choose a file")
     .setInputFiles({
@@ -200,7 +213,7 @@ test("candidate uploads, signs, downloads and requests access", async ({
     .click();
   await expect(page.getByRole("heading", { name: "resume.pdf" })).toBeVisible();
   expect(state.candidate_documents[0].candidate_id).toBe(userId);
-  await page.getByRole("button", { name: "My contracts", exact: true }).click();
+  await page.getByRole("link", { name: "My contracts", exact: true }).click();
   await page
     .getByRole("button", { name: "Review & sign", exact: true })
     .click();
@@ -216,7 +229,7 @@ test("candidate uploads, signs, downloads and requests access", async ({
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download PDF", exact: true }).click();
   expect((await download).suggestedFilename()).toBe("Employment agreement.pdf");
-  await page.getByRole("button", { name: "Tool access", exact: true }).click();
+  await page.getByRole("link", { name: "Tool access", exact: true }).click();
   await page.getByLabel("Tool or service").fill("GitHub");
   await page
     .getByLabel("What do you need it for?")
@@ -226,6 +239,43 @@ test("candidate uploads, signs, downloads and requests access", async ({
     page.getByRole("heading", { name: "GitHub", exact: true }),
   ).toBeVisible();
   expect(state.tool_requests[0].status).toBe("pending");
+});
+test("pre-hire candidate only sees application, documents and account", async ({
+  page,
+}) => {
+  const state = await mock(page, "candidate");
+  state.my_application = [
+    {
+      id: "app-2",
+      full_name: "Alex Morgan",
+      stage: "application",
+      start_date: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  await login(page, 5175);
+  await expect(
+    page.getByRole("heading", { name: "My application" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "My application", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "My documents", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "My onboarding", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "My contracts", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Tool access", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Team photos", exact: true }),
+  ).toHaveCount(0);
 });
 test("candidate cannot open admin workspace", async ({ page }) => {
   await mock(page, "candidate");
@@ -262,7 +312,7 @@ test("password confirmation is validated and mobile login fits", async ({
     ),
   ).toBe(true);
   await page.screenshot({
-    path: "test-results/candidate-mobile.png",
+    path: "test-results/hr-mobile.png",
     fullPage: true,
   });
 });

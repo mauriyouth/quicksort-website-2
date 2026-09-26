@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- @dsCard group="Colors" name="Light + dark mode" subtitle="Semantic tokens defined twice — flip with data-theme" viewport="700x380" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css"><link rel="stylesheet" href="../styles.css">
+<style>.mode{flex:1;padding:22px;border-radius:16px;background:var(--qs-bg-0);color:var(--qs-fg-1);border:1px solid var(--qs-border)}.mode h4{margin:0 0 14px;font:500 13px/1 var(--qs-font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--qs-fg-3)}.swatches{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}.sw{height:44px;border-radius:8px;border:1px solid var(--qs-border)}.ink{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}.chip{display:flex;gap:10px}.chip .btn{padding:8px 16px;border-radius:999px;border:0;font:500 14px/1 var(--qs-font-sans);background:var(--qs-accent);color:var(--qs-accent-fg)}.chip .btn2{padding:8px 16px;border-radius:999px;font:500 14px/1 var(--qs-font-sans);background:transparent;color:var(--qs-fg-1);border:1px solid var(--qs-border-strong)}.tok{font:400 12px/1.5 var(--qs-font-mono);color:var(--qs-fg-3)}</style>
+</head>
+<body><div class="card">
+  <div class="row" style="gap:16px;align-items:stretch">
+    <div class="mode" data-theme="light">
+      <h4>Light</h4>
+      <div class="swatches"><div class="sw" style="background:var(--qs-bg-0)"></div><div class="sw" style="background:var(--qs-bg-1)"></div><div class="sw" style="background:var(--qs-bg-2)"></div></div>
+      <div class="ink">
+        <div style="font:400 18px/1.2 var(--qs-font-display);color:var(--qs-fg-1)">Primary ink</div>
+        <div style="font:400 14px/1.4 var(--qs-font-sans);color:var(--qs-fg-2)">Secondary text sits one step back.</div>
+        <div style="font:400 13px/1.4 var(--qs-font-sans);color:var(--qs-fg-3)">Tertiary / muted labels.</div>
+      </div>
+      <div class="chip"><button class="btn">Accent</button><button class="btn2">Quiet</button></div>
+      <div class="tok" style="margin-top:14px">bg-0 #FFFFFF · fg-1 #000710</div>
+    </div>
+    <div class="mode" data-theme="dark">
+      <h4>Dark</h4>
+      <div class="swatches"><div class="sw" style="background:var(--qs-bg-0)"></div><div class="sw" style="background:var(--qs-bg-1)"></div><div class="sw" style="background:var(--qs-bg-2)"></div></div>
+      <div class="ink">
+        <div style="font:400 18px/1.2 var(--qs-font-display);color:var(--qs-fg-1)">Primary ink</div>
+        <div style="font:400 14px/1.4 var(--qs-font-sans);color:var(--qs-fg-2)">Secondary text sits one step back.</div>
+        <div style="font:400 13px/1.4 var(--qs-font-sans);color:var(--qs-fg-3)">Tertiary / muted labels.</div>
+      </div>
+      <div class="chip"><button class="btn">Accent</button><button class="btn2">Quiet</button></div>
+      <div class="tok" style="margin-top:14px">bg-0 #151515 · fg-1 #FAFAFA</div>
+    </div>
+  </div>
+  <div class="mono" style="margin-top:14px">Light is the default. Add data-theme="dark" to any element or subtree; tokens inherit. Signal Lime and the type scale are mode-independent.</div>
+</div></body></html>

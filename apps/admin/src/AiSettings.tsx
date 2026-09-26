@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@clerk/react";
-import { Notice } from "@quicksort/candidate-ui";
+import { Notice } from "@quicksort/hr-ui";
 type Status = { configured: boolean; source: string; model: string; updatedAt: string | null; canSave: boolean };
 export function AiSettings({ isOwner }: { isOwner: boolean }) {
   const { session } = useSession();
@@ -11,7 +11,7 @@ export function AiSettings({ isOwner }: { isOwner: boolean }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   async function request(method = "GET", body?: unknown) {
-    const token = await session?.getToken();
+    const token = await session?.getToken({ template: "supabase" });
     if (!token) throw new Error("Sign in again to configure AI.");
     const response = await fetch("/api/ai-settings", { method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
     if (!response.headers.get("content-type")?.includes("application/json")) throw new Error("AI settings are unavailable. Deploy the updated admin app first.");

@@ -1,0 +1,6 @@
+/* ─────────────────────────────────────────────────────────────────
+   QUICKSORT DESIGN SYSTEM · STYLESHEET
+   Single entry point for consumers: tokens + components.
+   ───────────────────────────────────────────────────────────────── */
+@import url('./tokens.css');
+@import url('./components.css');

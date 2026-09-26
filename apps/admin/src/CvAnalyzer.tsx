@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "@clerk/react";
-import { type Job, type Row } from "@quicksort/candidate-db";
-import { Heading, Notice } from "@quicksort/candidate-ui";
+import { type Job, type Row } from "@quicksort/hr-db";
+import { Notice } from "@quicksort/hr-ui";
 import { ArrowLeft, ArrowUpRight, Check, FileText, Info, Upload, X } from "lucide-react";
 import { MAX_BATCH_FILES, MAX_CV_BYTES, evaluationSchema, matchMetrics, topProfiles, type AnalysisRequest, type CandidateResult } from "./analysis";
 import "./analyzer.css";
@@ -58,7 +58,7 @@ export function CvAnalyzer({ jobs, documents, people }: { jobs: Job[]; documents
       const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1]); reader.onerror = () => reject(new Error("This PDF could not be read.")); reader.readAsDataURL(item.file!); });
       cv = { kind: "pdf", data, name: item.name };
     }
-    const token = await session?.getToken();
+    const token = await session?.getToken({ template: "supabase" });
     if (!token) throw Object.assign(new Error("Sign in again before continuing."), { status: 401 });
     const response = await fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ jobId: job.id, requestId: item.requestId, expectedUpdatedAt: job.updated_at, cv }), signal: AbortSignal.any([signal, AbortSignal.timeout(115000)]) });
     if (!response.headers.get("content-type")?.includes("application/json")) throw new Error("The analyzer is unavailable. Please retry.");
@@ -113,7 +113,6 @@ export function CvAnalyzer({ jobs, documents, people }: { jobs: Job[]; documents
   const pending = items.filter(i => i.status === "queued").length;
   if (selected) return <CandidateDetail candidate={selected} onBack={() => setSelected(null)} />;
   return <div className="cv-workspace">
-    <Heading eyebrow="Recruiting workspace" title="CV analyzer">From a stack of CVs to a focused shortlist.</Heading>
     <Notice error>{error}</Notice>
     <div className="cv-workbench">
       <section className="cv-card cv-setup" aria-label="Analysis setup">

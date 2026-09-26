@@ -1,0 +1,398 @@
+/* Operations board (src/ops/OpsBoard.tsx). Clean kanban: board tabs with
+   count chips, owner filter in a toolbar well, raised columns with count
+   badges, lift cards with priority chips, counter pills and lime progress
+   bars. Every surface resolves to portal tokens so the board flips with
+   data-theme — columns sit on --qs-paper, cards one step above on
+   --qs-lift (the token reserved for kanban cards). */
+.ops {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Board tabs */
+.ops-boards {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--qs-line);
+  overflow-x: auto;
+}
+.ops-board {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--qs-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--qs-dur-2) var(--qs-ease),
+    border-color var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease);
+}
+.ops-board:hover {
+  color: var(--qs-ink);
+  background: var(--qs-hover);
+}
+.ops-board.active {
+  color: var(--qs-ink);
+  font-weight: 650;
+  border-bottom-color: var(--qs-lime);
+}
+.ops-board-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--qs-muted);
+  background: var(--qs-active);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.ops-board.active .ops-board-count {
+  color: var(--qs-rich-black);
+  background: var(--qs-lime);
+}
+.ops-board-new {
+  color: var(--qs-muted);
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* Toolbar */
+.ops-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--qs-paper);
+  border: 1px solid var(--qs-line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.ops-toolbar select {
+  min-width: 180px;
+}
+
+/* Kanban */
+.ops-kanban {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding: 2px 2px 14px;
+}
+.ops-column {
+  flex: 0 0 296px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--qs-paper);
+  border: 1px solid var(--qs-line);
+  border-radius: var(--qs-radius, 14px);
+  padding: 12px;
+  min-height: 140px;
+  transition:
+    border-color var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease),
+    box-shadow var(--qs-dur-2) var(--qs-ease);
+}
+/* Lime drop target, same tint language as the sales pipeline filter chip. */
+.ops-column.drop {
+  border-color: color-mix(in srgb, var(--qs-lime) 55%, transparent);
+  background: color-mix(in srgb, var(--qs-lime) 8%, var(--qs-paper));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--qs-lime) 35%, transparent);
+}
+.ops-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px 2px;
+}
+.ops-column-head h2 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--qs-fg-2);
+}
+.ops-column-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--qs-muted);
+  background: var(--qs-active);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.ops-column-empty {
+  margin: 0;
+  padding: 20px 10px;
+  border: 1px dashed var(--qs-border);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--qs-muted);
+}
+.ops-column-new {
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 6px;
+  color: var(--qs-muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+}
+.ops-column-new:hover {
+  color: var(--qs-ink);
+  border-color: var(--qs-border-strong);
+  background: var(--qs-hover);
+}
+
+/* Cards */
+.ops-card {
+  background: var(--qs-lift);
+  border: 1px solid var(--qs-line);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(0, 7, 14, 0.06);
+  transition:
+    border-color var(--qs-dur-2) var(--qs-ease),
+    box-shadow var(--qs-dur-2) var(--qs-ease),
+    transform var(--qs-dur-2) var(--qs-ease);
+}
+.ops-card:hover {
+  border-color: var(--qs-border-strong);
+  box-shadow: 0 6px 18px rgba(0, 7, 14, 0.12);
+  transform: translateY(-1px);
+}
+.ops-card:active {
+  cursor: grabbing;
+}
+.ops-card:focus-visible {
+  outline: 2px solid var(--qs-lime);
+  outline-offset: 2px;
+}
+.ops-card-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ops-card-title h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ops-priority {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  border: 1px solid var(--qs-border-strong);
+  border-radius: 6px;
+  padding: 1px 6px;
+  color: var(--qs-fg-2);
+  background: var(--qs-active);
+  font-variant-numeric: tabular-nums;
+}
+.ops-priority--p1 {
+  background: var(--qs-lime);
+  border-color: var(--qs-lime);
+  color: var(--qs-rich-black);
+}
+.ops-priority--p2 {
+  border-color: color-mix(in srgb, var(--qs-lime) 55%, transparent);
+  color: var(--qs-ink);
+}
+.ops-priority--p3 {
+  color: var(--qs-muted);
+}
+.ops-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ops-pill {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--qs-fg-2);
+  background: var(--qs-active);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-variant-numeric: tabular-nums;
+}
+.ops-pct {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--qs-ink);
+  font-variant-numeric: tabular-nums;
+}
+.ops-progress {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--qs-active);
+  overflow: hidden;
+}
+.ops-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--qs-lime);
+  transition: width var(--qs-dur-2) var(--qs-ease);
+}
+.ops-card-owner {
+  margin: 0;
+  font-size: 12px;
+  color: var(--qs-muted);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.ops-card-owner > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ops-owner-avatar {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: var(--qs-deep);
+  color: var(--qs-lime);
+}
+
+/* Add card / column */
+.ops-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  border: 1px dashed transparent;
+  border-radius: 10px;
+  background: none;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--qs-muted);
+  cursor: pointer;
+  transition:
+    color var(--qs-dur-2) var(--qs-ease),
+    border-color var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease);
+}
+.ops-add:hover {
+  color: var(--qs-ink);
+  border-color: var(--qs-border-strong);
+  background: var(--qs-hover);
+}
+.ops-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ops-add-form .actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Modal */
+.ops-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(15, 15, 20, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8vh 16px 16px;
+  overflow-y: auto;
+}
+.ops-modal-card {
+  background: var(--qs-paper);
+  color: var(--qs-ink);
+  border: 1px solid var(--qs-line);
+  border-radius: 14px;
+  padding: 20px;
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 24px 60px rgba(15, 15, 20, 0.25);
+}
+.ops-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ops-modal-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.ops-counters {
+  border: 1px solid var(--qs-line);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ops-counters legend {
+  font-size: 12px;
+  color: var(--qs-muted);
+  padding: 0 4px;
+}
+.ops-counter-row {
+  display: grid;
+  grid-template-columns: 1fr 64px auto 64px auto;
+  align-items: center;
+  gap: 6px;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--qs-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+.icon-button:hover {
+  color: var(--qs-ink);
+  background: var(--qs-active);
+}

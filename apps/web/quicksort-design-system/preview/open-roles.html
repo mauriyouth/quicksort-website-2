@@ -1,0 +1,74 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Open roles list" subtitle="Job listing rows — hairline chips, one lime marker per row" viewport="700x780" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+.sec{padding:30px 26px 26px;border-radius:18px;background:var(--qs-bg-0);color:var(--qs-fg-1)}
+.hd{max-width:38ch;margin-bottom:28px}
+.hd .h{font:400 32px/1.1 var(--qs-font-display);letter-spacing:-.02em;color:var(--qs-fg-1);text-wrap:pretty;margin-bottom:14px}
+.hd .b{font:400 14px/1.55 var(--qs-font-sans);color:var(--qs-fg-2);text-wrap:pretty}
+.roles{display:flex;flex-direction:column;gap:10px}
+.role{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:16px;padding:20px;border-radius:14px;background:var(--qs-bg-1);border:1px solid var(--qs-border);transition:border-color var(--qs-dur-2) var(--qs-ease)}
+.role:hover{border-color:var(--qs-border-strong)}
+.main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.role .t{font:400 19px/1.2 var(--qs-font-display);letter-spacing:-.01em;color:var(--qs-fg-1)}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:4px 11px 4px 9px;border-radius:999px;border:1px solid var(--qs-border);font:500 11px/1.4 var(--qs-font-sans);letter-spacing:.02em;color:var(--qs-fg-2);white-space:nowrap}
+.chip::before{content:"";width:5px;height:5px;border-radius:999px;background:var(--qs-accent);flex-shrink:0}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font:400 12px/1.4 var(--qs-font-mono);color:var(--qs-fg-3)}
+.meta .sep{color:var(--qs-fg-4)}
+.apply{align-self:flex-start;display:inline-flex;align-items:center;gap:9px;padding:9px 15px;border-radius:999px;border:1px solid var(--qs-border-strong);background:transparent;font:500 13px/1 var(--qs-font-sans);color:var(--qs-fg-1);cursor:pointer;text-decoration:none;transition:background var(--qs-dur-2) var(--qs-ease)}
+.apply:hover{background:var(--qs-bg-2)}
+.know{display:inline-flex;align-items:center;gap:8px;font:500 13px/1 var(--qs-font-sans);color:var(--qs-fg-1);text-decoration:none;white-space:nowrap;padding-top:4px}
+.know:hover{color:var(--qs-fg-2)}
+.arw{width:11px;height:11px;flex-shrink:0}
+a{color:var(--qs-fg-1)}a:hover{color:var(--qs-fg-2)}
+</style><style>
+.modebar{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:14px}
+.modebar .seg{display:inline-flex;padding:3px;border-radius:999px;border:1px solid var(--qs-border-strong);background:var(--qs-bg-2)}
+.modebar button{appearance:none;border:0;background:transparent;padding:6px 14px;border-radius:999px;font:500 12px/1 var(--qs-font-sans);letter-spacing:.02em;color:var(--qs-fg-3);cursor:pointer;transition:background var(--qs-dur-2) var(--qs-ease),color var(--qs-dur-2) var(--qs-ease)}
+.modebar button[aria-pressed="true"]{background:var(--qs-fg-1);color:var(--qs-bg-0)}
+.sec{transition:background var(--qs-dur-3) var(--qs-ease),color var(--qs-dur-3) var(--qs-ease)}
+</style>
+</head>
+<body><div class="card">
+ <div class="modebar"><div class="seg"><button type="button" data-set="light" aria-pressed="true">Light</button><button type="button" data-set="dark" aria-pressed="false">Dark</button></div></div>
+ <div class="sec" data-theme="light">
+  <div class="hd">
+   <div class="h">We unite world-class talent to push boundaries and build what's next.</div>
+   <div class="b">We believe in building teams where unique perspectives and talents can thrive and everyone has what they need to excel in their role, career, and at home.</div>
+  </div>
+  <div class="roles">
+   <div class="role">
+    <div class="main">
+     <div class="top">
+      <div class="t">Senior AI &amp; ML Engineer</div>
+      <span class="chip">Engineering</span>
+     </div>
+     <div class="meta">Paris, France<span class="sep">·</span>Permanent (CDI)</div>
+     <a class="apply" href="#">Apply on LinkedIn<svg class="arw" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9L9 3M9 3H4.2M9 3v4.8"/></svg></a>
+    </div>
+    <a class="know" href="#">Know More<svg class="arw" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9L9 3M9 3H4.2M9 3v4.8"/></svg></a>
+   </div>
+   <div class="role">
+    <div class="main">
+     <div class="top">
+      <div class="t">B2B Growth &amp; Digital Marketing Manager</div>
+      <span class="chip">Growth &amp; Business Development</span>
+     </div>
+     <div class="meta">Chennai, India <span class="sep">|</span> Remote / Hybrid<span class="sep">·</span>Permanent (CDI)</div>
+     <a class="apply" href="#">Apply on LinkedIn<svg class="arw" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9L9 3M9 3H4.2M9 3v4.8"/></svg></a>
+    </div>
+    <a class="know" href="#">Know More<svg class="arw" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9L9 3M9 3H4.2M9 3v4.8"/></svg></a>
+   </div>
+  </div>
+ </div>
+ <div class="mono" style="margin-top:14px">Filled rows, not cards — one grey row per role stays quiet as the list grows. Department is a neutral chip with a single lime dot; the pin and clock icons are dropped in favour of mono meta text, since the system ships no icon set. Rows read from the mode tokens, so the same markup serves both grounds.</div>
+</div>
+<script>
+const secs = document.querySelectorAll('.sec');
+const btns = document.querySelectorAll('.modebar button');
+for (const b of btns) b.addEventListener('click', () => {
+  for (const o of btns) o.setAttribute('aria-pressed', String(o === b));
+  for (const s of secs) s.setAttribute('data-theme', b.dataset.set);
+});
+</script>
+</body></html>

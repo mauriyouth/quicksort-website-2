@@ -1,9 +1,9 @@
 import "./blog.css";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Plus, Search, ArrowUpRight } from "lucide-react";
-import { db, errorMessage, blogCategories, validateBlogImage, type BlogRecord } from "@quicksort/candidate-db";
-import { slugify } from "@quicksort/candidate-db/validation";
-import { Heading, Notice, Empty, Pill } from "@quicksort/candidate-ui";
+import { db, errorMessage, blogCategories, validateBlogImage, type BlogRecord } from "@quicksort/hr-db";
+import { slugify } from "@quicksort/hr-db/validation";
+import { Notice, Empty, Pill } from "@quicksort/hr-ui";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -33,9 +33,10 @@ export function BlogManager() {
   }
   const visible = posts.filter(p => (category === "All" || p.category === category) && `${p.title} ${p.author}`.toLowerCase().includes(search.toLowerCase()));
   return <>
-    <Heading eyebrow="Ideas worth sharing" title="Blog posts" action={<button className="btn" disabled={busy} onClick={() => setEditing(null)}><Plus size={16}/>Create a post</button>}>
-      Write, add a cover image and publish your team's ideas on the blog.
-    </Heading>
+    <div className="heading">
+      <div />
+      <button className="btn" disabled={busy} onClick={() => setEditing(null)}><Plus size={16}/>Create a post</button>
+    </div>
     <Notice error>{error}</Notice><Notice>{message}</Notice>
     {editing !== undefined && <BlogEditor key={editing?.id || "new"} post={editing} busy={busy} onCancel={() => setEditing(undefined)} onSave={(values, file) => action(async () => {
       let image_path = values.image_path || "";

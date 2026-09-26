@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Mode switch" subtitle="Flips the data-theme scope · light ⇄ dark" viewport="700x360" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../preview/_card.css"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>.panel{padding:20px 22px;border-radius:16px;background:var(--qs-bg-0);color:var(--qs-fg-1);border:1px solid var(--qs-border);transition:background var(--qs-dur-3) var(--qs-ease),border-color var(--qs-dur-3) var(--qs-ease)}.hdr{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.ttl{font:400 20px/1.2 var(--qs-font-display);color:var(--qs-fg-1)}.bdy{font:400 14px/1.5 var(--qs-font-sans);color:var(--qs-fg-2);max-width:44ch}.sizes{display:flex;align-items:center;gap:22px;margin-top:18px;padding-top:16px;border-top:1px solid var(--qs-border)}.sizes .lb{font:400 12px/1 var(--qs-font-mono);color:var(--qs-fg-3)}.sz{display:flex;flex-direction:column;gap:8px;align-items:flex-start}</style>
+</head>
+<body><div class="card">
+  <div class="panel" id="demo" data-theme="light">
+    <div class="hdr">
+      <div class="ttl">Mode switch</div>
+      <div id="mount-labeled"></div>
+    </div>
+    <div class="bdy">The switch writes <code class="qs-code">data-theme</code> on its target. Here it flips this panel only; on a real page it writes <code class="qs-code">&lt;html&gt;</code> and persists the choice.</div>
+    <div class="sizes">
+      <div class="sz"><div id="mount-sm"></div><div class="lb">sm</div></div>
+      <div class="sz"><div id="mount-md"></div><div class="lb">md</div></div>
+      <div class="sz"><div id="mount-lg"></div><div class="lb">lg</div></div>
+    </div>
+  </div>
+  <div class="mono" style="margin-top:14px">&lt;ThemeToggle showLabel /&gt; — uncontrolled, writes &lt;html data-theme&gt; and localStorage. Pass target="local" to scope it to a subtree, or theme + onChange to control it.</div>
+</div>
+<script>
+const { ThemeToggle } = window.QuicksortDesignSystem_bdb780;
+const panel = document.getElementById('demo');
+function render(theme) {
+  const props = { theme, onChange: t => { panel.setAttribute('data-theme', t); render(t); } };
+  for (const [id, extra] of [['mount-labeled', { showLabel: true }], ['mount-sm', { size: 'sm' }], ['mount-md', { size: 'md' }], ['mount-lg', { size: 'lg' }]]) {
+    const host = document.getElementById(id);
+    host._root = host._root || ReactDOM.createRoot(host);
+    host._root.render(React.createElement(ThemeToggle, { ...props, ...extra }));
+  }
+}
+render('light');
+</script>
+</body></html>

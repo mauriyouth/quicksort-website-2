@@ -5,7 +5,8 @@
 Project: `kupbvrnjppcwqxmzxasi` (Quicksort), URL `https://kupbvrnjppcwqxmzxasi.supabase.co`.
 The versioned migrations have already been applied to this project. Do not replay them manually on the same database. Generated TypeScript definitions in `packages/db/src/database.types.ts` came from this project's schema.
 
-Tables: `profiles`, `user_roles`, `jobs`, `candidate_documents`, `contracts`, `contract_signatures`, `tool_requests`.
+Tables: `profiles`, `user_roles`, `jobs`, `candidate_documents`, `contracts`, `contract_signatures`, `tool_requests`, plus the HR pipeline from `prd-hr.md`: `opportunities`, `pipeline_candidates`, `pipeline_events` (immutable — insert/select only), `interviews`, `offers`, `onboarding_items`, `reviews`, `offboarding_records`, `offboarding_items`, `candidate_requests`.
+Candidate-facing views: `my_application`, `my_application_events` — a candidate sees only their own stage and timeline, never scores, rankings or other candidates.
 Private storage buckets: `candidate-documents` and `contracts`, both limited to 10 MB per file. Onboarding files support PDF, JPG, PNG and DOCX; contracts support PDF.
 
 All exposed tables use row-level security. Candidates are restricted to their own records. Admin roles are stored in `user_roles`, which clients can read but cannot change. Every new user starts as a candidate, irrespective of user-supplied metadata. No service-role/secret key is used in an application bundle.
@@ -30,16 +31,25 @@ returning user_id, role;
 
 No initial administrator has been selected yet. Do not use user metadata to grant privileges. Granting/revoking roles remains a trusted database-owner operation.
 
+## Environment variables
+
+Each portal needs a local `.env.local` (never committed) built from its `.env.example`:
+
+- `VITE_SUPABASE_URL` — project URL, e.g. `https://kupbvrnjppcwqxmzxasi.supabase.co`
+- `VITE_SUPABASE_PUBLISHABLE_KEY` — the public anon/publishable key (Supabase Dashboard → Project Settings → API)
+- `VITE_CLERK_PUBLISHABLE_KEY` — the Clerk publishable key for the `blessed-midge-8591` instance (Clerk Dashboard → API keys)
+
+Without `VITE_CLERK_PUBLISHABLE_KEY` the app stops at startup with a "Sign-in is not configured" message naming the missing variable; without the Supabase variables the workspace shows "coming online" after sign-in.
+
 ## Auth configuration
 
-In Supabase Authentication, keep Email/password enabled. Set the Site URL to `https://quicksort-candidate.vercel.app`. Add the exact following redirect URLs for both deployed portals and local development:
+In Supabase Authentication, keep Email/password enabled. Set the Site URL to `https://quicksort-admin.vercel.app`. Add the exact following redirect URLs for the deployed portal and local development:
 
 - `https://quicksort-admin.vercel.app/`
 - `https://quicksort-admin.vercel.app/?account=password`
-- `https://quicksort-candidate.vercel.app/`
-- `https://quicksort-candidate.vercel.app/?account=password`
 - `http://127.0.0.1:5174/` and `http://127.0.0.1:5174/?account=password`
-- `http://127.0.0.1:5175/` and `http://127.0.0.1:5175/?account=password`
+
+(The retired HR portal URLs can stay listed until the old deployment is taken down.)
 
 Use custom SMTP for production delivery of confirmation and password-reset messages. Configure the Auth password minimum to 12 characters to match the UI. The apps support signup, confirmation, password login, recovery, password creation after an invitation/recovery session and sign-out. They do not send admin invitations themselves.
 
@@ -50,7 +60,8 @@ The live redirect/SMTP settings must be configured for the final portal domains;
 The two new Vercel projects have been created in the existing website team (`team_msiIWIErbrbRMcWEWv69WUdJ`). Their initial deployments use this checkout:
 
 - Admin: https://quicksort-admin.vercel.app
-- Candidate: https://quicksort-candidate.vercel.app
+
+The former HR portal app (`apps/hr`, package `@quicksort/hr`) was merged into the admin app: one deployment serves both workspaces. Signed-in users with the `admin` role get the back-office (HR, Sales, Ops sections); every other signed-in user gets the candidate self-service portal (application status, documents, contracts, tool access, team photos). The app root picks the shell from the session role — data access stays enforced by Supabase RLS. The standalone `quicksort-hr` Vercel project can be retired (or kept as a duplicate of the same root) once the domain is repointed.
 
 The Vercel account could not connect the GitHub repository to these new projects because its GitHub integration is missing. A repository owner must connect `mauriyouth/quicksort-website-2` in each project's Git settings to enable automatic deployments. The source is already pushed to `feat/workforce-monorepo` in that repository.
 
@@ -59,8 +70,7 @@ The existing website Vercel project is configured to build from `apps/web`, with
 | Project | Root Directory | Build command | Output |
 | --- | --- | --- | --- |
 | Existing `quicksort-website-2` | `apps/web` | `pnpm build` | `dist` |
-| `quicksort-admin` | `apps/admin` | `pnpm build` | `dist` |
-| `quicksort-candidate` | `apps/candidate` | `pnpm build` | `dist` |
+| `quicksort-admin` (staff + candidate portal) | `apps/admin` | `pnpm build` | `dist` |
 
 All three Vercel projects have `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` configured for production, preview and development. Use the public publishable key, never a secret/service-role key. Environment changes require a new Vite build.
 
@@ -68,11 +78,11 @@ Coordinate changing the existing website Root Directory with merging the monorep
 
 The portals use SPA rewrites and no-index headers. The website has narrow rewrites for `/career/:slug` and `/fr/career/:slug`, retaining 404 responses for unrelated unknown routes. Job detail pages return an app shell and mark unavailable jobs noindex after loading; they are not server-rendered job pages.
 
-Suggested domains: existing website domain, `admin.quicksort.fr`, `candidate.quicksort.fr`. Domain DNS changes and external tool provisioning are not part of the app code.
+Suggested domains: existing website domain, `admin.quicksort.fr`, `hr.quicksort.fr`. Domain DNS changes and external tool provisioning are not part of the app code.
 
 ## Verification
 
-- `pnpm build`: builds all three apps; admin/candidate builds include strict TypeScript checking.
+- `pnpm build`: builds both apps; the admin build includes strict TypeScript checking and the team-photo asset check.
 - `pnpm test`: URL and upload boundary checks.
 - `pnpm test:seo`: static website and EN/FR regression checks.
 - `pnpm test:browser`: mocked browser workflows and responsive layouts.

@@ -8,7 +8,7 @@
     "vite": "6.0.4"
   },
   "scripts": {
-    "build": "tsc --noEmit && vite build",
+    "build": "node scripts/check-photo-assets.mjs && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "dev": "vite --host 127.0.0.1 --port 5174",
     "preview": "vite preview"
@@ -20,8 +20,8 @@
   "dependencies": {
     "@ai-sdk/openai": "4.0.60",
     "@clerk/react": "6.15.1",
-    "@quicksort/candidate-db": "workspace:*",
-    "@quicksort/candidate-ui": "workspace:*",
+    "@quicksort/hr-db": "workspace:*",
+    "@quicksort/hr-ui": "workspace:*",
     "@supabase/supabase-js": "2.115.0",
     "ai": "7.0.93",
     "lucide-react": "0.453.0",

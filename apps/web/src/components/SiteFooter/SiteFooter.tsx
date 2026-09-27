@@ -11,6 +11,7 @@ const navigationLinks = [
     { label: "Voice AI", href: "/voice-ai" },
     { label: "Careers", href: "/career" },
     { label: "Blog", href: "/blog" },
+    { label: "Events", href: "/events" },
 ];
 
 const contactInfo = [
@@ -167,7 +168,7 @@ export const SiteFooter = ({
                     <nav
                         className={`inline-flex items-start ${isHomepage
                             ? "flex-wrap h-auto gap-3 sm:gap-4 relative order-1 sm:order-2"
-                            : "h-6 gap-4"
+                            : "flex-wrap h-auto gap-4"
                             }`}
                     >
                         {navigationLinks.map((link, index) =>
@@ -201,7 +202,7 @@ export const SiteFooter = ({
                     <div
                         className={`inline-flex items-start ${isHomepage
                             ? "flex-wrap h-auto gap-3 sm:gap-4 relative order-2 sm:order-3"
-                            : "h-6 gap-4"
+                            : "flex-wrap h-auto gap-4"
                             }`}
                     >
                         {contactInfo.map((info, index) => (

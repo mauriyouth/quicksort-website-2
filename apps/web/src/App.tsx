@@ -6,6 +6,7 @@ import { Seo } from "./components/Seo";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { Desktop } from "./screens/Desktop";
 import { AiForBusiness } from "./screens/AiForBusiness";
+import { Events } from "./screens/Events";
 import { Blog } from "./screens/Blog";
 import { BlogPostDetail } from "./screens/BlogPostDetail";
 import { DataForAi } from "./screens/DataForAi";
@@ -27,6 +28,7 @@ const AppContent = () => {
       <Routes key={locale} location={{ ...location, pathname: path }}>
         <Route path="/" element={<Desktop />} />
         <Route path="/ai-for-business" element={<AiForBusiness />} />
+        <Route path="/events" element={<Events />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/blog/:slug" element={<BlogPostDetail />} />
         <Route path="/data-for-ai" element={<DataForAi />} />

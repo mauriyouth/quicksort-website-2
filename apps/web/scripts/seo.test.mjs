@@ -51,7 +51,7 @@ test('static serving keeps robots/XML separate and unknown URLs return 404', asy
       assert.ok(response.headers.get('content-type').includes(type));
       assert.ok(!(await response.text()).includes('<div id="app">'));
     }
-    for (const path of ['/missing-page', '/blog/missing-post', '/missing.png']) {
+    for (const path of ['/missing-page', '/missing.png']) {
       const response = await fetch(base + path); assert.equal(response.status, 404);
       assert.ok((await response.text()).includes('Page not found'));
     }
@@ -59,9 +59,13 @@ test('static serving keeps robots/XML separate and unknown URLs return 404', asy
     assert.equal(good.headers.get('x-content-type-options'), 'nosniff');
     const config = JSON.parse(await readFile('vercel.json', 'utf8'));
     assert.ok(!config.routes, 'no catch-all route override');
-    assert.deepEqual(config.rewrites.map(r=>r.source), ['/career/:slug', '/fr/career/:slug']);
-    const dynamic = await fetch(base + '/career/new-role'); assert.equal(dynamic.status, 200);
-    assert.ok((await dynamic.text()).includes('<div id="app"></div>'));
+    assert.deepEqual(config.rewrites.map(r=>r.source), ['/career/:slug', '/fr/career/:slug', '/blog/:slug', '/fr/blog/:slug']);
+    for (const path of ['/career/new-role', '/blog/new-post', '/fr/blog/new-post']) {
+      const dynamic = await fetch(base + path); assert.equal(dynamic.status, 200);
+      assert.ok((await dynamic.text()).includes('<div id="app"></div>'));
+    }
+    const csp = config.headers[0].headers.find(header => header.key === 'Content-Security-Policy').value;
+    assert.ok(csp.split(';').find(rule => rule.trim().startsWith('img-src ')).includes('https://kupbvrnjppcwqxmzxasi.supabase.co'));
     assert.equal(config.redirects[0].permanent, true);
     assert.equal(config.redirects[0].has[0].value, 'quicksort.fr');
   } finally { await new Promise(done => server.close(done)); }

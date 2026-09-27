@@ -18,7 +18,7 @@ export async function startServer(port = 4173) {
       if (safe !== root && !safe.startsWith(root + sep)) { res.writeHead(400); return res.end(); }
       const candidates = path === '/' ? [resolve(root, 'index.html')] : [safe, safe + '.html'];
       let file;
-      if (/^\/(fr\/)?career\/[^/]+$/.test(path)) file = resolve(root, 'app-shell.html');
+      if (/^\/(fr\/)?(career|blog)\/[^/]+$/.test(path)) file = resolve(root, 'app-shell.html');
       for (const candidate of candidates) if (await stat(candidate).then(s => s.isFile()).catch(() => false)) { file = candidate; break; }
       const status = file && path !== '/404' && path !== '/404.html' ? 200 : 404;
       file ??= resolve(root, '404.html');

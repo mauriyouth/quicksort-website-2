@@ -42,7 +42,7 @@ export function BlogManager() {
       let uploaded = "";
       if (file) {
         validateBlogImage(file);
-        const extension = {"image/jpeg":"jpg", "image/png":"png", "image/webp":"webp"}[file.type];
+        const extension = {"image/jpeg":"jpg", "image/png":"png", "image/webp":"webp", "image/gif":"gif"}[file.type];
         uploaded = `${crypto.randomUUID()}.${extension}`;
         const r = await db().storage.from("blog-images").upload(uploaded, file, {contentType: file.type, upsert: false});
         if (r.error) throw r.error;
@@ -109,7 +109,7 @@ function BlogEditor({post,busy,onCancel,onSave}: {post:BlogRecord|null;busy:bool
         <label>Publication date<input name="date" type="date" required max={new Date().toISOString().slice(0,10)} defaultValue={(post?.published_at || new Date().toISOString()).slice(0,10)}/></label>
       </div>
       <label>Short description<textarea name="description" rows={2} maxLength={500} required defaultValue={post?.description} placeholder="A short introduction for the blog card."/></label>
-      <label>Cover image<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => {const next=e.target.files?.[0];if(!next)return;try{validateBlogImage(next);setFile(next);setImageError("");}catch(err){setImageError(errorMessage(err));e.target.value="";}}}/><span className="muted small-text">JPG, PNG or WebP, up to 5 MB. Landscape images work best.</span></label>
+      <label>Cover image<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={e => {const next=e.target.files?.[0];if(!next)return;try{validateBlogImage(next);setFile(next);setImageError("");}catch(err){setImageError(errorMessage(err));e.target.value="";}}}/><span className="muted small-text">JPG, PNG, WebP or GIF, up to 5 MB. Landscape images work best.</span></label>
       <Notice error>{imageError}</Notice>
       {image && <img src={image} alt="Cover preview" style={{width:"100%",maxWidth:640,aspectRatio:"16 / 9",objectFit:"cover",borderRadius:16}}/>}
       <label>Image description<input name="image_alt" maxLength={300} required={Boolean(image)} defaultValue={post?.image_alt} placeholder="Describe the image for readers using a screen reader."/></label>

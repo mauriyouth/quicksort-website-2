@@ -3,7 +3,7 @@ import { ArrowUpRightIcon } from "lucide-react";
 import { LocaleLink as Link } from '@lib/i18n';
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
-import { getAllBlogPosts } from "@lib/blogPosts";
+import { useBlogPosts } from "@lib/useBlogPosts";
 
 const categories = [
   { id: "all", label: "View all" },
@@ -13,11 +13,12 @@ const categories = [
   { id: "infrastructure", label: "Infrastructure" },
 ];
 
-const blogPosts = getAllBlogPosts();
+
 
 
 export const BlogPostsGridSection = (): JSX.Element => {
-  const { t, localize } = useLocale();
+  const { t } = useLocale();
+  const { posts: blogPosts, loading, error } = useBlogPosts();
   const [categoryId, setCategoryId] = useState("all");
   const selectedCategory = categories.find(category => category.id === categoryId)?.label;
   const visiblePosts = blogPosts.filter(post => categoryId === "all" || post.category === selectedCategory);
@@ -42,23 +43,19 @@ export const BlogPostsGridSection = (): JSX.Element => {
           </div>
         </div>
 
-        {visiblePosts.length === 0 && <p role="status" className="text-ink-muted">{t("No articles in this category yet.")}</p>}
+        {error && <p role="alert" className="text-ink-muted">{t("Unable to load articles. Please refresh to try again.")}</p>}
+        {!loading && !error && visiblePosts.length === 0 && <p role="status" className="text-ink-muted">{t("No articles in this category yet.")}</p>}
         <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-3 items-start gap-6 sm:gap-8 md:gap-[48px_32px] w-full">
-          {visiblePosts.map((post, index) => (
+          {visiblePosts.map((post) => (
             <Link
               key={post.slug}
               to={`/blog/${post.slug}`}
               className="flex flex-col min-w-0 w-full sm:min-w-[280px] items-start gap-4 sm:gap-5 flex-1 hover:opacity-90 transition-opacity"
             >
               <article className="flex flex-col min-w-0 w-full items-start gap-4 sm:gap-5 flex-1">
-                <div
-                  className="relative self-stretch w-full h-48 sm:h-56 md:h-60 rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#1f242f] to-[#000000]"
-                  style={
-                    post.image
-                      ? { background: `${post.image} 50% 50% / cover` }
-                      : undefined
-                  }
-                />
+                <div className="relative self-stretch w-full h-48 sm:h-56 md:h-60 overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#1f242f] to-[#000000]">
+                  {post.image && <img src={post.image} alt={post.imageAlt || post.title} className="w-full h-full object-cover" loading="lazy" />}
+                </div>
 
                 <div className="flex flex-col items-start gap-4 sm:gap-6 w-full">
                   <div className="flex flex-col items-start gap-2 w-full">

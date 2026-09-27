@@ -1,3 +1,4 @@
+import type { BlogRecord, BlogInsert } from "../../candidate-db/src/blog";
 export type Json =
   | string
   | number
@@ -20,6 +21,7 @@ export type Database = {
         Update: { title?: string; event_date?: string; location?: string; event_url?: string; banner_url?: string; published?: boolean };
         Relationships: [];
       };
+      blog_posts: { Row: BlogRecord; Insert: BlogInsert; Update: Partial<BlogRecord>; Relationships: [] };
       candidate_documents: {
         Row: {
           candidate_id: string

@@ -5,6 +5,9 @@ export interface BlogPostMetadata {
   description: string;
   category: string;
   image?: string;
+  imageAlt?: string;
+  content?: string;
+  contentFr?: string;
   publishedDate?: string;
 }
 

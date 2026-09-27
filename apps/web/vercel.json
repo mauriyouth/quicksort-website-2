@@ -48,6 +48,14 @@
     {
       "destination": "/app-shell.html",
       "source": "/fr/career/:slug"
+    },
+    {
+      "source": "/blog/:slug",
+      "destination": "/app-shell.html"
+    },
+    {
+      "source": "/fr/blog/:slug",
+      "destination": "/app-shell.html"
     }
   ]
 }

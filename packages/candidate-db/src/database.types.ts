@@ -15,6 +15,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      events: {
+        Row: { id: string; title: string; event_date: string; location: string; event_url: string; banner_url: string; published: boolean; created_at: string; updated_at: string };
+        Insert: { title: string; event_date: string; location: string; event_url: string; banner_url: string; published?: boolean };
+        Update: { title?: string; event_date?: string; location?: string; event_url?: string; banner_url?: string; published?: boolean };
+        Relationships: [];
+      };
       kanban_projects: { Row: { id: string; name: string; created_at: string; created_by: string | null; creator_name: string | null }; Insert: { name: string }; Update: { name?: string }; Relationships: [] };
       kanban_boards: { Row: { id: string; project_id: string; name: string; created_at: string; created_by: string | null; creator_name: string | null }; Insert: { project_id: string; name: string }; Update: { name?: string }; Relationships: [] };
       kanban_columns: { Row: { id: string; board_id: string; name: string; position: number }; Insert: { board_id: string; name: string; position: number }; Update: { name?: string; position?: number }; Relationships: [] };

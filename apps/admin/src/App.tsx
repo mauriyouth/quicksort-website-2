@@ -1,5 +1,6 @@
 import { KanbanWorkspace } from "@quicksort/candidate-ui/kanban";
 import { AnalysisHistory } from "./AnalysisHistory";
+import { EventsManager } from "./EventsManager";
 import { BlogManager } from "./BlogManager";
 import { CvAnalyzer } from "./CvAnalyzer";
 import { AiSettings } from "./AiSettings";
@@ -12,6 +13,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Columns3,
+  CalendarDays,
   Plus,
   Search,
   ArrowUpRight,
@@ -46,6 +48,7 @@ const nav = [
   { id: "jobs", href: "/jobs", label: "Job posts", icon: BriefcaseBusiness },
   { id: "analyzer", href: "/cv-analyzer", label: "CV analyzer", icon: FileText },
   { id: "history", href: "/analysis-history", label: "Analysis history", icon: FileText },
+  { id: "events", href: "/events", label: "Events", icon: CalendarDays },
   { id: "blogs", href: "/blog-posts", label: "Blog posts", icon: FileText },
   { id: "people", href: "/candidates", label: "Candidates", icon: Users },
   { id: "contracts", href: "/contracts", label: "Contracts", icon: FileText },
@@ -217,6 +220,7 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
       {tab === "access" && isOwner && <AccessManager />}
+      {tab === "events" && <EventsManager />}
       {tab === "blogs" && <BlogManager />}
       {tab === "history" && <AnalysisHistory />}
       <div hidden={tab !== "analyzer"}><CvAnalyzer jobs={jobs} documents={documents} people={people} /></div>

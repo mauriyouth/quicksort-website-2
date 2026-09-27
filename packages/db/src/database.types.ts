@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      events: {
+        Row: { id: string; title: string; event_date: string; location: string; event_url: string; banner_url: string; published: boolean; created_at: string; updated_at: string };
+        Insert: { title: string; event_date: string; location: string; event_url: string; banner_url: string; published?: boolean };
+        Update: { title?: string; event_date?: string; location?: string; event_url?: string; banner_url?: string; published?: boolean };
+        Relationships: [];
+      };
       candidate_documents: {
         Row: {
           candidate_id: string

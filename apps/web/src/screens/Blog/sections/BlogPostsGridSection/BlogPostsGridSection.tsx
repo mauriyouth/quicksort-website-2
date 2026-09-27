@@ -54,7 +54,7 @@ export const BlogPostsGridSection = (): JSX.Element => {
             >
               <article className="flex flex-col min-w-0 w-full items-start gap-4 sm:gap-5 flex-1">
                 <div className="relative self-stretch w-full h-48 sm:h-56 md:h-60 overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#1f242f] to-[#000000]">
-                  {post.image && <img src={post.image} alt={post.imageAlt || post.title} className="w-full h-full object-cover" loading="lazy" />}
+                  {post.image && <img src={post.image} alt={post.imageAlt || post.title} className="w-full h-full object-contain" loading="lazy" />}
                 </div>
 
                 <div className="flex flex-col items-start gap-4 sm:gap-6 w-full">

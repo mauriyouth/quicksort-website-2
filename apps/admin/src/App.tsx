@@ -621,7 +621,7 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       {tab === "contracts" && (
         <>
           <Heading eyebrow="Onboarding" title="Contracts">
-            Share a PDF with a candidate and track their signature.
+            Share a PDF with a candidate and monitor their signature.
           </Heading>
           <section className="panel">
             <h2>Share a contract</h2>

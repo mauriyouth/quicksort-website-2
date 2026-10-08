@@ -61,6 +61,7 @@ const intelligenceWorkspaces: Record<"market" | "competitors" | "marketing" | "p
 
 const nav = [
   { id: "overview" as View, path: "/", label: "Overview", icon: LayoutGrid },
+  { id: "capabilities" as View, path: "/capabilities", label: "Capabilities", icon: Sparkles },
   { id: "accounts" as View, path: "/accounts", label: "Accounts", icon: Building2 },
   { id: "events" as View, path: "/events", label: "Events", icon: CalendarDays },
   { id: "leads" as View, path: "/leads", label: "Leads", icon: Users },
@@ -69,7 +70,6 @@ const nav = [
   { id: "marketing" as View, path: "/marketing-intelligence", label: "Marketing intelligence", icon: CircleDollarSign },
   { id: "partners" as View, path: "/strategic-partners", label: "Strategic partners", icon: Network },
   { id: "executive" as View, path: "/executive-intelligence", label: "Executive intelligence", icon: FileText },
-  { id: "capabilities" as View, path: "/capabilities", label: "Capabilities", icon: Sparkles },
   { id: "pipeline" as View, path: "/pipeline", label: "Pipeline", icon: Target },
   { id: "doors" as View, path: "/open-doors", label: "Open doors", icon: ContactRound },
 ];

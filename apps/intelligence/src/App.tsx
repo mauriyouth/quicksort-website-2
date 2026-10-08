@@ -123,18 +123,18 @@ const intelligenceWorkspaces: Record<"market" | "competitors" | "marketing" | "p
 };
 
 const nav = [
-  { id: "overview" as View, path: "/", label: "Overview", icon: LayoutGrid },
-  { id: "capabilities" as View, path: "/capabilities", label: "Capabilities", icon: Sparkles },
-  { id: "accounts" as View, path: "/accounts", label: "Accounts", icon: Building2 },
-  { id: "events" as View, path: "/events", label: "Events", icon: CalendarDays },
-  { id: "leads" as View, path: "/leads", label: "Leads", icon: Users },
-  { id: "market" as View, path: "/market-intelligence", label: "Market intelligence", icon: Activity },
-  { id: "competitors" as View, path: "/competitor-analysis", label: "Competitor analysis", icon: Search },
-  { id: "marketing" as View, path: "/marketing-intelligence", label: "Marketing intelligence", icon: CircleDollarSign },
-  { id: "partners" as View, path: "/strategic-partners", label: "Strategic partners", icon: Network },
-  { id: "executive" as View, path: "/executive-intelligence", label: "Executive intelligence", icon: FileText },
-  { id: "pipeline" as View, path: "/pipeline", label: "Pipeline", icon: Target },
-  { id: "doors" as View, path: "/open-doors", label: "Open doors", icon: ContactRound },
+  { id: "overview" as View, path: "/", label: "Overview", sidebarLabel: "Overview", icon: LayoutGrid },
+  { id: "capabilities" as View, path: "/capabilities", label: "Capabilities", sidebarLabel: "Capabilities", icon: Sparkles },
+  { id: "accounts" as View, path: "/accounts", label: "Accounts", sidebarLabel: "Accounts", icon: Building2 },
+  { id: "events" as View, path: "/events", label: "Events", sidebarLabel: "Events", icon: CalendarDays },
+  { id: "leads" as View, path: "/leads", label: "Leads", sidebarLabel: "Leads", icon: Users },
+  { id: "market" as View, path: "/market-intelligence", label: "Market intelligence", sidebarLabel: "Market", icon: Activity },
+  { id: "competitors" as View, path: "/competitor-analysis", label: "Competitor analysis", sidebarLabel: "Competitors", icon: Search },
+  { id: "marketing" as View, path: "/marketing-intelligence", label: "Marketing intelligence", sidebarLabel: "Marketing", icon: CircleDollarSign },
+  { id: "partners" as View, path: "/strategic-partners", label: "Strategic partners", sidebarLabel: "Strategic partners", icon: Network },
+  { id: "executive" as View, path: "/executive-intelligence", label: "Executive intelligence", sidebarLabel: "Executive", icon: FileText },
+  { id: "pipeline" as View, path: "/pipeline", label: "Pipeline", sidebarLabel: "Pipeline", icon: Target },
+  { id: "doors" as View, path: "/open-doors", label: "Open doors", sidebarLabel: "Open doors", icon: ContactRound },
 ];
 
 const accountSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -253,10 +253,10 @@ export default function App({ email = "" }: { email?: string }) {
           </a>
           <button className="sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? <PanelLeftOpen size={15}/> : <PanelLeftClose size={15}/>}</button>
         </div>
-        <div className="portal-label">Intelligence workspace</div>
+        <div className="portal-label">Business workspace</div>
         <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X size={20}/></button>
         <nav aria-label="Primary navigation">
-          {nav.map(({ id, path, label, icon: Icon }) => <a key={id} href={path} title={sidebarCollapsed ? label : undefined} className={view === id ? "active" : ""} onClick={(event) => { event.preventDefault(); go(id); }}><Icon size={18}/><span className="nav-label">{label}</span></a>)}
+          {nav.map(({ id, path, sidebarLabel, icon: Icon }) => <a key={id} href={path} title={sidebarCollapsed ? sidebarLabel : undefined} className={view === id ? "active" : ""} onClick={(event) => { event.preventDefault(); go(id); }}><Icon size={18}/><span className="nav-label">{sidebarLabel}</span></a>)}
         </nav>
         <div className="sidebar-bottom">
           <ShieldCheck size={22}/>

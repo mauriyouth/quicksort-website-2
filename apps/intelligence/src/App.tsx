@@ -6,7 +6,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Pencil, Save, ShieldCheck, Sparkles, Target, Users, X,
 } from "lucide-react";
 
-type View = "overview" | "intelligence" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors";
+type View = "overview" | "market" | "competitors" | "customers" | "marketing" | "partners" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors";
 type Capability = {
   id: string; name: string; short: string; color: string; people: number; projects: number;
   technologies: string[]; proof: string; experts: { initials: string; name: string; role: string }[];
@@ -50,84 +50,28 @@ const initialEvents: EventRecord[] = [
   { id: "ccparis", title: "Cafe Compute Meetup: Paris", date: "02 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/ccparis", attendees: 0, qualified: 0, status: "Awaiting upload" },
 ];
 
-const intelligenceAreas = [
-  { id: "lead", name: "Lead intelligence", icon: Target, summary: "Build ICP lists, find relevant buyers, enrich profiles, verify emails, score fit, and identify why-now signals.", output: "Qualified people and accounts ready for Leads", inputs: ["ICP and buyer criteria", "People and company enrichment", "Email verification", "Intent and timing signals"] },
-  { id: "market", name: "Market intelligence", icon: Activity, summary: "Estimate market size, map segments, find growing companies, and monitor hiring, funding, adoption, and geographic expansion.", output: "Prioritised market segments and growth watchlists", inputs: ["Market sizing", "Segment mapping", "Funding and hiring", "Technology adoption"] },
-  { id: "competitive", name: "Competitive intelligence", icon: Search, summary: "Track competitor ads, PPC keywords, rankings, backlinks, hiring, reviews, social posts, and campaign changes.", output: "Competitor movement alerts and response briefs", inputs: ["Search and ad history", "Rankings and backlinks", "Hiring signals", "Creative and messaging changes"] },
-  { id: "customer", name: "Customer intelligence", icon: Users, summary: "Enrich inbound leads, classify accounts, analyze reviews and comments, find expansion opportunities, and route accounts.", output: "Enriched accounts with expansion and routing signals", inputs: ["Inbound enrichment", "Account classification", "Review analysis", "Expansion opportunities"] },
-  { id: "marketing", name: "Marketing intelligence", icon: CircleDollarSign, summary: "Combine GA4, Search Console, advertising data, SEO demand, creator performance, and social trends.", output: "One performance view across acquisition channels", inputs: ["GA4 and Search Console", "Paid media performance", "SEO demand", "Creator and social trends"] },
-  { id: "product", name: "Product intelligence", icon: Sparkles, summary: "Mine reviews, Reddit discussions, social comments, app listings, and YouTube content for recurring problems and feature requests.", output: "Evidence-backed problems and feature opportunities", inputs: ["Reviews and app stores", "Reddit and communities", "Social comments", "Video and creator content"] },
-  { id: "partner", name: "Partner intelligence", icon: Network, summary: "Find agencies, creators, affiliates, integration partners, and complementary products; qualify and rank them.", output: "Ranked partner pipeline with fit evidence", inputs: ["Agency discovery", "Creator and affiliate fit", "Integration partners", "Complementary products"] },
-  { id: "executive", name: "Executive intelligence", icon: FileText, summary: "Produce a weekly digest covering pipeline, competitors, market signals, campaign performance, and notable risks.", output: "Decision-ready weekly executive brief", inputs: ["Pipeline movement", "Competitive changes", "Market signals", "Performance and risk"] },
-  { id: "providers", name: "Data-provider management", icon: Building2, summary: "Compare providers by reliability, speed, coverage, and integration fit.", output: "Evidence-based provider shortlist and integration plan", inputs: ["Coverage and freshness", "Reliability and limits", "Integration requirements", "Trial validation"] },
-];
-
-type ProviderCapability = { group: string; capability: string; provider: string; access?: string };
-const providerCapabilities: ProviderCapability[] = [
-  { group: "Keyword & rank tracking", capability: "Keyword volume & ideas", provider: "Semrush" },
-  { group: "Keyword & rank tracking", capability: "Competitor keywords", provider: "Serpstat" },
-  { group: "Keyword & rank tracking", capability: "Domain & ad history", provider: "SpyFu" },
-  { group: "Keyword & rank tracking", capability: "Keyword difficulty", provider: "DataForSEO Labs" },
-  { group: "Keyword & rank tracking", capability: "Live SERP results", provider: "SerpApi" },
-  { group: "Keyword & rank tracking", capability: "Rank tracking", provider: "SE Ranking" },
-  { group: "Keyword & rank tracking", capability: "Search Console", provider: "SEOTesting", access: "OAuth" },
-  { group: "Backlinks & authority", capability: "Backlinks & anchors", provider: "Moz" },
-  { group: "Backlinks & authority", capability: "Trust & citation flow", provider: "Majestic" },
-  { group: "Backlinks & authority", capability: "Referring domains", provider: "DataForSEO Backlinks" },
-  { group: "Backlinks & authority", capability: "Broken-link audit", provider: "Crawl endpoints" },
-  { group: "AI visibility", capability: "AI Overview citations", provider: "SerpApi" },
-  { group: "AI visibility", capability: "Brand mentions in answers", provider: "Custom monitoring" },
-  { group: "AI visibility", capability: "Cited-source tracking", provider: "Custom monitoring" },
-  { group: "AI visibility", capability: "Where LLMs source it", provider: "Research workflow" },
-  { group: "Trending & discovery", capability: "TikTok trends & sounds", provider: "TikTok API" },
-  { group: "Trending & discovery", capability: "X posts & profiles", provider: "X API" },
-  { group: "Trending & discovery", capability: "Instagram posts & reels", provider: "Instagram API" },
-  { group: "Trending & discovery", capability: "YouTube videos & stats", provider: "YouTube API" },
-  { group: "Trending & discovery", capability: "Creator analytics", provider: "Platform research" },
-  { group: "Trending & discovery", capability: "Follower & profile graph", provider: "Platform APIs" },
-  { group: "Trending & discovery", capability: "Subreddit posts", provider: "Reddit API" },
-  { group: "Trending & discovery", capability: "LinkedIn posts & pages", provider: "LinkedIn API" },
-  { group: "Publish on socials", capability: "Post to X", provider: "Postiz", access: "OAuth" },
-  { group: "Publish on socials", capability: "Publish Instagram reels", provider: "Postiz", access: "OAuth" },
-  { group: "Publish on socials", capability: "Post to LinkedIn", provider: "Postiz", access: "OAuth" },
-  { group: "Publish on socials", capability: "Upload to YouTube", provider: "Postiz", access: "OAuth" },
-  { group: "Enrich people & company", capability: "Find & verify work email", provider: "Hunter" },
-  { group: "Enrich people & company", capability: "Person enrichment", provider: "Lusha" },
-  { group: "Enrich people & company", capability: "Profile & role history", provider: "PDL" },
-  { group: "Enrich people & company", capability: "Contact search", provider: "Apollo" },
-  { group: "Enrich people & company", capability: "Funding & investors", provider: "Crunchbase", access: "TC" },
-  { group: "Enrich people & company", capability: "Company firmographics", provider: "Company data providers" },
-  { group: "Enrich people & company", capability: "Knowledge-graph lookup", provider: "Diffbot", access: "CS" },
-  { group: "Enrich people & company", capability: "Company news & signals", provider: "Enterprise providers" },
-  { group: "Enrich people & company", capability: "Hiring & headcount", provider: "Enterprise providers" },
-  { group: "Enrich people & company", capability: "Mobile & social lookup", provider: "LeadMagic" },
-  { group: "Enrich people & company", capability: "Local business data", provider: "Maps providers" },
-  { group: "Enrich people & company", capability: "Deliverability check", provider: "Hunter" },
-  { group: "Manage ad campaigns", capability: "Google Ads campaigns", provider: "Optmyzr", access: "OAuth" },
-  { group: "Manage ad campaigns", capability: "Meta Ads budgets", provider: "Revealbot", access: "OAuth" },
-  { group: "Manage ad campaigns", capability: "TikTok Ads", provider: "Madgicx", access: "OAuth" },
-  { group: "Manage ad campaigns", capability: "Microsoft Ads", provider: "Adalysis", access: "OAuth" },
-  { group: "Competitor creative", capability: "Meta Ad Library", provider: "Manual research" },
-  { group: "Competitor creative", capability: "Google Ads Transparency", provider: "SerpApi" },
-  { group: "Competitor creative", capability: "TikTok ad library", provider: "TikTok" },
-  { group: "Competitor creative", capability: "LinkedIn ad library", provider: "Manual research" },
-  { group: "Measurement", capability: "GA4 sessions, goals & conversions", provider: "Supermetrics", access: "OAuth" },
-  { group: "Measurement", capability: "Business Profile", provider: "BrightLocal", access: "OAuth" },
-  { group: "Measurement", capability: "Pinterest Ads", provider: "Tailwind", access: "OAuth" },
-  { group: "Measurement", capability: "Snapchat Ads", provider: "Ads Manager", access: "OAuth" },
-  { group: "Measurement", capability: "Slack messages", provider: "Slack" },
-  { group: "Measurement", capability: "Actor runs at scale", provider: "Automation providers" },
-  { group: "Measurement", capability: "Channel analytics", provider: "Platform APIs" },
-  { group: "Measurement", capability: "Google Trends", provider: "Research workflow" },
-];
+type IntelligenceWorkspace = { title: string; description: string; outcome: string; focus: string[]; sources: string[]; icon: React.ElementType };
+const intelligenceWorkspaces: Record<"market" | "competitors" | "customers" | "marketing" | "partners" | "executive", IntelligenceWorkspace> = {
+  market: { title: "Market intelligence", description: "Understand market size, priority segments, and the companies showing real growth signals.", outcome: "A ranked market map built from verified signals.", focus: ["Market size", "Segment mapping", "Growing companies", "Hiring and funding", "Technology adoption", "Geographic expansion"], sources: ["Company data", "Funding signals", "Hiring activity", "Market research"], icon: Activity },
+  competitors: { title: "Competitor analysis", description: "Track the companies you compete with and see how their search, advertising, authority, and messaging change.", outcome: "A focused competitor brief with the changes that matter.", focus: ["Competitor keywords", "Keyword volume and ideas", "Domain and ad history", "Live search results", "Rank tracking", "Backlinks and authority", "Competitor creative", "Messaging changes"], sources: ["Search data", "Ad libraries", "Domain history", "Backlink data"], icon: Search },
+  customers: { title: "Customer intelligence", description: "Turn customer and account evidence into clearer priorities, risks, and expansion opportunities.", outcome: "Enriched customer accounts with clear next actions.", focus: ["Inbound enrichment", "Account classification", "Review analysis", "Customer signals", "Expansion opportunities", "Account routing"], sources: ["Account data", "Reviews", "Customer feedback", "Usage signals"], icon: Users },
+  marketing: { title: "Marketing intelligence", description: "Bring acquisition and audience signals together without mixing them into unrelated workflows.", outcome: "A clear performance view across marketing channels.", focus: ["Search demand", "Search Console", "GA4 performance", "Advertising results", "Creator performance", "Social trends"], sources: ["GA4", "Search Console", "Advertising platforms", "Social channels"], icon: CircleDollarSign },
+  partners: { title: "Strategic partners", description: "Find and qualify partners that can expand distribution, delivery, and market access.", outcome: "A ranked strategic partner pipeline with fit evidence.", focus: ["Agency partners", "Creators and affiliates", "Integration partners", "Complementary products", "Partner fit", "Introduction paths"], sources: ["Company profiles", "Partner networks", "Audience overlap", "Relationship data"], icon: Network },
+  executive: { title: "Executive intelligence", description: "Summarise the signals leadership needs to make weekly commercial decisions.", outcome: "A decision-ready executive brief based on live workspace data.", focus: ["Pipeline movement", "Competitor changes", "Market signals", "Campaign performance", "Customer risks", "Strategic opportunities"], sources: ["Pipeline", "Accounts", "Market signals", "Marketing performance"], icon: FileText },
+};
 
 const nav = [
   { id: "overview" as View, path: "/", label: "Overview", icon: LayoutGrid },
-  { id: "intelligence" as View, path: "/intelligence", label: "Intelligence", icon: Lightbulb },
-  { id: "capabilities" as View, path: "/capabilities", label: "Capabilities", icon: Sparkles },
   { id: "accounts" as View, path: "/accounts", label: "Accounts", icon: Building2 },
   { id: "events" as View, path: "/events", label: "Events", icon: CalendarDays },
   { id: "leads" as View, path: "/leads", label: "Leads", icon: Users },
+  { id: "market" as View, path: "/market-intelligence", label: "Market intelligence", icon: Activity },
+  { id: "competitors" as View, path: "/competitor-analysis", label: "Competitor analysis", icon: Search },
+  { id: "customers" as View, path: "/customer-intelligence", label: "Customer intelligence", icon: ContactRound },
+  { id: "marketing" as View, path: "/marketing-intelligence", label: "Marketing intelligence", icon: CircleDollarSign },
+  { id: "partners" as View, path: "/strategic-partners", label: "Strategic partners", icon: Network },
+  { id: "executive" as View, path: "/executive-intelligence", label: "Executive intelligence", icon: FileText },
+  { id: "capabilities" as View, path: "/capabilities", label: "Capabilities", icon: Sparkles },
   { id: "pipeline" as View, path: "/pipeline", label: "Pipeline", icon: Target },
   { id: "doors" as View, path: "/open-doors", label: "Open doors", icon: ContactRound },
 ];
@@ -253,7 +197,7 @@ export default function App({ email = "" }: { email?: string }) {
           <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button><button className="primary" onClick={() => notify("New record ready to configure")}><Plus size={17}/> Add record</button></div>
         </header>
         {view === "overview" && <Overview active={active} selected={selected} setSelected={setSelected} go={go} notify={notify} accounts={accountRecords} leads={leadRecords} events={eventRecords}/>}
-        {view === "intelligence" && <IntelligenceHub notify={notify}/>}
+        {(["market", "competitors", "customers", "marketing", "partners", "executive"] as const).includes(view as keyof typeof intelligenceWorkspaces) && <IntelligencePage workspace={intelligenceWorkspaces[view as keyof typeof intelligenceWorkspaces]} notify={notify}/>}
         {view === "capabilities" && <Capabilities active={active} selected={selected} setSelected={setSelected}/>} 
         {view === "accounts" && (selectedAccount
           ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount]} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
@@ -305,38 +249,26 @@ function Overview({ active, selected, setSelected, go, notify, accounts, leads, 
   </div>;
 }
 
-function IntelligenceHub({ notify }: { notify: (message: string) => void }) {
-  const [selectedArea, setSelectedArea] = useState("lead");
-  const [selectedGroup, setSelectedGroup] = useState("All");
-  const [providerQuery, setProviderQuery] = useState("");
-  const area = intelligenceAreas.find((item) => item.id === selectedArea)!;
-  const AreaIcon = area.icon;
-  const groups = ["All", ...Array.from(new Set(providerCapabilities.map((item) => item.group)))];
-  const filteredProviders = providerCapabilities.filter((item) => (selectedGroup === "All" || item.group === selectedGroup) && `${item.capability} ${item.provider} ${item.group}`.toLowerCase().includes(providerQuery.toLowerCase()));
-  return <div className="page intelligence-page">
-    <PageIntro title="Intelligence command centre" text="Turn fragmented market, customer and channel data into prioritised commercial action." action={<button className="primary" onClick={() => notify("New intelligence brief ready to configure")}><Plus size={16}/> New brief</button>}/>
-    <section className="intelligence-hero">
-      <div><span>QuickSort intelligence system</span><h2>Nine lenses.<br/>One operating picture.</h2></div>
-      <p>Choose an intelligence area to define the question, then assemble the smallest reliable provider stack to answer it.</p>
-      <div className="intelligence-hero-stats"><div><strong>{intelligenceAreas.length}</strong><small>intelligence areas</small></div><div><strong>{providerCapabilities.length}</strong><small>data capabilities</small></div><div><strong>{groups.length - 1}</strong><small>provider groups</small></div></div>
+function IntelligencePage({ workspace, notify }: { workspace: IntelligenceWorkspace; notify: (message: string) => void }) {
+  const WorkspaceIcon = workspace.icon;
+  return <div className="page intelligence-workspace-page">
+    <PageIntro title={workspace.title} text={workspace.description} action={<button className="primary" onClick={() => notify(`${workspace.title} brief ready to configure`)}><Plus size={16}/> New brief</button>}/>
+    <section className="intelligence-workspace-hero">
+      <span><WorkspaceIcon size={24}/></span>
+      <div><small>Primary output</small><h2>{workspace.outcome}</h2></div>
     </section>
-    <div className="intelligence-layout">
-      <nav className="intelligence-area-nav" aria-label="Intelligence areas">{intelligenceAreas.map(({ id, name, icon: Icon }) => <button key={id} className={selectedArea === id ? "active" : ""} onClick={() => setSelectedArea(id)}><Icon size={16}/><span>{name}</span><ArrowUpRight size={13}/></button>)}</nav>
-      <section className="surface intelligence-area-detail">
-        <div className="intelligence-detail-head"><span><AreaIcon size={22}/></span><div><small>Intelligence area</small><h2>{area.name}</h2></div></div>
-        <p>{area.summary}</p>
-        <div className="intelligence-output"><small>Primary output</small><strong>{area.output}</strong></div>
-        <div className="intelligence-inputs"><small>What it combines</small>{area.inputs.map((input) => <span key={input}><i/>{input}</span>)}</div>
-        <div className="intelligence-actions"><button className="primary" onClick={() => notify(`${area.name} brief created`)}>Create brief</button><button className="secondary" onClick={() => { setSelectedGroup("All"); document.querySelector(".provider-catalogue")?.scrollIntoView({ behavior: "smooth" }); }}>View data options</button></div>
+    <div className="intelligence-workspace-grid">
+      <section className="surface intelligence-focus-panel">
+        <div className="section-head"><div><h2>What to analyse</h2><p>Keep each brief focused on the signals you need.</p></div></div>
+        <div className="intelligence-focus-grid">{workspace.focus.map((item) => <button key={item} onClick={() => notify(`${item} selected for the brief`)}><span>{item}</span><Plus size={14}/></button>)}</div>
       </section>
+      <aside className="surface intelligence-source-panel">
+        <h2>Data sources</h2><p>Add sources only when the brief needs them.</p>
+        <div>{workspace.sources.map((source) => <span key={source}>{source}</span>)}</div>
+        <button className="secondary wide" onClick={() => notify("Data source connection ready to configure")}>Connect a source</button>
+      </aside>
     </div>
-    <section className="surface provider-catalogue">
-      <div className="provider-heading"><div><h2>Data capability catalogue</h2><p>Compare coverage, access, and integration fit.</p></div><span>{filteredProviders.length} options</span></div>
-      <div className="provider-controls"><label><Search size={16}/><input value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder="Search capabilities or providers"/></label><div className="provider-groups">{groups.map((group) => <button key={group} className={selectedGroup === group ? "active" : ""} onClick={() => setSelectedGroup(group)}>{group}</button>)}</div></div>
-      <div className="provider-table-head"><span>Capability</span><span>Provider</span><span>Access</span><span/></div>
-      <div className="provider-list">{filteredProviders.map((item) => <article className="provider-row" key={`${item.group}-${item.capability}`}><div><small>{item.group}</small><strong>{item.capability}</strong></div><span>{item.provider}</span><span>{item.access ?? "Direct"}</span><button onClick={() => notify(`${item.provider} added to comparison`)}>Compare <Plus size={13}/></button></article>)}</div>
-      {filteredProviders.length === 0 && <div className="provider-empty">No provider capabilities match this search.</div>}
-    </section>
+    <section className="surface intelligence-empty-state"><WorkspaceIcon size={22}/><div><h2>No briefs yet</h2><p>Create the first {workspace.title.toLowerCase()} brief when you have a real question and source data.</p></div></section>
   </div>;
 }
 
@@ -554,6 +486,10 @@ function Leads({ leads, onChange, notify }: { leads: LeadRecord[]; onChange: (le
   };
   return <div className="page leads-page">
     <PageIntro title="Lead pipeline" text="Every prospect in one place, with the source and reason behind the signal." action={<button className="primary" onClick={() => notify("Manual lead ready to configure")}><Plus size={16}/> Add lead</button>}/>
+    <section className="lead-intelligence-panel">
+      <div><span><Lightbulb size={18}/></span><div><h2>Lead intelligence</h2><p>Build an ICP, identify buyers, enrich profiles, verify emails, and score real leads.</p></div></div>
+      <div className="lead-intelligence-actions">{["ICP lists", "Buyer discovery", "Profile enrichment", "Email verification", "Fit scoring", "Why-now signals"].map((item) => <button key={item} onClick={() => notify(`${item} ready to configure`)}>{item}<Plus size={12}/></button>)}</div>
+    </section>
     <section className="lead-source-strip">
       {(["All", "Event", "Tool", "Network"] as const).map((item) => <button key={item} className={source === item ? "active" : ""} onClick={() => setSource(item)}><span className={`source-mark ${item.toLowerCase()}`}/><div><strong>{item === "All" ? "All leads" : `${item} leads`}</strong><small>{item === "Network" ? "From Open doors" : item === "Event" ? "From Luma events" : item === "Tool" ? "From prospecting tools" : "Across every source"}</small></div><b>{item === "All" ? leads.length : leads.filter((lead) => lead.source === item).length}</b></button>)}
     </section>

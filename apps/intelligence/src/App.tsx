@@ -6,7 +6,7 @@ import {
   Pencil, Save, ShieldCheck, Sparkles, Target, UserRound, Users, X,
 } from "lucide-react";
 
-type View = "overview" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors";
+type View = "overview" | "intelligence" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors";
 type Capability = {
   id: string; name: string; short: string; color: string; people: number; projects: number;
   technologies: string[]; proof: string; experts: { initials: string; name: string; role: string }[];
@@ -94,8 +94,80 @@ const networkProspects: Record<string, { name: string; role: string }> = {
   "TotalEnergies": { name: "Alexandre Fontaine", role: "Data Innovation Director" },
 };
 
+const intelligenceAreas = [
+  { id: "lead", name: "Lead intelligence", icon: Target, summary: "Build ICP lists, find relevant buyers, enrich profiles, verify emails, score fit, and identify why-now signals.", output: "Qualified people and accounts ready for Leads", inputs: ["ICP and buyer criteria", "People and company enrichment", "Email verification", "Intent and timing signals"] },
+  { id: "market", name: "Market intelligence", icon: Activity, summary: "Estimate market size, map segments, find growing companies, and monitor hiring, funding, adoption, and geographic expansion.", output: "Prioritised market segments and growth watchlists", inputs: ["Market sizing", "Segment mapping", "Funding and hiring", "Technology adoption"] },
+  { id: "competitive", name: "Competitive intelligence", icon: Search, summary: "Track competitor ads, PPC keywords, rankings, backlinks, hiring, reviews, social posts, and campaign changes.", output: "Competitor movement alerts and response briefs", inputs: ["Search and ad history", "Rankings and backlinks", "Hiring signals", "Creative and messaging changes"] },
+  { id: "customer", name: "Customer intelligence", icon: Users, summary: "Enrich inbound leads, classify accounts, analyze reviews and comments, find expansion opportunities, and route accounts.", output: "Enriched accounts with expansion and routing signals", inputs: ["Inbound enrichment", "Account classification", "Review analysis", "Expansion opportunities"] },
+  { id: "marketing", name: "Marketing intelligence", icon: CircleDollarSign, summary: "Combine GA4, Search Console, advertising data, SEO demand, creator performance, and social trends.", output: "One performance view across acquisition channels", inputs: ["GA4 and Search Console", "Paid media performance", "SEO demand", "Creator and social trends"] },
+  { id: "product", name: "Product intelligence", icon: Sparkles, summary: "Mine reviews, Reddit discussions, social comments, app listings, and YouTube content for recurring problems and feature requests.", output: "Evidence-backed problems and feature opportunities", inputs: ["Reviews and app stores", "Reddit and communities", "Social comments", "Video and creator content"] },
+  { id: "partner", name: "Partner intelligence", icon: Network, summary: "Find agencies, creators, affiliates, integration partners, and complementary products; qualify and rank them.", output: "Ranked partner pipeline with fit evidence", inputs: ["Agency discovery", "Creator and affiliate fit", "Integration partners", "Complementary products"] },
+  { id: "executive", name: "Executive intelligence", icon: FileText, summary: "Produce a weekly digest covering pipeline, competitors, market signals, campaign performance, and notable risks.", output: "Decision-ready weekly executive brief", inputs: ["Pipeline movement", "Competitive changes", "Market signals", "Performance and risk"] },
+  { id: "providers", name: "Data-provider management", icon: Building2, summary: "Compare providers by cost, reliability, speed, and coverage before committing to multiple subscriptions.", output: "Evidence-based provider shortlist and spend plan", inputs: ["Cost comparison", "Coverage and freshness", "Reliability and limits", "Trial-before-buy decisions"] },
+];
+
+type ProviderCapability = { group: string; capability: string; provider: string; commercial: string; access?: string };
+const providerCapabilities: ProviderCapability[] = [
+  { group: "Keyword & rank tracking", capability: "Keyword volume & ideas", provider: "Semrush", commercial: "$139/mo" },
+  { group: "Keyword & rank tracking", capability: "Competitor keywords", provider: "Serpstat", commercial: "$69/mo" },
+  { group: "Keyword & rank tracking", capability: "Domain & ad history", provider: "SpyFu", commercial: "$39/mo" },
+  { group: "Keyword & rank tracking", capability: "Keyword difficulty", provider: "DataForSEO Labs", commercial: "Usage based" },
+  { group: "Keyword & rank tracking", capability: "Live SERP results", provider: "SerpApi", commercial: "$75/mo" },
+  { group: "Keyword & rank tracking", capability: "Rank tracking", provider: "SE Ranking", commercial: "$65/mo" },
+  { group: "Keyword & rank tracking", capability: "Search Console", provider: "SEOTesting", commercial: "$40/mo", access: "OAuth" },
+  { group: "Backlinks & authority", capability: "Backlinks & anchors", provider: "Moz", commercial: "$99/mo" },
+  { group: "Backlinks & authority", capability: "Trust & citation flow", provider: "Majestic", commercial: "$50/mo" },
+  { group: "Backlinks & authority", capability: "Referring domains", provider: "DataForSEO Backlinks", commercial: "Usage based" },
+  { group: "Backlinks & authority", capability: "Broken-link audit", provider: "Crawl endpoints", commercial: "Usage based" },
+  { group: "AI visibility", capability: "AI Overview citations", provider: "SerpApi", commercial: "$75/mo" },
+  { group: "AI visibility", capability: "Brand mentions in answers", provider: "Custom monitoring", commercial: "No official API" },
+  { group: "AI visibility", capability: "Cited-source tracking", provider: "Custom monitoring", commercial: "No official API" },
+  { group: "AI visibility", capability: "Where LLMs source it", provider: "Research workflow", commercial: "Rate-limited" },
+  { group: "Trending & discovery", capability: "TikTok trends & sounds", provider: "TikTok API", commercial: "Invite-only" },
+  { group: "Trending & discovery", capability: "X posts & profiles", provider: "X API", commercial: "$200/mo" },
+  { group: "Trending & discovery", capability: "Instagram posts & reels", provider: "Instagram API", commercial: "App review" },
+  { group: "Trending & discovery", capability: "YouTube videos & stats", provider: "YouTube API", commercial: "Quota-capped" },
+  { group: "Trending & discovery", capability: "Creator analytics", provider: "Platform research", commercial: "Not publicly exposed" },
+  { group: "Trending & discovery", capability: "Follower & profile graph", provider: "Platform APIs", commercial: "App review" },
+  { group: "Trending & discovery", capability: "Subreddit posts", provider: "Reddit API", commercial: "Rate-limited" },
+  { group: "Trending & discovery", capability: "LinkedIn posts & pages", provider: "LinkedIn API", commercial: "Partner-only" },
+  { group: "Publish on socials", capability: "Post to X", provider: "Postiz", commercial: "$29/mo", access: "OAuth" },
+  { group: "Publish on socials", capability: "Publish Instagram reels", provider: "Postiz", commercial: "$29/mo", access: "OAuth" },
+  { group: "Publish on socials", capability: "Post to LinkedIn", provider: "Postiz", commercial: "$29/mo", access: "OAuth" },
+  { group: "Publish on socials", capability: "Upload to YouTube", provider: "Postiz", commercial: "$29/mo", access: "OAuth" },
+  { group: "Enrich people & company", capability: "Find & verify work email", provider: "Hunter", commercial: "$34/mo" },
+  { group: "Enrich people & company", capability: "Person enrichment", provider: "Lusha", commercial: "$49/mo" },
+  { group: "Enrich people & company", capability: "Profile & role history", provider: "PDL", commercial: "Credit packs" },
+  { group: "Enrich people & company", capability: "Contact search", provider: "Apollo", commercial: "$59/seat" },
+  { group: "Enrich people & company", capability: "Funding & investors", provider: "Crunchbase", commercial: "$99/mo", access: "TC" },
+  { group: "Enrich people & company", capability: "Company firmographics", provider: "Commercial datasets", commercial: "Per-seat plans" },
+  { group: "Enrich people & company", capability: "Knowledge-graph lookup", provider: "Diffbot", commercial: "$299/mo", access: "CS" },
+  { group: "Enrich people & company", capability: "Company news & signals", provider: "Enterprise providers", commercial: "Enterprise-only" },
+  { group: "Enrich people & company", capability: "Hiring & headcount", provider: "Enterprise providers", commercial: "Enterprise-only" },
+  { group: "Enrich people & company", capability: "Mobile & social lookup", provider: "LeadMagic", commercial: "Credits" },
+  { group: "Enrich people & company", capability: "Local business data", provider: "Maps providers", commercial: "Rate-limited" },
+  { group: "Enrich people & company", capability: "Deliverability check", provider: "Hunter", commercial: "$34/mo" },
+  { group: "Manage ad campaigns", capability: "Google Ads campaigns", provider: "Optmyzr", commercial: "$249/mo", access: "OAuth" },
+  { group: "Manage ad campaigns", capability: "Meta Ads budgets", provider: "Revealbot", commercial: "$99/mo", access: "OAuth" },
+  { group: "Manage ad campaigns", capability: "TikTok Ads", provider: "Madgicx", commercial: "$55/mo", access: "OAuth" },
+  { group: "Manage ad campaigns", capability: "Microsoft Ads", provider: "Adalysis", commercial: "$99/mo", access: "OAuth" },
+  { group: "Competitor creative", capability: "Meta Ad Library", provider: "Manual research", commercial: "Public library" },
+  { group: "Competitor creative", capability: "Google Ads Transparency", provider: "SerpApi", commercial: "$75/mo" },
+  { group: "Competitor creative", capability: "TikTok ad library", provider: "TikTok", commercial: "EU-only UI" },
+  { group: "Competitor creative", capability: "LinkedIn ad library", provider: "Manual research", commercial: "Public library" },
+  { group: "Measurement", capability: "GA4 sessions, goals & conversions", provider: "Supermetrics", commercial: "$69/mo", access: "OAuth" },
+  { group: "Measurement", capability: "Business Profile", provider: "BrightLocal", commercial: "$39/mo", access: "OAuth" },
+  { group: "Measurement", capability: "Pinterest Ads", provider: "Tailwind", commercial: "$25/mo", access: "OAuth" },
+  { group: "Measurement", capability: "Snapchat Ads", provider: "Ads Manager", commercial: "Manual", access: "OAuth" },
+  { group: "Measurement", capability: "Slack messages", provider: "Slack", commercial: "Workspace app" },
+  { group: "Measurement", capability: "Actor runs at scale", provider: "Automation providers", commercial: "Per-seat plans" },
+  { group: "Measurement", capability: "Channel analytics", provider: "Platform APIs", commercial: "Quota-capped" },
+  { group: "Measurement", capability: "Google Trends", provider: "Research workflow", commercial: "No official API" },
+];
+
 const nav = [
   { id: "overview" as View, path: "/", label: "Overview", icon: LayoutGrid },
+  { id: "intelligence" as View, path: "/intelligence", label: "Intelligence", icon: Lightbulb },
   { id: "capabilities" as View, path: "/capabilities", label: "Capabilities", icon: Sparkles },
   { id: "accounts" as View, path: "/accounts", label: "Accounts", icon: Building2 },
   { id: "events" as View, path: "/events", label: "Events", icon: CalendarDays },
@@ -223,6 +295,7 @@ export default function App({ email = "" }: { email?: string }) {
           <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button><button className="primary" onClick={() => notify("New record ready to configure")}><Plus size={17}/> Add record</button></div>
         </header>
         {view === "overview" && <Overview active={active} selected={selected} setSelected={setSelected} go={go} notify={notify}/>} 
+        {view === "intelligence" && <IntelligenceHub notify={notify}/>}
         {view === "capabilities" && <Capabilities active={active} selected={selected} setSelected={setSelected}/>} 
         {view === "accounts" && (selectedAccount
           ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount]} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
@@ -274,6 +347,41 @@ function Overview({ active, selected, setSelected, go, notify }: { active: Capab
       <div className="activity-row"><div className="activity-icon violet"><BriefcaseBusiness size={17}/></div><div><strong>Foundever proposal moved forward</strong><p>Multilingual service automation · €220k</p></div><span>12 min</span></div>
       <div className="activity-row"><div className="activity-icon blue"><UserRound size={17}/></div><div><strong>Warm introduction available at AXA</strong><p>Aïcha knows the Head of Claims Transformation</p></div><span>2 hr</span></div>
       <div className="activity-row"><div className="activity-icon green"><FileText size={17}/></div><div><strong>New delivery evidence added</strong><p>Voice orchestration · Retail assistant</p></div><span>Yesterday</span></div>
+    </section>
+  </div>;
+}
+
+function IntelligenceHub({ notify }: { notify: (message: string) => void }) {
+  const [selectedArea, setSelectedArea] = useState("lead");
+  const [selectedGroup, setSelectedGroup] = useState("All");
+  const [providerQuery, setProviderQuery] = useState("");
+  const area = intelligenceAreas.find((item) => item.id === selectedArea)!;
+  const AreaIcon = area.icon;
+  const groups = ["All", ...Array.from(new Set(providerCapabilities.map((item) => item.group)))];
+  const filteredProviders = providerCapabilities.filter((item) => (selectedGroup === "All" || item.group === selectedGroup) && `${item.capability} ${item.provider} ${item.group}`.toLowerCase().includes(providerQuery.toLowerCase()));
+  return <div className="page intelligence-page">
+    <PageIntro title="Intelligence command centre" text="Turn fragmented market, customer and channel data into prioritised commercial action." action={<button className="primary" onClick={() => notify("New intelligence brief ready to configure")}><Plus size={16}/> New brief</button>}/>
+    <section className="intelligence-hero">
+      <div><span>QuickSort intelligence system</span><h2>Nine lenses.<br/>One operating picture.</h2></div>
+      <p>Choose an intelligence area to define the question, then assemble the smallest reliable provider stack to answer it.</p>
+      <div className="intelligence-hero-stats"><div><strong>{intelligenceAreas.length}</strong><small>intelligence areas</small></div><div><strong>{providerCapabilities.length}</strong><small>data capabilities</small></div><div><strong>{groups.length - 1}</strong><small>provider groups</small></div></div>
+    </section>
+    <div className="intelligence-layout">
+      <nav className="intelligence-area-nav" aria-label="Intelligence areas">{intelligenceAreas.map(({ id, name, icon: Icon }) => <button key={id} className={selectedArea === id ? "active" : ""} onClick={() => setSelectedArea(id)}><Icon size={16}/><span>{name}</span><ArrowUpRight size={13}/></button>)}</nav>
+      <section className="surface intelligence-area-detail">
+        <div className="intelligence-detail-head"><span><AreaIcon size={22}/></span><div><small>Intelligence area</small><h2>{area.name}</h2></div></div>
+        <p>{area.summary}</p>
+        <div className="intelligence-output"><small>Primary output</small><strong>{area.output}</strong></div>
+        <div className="intelligence-inputs"><small>What it combines</small>{area.inputs.map((input) => <span key={input}><i/>{input}</span>)}</div>
+        <div className="intelligence-actions"><button className="primary" onClick={() => notify(`${area.name} brief created`)}>Create brief</button><button className="secondary" onClick={() => { setSelectedGroup("All"); document.querySelector(".provider-catalogue")?.scrollIntoView({ behavior: "smooth" }); }}>View data options</button></div>
+      </section>
+    </div>
+    <section className="surface provider-catalogue">
+      <div className="provider-heading"><div><h2>Data capability catalogue</h2><p>Compare access, cost and coverage before adding another subscription.</p></div><span>{filteredProviders.length} options</span></div>
+      <div className="provider-controls"><label><Search size={16}/><input value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder="Search capabilities or providers"/></label><div className="provider-groups">{groups.map((group) => <button key={group} className={selectedGroup === group ? "active" : ""} onClick={() => setSelectedGroup(group)}>{group}</button>)}</div></div>
+      <div className="provider-table-head"><span>Capability</span><span>Provider</span><span>Commercial model</span><span>Access</span><span/></div>
+      <div className="provider-list">{filteredProviders.map((item) => <article className="provider-row" key={`${item.group}-${item.capability}`}><div><small>{item.group}</small><strong>{item.capability}</strong></div><span>{item.provider}</span><span>{item.commercial}</span><span>{item.access ?? "Direct"}</span><button onClick={() => notify(`${item.provider} added to comparison`)}>Compare <Plus size={13}/></button></article>)}</div>
+      {filteredProviders.length === 0 && <div className="provider-empty">No provider capabilities match this search.</div>}
     </section>
   </div>;
 }

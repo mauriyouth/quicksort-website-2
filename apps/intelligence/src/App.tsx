@@ -166,7 +166,10 @@ export default function App({ email = "" }: { email?: string }) {
     try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-events-v4") || "null") ?? initialEvents; } catch { return initialEvents; }
   });
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.localStorage.getItem("quicksort-intelligence-sidebar") === "collapsed");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return window.localStorage.getItem("quicksort-intelligence-sidebar") === "collapsed"; }
+    catch { return false; }
+  });
   const [toast, setToast] = useState("");
   const active = capabilities.find((c) => c.id === selected)!;
   const filteredAccounts = useMemo(() => accountRecords.filter((a) => `${a.name} ${a.sector} ${a.opportunity}`.toLowerCase().includes(query.toLowerCase())), [accountRecords, query]);
@@ -196,11 +199,11 @@ export default function App({ email = "" }: { email?: string }) {
   };
   const go = (next: View) => navigate(next);
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2400); };
-  const toggleSidebar = () => setSidebarCollapsed((current) => {
-    const next = !current;
-    window.localStorage.setItem("quicksort-intelligence-sidebar", next ? "collapsed" : "open");
-    return next;
-  });
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try { window.localStorage.setItem("quicksort-intelligence-sidebar", next ? "collapsed" : "open"); } catch { /* The control still works without persistence. */ }
+  };
   const saveAccount = (updatedAccount: Account, updatedIntel: AccountIntel) => {
     const nextAccounts = accountRecords.map((account) => account.id === updatedAccount.id ? updatedAccount : account);
     const nextIntel = { ...intelRecords, [updatedAccount.id]: updatedIntel };

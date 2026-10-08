@@ -3,7 +3,7 @@ import { useClerk } from "@clerk/react";
 import {
   Activity, ArrowUpRight, Building2, CalendarDays, ChevronDown, CircleDollarSign,
   ContactRound, FileText, Filter, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
-  Pencil, Save, ShieldCheck, Sparkles, Target, Users, X,
+  PanelLeftClose, PanelLeftOpen, Pencil, Save, ShieldCheck, Sparkles, Target, Users, X,
 } from "lucide-react";
 
 type View = "overview" | "intelligence" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors";
@@ -166,6 +166,7 @@ export default function App({ email = "" }: { email?: string }) {
     try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-events-v4") || "null") ?? initialEvents; } catch { return initialEvents; }
   });
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.localStorage.getItem("quicksort-intelligence-sidebar") === "collapsed");
   const [toast, setToast] = useState("");
   const active = capabilities.find((c) => c.id === selected)!;
   const filteredAccounts = useMemo(() => accountRecords.filter((a) => `${a.name} ${a.sector} ${a.opportunity}`.toLowerCase().includes(query.toLowerCase())), [accountRecords, query]);
@@ -195,6 +196,11 @@ export default function App({ email = "" }: { email?: string }) {
   };
   const go = (next: View) => navigate(next);
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2400); };
+  const toggleSidebar = () => setSidebarCollapsed((current) => {
+    const next = !current;
+    window.localStorage.setItem("quicksort-intelligence-sidebar", next ? "collapsed" : "open");
+    return next;
+  });
   const saveAccount = (updatedAccount: Account, updatedIntel: AccountIntel) => {
     const nextAccounts = accountRecords.map((account) => account.id === updatedAccount.id ? updatedAccount : account);
     const nextIntel = { ...intelRecords, [updatedAccount.id]: updatedIntel };
@@ -216,18 +222,19 @@ export default function App({ email = "" }: { email?: string }) {
     notify(`${linkedinProfiles} LinkedIn profiles are ready · connect an enrichment provider to run AI analysis`);
   };
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={mobileOpen ? "sidebar open" : "sidebar"}>
         <div className="sidebar-header">
           <a className="brand" href="https://www.quicksort.fr" aria-label="Quicksort home">
             <span className="brand-word">Quicksort</span>
             <span className="brand-symbol" aria-hidden="true"><span className="brand-disc"/><span className="brand-cut"/><span className="brand-dot"/></span>
           </a>
+          <button className="sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? <PanelLeftOpen size={15}/> : <PanelLeftClose size={15}/>}</button>
         </div>
         <div className="portal-label">Intelligence workspace</div>
         <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation"><X size={20}/></button>
         <nav aria-label="Primary navigation">
-          {nav.map(({ id, path, label, icon: Icon }) => <a key={id} href={path} className={view === id ? "active" : ""} onClick={(event) => { event.preventDefault(); go(id); }}><Icon size={18}/>{label}</a>)}
+          {nav.map(({ id, path, label, icon: Icon }) => <a key={id} href={path} title={sidebarCollapsed ? label : undefined} className={view === id ? "active" : ""} onClick={(event) => { event.preventDefault(); go(id); }}><Icon size={18}/><span className="nav-label">{label}</span></a>)}
         </nav>
         <div className="sidebar-bottom">
           <ShieldCheck size={22}/>

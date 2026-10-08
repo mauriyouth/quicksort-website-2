@@ -70,8 +70,6 @@ type LeadRecord = { id: string; name: string; role: string; company: string; sou
 type EventRecord = { id: string; title: string; date: string; location: string; lumaUrl: string; attendees: number; qualified: number; status: "Ready to analyze" | "Analyzed" };
 
 const initialLeads: LeadRecord[] = [
-  { id: "event-sarah", name: "Sarah Cohen", role: "VP Data & AI", company: "Carrefour", source: "Event", origin: "Enterprise AI Breakfast", score: 94, reason: "Executive owner with an active GenAI programme", stage: "Qualified", owner: "MA" },
-  { id: "event-antoine", name: "Antoine Leroy", role: "Head of Automation", company: "Air Liquide", source: "Event", origin: "Enterprise AI Breakfast", score: 88, reason: "Strong agentic AI fit and recent buying signal", stage: "New", owner: "AD" },
   { id: "tool-marie", name: "Marie Dumas", role: "Director of Innovation", company: "Sodexo", source: "Tool", origin: "Clay enrichment", score: 91, reason: "Hiring AI product leaders and expanding automation", stage: "Contacted", owner: "NK" },
   { id: "tool-raphael", name: "Raphaël Simon", role: "Chief Data Officer", company: "Rexel", source: "Tool", origin: "Apollo signal", score: 84, reason: "Public data modernisation programme", stage: "New", owner: "FA" },
   { id: "network-claire", name: "Claire Dubois", role: "Claims Transformation Director", company: "AXA", source: "Network", origin: "Aïcha Dridi introduction", score: 96, reason: "Warm executive path through the QuickSort network", stage: "Qualified", owner: "AD" },
@@ -79,8 +77,8 @@ const initialLeads: LeadRecord[] = [
 ];
 
 const initialEvents: EventRecord[] = [
-  { id: "enterprise-ai-breakfast", title: "Enterprise AI Breakfast", date: "18 Oct 2026", location: "Paris", lumaUrl: "https://lu.ma/enterprise-ai-paris", attendees: 84, qualified: 12, status: "Analyzed" },
-  { id: "ai-builders-dinner", title: "AI Builders Dinner", date: "06 Nov 2026", location: "Paris", lumaUrl: "https://lu.ma/ai-builders-dinner", attendees: 46, qualified: 0, status: "Ready to analyze" },
+  { id: "quicksort-multimodal-ai", title: "Multimodal AI in Production (w/ The AI Collective)", date: "01 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/quicksort-multimodal-ai", attendees: 0, qualified: 0, status: "Ready to analyze" },
+  { id: "ccparis", title: "Cafe Compute Meetup: Paris", date: "02 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/ccparis", attendees: 0, qualified: 0, status: "Ready to analyze" },
 ];
 
 const networkProspects: Record<string, { name: string; role: string }> = {
@@ -134,10 +132,10 @@ export default function App({ email = "" }: { email?: string }) {
   const [accountRecords, setAccountRecords] = useState<Account[]>(storedWorkspace?.accounts ?? accounts);
   const [intelRecords, setIntelRecords] = useState<Record<string, AccountIntel>>(storedWorkspace?.intel ?? accountIntel);
   const [leadRecords, setLeadRecords] = useState<LeadRecord[]>(() => {
-    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-leads-v1") || "null") ?? initialLeads; } catch { return initialLeads; }
+    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-leads-v2") || "null") ?? initialLeads; } catch { return initialLeads; }
   });
   const [eventRecords, setEventRecords] = useState<EventRecord[]>(() => {
-    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-events-v1") || "null") ?? initialEvents; } catch { return initialEvents; }
+    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-events-v2") || "null") ?? initialEvents; } catch { return initialEvents; }
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState("");
@@ -177,8 +175,8 @@ export default function App({ email = "" }: { email?: string }) {
     window.localStorage.setItem("quicksort-intelligence-accounts-v1", JSON.stringify({ accounts: nextAccounts, intel: nextIntel }));
     notify("Account changes saved");
   };
-  const saveLeads = (next: LeadRecord[]) => { setLeadRecords(next); window.localStorage.setItem("quicksort-intelligence-leads-v1", JSON.stringify(next)); };
-  const saveEvents = (next: EventRecord[]) => { setEventRecords(next); window.localStorage.setItem("quicksort-intelligence-events-v1", JSON.stringify(next)); };
+  const saveLeads = (next: LeadRecord[]) => { setLeadRecords(next); window.localStorage.setItem("quicksort-intelligence-leads-v2", JSON.stringify(next)); };
+  const saveEvents = (next: EventRecord[]) => { setEventRecords(next); window.localStorage.setItem("quicksort-intelligence-events-v2", JSON.stringify(next)); };
   const qualifyEvent = (event: EventRecord) => {
     if (event.status === "Analyzed") { go("leads"); notify(`${event.qualified} qualified leads opened`); return; }
     const generated: LeadRecord[] = [

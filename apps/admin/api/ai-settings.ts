@@ -33,7 +33,7 @@ export function createSettingsHandler(deps = { createClient, generateText, loadA
         return res.status(200).json({ saved: false });
       }
       const parsed = inputSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ error: "Enter an OpenAI API key starting with sk- and a valid model ID." });
+      if (!parsed.success) return res.status(400).json({ error: "Enter a valid AI API key and model ID." });
       if (req.method === "POST") {
         const apiKey = parsed.data.apiKey || (await deps.loadAiSettings(client)).apiKey;
         if (!apiKey) return res.status(400).json({ error: "Add an API key before testing the connection." });
@@ -47,11 +47,11 @@ export function createSettingsHandler(deps = { createClient, generateText, loadA
           return res.status(200).json({ connected: true, model: parsed.data.model });
         } catch (error) {
           const code = APICallError.isInstance(error) ? error.statusCode : undefined;
-          const message = code === 401 ? "OpenAI rejected the API key. Check or replace it."
+          const message = code === 401 ? "The AI service rejected the API key. Check or replace it."
             : code === 403 || code === 404 ? "The selected model is unavailable to this API key. Check the model ID and access."
-            : code === 429 ? "OpenAI quota or rate limit reached. Check billing and try again."
-            : code === 400 ? "OpenAI rejected the request. Check that the model supports text responses."
-            : "Could not connect to OpenAI. The request may have timed out; try again.";
+            : code === 429 ? "The AI service quota or rate limit was reached. Check billing and try again."
+            : code === 400 ? "The AI service rejected the request. Check that the model supports text responses."
+            : "Could not connect to the AI service. The request may have timed out; try again.";
           return res.status(502).json({ error: message });
         }
       }

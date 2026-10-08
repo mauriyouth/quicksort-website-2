@@ -28,7 +28,7 @@ return async function handler(req: Request, res: Response) {
     const role = await client.from("user_roles").select("role").eq("user_id", identity.data).single();
     if (role.error || role.data?.role !== "admin") return res.status(403).json({ error: "Admin access is required." });
     const aiSettings = await deps.loadAiSettings(client);
-    if (!aiSettings.apiKey) return res.status(503).json({ error: "Add an OpenAI API key in Settings → AI configuration." });
+    if (!aiSettings.apiKey) return res.status(503).json({ error: "Configure the AI connection in Settings → AI configuration." });
     const parsed = analysisRequest.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Choose a job and provide a PDF up to 3 MB or CV text between 50 and 60,000 characters." });
     const input = parsed.data;

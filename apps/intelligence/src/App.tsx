@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useClerk } from "@clerk/react";
 import {
-  Activity, ArrowUpRight, BriefcaseBusiness, Building2, CalendarDays, ChevronDown, CircleDollarSign,
+  Activity, ArrowUpRight, Building2, CalendarDays, ChevronDown, CircleDollarSign,
   ContactRound, FileText, Filter, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
-  Pencil, Save, ShieldCheck, Sparkles, Target, UserRound, Users, X,
+  Pencil, Save, ShieldCheck, Sparkles, Target, Users, X,
 } from "lucide-react";
 
 type View = "overview" | "intelligence" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors";
@@ -13,86 +13,42 @@ type Capability = {
 };
 
 const capabilities: Capability[] = [
-  { id: "rag", name: "Enterprise RAG", short: "RAG", color: "blue", people: 6, projects: 4, technologies: ["Docling", "Qdrant", "Azure OpenAI"], proof: "4 production systems", experts: [{ initials: "AD", name: "Aïcha Dridi", role: "AI engineer" }, { initials: "MM", name: "Murad Mustafayev", role: "ML lead" }, { initials: "IH", name: "Issa Hammoud", role: "Data engineer" }] },
-  { id: "voice", name: "Voice AI", short: "Voice", color: "violet", people: 8, projects: 3, technologies: ["LiveKit", "Deepgram", "ElevenLabs"], proof: "3 real-time deployments", experts: [{ initials: "NA", name: "Nader Sadek", role: "AI engineer" }, { initials: "AR", name: "Amadou Renaud", role: "Product engineer" }, { initials: "MK", name: "Mirette Karam", role: "Conversation designer" }] },
-  { id: "agents", name: "Agentic AI", short: "Agents", color: "orange", people: 11, projects: 6, technologies: ["LangGraph", "CrewAI", "MCP"], proof: "6 client programmes", experts: [{ initials: "MA", name: "Mohamed Amari", role: "AI architect" }, { initials: "AK", name: "Alexandra Kim", role: "Product lead" }, { initials: "NK", name: "Nageeta Kumari", role: "ML engineer" }] },
-  { id: "data", name: "Data for AI", short: "Data", color: "green", people: 9, projects: 7, technologies: ["dbt", "Airflow", "Snowflake"], proof: "7 data foundations", experts: [{ initials: "FA", name: "Frimpong Adotri", role: "Data lead" }, { initials: "AS", name: "Asmae Karmouchi", role: "Data engineer" }, { initials: "JB", name: "Jermiah Brown", role: "Platform engineer" }] },
+  { id: "rag", name: "Enterprise RAG", short: "RAG", color: "blue", people: 0, projects: 0, technologies: [], proof: "No delivery evidence added", experts: [] },
+  { id: "voice", name: "Voice AI", short: "Voice", color: "violet", people: 0, projects: 0, technologies: [], proof: "No delivery evidence added", experts: [] },
+  { id: "agents", name: "Agentic AI", short: "Agents", color: "orange", people: 0, projects: 0, technologies: [], proof: "No delivery evidence added", experts: [] },
+  { id: "data", name: "Data for AI", short: "Data", color: "green", people: 0, projects: 0, technologies: [], proof: "No delivery evidence added", experts: [] },
 ];
 
 const accounts = [
   {
-    id: "bnp-paribas", name: "BNP Paribas", sector: "Financial services", contacts: 8, signal: "Strong", opportunity: "Knowledge copilot", value: "€240k", stage: "Discovery", owner: "MA", fit: ["RAG", "Agents"],
-    caseStudies: [
-      { title: "Regulated knowledge assistant", client: "European retail bank", summary: "A governed RAG assistant that helps operations teams find policy answers with source-level citations.", outcome: "42% faster policy resolution", evidence: "Production", tags: ["RAG", "Azure OpenAI"] },
-      { title: "Analyst research copilot", client: "Global financial institution", summary: "An agentic research workflow spanning internal research, market data and compliance-approved summaries.", outcome: "6 hours saved per analyst weekly", evidence: "Reusable", tags: ["Agents", "Qdrant"] },
-    ],
+    id: "bnp-paribas", name: "BNP Paribas", sector: "Financial services", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
   },
   {
-    id: "axa", name: "AXA", sector: "Insurance", contacts: 5, signal: "Warm", opportunity: "Claims voice agent", value: "€180k", stage: "Meeting", owner: "AD", fit: ["Voice", "Data"],
-    caseStudies: [
-      { title: "Claims intake voice agent", client: "European insurer", summary: "A real-time voice assistant that captures first-notice-of-loss details and routes complex claims to specialists.", outcome: "31% lower handling time", evidence: "Production", tags: ["Voice", "LiveKit"] },
-      { title: "Claims document intelligence", client: "Specialty insurance group", summary: "A document pipeline that extracts, validates and prioritises claim evidence for human review.", outcome: "68% straight-through extraction", evidence: "Reusable", tags: ["Data", "Docling"] },
-    ],
+    id: "axa", name: "AXA", sector: "Insurance", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
   },
   {
-    id: "kering", name: "Kering", sector: "Luxury", contacts: 4, signal: "New", opportunity: "Retail intelligence", value: "€135k", stage: "Contacted", owner: "NK", fit: ["Agents", "Data"],
-    caseStudies: [
-      { title: "Store performance intelligence", client: "Global luxury retailer", summary: "A daily decision layer combining store, product and clienteling signals for regional retail teams.", outcome: "18% faster action on store signals", evidence: "Production", tags: ["Data", "Snowflake"] },
-      { title: "Clienteling recommendation agent", client: "Premium fashion house", summary: "An assisted-selling agent that turns customer history and catalogue data into explainable recommendations.", outcome: "12% uplift in assisted conversion", evidence: "Reusable", tags: ["Agents", "RAG"] },
-    ],
+    id: "kering", name: "Kering", sector: "Luxury", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
   },
   {
-    id: "foundever", name: "Foundever", sector: "Customer experience", contacts: 6, signal: "Warm", opportunity: "Multilingual service automation", value: "€220k", stage: "Discovery", owner: "MA", fit: ["Voice", "Agents"],
-    caseStudies: [
-      { title: "Multilingual customer service agent", client: "Global service provider", summary: "A real-time voice agent supporting customer journeys across languages while preserving human escalation paths.", outcome: "29% lower average handling time", evidence: "Production", tags: ["Voice", "Agents"] },
-      { title: "Agent knowledge copilot", client: "European contact centre", summary: "A grounded assistant that surfaces approved answers and next-best actions during live conversations.", outcome: "18% higher first-contact resolution", evidence: "Reusable", tags: ["RAG", "Data"] },
-    ],
+    id: "foundever", name: "Foundever", sector: "Customer experience", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
   },
   {
-    id: "cdg-capital-morocco", name: "CDG Capital Morocco", sector: "Financial services", contacts: 5, signal: "New", opportunity: "Investment research copilot", value: "€165k", stage: "Contacted", owner: "AD", fit: ["RAG", "Data"],
-    caseStudies: [
-      { title: "Investment research assistant", client: "Regional investment bank", summary: "A bilingual research copilot that connects market intelligence, internal notes and approved investment documents.", outcome: "55% faster research preparation", evidence: "Production", tags: ["RAG", "Data"] },
-      { title: "Portfolio reporting automation", client: "Asset management group", summary: "An agentic reporting workflow that validates source data and produces review-ready portfolio commentary.", outcome: "3 days saved each reporting cycle", evidence: "Reusable", tags: ["Agents", "Data"] },
-    ],
+    id: "cdg-capital-morocco", name: "CDG Capital Morocco", sector: "Financial services", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
   },
-];
-
-const pipeline = [
-  { stage: "Identified", total: "€455k", cards: [{ company: "Kering", title: "Retail intelligence", value: "€135k", age: "2d" }, { company: "Orange", title: "Support automation", value: "€320k", age: "5d" }] },
-  { stage: "Meeting", total: "€300k", cards: [{ company: "AXA", title: "Claims voice agent", value: "€180k", age: "Tomorrow" }, { company: "Veolia", title: "Operations copilot", value: "€120k", age: "Oct 12" }] },
-  { stage: "Discovery", total: "€240k", cards: [{ company: "BNP Paribas", title: "Knowledge copilot", value: "€240k", age: "4d" }] },
-  { stage: "Proposal", total: "€415k", cards: [{ company: "Foundever", title: "Multilingual service automation", value: "€220k", age: "Oct 9" }, { company: "Sanofi", title: "Research agent", value: "€195k", age: "Oct 15" }] },
 ];
 
 type LeadSource = "Event" | "Tool" | "Network";
 type LeadStage = "New" | "Qualified" | "Contacted" | "Converted";
 type LeadRecord = { id: string; name: string; role: string; company: string; source: LeadSource; origin: string; score: number; reason: string; stage: LeadStage; owner: string };
-type EventRecord = { id: string; title: string; date: string; location: string; lumaUrl: string; attendees: number; qualified: number; status: "Ready to analyze" | "Analyzed" };
+type ImportedAttendee = { name: string; role: string; company: string; linkedin: string; email: string; sourceRow: Record<string, string> };
+type EventRecord = { id: string; title: string; date: string; location: string; lumaUrl: string; attendees: number; qualified: number; status: "Awaiting upload" | "Ready to analyze" | "Analyzed"; fileName?: string; attendeeData?: ImportedAttendee[] };
 
-const initialLeads: LeadRecord[] = [
-  { id: "tool-marie", name: "Marie Dumas", role: "Director of Innovation", company: "Sodexo", source: "Tool", origin: "Clay enrichment", score: 91, reason: "Hiring AI product leaders and expanding automation", stage: "Contacted", owner: "NK" },
-  { id: "tool-raphael", name: "Raphaël Simon", role: "Chief Data Officer", company: "Rexel", source: "Tool", origin: "Apollo signal", score: 84, reason: "Public data modernisation programme", stage: "New", owner: "FA" },
-  { id: "network-claire", name: "Claire Dubois", role: "Claims Transformation Director", company: "AXA", source: "Network", origin: "Aïcha Dridi introduction", score: 96, reason: "Warm executive path through the QuickSort network", stage: "Qualified", owner: "AD" },
-  { id: "network-youssef", name: "Youssef Alaoui", role: "Head of Investment Research", company: "CDG Capital Morocco", source: "Network", origin: "Frimpong Adotri introduction", score: 92, reason: "Trusted introduction and a matched RAG use case", stage: "Contacted", owner: "MA" },
-];
+const initialLeads: LeadRecord[] = [];
 
 const initialEvents: EventRecord[] = [
-  { id: "quicksort-multimodal-ai", title: "Multimodal AI in Production (w/ The AI Collective)", date: "01 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/quicksort-multimodal-ai", attendees: 0, qualified: 0, status: "Ready to analyze" },
-  { id: "ccparis", title: "Cafe Compute Meetup: Paris", date: "02 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/ccparis", attendees: 0, qualified: 0, status: "Ready to analyze" },
+  { id: "quicksort-multimodal-ai", title: "Multimodal AI in Production (w/ The AI Collective)", date: "01 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/quicksort-multimodal-ai", attendees: 0, qualified: 0, status: "Awaiting upload" },
+  { id: "ccparis", title: "Cafe Compute Meetup: Paris", date: "02 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/ccparis", attendees: 0, qualified: 0, status: "Awaiting upload" },
 ];
-
-const networkProspects: Record<string, { name: string; role: string }> = {
-  "AXA": { name: "Claire Dubois", role: "Claims Transformation Director" },
-  "BNP Paribas": { name: "Sophie Martin", role: "Head of AI Transformation" },
-  "Sanofi": { name: "Paul Girard", role: "Director of Research Platforms" },
-  "Orange": { name: "Karim Benali", role: "Customer AI Director" },
-  "Veolia": { name: "Julie Mercier", role: "Operations Transformation Lead" },
-  "Kering": { name: "Amélie Laurent", role: "Retail Innovation Director" },
-  "LVMH": { name: "Charlotte Roux", role: "Clienteling Technology Director" },
-  "CDG Capital Morocco": { name: "Youssef Alaoui", role: "Head of Investment Research" },
-  "Foundever": { name: "Sonia Alvarez", role: "Global Digital Transformation VP" },
-  "TotalEnergies": { name: "Alexandre Fontaine", role: "Data Innovation Director" },
-};
 
 const intelligenceAreas = [
   { id: "lead", name: "Lead intelligence", icon: Target, summary: "Build ICP lists, find relevant buyers, enrich profiles, verify emails, score fit, and identify why-now signals.", output: "Qualified people and accounts ready for Leads", inputs: ["ICP and buyer criteria", "People and company enrichment", "Email verification", "Intent and timing signals"] },
@@ -193,7 +149,7 @@ export default function App({ email = "" }: { email?: string }) {
   const initialRoute = useMemo(routeFromLocation, []);
   const storedWorkspace = useMemo(() => {
     try {
-      const saved = window.localStorage.getItem("quicksort-intelligence-accounts-v1");
+      const saved = window.localStorage.getItem("quicksort-intelligence-accounts-v3");
       return saved ? JSON.parse(saved) as { accounts: Account[]; intel: Record<string, AccountIntel> } : null;
     } catch { return null; }
   }, []);
@@ -202,12 +158,12 @@ export default function App({ email = "" }: { email?: string }) {
   const [query, setQuery] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<string | null>(initialRoute.account);
   const [accountRecords, setAccountRecords] = useState<Account[]>(storedWorkspace?.accounts ?? accounts);
-  const [intelRecords, setIntelRecords] = useState<Record<string, AccountIntel>>(storedWorkspace?.intel ?? accountIntel);
+  const [intelRecords, setIntelRecords] = useState<Record<string, AccountIntel>>(storedWorkspace?.intel ?? emptyAccountIntel);
   const [leadRecords, setLeadRecords] = useState<LeadRecord[]>(() => {
-    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-leads-v2") || "null") ?? initialLeads; } catch { return initialLeads; }
+    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-leads-v4") || "null") ?? initialLeads; } catch { return initialLeads; }
   });
   const [eventRecords, setEventRecords] = useState<EventRecord[]>(() => {
-    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-events-v2") || "null") ?? initialEvents; } catch { return initialEvents; }
+    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-events-v4") || "null") ?? initialEvents; } catch { return initialEvents; }
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toast, setToast] = useState("");
@@ -244,29 +200,21 @@ export default function App({ email = "" }: { email?: string }) {
     const nextIntel = { ...intelRecords, [updatedAccount.id]: updatedIntel };
     setAccountRecords(nextAccounts);
     setIntelRecords(nextIntel);
-    window.localStorage.setItem("quicksort-intelligence-accounts-v1", JSON.stringify({ accounts: nextAccounts, intel: nextIntel }));
+    window.localStorage.setItem("quicksort-intelligence-accounts-v3", JSON.stringify({ accounts: nextAccounts, intel: nextIntel }));
     notify("Account changes saved");
   };
-  const saveLeads = (next: LeadRecord[]) => { setLeadRecords(next); window.localStorage.setItem("quicksort-intelligence-leads-v2", JSON.stringify(next)); };
-  const saveEvents = (next: EventRecord[]) => { setEventRecords(next); window.localStorage.setItem("quicksort-intelligence-events-v2", JSON.stringify(next)); };
+  const saveLeads = (next: LeadRecord[]) => { setLeadRecords(next); window.localStorage.setItem("quicksort-intelligence-leads-v4", JSON.stringify(next)); };
+  const saveEvents = (next: EventRecord[]) => {
+    setEventRecords(next);
+    try { window.localStorage.setItem("quicksort-intelligence-events-v4", JSON.stringify(next)); }
+    catch { notify("File loaded for this session, but it is too large for browser storage"); }
+  };
   const qualifyEvent = (event: EventRecord) => {
-    if (event.status === "Analyzed") { go("leads"); notify(`${event.qualified} qualified leads opened`); return; }
-    const generated: LeadRecord[] = [
-      { id: `${event.id}-1`, name: "Camille Bernard", role: "Director, AI Transformation", company: "Schneider Electric", source: "Event", origin: event.title, score: 95, reason: "Decision-maker with an active enterprise AI mandate", stage: "Qualified", owner: "MA" },
-      { id: `${event.id}-2`, name: "Nicolas Petit", role: "Head of Customer Operations", company: "Bouygues Telecom", source: "Event", origin: event.title, score: 89, reason: "High fit for voice automation and near-term buying signal", stage: "Qualified", owner: "AD" },
-      { id: `${event.id}-3`, name: "Léa Moreau", role: "Data Platform Lead", company: "Engie", source: "Event", origin: event.title, score: 86, reason: "Owns a data foundation programme matched to QuickSort evidence", stage: "New", owner: "FA" },
-    ];
-    saveLeads([...generated.filter((lead) => !leadRecords.some((item) => item.id === lead.id)), ...leadRecords]);
-    saveEvents(eventRecords.map((item) => item.id === event.id ? { ...item, status: "Analyzed", attendees: item.attendees || 62, qualified: 3 } : item));
-    notify("AI analysis complete · 3 leads added");
+    if (!event.attendeeData?.length) { notify("Upload the attendee spreadsheet before analysis"); return; }
+    const linkedinProfiles = event.attendeeData.filter((attendee) => attendee.linkedin).length;
+    if (!linkedinProfiles) { notify("No LinkedIn column or profile URLs were found"); return; }
+    notify(`${linkedinProfiles} LinkedIn profiles are ready · connect an enrichment provider to run AI analysis`);
   };
-  const addNetworkLead = (company: string, connector: string) => {
-    const prospect = networkProspects[company] ?? { name: `${company} contact`, role: "Decision maker" };
-    const id = `network-${accountSlug(company)}-${accountSlug(prospect.name)}`;
-    if (!leadRecords.some((lead) => lead.id === id)) saveLeads([{ id, name: prospect.name, role: prospect.role, company, source: "Network", origin: `${connector} introduction`, score: 92, reason: "Warm relationship path discovered in Open doors", stage: "New", owner: connector.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() }, ...leadRecords]);
-    go("leads"); notify(`${prospect.name} added from Open doors`);
-  };
-
   return (
     <div className="app-shell">
       <aside className={mobileOpen ? "sidebar open" : "sidebar"}>
@@ -294,7 +242,7 @@ export default function App({ email = "" }: { email?: string }) {
           <div className="breadcrumbs">Intelligence <span>/</span> {nav.find((item) => item.id === view)?.label}</div>
           <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button><button className="primary" onClick={() => notify("New record ready to configure")}><Plus size={17}/> Add record</button></div>
         </header>
-        {view === "overview" && <Overview active={active} selected={selected} setSelected={setSelected} go={go} notify={notify}/>} 
+        {view === "overview" && <Overview active={active} selected={selected} setSelected={setSelected} go={go} notify={notify} accounts={accountRecords} leads={leadRecords} events={eventRecords}/>}
         {view === "intelligence" && <IntelligenceHub notify={notify}/>}
         {view === "capabilities" && <Capabilities active={active} selected={selected} setSelected={setSelected}/>} 
         {view === "accounts" && (selectedAccount
@@ -303,7 +251,7 @@ export default function App({ email = "" }: { email?: string }) {
         {view === "events" && <Events events={eventRecords} onChange={saveEvents} onQualify={qualifyEvent} notify={notify}/>}
         {view === "leads" && <Leads leads={leadRecords} onChange={saveLeads} notify={notify}/>}
         {view === "pipeline" && <Pipeline notify={notify}/>} 
-        {view === "doors" && <OpenDoors onAddLead={addNetworkLead}/>}
+        {view === "doors" && <OpenDoors notify={notify}/>}
       </main>
       {toast && <div className="toast" role="status">{toast}</div>}
       {mobileOpen && <button className="scrim" onClick={() => setMobileOpen(false)} aria-label="Close navigation"/>}
@@ -315,14 +263,16 @@ function PageIntro({ title, text, action }: { title: string; text: string; actio
   return <div className="page-intro"><div><h1>{title}</h1><p>{text}</p></div>{action}</div>;
 }
 
-function Overview({ active, selected, setSelected, go, notify }: { active: Capability; selected: string; setSelected: (id: string) => void; go: (v: View) => void; notify: (m: string) => void }) {
+function Overview({ active, selected, setSelected, go, notify, accounts, leads, events }: { active: Capability; selected: string; setSelected: (id: string) => void; go: (v: View) => void; notify: (m: string) => void; accounts: Account[]; leads: LeadRecord[]; events: EventRecord[] }) {
+  const attendees = events.reduce((total, event) => total + event.attendees, 0);
+  const opportunities = accounts.filter((account) => account.opportunity !== "Not set").length;
   return <div className="page">
-    <PageIntro title="Company intelligence, connected." text="Delivery evidence and commercial relationships in one live view." action={<button className="quiet-action" onClick={() => notify("Workspace data is up to date")}><Activity size={16}/> Live now</button>}/>
+    <PageIntro title="Company intelligence, connected." text="Only verified records and uploaded source data appear in this workspace." action={<button className="quiet-action" onClick={() => notify("Workspace data is current")}><Activity size={16}/> Current</button>}/>
     <section className="metrics-grid" aria-label="Portfolio metrics">
-      <Metric label="Active opportunities" value="18" change="+4 this month" icon={Target}/>
-      <Metric label="Qualified pipeline" value="€1.50m" change="62% evidence matched" icon={CircleDollarSign}/>
-      <Metric label="Proven capabilities" value="12" change="Across 28 deliveries" icon={Sparkles}/>
-      <Metric label="Warm relationships" value="47" change="11 need follow-up" icon={Users}/>
+      <Metric label="Accounts" value={String(accounts.length)} change="Added to this workspace" icon={Building2}/>
+      <Metric label="Active opportunities" value={String(opportunities)} change="Based on account records" icon={Target}/>
+      <Metric label="Leads" value={String(leads.length)} change="Across all lead sources" icon={Users}/>
+      <Metric label="Uploaded attendees" value={String(attendees)} change="From event spreadsheets" icon={CalendarDays}/>
     </section>
     <div className="overview-grid">
       <section className="surface capability-surface">
@@ -330,23 +280,17 @@ function Overview({ active, selected, setSelected, go, notify }: { active: Capab
         <CapabilityGraph selected={selected} setSelected={setSelected}/>
         <CapabilityDetail capability={active}/>
       </section>
-      <section className="surface match-surface">
-        <div className="match-kicker"><Lightbulb size={17}/> Best next match</div>
-        <h2>BNP Paribas</h2><p className="match-title">Enterprise knowledge copilot</p>
-        <div className="fit-score"><div><strong>92</strong><span>%</span></div><p>Delivery fit based on QuickSort’s proven work</p></div>
-        <div className="evidence-list">
-          <div><span>06</span><p><strong>Relevant engineers</strong>Enterprise RAG experience</p></div>
-          <div><span>04</span><p><strong>Production projects</strong>Financial services ready</p></div>
-          <div><span>02</span><p><strong>Reusable case studies</strong>Cleared for sales use</p></div>
-        </div>
+      <section className="surface match-surface empty-workspace">
+        <div className="match-kicker"><Lightbulb size={17}/> Next best match</div>
+        <h2>No recommendation yet</h2>
+        <p className="match-title">Add real contacts, evidence and opportunities to generate account recommendations.</p>
+        <div className="data-empty">Recommendations stay empty until verified workspace data is available.</div>
         <button className="primary wide" onClick={() => go("accounts")}>Open account intelligence</button>
       </section>
     </div>
     <section className="surface momentum">
       <div className="section-head"><div><h2>Commercial momentum</h2><p>What needs attention across the pipeline</p></div><button onClick={() => go("pipeline")}>Open pipeline <ArrowUpRight size={15}/></button></div>
-      <div className="activity-row"><div className="activity-icon violet"><BriefcaseBusiness size={17}/></div><div><strong>Foundever proposal moved forward</strong><p>Multilingual service automation · €220k</p></div><span>12 min</span></div>
-      <div className="activity-row"><div className="activity-icon blue"><UserRound size={17}/></div><div><strong>Warm introduction available at AXA</strong><p>Aïcha knows the Head of Claims Transformation</p></div><span>2 hr</span></div>
-      <div className="activity-row"><div className="activity-icon green"><FileText size={17}/></div><div><strong>New delivery evidence added</strong><p>Voice orchestration · Retail assistant</p></div><span>Yesterday</span></div>
+      <div className="data-empty">No commercial activity has been recorded yet.</div>
     </section>
   </div>;
 }
@@ -393,19 +337,19 @@ function Metric({ label, value, change, icon: Icon }: { label: string; value: st
 function CapabilityGraph({ selected, setSelected }: { selected: string; setSelected: (id: string) => void }) {
   return <div className="graph" aria-label="Interactive capability graph">
     <svg viewBox="0 0 720 250" preserveAspectRatio="none" aria-hidden="true"><path d="M360 74 C300 88 182 89 118 152 M360 74 C340 112 295 112 273 154 M360 74 C388 110 427 112 447 154 M360 74 C430 86 552 89 608 152"/><path className="pulse-line" d="M360 74 C300 88 182 89 118 152"/></svg>
-    <div className="hub"><span className="hub-logo">QS</span><div><strong>QuickSort</strong><small>28 delivered projects</small></div></div>
+    <div className="hub"><span className="hub-logo">QS</span><div><strong>QuickSort</strong><small>No evidence added</small></div></div>
     {capabilities.map((cap, index) => <button key={cap.id} className={`graph-node n${index + 1} ${cap.color} ${selected === cap.id ? "selected" : ""}`} onClick={() => setSelected(cap.id)}><span>{cap.short}</span><small>{cap.people} people</small></button>)}
   </div>;
 }
 
 function CapabilityDetail({ capability }: { capability: Capability }) {
-  return <div className="capability-detail"><div><span className={`dot ${capability.color}`}/><div><strong>{capability.name}</strong><p>{capability.proof}</p></div></div><div className="tech-list">{capability.technologies.map((tech) => <span key={tech}>{tech}</span>)}</div><div className="avatars">{capability.experts.map((expert) => <span key={expert.initials} title={expert.name}>{expert.initials}</span>)}<b>+{capability.people - 3}</b></div></div>;
+  return <div className="capability-detail"><div><span className={`dot ${capability.color}`}/><div><strong>{capability.name}</strong><p>{capability.proof}</p></div></div><div className="tech-list">{capability.technologies.length ? capability.technologies.map((tech) => <span key={tech}>{tech}</span>) : <small>No technology evidence added.</small>}</div><div className="avatars">{capability.experts.length ? capability.experts.map((expert) => <span key={expert.initials} title={expert.name}>{expert.initials}</span>) : <small>No people evidence added.</small>}</div></div>;
 }
 
 function Capabilities({ active, selected, setSelected }: { active: Capability; selected: string; setSelected: (id: string) => void }) {
   return <div className="page"><PageIntro title="Delivery capability portfolio" text="Every claim is backed by people, deliverables and production experience." action={<button className="secondary"><Filter size={16}/> Filter evidence</button>}/>
     <div className="capabilities-layout"><section className="surface cap-map"><div className="section-head"><div><h2>QuickSort capability map</h2><p>Select a domain to inspect its evidence</p></div></div><CapabilityGraph selected={selected} setSelected={setSelected}/><div className="cap-grid">{capabilities.map((cap) => <button key={cap.id} className={selected === cap.id ? "cap-card active" : "cap-card"} onClick={() => setSelected(cap.id)}><span className={`dot ${cap.color}`}/><strong>{cap.name}</strong><small>{cap.projects} projects · {cap.people} people</small></button>)}</div></section>
-      <aside className="surface evidence-panel"><span className={`domain-badge ${active.color}`}>{active.short}</span><h2>{active.name}</h2><p>{active.proof}, with reusable delivery patterns and specialist expertise.</p><div className="evidence-stat"><strong>{active.projects}</strong><span>client projects</span><strong>{active.people}</strong><span>experienced people</span></div><h3>Core stack</h3><div className="tech-list">{active.technologies.map((tech) => <span key={tech}>{tech}</span>)}</div><h3>People with evidence</h3>{active.experts.map((expert) => <div className="expert" key={expert.initials}><span>{expert.initials}</span><div><strong>{expert.name}</strong><small>{expert.role}</small></div><ArrowUpRight size={15}/></div>)}<button className="primary wide">Open capability dossier</button></aside>
+      <aside className="surface evidence-panel"><span className={`domain-badge ${active.color}`}>{active.short}</span><h2>{active.name}</h2><p>{active.proof}</p><div className="evidence-stat"><strong>{active.projects}</strong><span>client projects</span><strong>{active.people}</strong><span>experienced people</span></div><h3>Core stack</h3><div className="tech-list">{active.technologies.length ? active.technologies.map((tech) => <span key={tech}>{tech}</span>) : <small>No technology evidence added.</small>}</div><h3>People with evidence</h3>{active.experts.length ? active.experts.map((expert) => <div className="expert" key={expert.initials}><span>{expert.initials}</span><div><strong>{expert.name}</strong><small>{expert.role}</small></div><ArrowUpRight size={15}/></div>) : <div className="data-empty">No people evidence added.</div>}<button className="primary wide">Open capability dossier</button></aside>
     </div>
   </div>;
 }
@@ -417,93 +361,7 @@ type AccountEvent = { date: string; month: string; title: string; type: string; 
 type RelationshipContact = { name: string; role: string; strength: string; owner: string };
 type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: RelationshipContact[] };
 
-const accountIntel: Record<string, AccountIntel> = {
-  "bnp-paribas": {
-    contacts: [
-      { name: "Camille Laurent", role: "Chief Information Officer", strength: "Strong", owner: "MA" },
-      { name: "Sophie Martin", role: "Head of AI Transformation", strength: "Warm", owner: "AD" },
-      { name: "Thomas Bernard", role: "GenAI Programme Lead", strength: "Active", owner: "NK" },
-    ],
-    leads: [
-      { name: "Sophie Martin", role: "Head of AI Transformation", company: "BNP Paribas", status: "Qualified", nextStep: "Discovery workshop", owner: "AD" },
-      { name: "Julien Moreau", role: "Knowledge Platforms Director", company: "BNP Paribas", status: "Engaged", nextStep: "Share case study", owner: "MA" },
-      { name: "Élodie Robert", role: "Procurement Partner", company: "BNP Paribas", status: "New", nextStep: "Request introduction", owner: "NK" },
-    ],
-    events: [
-      { date: "14", month: "OCT", title: "Enterprise AI discovery workshop", type: "Workshop", detail: "Paris · 5 attendees" },
-      { date: "21", month: "OCT", title: "Knowledge copilot solution review", type: "Meeting", detail: "Remote · Architecture team" },
-      { date: "05", month: "NOV", title: "BNP Paribas AI Forum", type: "Industry event", detail: "Paris · Relationship opportunity" },
-    ],
-  },
-  "axa": {
-    contacts: [
-      { name: "Claire Dubois", role: "Claims Transformation Director", strength: "Strong", owner: "AD" },
-      { name: "Hugo Lefèvre", role: "Customer Operations Lead", strength: "Warm", owner: "MA" },
-      { name: "Inès Bernard", role: "AI Governance Manager", strength: "New", owner: "NK" },
-    ],
-    leads: [
-      { name: "Claire Dubois", role: "Claims Transformation Director", company: "AXA", status: "Qualified", nextStep: "Voice demo", owner: "AD" },
-      { name: "Hugo Lefèvre", role: "Customer Operations Lead", company: "AXA", status: "Engaged", nextStep: "Validate call flow", owner: "MA" },
-      { name: "Inès Bernard", role: "AI Governance Manager", company: "AXA", status: "New", nextStep: "Send risk brief", owner: "NK" },
-    ],
-    events: [
-      { date: "11", month: "OCT", title: "Claims voice agent demonstration", type: "Demo", detail: "Remote · Claims leadership" },
-      { date: "18", month: "OCT", title: "Data and compliance review", type: "Workshop", detail: "Paris · Governance team" },
-      { date: "07", month: "NOV", title: "Insurance innovation roundtable", type: "Industry event", detail: "Paris · 3 target contacts" },
-    ],
-  },
-  "kering": {
-    contacts: [
-      { name: "Amélie Laurent", role: "Retail Innovation Director", strength: "Warm", owner: "NK" },
-      { name: "Marc Petit", role: "Group Data Platform Lead", strength: "New", owner: "FA" },
-      { name: "Lina Rossi", role: "Clienteling Product Owner", strength: "Strong", owner: "AD" },
-    ],
-    leads: [
-      { name: "Amélie Laurent", role: "Retail Innovation Director", company: "Kering", status: "Engaged", nextStep: "Share retail demo", owner: "NK" },
-      { name: "Marc Petit", role: "Group Data Platform Lead", company: "Kering", status: "New", nextStep: "Map data landscape", owner: "FA" },
-      { name: "Lina Rossi", role: "Clienteling Product Owner", company: "Kering", status: "Qualified", nextStep: "Use-case workshop", owner: "AD" },
-    ],
-    events: [
-      { date: "16", month: "OCT", title: "Retail intelligence introduction", type: "Meeting", detail: "Paris · Innovation team" },
-      { date: "29", month: "OCT", title: "Clienteling use-case workshop", type: "Workshop", detail: "Remote · Product and data" },
-      { date: "13", month: "NOV", title: "Luxury technology summit", type: "Industry event", detail: "Paris · Executive networking" },
-    ],
-  },
-  "foundever": {
-    contacts: [
-      { name: "Sonia Alvarez", role: "Global Digital Transformation VP", strength: "Strong", owner: "MA" },
-      { name: "David Martin", role: "Conversational AI Director", strength: "Warm", owner: "AD" },
-      { name: "Nora Benali", role: "Service Innovation Lead", strength: "Active", owner: "NK" },
-    ],
-    leads: [
-      { name: "Sonia Alvarez", role: "Global Digital Transformation VP", company: "Foundever", status: "Qualified", nextStep: "Discovery workshop", owner: "MA" },
-      { name: "David Martin", role: "Conversational AI Director", company: "Foundever", status: "Engaged", nextStep: "Voice demo", owner: "AD" },
-      { name: "Nora Benali", role: "Service Innovation Lead", company: "Foundever", status: "New", nextStep: "Share case study", owner: "NK" },
-    ],
-    events: [
-      { date: "15", month: "OCT", title: "Service automation discovery", type: "Workshop", detail: "Remote · Transformation team" },
-      { date: "28", month: "OCT", title: "Multilingual voice demonstration", type: "Demo", detail: "Paris · Operations leadership" },
-      { date: "20", month: "NOV", title: "Customer experience summit", type: "Industry event", detail: "Madrid · Executive networking" },
-    ],
-  },
-  "cdg-capital-morocco": {
-    contacts: [
-      { name: "Salma El Idrissi", role: "Chief Digital Officer", strength: "Warm", owner: "AD" },
-      { name: "Youssef Alaoui", role: "Head of Investment Research", strength: "Active", owner: "MA" },
-      { name: "Imane Bennis", role: "Data & Analytics Director", strength: "New", owner: "FA" },
-    ],
-    leads: [
-      { name: "Salma El Idrissi", role: "Chief Digital Officer", company: "CDG Capital Morocco", status: "Qualified", nextStep: "Executive briefing", owner: "AD" },
-      { name: "Youssef Alaoui", role: "Head of Investment Research", company: "CDG Capital Morocco", status: "Engaged", nextStep: "Research demo", owner: "MA" },
-      { name: "Imane Bennis", role: "Data & Analytics Director", company: "CDG Capital Morocco", status: "New", nextStep: "Data workshop", owner: "FA" },
-    ],
-    events: [
-      { date: "17", month: "OCT", title: "Investment research introduction", type: "Meeting", detail: "Casablanca · Research team" },
-      { date: "31", month: "OCT", title: "Bilingual copilot demonstration", type: "Demo", detail: "Remote · Digital leadership" },
-      { date: "26", month: "NOV", title: "Morocco Capital Markets Forum", type: "Industry event", detail: "Casablanca · Executive networking" },
-    ],
-  },
-};
+const emptyAccountIntel = Object.fromEntries(accounts.map((account) => [account.id, { contacts: [], leads: [], events: [] }])) as Record<string, AccountIntel>;
 
 function Accounts({ query, setQuery, accounts, openAccount, notify }: { query: string; setQuery: (s: string) => void; accounts: Account[]; openAccount: (id: string) => void; notify: (m: string) => void }) {
   return <div className="page"><PageIntro title="Account intelligence" text="See who matters, who knows them and where the opportunity sits." action={<button className="primary" onClick={() => notify("New account ready to configure")}><Plus size={16}/> Add account</button>}/>
@@ -531,8 +389,8 @@ function AccountDetail({ account, intel, onSave, onBack, notify }: { account: Ac
   const beginEditing = () => { if (!editing) setEditing(true); };
   const cancelEditing = () => { setDraft(account); setDraftIntel(intel); setEditing(false); };
   const saveEditing = () => { onSave(draft, draftIntel); setEditing(false); };
-  const summary = draft.opportunitySummary ?? "Matched to proven QuickSort delivery evidence and the account’s current transformation priorities.";
-  const evidence = draft.evidence ?? ["4 relevant production projects", "6 experienced engineers", `${draft.caseStudies.length} reusable case studies`];
+  const summary = draft.opportunitySummary ?? "";
+  const evidence = draft.evidence ?? [];
 
   return <div className={`page account-detail-page ${editing ? "edit-mode" : ""}`}>
     <div className="account-page-actions">
@@ -557,47 +415,47 @@ function AccountDetail({ account, intel, onSave, onBack, notify }: { account: Ac
         <div className="org-chart">
           <div className="org-root"><span>{draft.name.split(" ").map((part) => part[0]).join("").slice(0,2)}</span><strong>{draft.name}</strong></div>
           <div className="org-line"/>
-          <div className="org-contacts">{draftIntel.contacts.map((contact, index) => <div className="org-contact" key={index}><span>{contact.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><strong><EditField editing={editing} value={contact.name} label={`Contact ${index + 1} name`} onChange={(name) => patchIntelItem("contacts", index, { name })}/></strong><small><EditField editing={editing} value={contact.role} label={`Contact ${index + 1} role`} onChange={(role) => patchIntelItem("contacts", index, { role })}/></small><em><i/> <EditField editing={editing} value={contact.strength} label={`Contact ${index + 1} strength`} onChange={(strength) => patchIntelItem("contacts", index, { strength })}/> · owner <EditField editing={editing} value={contact.owner} label={`Contact ${index + 1} owner`} onChange={(owner) => patchIntelItem("contacts", index, { owner })}/></em></div>)}</div>
+          <div className="org-contacts">{draftIntel.contacts.length ? draftIntel.contacts.map((contact, index) => <div className="org-contact" key={index}><span>{contact.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><strong><EditField editing={editing} value={contact.name} label={`Contact ${index + 1} name`} onChange={(name) => patchIntelItem("contacts", index, { name })}/></strong><small><EditField editing={editing} value={contact.role} label={`Contact ${index + 1} role`} onChange={(role) => patchIntelItem("contacts", index, { role })}/></small><em><i/> <EditField editing={editing} value={contact.strength} label={`Contact ${index + 1} strength`} onChange={(strength) => patchIntelItem("contacts", index, { strength })}/> · owner <EditField editing={editing} value={contact.owner} label={`Contact ${index + 1} owner`} onChange={(owner) => patchIntelItem("contacts", index, { owner })}/></em></div>) : <div className="data-empty">No contacts added.</div>}</div>
         </div>
       </section>
       <aside className="surface opportunity-panel editable-block" onClick={beginEditing}>
         <span className="panel-label">Opportunity</span>
         <h2><EditField editing={editing} value={draft.opportunity} label="Opportunity name" onChange={(opportunity) => patchAccount({ opportunity })}/></h2>
-        <p><EditField editing={editing} multiline value={summary} label="Opportunity summary" onChange={(opportunitySummary) => patchAccount({ opportunitySummary })}/></p>
-        <div className="opportunity-score"><strong><EditField editing={editing} value={draft.fitScore ?? "92%"} label="Capability fit" onChange={(fitScore) => patchAccount({ fitScore })}/></strong><span>capability fit</span></div>
+        <p>{editing || summary ? <EditField editing={editing} multiline value={summary} label="Opportunity summary" onChange={(opportunitySummary) => patchAccount({ opportunitySummary })}/> : "No opportunity details added."}</p>
+        <div className="opportunity-score"><strong><EditField editing={editing} value={draft.fitScore ?? "—"} label="Capability fit" onChange={(fitScore) => patchAccount({ fitScore })}/></strong><span>capability fit</span></div>
         <h3>Recommended capabilities</h3>
-        {editing ? <input className="inline-edit" aria-label="Recommended capabilities" value={draft.fit.join(", ")} onChange={(event) => patchAccount({ fit: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })}/> : <div className="fit-tags">{draft.fit.map((fit) => <span key={fit}>{fit}</span>)}</div>}
+        {editing ? <input className="inline-edit" aria-label="Recommended capabilities" value={draft.fit.join(", ")} onChange={(event) => patchAccount({ fit: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })}/> : draft.fit.length ? <div className="fit-tags">{draft.fit.map((fit) => <span key={fit}>{fit}</span>)}</div> : <div className="data-empty">No capability matches added.</div>}
         <h3>Evidence ready</h3>
-        {editing ? <textarea className="inline-edit textarea" aria-label="Evidence ready" value={evidence.join("\n")} onChange={(event) => patchAccount({ evidence: event.target.value.split("\n") })}/> : <ul>{evidence.map((item) => <li key={item}>{item}</li>)}</ul>}
+        {editing ? <textarea className="inline-edit textarea" aria-label="Evidence ready" value={evidence.join("\n")} onChange={(event) => patchAccount({ evidence: event.target.value.split("\n").filter(Boolean) })}/> : evidence.length ? <ul>{evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <div className="data-empty">No evidence added.</div>}
       </aside>
     </div>
     <section className="surface case-studies-section editable-block" onClick={beginEditing}>
       <div className="section-head"><div><h2>Relevant case studies</h2><p>Delivery evidence selected for {draft.name}</p></div><span className="case-count">{draft.caseStudies.length} ready to use</span></div>
-      <div className="case-study-grid">{draft.caseStudies.map((study, index) => <article className="case-study-card" key={index}>
+      {draft.caseStudies.length ? <div className="case-study-grid">{draft.caseStudies.map((study, index) => <article className="case-study-card" key={index}>
         <div className="case-study-top"><span><FileText size={16}/><EditField editing={editing} value={study.evidence} label={`Case study ${index + 1} evidence`} onChange={(evidence) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, evidence } : item) })}/></span>{!editing && <Pencil size={15}/>}</div>
         <div><small><EditField editing={editing} value={study.client} label={`Case study ${index + 1} client`} onChange={(client) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, client } : item) })}/></small><h3><EditField editing={editing} value={study.title} label={`Case study ${index + 1} title`} onChange={(title) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, title } : item) })}/></h3><p><EditField editing={editing} multiline value={study.summary} label={`Case study ${index + 1} summary`} onChange={(summary) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, summary } : item) })}/></p></div>
         <div className="case-study-outcome"><span>Proven outcome</span><strong><EditField editing={editing} value={study.outcome} label={`Case study ${index + 1} outcome`} onChange={(outcome) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, outcome } : item) })}/></strong></div>
         {editing ? <input className="inline-edit" aria-label={`Case study ${index + 1} tags`} value={study.tags.join(", ")} onChange={(event) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) } : item) })}/> : <div className="fit-tags">{study.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
-      </article>)}</div>
+      </article>)}</div> : <div className="data-empty">No case studies added.</div>}
     </section>
     <div className="account-intel-grid">
       <section className="surface leads-section editable-block" onClick={beginEditing}>
         <div className="section-head"><div><h2>Leads</h2><p>People moving this account forward</p></div><span className="case-count">{draftIntel.leads.length} active</span></div>
-        <div className="lead-list">{draftIntel.leads.map((lead, index) => <div className="lead-row" key={index}>
+        {draftIntel.leads.length ? <div className="lead-list">{draftIntel.leads.map((lead, index) => <div className="lead-row" key={index}>
           <span className="lead-avatar">{lead.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>
           <span className="lead-person"><strong><EditField editing={editing} value={lead.name} label={`Lead ${index + 1} name`} onChange={(name) => patchIntelItem("leads", index, { name })}/></strong><small><EditField editing={editing} value={lead.role} label={`Lead ${index + 1} role`} onChange={(role) => patchIntelItem("leads", index, { role })}/></small></span>
           <span className={`lead-status ${lead.status.toLowerCase()}`}><EditField editing={editing} value={lead.status} label={`Lead ${index + 1} status`} onChange={(status) => patchIntelItem("leads", index, { status })}/></span>
           <span className="lead-next"><small>Next step</small><strong><EditField editing={editing} value={lead.nextStep} label={`Lead ${index + 1} next step`} onChange={(nextStep) => patchIntelItem("leads", index, { nextStep })}/></strong></span>
           <span className="lead-owner"><EditField editing={editing} value={lead.owner} label={`Lead ${index + 1} owner`} onChange={(owner) => patchIntelItem("leads", index, { owner })}/></span>
-        </div>)}</div>
+        </div>)}</div> : <div className="data-empty">No leads added.</div>}
       </section>
       <section className="surface events-section editable-block" onClick={beginEditing}>
         <div className="section-head"><div><h2>Events</h2><p>Key moments around this account</p></div><CalendarDays size={18}/></div>
-        <div className="event-list">{draftIntel.events.map((event, index) => <div className="event-row" key={index}>
+        {draftIntel.events.length ? <div className="event-list">{draftIntel.events.map((event, index) => <div className="event-row" key={index}>
           <span className="event-date"><strong><EditField editing={editing} value={event.date} label={`Event ${index + 1} day`} onChange={(date) => patchIntelItem("events", index, { date })}/></strong><small><EditField editing={editing} value={event.month} label={`Event ${index + 1} month`} onChange={(month) => patchIntelItem("events", index, { month })}/></small></span>
           <span className="event-info"><small><EditField editing={editing} value={event.type} label={`Event ${index + 1} type`} onChange={(type) => patchIntelItem("events", index, { type })}/></small><strong><EditField editing={editing} value={event.title} label={`Event ${index + 1} title`} onChange={(title) => patchIntelItem("events", index, { title })}/></strong><em><EditField editing={editing} value={event.detail} label={`Event ${index + 1} details`} onChange={(detail) => patchIntelItem("events", index, { detail })}/></em></span>
           {!editing && <Pencil size={14}/>} 
-        </div>)}</div>
+        </div>)}</div> : <div className="data-empty">No account events added.</div>}
       </section>
     </div>
   </div>;
@@ -606,33 +464,69 @@ function AccountDetail({ account, intel, onSave, onBack, notify }: { account: Ac
 function Events({ events, onChange, onQualify, notify }: { events: EventRecord[]; onChange: (events: EventRecord[]) => void; onQualify: (event: EventRecord) => void; notify: (message: string) => void }) {
   const [lumaUrl, setLumaUrl] = useState("");
   const [error, setError] = useState("");
-  const analyzed = events.filter((event) => event.status === "Analyzed");
-  const importedLeads = analyzed.reduce((total, event) => total + event.qualified, 0);
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+  const uploadedEvents = events.filter((event) => event.attendeeData?.length);
+  const attendeeRows = events.reduce((total, event) => total + event.attendees, 0);
+  const linkedinProfiles = events.reduce((total, event) => total + (event.attendeeData?.filter((attendee) => attendee.linkedin).length ?? 0), 0);
   const addEvent = (event: React.FormEvent) => {
     event.preventDefault();
     const value = lumaUrl.trim();
     if (!/^https?:\/\/(?:www\.)?(?:lu\.ma|luma\.com)\//i.test(value)) { setError("Paste a valid lu.ma or luma.com event link."); return; }
     const rawSlug = value.split("/").filter(Boolean).pop()?.split("?")[0] || "new-event";
     const title = decodeURIComponent(rawSlug).replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-    const nextEvent: EventRecord = { id: `${rawSlug}-${Date.now()}`, title, date: "Date to confirm", location: "From Luma", lumaUrl: value, attendees: 0, qualified: 0, status: "Ready to analyze" };
+    const nextEvent: EventRecord = { id: `${rawSlug}-${Date.now()}`, title, date: "Date to confirm", location: "From Luma", lumaUrl: value, attendees: 0, qualified: 0, status: "Awaiting upload" };
     onChange([nextEvent, ...events]);
-    setLumaUrl(""); setError(""); notify("Luma event imported · ready for AI analysis");
+    setLumaUrl(""); setError(""); notify("Event added · upload its attendee spreadsheet next");
+  };
+  const uploadAttendees = async (eventId: string, file?: File) => {
+    if (!file) return;
+    try {
+      const { read, utils } = await import("xlsx");
+      const workbook = read(await file.arrayBuffer(), { type: "array", cellDates: true });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) throw new Error("The spreadsheet has no worksheets.");
+      const rows = utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: "", raw: false });
+      const normalized = rows.map((row) => {
+        const sourceRow = Object.fromEntries(Object.entries(row).map(([key, value]) => [key, String(value ?? "").trim()]));
+        const lookup = Object.fromEntries(Object.entries(sourceRow).map(([key, value]) => [key.toLowerCase().replace(/[^a-z0-9]/g, ""), value]));
+        const get = (...keys: string[]) => keys.map((key) => lookup[key]).find(Boolean) ?? "";
+        const linkedin = Object.entries(lookup).find(([key]) => key.includes("linkedin") || key === "profileurl")?.[1] ?? "";
+        const firstName = get("firstname", "givenname");
+        const lastName = get("lastname", "surname", "familyname");
+        return {
+          name: get("fullname", "name", "attendeename") || [firstName, lastName].filter(Boolean).join(" "),
+          role: get("jobtitle", "title", "role", "position"),
+          company: get("company", "companyname", "organisation", "organization"),
+          linkedin,
+          email: get("email", "emailaddress"),
+          sourceRow,
+        } satisfies ImportedAttendee;
+      }).filter((attendee) => Object.values(attendee.sourceRow).some(Boolean));
+      if (!normalized.length) throw new Error("No attendee rows were found in the first worksheet.");
+      const next = events.map((item) => item.id === eventId ? { ...item, fileName: file.name, attendeeData: normalized, attendees: normalized.length, qualified: 0, status: "Ready to analyze" as const } : item);
+      onChange(next);
+      setUploadErrors((current) => ({ ...current, [eventId]: "" }));
+      notify(`${normalized.length} attendee rows loaded from ${file.name}`);
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : "This file could not be read.";
+      setUploadErrors((current) => ({ ...current, [eventId]: message }));
+    }
   };
   return <div className="page events-page">
-    <PageIntro title="Events intelligence" text="Import a Luma event, qualify the right attendees and send them directly to Leads."/>
+    <PageIntro title="Events intelligence" text="Add an event, upload the real attendee sheet, then prepare LinkedIn profiles for authorized enrichment."/>
     <section className="event-importer">
-      <div className="event-import-copy"><span className="import-icon"><CalendarDays size={22}/></span><div><h2>Bring in a Luma event</h2><p>Paste the public event link. QuickSort prepares the attendee list for AI qualification.</p></div></div>
+      <div className="event-import-copy"><span className="import-icon"><CalendarDays size={22}/></span><div><h2>Bring in a Luma event</h2><p>The Luma link creates the event only. Attendee data appears after you upload a spreadsheet.</p></div></div>
       <form onSubmit={addEvent}><label htmlFor="luma-link">Luma event link</label><div><input id="luma-link" value={lumaUrl} onChange={(event) => { setLumaUrl(event.target.value); setError(""); }} placeholder="https://lu.ma/your-event"/><button className="primary" type="submit"><Plus size={16}/> Import event</button></div>{error && <p className="form-error" role="alert">{error}</p>}</form>
     </section>
-    <div className="event-flow" aria-label="Event lead workflow"><span><b>1</b> Import from Luma</span><i/><span><b>2</b> AI ranks attendees</span><i/><span><b>3</b> Best leads enter pipeline</span></div>
-    <section className="event-metrics"><div><span>Events imported</span><strong>{events.length}</strong></div><div><span>Attendees scanned</span><strong>{events.reduce((total, event) => total + event.attendees, 0)}</strong></div><div><span>Qualified leads</span><strong>{importedLeads}</strong></div><div><span>Qualification rate</span><strong>{events.reduce((total, event) => total + event.attendees, 0) ? Math.round(importedLeads / events.reduce((total, event) => total + event.attendees, 0) * 100) : 0}%</strong></div></section>
+    <div className="event-flow" aria-label="Event lead workflow"><span><b>1</b> Add Luma event</span><i/><span><b>2</b> Upload attendee sheet</span><i/><span><b>3</b> Enrich LinkedIn profiles</span></div>
+    <section className="event-metrics"><div><span>Events added</span><strong>{events.length}</strong></div><div><span>Files uploaded</span><strong>{uploadedEvents.length}</strong></div><div><span>Attendee rows</span><strong>{attendeeRows}</strong></div><div><span>LinkedIn profiles</span><strong>{linkedinProfiles}</strong></div></section>
     <section className="surface event-workspace"><div className="section-head"><div><h2>Event queue</h2><p>Analyze new attendee lists or revisit completed results</p></div><span className="case-count">{events.length} events</span></div>
-      <div className="event-table-head"><span>Event</span><span>Attendees</span><span>AI-qualified</span><span>Status</span><span/></div>
+      <div className="event-table-head"><span>Event</span><span>Attendees</span><span>LinkedIn</span><span>Status</span><span>Source data</span></div>
       <div className="event-work-list">{events.map((event) => <article key={event.id} className="event-work-row">
-        <div className="event-identity"><span><CalendarDays size={18}/></span><div><strong>{event.title}</strong><small>{event.date} · {event.location}</small><a href={event.lumaUrl} target="_blank" rel="noreferrer">Open Luma <ArrowUpRight size={12}/></a></div></div>
-        <strong className="event-number">{event.attendees || "—"}</strong><strong className="event-number event-qualified">{event.qualified || "—"}</strong>
+        <div className="event-identity"><span><CalendarDays size={18}/></span><div><strong>{event.title}</strong><small>{event.date} · {event.location}</small><a href={event.lumaUrl} target="_blank" rel="noreferrer">Open Luma <ArrowUpRight size={12}/></a>{event.fileName && <em>{event.fileName}</em>}</div></div>
+        <strong className="event-number">{event.attendeeData?.length ? event.attendees : "—"}</strong><strong className="event-number event-qualified">{event.attendeeData?.length ? event.attendeeData.filter((attendee) => attendee.linkedin).length : "—"}</strong>
         <span className={`analysis-status ${event.status === "Analyzed" ? "complete" : "ready"}`}><i/>{event.status}</span>
-        <button className={event.status === "Analyzed" ? "secondary" : "primary"} onClick={() => onQualify(event)}>{event.status === "Analyzed" ? "View leads" : <><Sparkles size={15}/> Analyze with AI</>}</button>
+        <div className="event-actions"><label className="secondary file-action"><FileText size={15}/>{event.fileName ? "Replace file" : "Upload file"}<input type="file" accept=".xlsx,.xls,.csv" onChange={(input) => void uploadAttendees(event.id, input.target.files?.[0])}/></label><button className="primary" disabled={!event.attendeeData?.length} onClick={() => onQualify(event)}><Sparkles size={15}/> Analyze with AI</button>{uploadErrors[event.id] && <small className="event-upload-error" role="alert">{uploadErrors[event.id]}</small>}</div>
       </article>)}</div>
     </section>
   </div>;
@@ -669,19 +563,13 @@ function Leads({ leads, onChange, notify }: { leads: LeadRecord[]; onChange: (le
 
 function Pipeline({ notify }: { notify: (m: string) => void }) {
   return <div className="page"><PageIntro title="Opportunity pipeline" text="Move from first signal to signed work, with delivery evidence attached." action={<button className="primary" onClick={() => notify("New opportunity ready to configure")}><Plus size={16}/> New opportunity</button>}/>
-    <div className="pipeline-summary"><span><strong>€1.50m</strong> qualified pipeline</span><span><strong>18</strong> active opportunities</span><span><strong>38%</strong> weighted confidence</span></div>
-    <div className="kanban">{pipeline.map((column) => <section className="kanban-column" key={column.stage}><header><div><i/><strong>{column.stage}</strong><span>{column.cards.length}</span></div><small>{column.total}</small></header>{column.cards.map((card) => <button className="deal-card" key={card.company} onClick={() => notify(`${card.company} opportunity opened`)}><div><span>{card.company}</span><small>{card.age}</small></div><h3>{card.title}</h3><p>{card.value}</p><div className="deal-bottom"><span>{card.company.slice(0, 2).toUpperCase()}</span><div className="mini-fit"><i/><i/><i/></div></div></button>)}<button className="add-deal"><Plus size={15}/> Add opportunity</button></section>)}</div>
+    <div className="pipeline-summary"><span><strong>0</strong> active opportunities</span><span><strong>0</strong> qualified opportunities</span><span><strong>—</strong> weighted confidence</span></div>
+    <section className="surface empty-workspace"><Target size={24}/><h2>No opportunity data added</h2><p>Create an opportunity when you have a real account, value and stage to record.</p><button className="primary" onClick={() => notify("New opportunity ready to configure")}><Plus size={15}/> Add opportunity</button></section>
   </div>;
 }
 
-function OpenDoors({ onAddLead }: { onAddLead: (company: string, connector: string) => void }) {
-  const people = [
-    { initials: "AD", name: "Aïcha Dridi", role: "AI engineer", companies: ["AXA", "BNP Paribas", "Sanofi"], contacts: 9, introductions: 3 },
-    { initials: "MA", name: "Mohamed Amari", role: "AI architect", companies: ["BNP Paribas", "Orange", "Veolia"], contacts: 12, introductions: 5 },
-    { initials: "NK", name: "Nageeta Kumari", role: "ML engineer", companies: ["Kering", "LVMH"], contacts: 6, introductions: 2 },
-    { initials: "FA", name: "Frimpong Adotri", role: "Data lead", companies: ["CDG Capital Morocco", "Foundever", "TotalEnergies"], contacts: 11, introductions: 4 },
-  ];
-  return <div className="page"><PageIntro title="Open doors" text="Find the shortest trusted path from QuickSort to the people who can move an opportunity." action={<span className="case-count">Select a company to create a network lead</span>}/>
-    <section className="surface door-map"><div className="section-head"><div><h2>Relationship network</h2><p>Team members with the strongest commercial reach</p></div><span className="legend"><i/> Strong relationship</span></div><div className="door-grid">{people.map((person) => <article className="person-card" key={person.name}><div className="person-main"><span>{person.initials}</span><div><h3>{person.name}</h3><p>{person.role}</p></div></div><div className="door-numbers"><div><strong>{person.contacts}</strong><span>contacts</span></div><div><strong>{person.introductions}</strong><span>open intros</span></div></div><div className="company-links">{person.companies.map((company, i) => <button key={company} onClick={() => onAddLead(company, person.name)} title={`Add ${company} contact to Leads`}><i className={i === 0 ? "strong" : ""}/>{company}<ArrowUpRight size={14}/></button>)}</div></article>)}</div></section>
+function OpenDoors({ notify }: { notify: (message: string) => void }) {
+  return <div className="page"><PageIntro title="Open doors" text="Record verified relationships to find the shortest trusted path into an account." action={<button className="primary" onClick={() => notify("New relationship ready to configure")}><Plus size={16}/> Add relationship</button>}/>
+    <section className="surface door-map empty-workspace"><ContactRound size={26}/><h2>No relationships added</h2><p>Network leads will appear only after a real relationship is recorded here.</p><button className="secondary" onClick={() => notify("New relationship ready to configure")}><Plus size={15}/> Add first relationship</button></section>
   </div>;
 }

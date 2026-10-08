@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 export { blogCategories, validateBlogImage, type BlogRecord } from "./blog";
+export { capabilityVerticals, capabilityName, type CapabilityVerticalId } from "./capabilities";
 import type { Database } from "./database.types";
 export type { Database } from "./database.types";
 export type Row<T extends keyof Database["public"]["Tables"]> =

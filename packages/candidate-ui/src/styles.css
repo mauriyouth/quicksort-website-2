@@ -300,6 +300,52 @@ p {
 .panel-head h2 {
   margin: 0;
 }
+.profile-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 26px;
+  margin-bottom: 24px;
+  border: 1px solid #3a442f;
+  border-radius: var(--qs-radius);
+  background: linear-gradient(120deg, #141811, #101010);
+}
+.profile-status-card h2 { margin: 7px 0 4px; }
+.profile-status-card p { margin: 0; color: var(--qs-muted); }
+.admin-review-card .actions { justify-content: flex-end; }
+.capability-inline-form,
+.evidence-edit-card {
+  padding: 20px;
+  margin: 18px 0;
+  border: 1px solid var(--qs-line);
+  border-radius: 10px;
+  background: #0d0d0d;
+}
+.capability-record-list,
+.admin-evidence-list { display: grid; gap: 12px; }
+.capability-record-list article {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--qs-line);
+}
+.capability-record-list article:last-child { border-bottom: 0; }
+.capability-record-list article > div:first-child { min-width: 0; }
+.capability-record-list p { color: var(--qs-muted); margin: 4px 0 0; max-width: 760px; }
+.record-vertical {
+  color: var(--qs-lime);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.record-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.record-tags span { padding: 4px 8px; border: 1px solid var(--qs-line); border-radius: 6px; color: #bdbdbd; font-size: 11px; }
+.icon-danger { display: inline-grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--qs-line); border-radius: 7px; background: transparent; color: var(--qs-danger); }
+.evidence-edit-card + .evidence-edit-card { margin-top: 12px; }
 .grid-two {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -587,6 +633,9 @@ input[type="checkbox"] {
   }
 }
 @media (max-width: 700px) {
+  .profile-status-card,
+  .capability-record-list article { align-items: flex-start; flex-direction: column; }
+  .admin-review-card .actions { justify-content: flex-start; }
   .shell {
     display: block;
   }

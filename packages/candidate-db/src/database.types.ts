@@ -15,6 +15,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      candidate_profiles: {
+        Row: { candidate_id: string; headline: string; bio: string; location: string; linkedin_url: string; availability: string; review_status: string; approved_at: string | null; approved_by: string | null; updated_at: string };
+        Insert: { candidate_id: string; headline?: string; bio?: string; location?: string; linkedin_url?: string; availability?: string; review_status?: string; approved_at?: string | null; approved_by?: string | null; updated_at?: string };
+        Update: { candidate_id?: string; headline?: string; bio?: string; location?: string; linkedin_url?: string; availability?: string; review_status?: string; approved_at?: string | null; approved_by?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      candidate_skills: {
+        Row: { id: string; candidate_id: string; vertical: string; name: string; proficiency: string; years_experience: number; approved: boolean; updated_at: string };
+        Insert: { id?: string; candidate_id?: string; vertical: string; name: string; proficiency?: string; years_experience?: number; approved?: boolean; updated_at?: string };
+        Update: { id?: string; candidate_id?: string; vertical?: string; name?: string; proficiency?: string; years_experience?: number; approved?: boolean; updated_at?: string };
+        Relationships: [];
+      };
+      candidate_projects: {
+        Row: { id: string; candidate_id: string; vertical: string; title: string; client_name: string; summary: string; outcome: string; technologies: string[]; project_url: string; approved: boolean; updated_at: string };
+        Insert: { id?: string; candidate_id?: string; vertical: string; title: string; client_name?: string; summary: string; outcome?: string; technologies?: string[]; project_url?: string; approved?: boolean; updated_at?: string };
+        Update: { id?: string; candidate_id?: string; vertical?: string; title?: string; client_name?: string; summary?: string; outcome?: string; technologies?: string[]; project_url?: string; approved?: boolean; updated_at?: string };
+        Relationships: [];
+      };
       events: {
         Row: { id: string; title: string; event_date: string; location: string; event_url: string; banner_url: string; published: boolean; created_at: string; updated_at: string };
         Insert: { title: string; event_date: string; location: string; event_url: string; banner_url: string; published?: boolean };
@@ -380,6 +398,14 @@ export type Database = {
       review_admin_access: {
         Args: { decision: string; target_email: string }
         Returns: undefined
+      }
+      approve_candidate_capability_profile: {
+        Args: { target_candidate: string }
+        Returns: undefined
+      }
+      get_business_capabilities: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
     }
     Enums: {

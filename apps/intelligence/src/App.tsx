@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useClerk } from "@clerk/react";
+import { db } from "./workspaceAuth";
 import {
   Activity, ArrowUpRight, Building2, CalendarDays, ChevronDown, CircleDollarSign,
   ContactRound, FileText, Filter, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
@@ -12,11 +13,11 @@ type Capability = {
   technologies: string[]; proof: string; experts: { initials: string; name: string; role: string }[];
 };
 
-const capabilities: Capability[] = [
-  { id: "rag", name: "Enterprise RAG", short: "RAG", color: "blue", people: 0, projects: 0, technologies: [], proof: "No delivery evidence added", experts: [] },
-  { id: "voice", name: "Voice AI", short: "Voice", color: "violet", people: 0, projects: 0, technologies: [], proof: "No delivery evidence added", experts: [] },
-  { id: "agents", name: "Agentic AI", short: "Agents", color: "orange", people: 0, projects: 0, technologies: [], proof: "No delivery evidence added", experts: [] },
-  { id: "data", name: "Data for AI", short: "Data", color: "green", people: 0, projects: 0, technologies: [], proof: "No delivery evidence added", experts: [] },
+const emptyCapabilities: Capability[] = [
+  { id: "ai_for_business", name: "AI for Business", short: "AI", color: "blue", people: 0, projects: 0, technologies: [], proof: "No approved candidate evidence yet", experts: [] },
+  { id: "infrastructure_for_ai", name: "Infrastructure for AI", short: "Infra", color: "green", people: 0, projects: 0, technologies: [], proof: "No approved candidate evidence yet", experts: [] },
+  { id: "data_for_ai", name: "Data for AI", short: "Data", color: "orange", people: 0, projects: 0, technologies: [], proof: "No approved candidate evidence yet", experts: [] },
+  { id: "voice_ai", name: "Voice AI", short: "Voice", color: "violet", people: 0, projects: 0, technologies: [], proof: "No approved candidate evidence yet", experts: [] },
 ];
 
 const accounts = [
@@ -96,7 +97,8 @@ export default function App({ email = "" }: { email?: string }) {
     } catch { return null; }
   }, []);
   const [view, setView] = useState<View>(initialRoute.view);
-  const [selected, setSelected] = useState("rag");
+  const [selected, setSelected] = useState("ai_for_business");
+  const [capabilities, setCapabilities] = useState<Capability[]>(emptyCapabilities);
   const [query, setQuery] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<string | null>(initialRoute.account);
   const [accountRecords, setAccountRecords] = useState<Account[]>(storedWorkspace?.accounts ?? accounts);
@@ -113,7 +115,7 @@ export default function App({ email = "" }: { email?: string }) {
     catch { return false; }
   });
   const [toast, setToast] = useState("");
-  const active = capabilities.find((c) => c.id === selected)!;
+  const active = capabilities.find((c) => c.id === selected) ?? capabilities[0] ?? emptyCapabilities[0];
   const filteredAccounts = useMemo(() => accountRecords.filter((a) => `${a.name} ${a.sector} ${a.opportunity}`.toLowerCase().includes(query.toLowerCase())), [accountRecords, query]);
   useEffect(() => {
     const syncRoute = () => {
@@ -125,6 +127,25 @@ export default function App({ email = "" }: { email?: string }) {
     };
     window.addEventListener("popstate", syncRoute);
     return () => window.removeEventListener("popstate", syncRoute);
+  }, []);
+  useEffect(() => {
+    let activeRequest = true;
+    void db().rpc("get_business_capabilities").then(({ data, error }) => {
+      if (!activeRequest || error || !Array.isArray(data)) return;
+      const mapped = data.map((item: Record<string, unknown>) => ({
+        id: String(item.id), name: String(item.name), short: String(item.short), color: String(item.color),
+        people: Number(item.people) || 0, projects: Number(item.projects) || 0,
+        technologies: Array.isArray(item.technologies) ? item.technologies.map(String) : [],
+        proof: Number(item.projects) > 0 || Number(item.people) > 0 ? String(item.description) : "No approved candidate evidence yet",
+        experts: Array.isArray(item.experts) ? item.experts.map((expert) => {
+          const record = expert as Record<string, unknown>;
+          const name = String(record.name || "Candidate");
+          return { initials: name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase(), name, role: String(record.role || "QuickSort candidate") };
+        }) : [],
+      }));
+      setCapabilities(mapped);
+    });
+    return () => { activeRequest = false; };
   }, []);
   useEffect(() => {
     const label = accountRecords.find((account) => account.id === selectedAccount)?.name ?? nav.find((item) => item.id === view)?.label ?? "Overview";
@@ -194,9 +215,9 @@ export default function App({ email = "" }: { email?: string }) {
           <div className="breadcrumbs">Intelligence <span>/</span> {nav.find((item) => item.id === view)?.label}</div>
           <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button><button className="primary" onClick={() => notify("New record ready to configure")}><Plus size={17}/> Add record</button></div>
         </header>
-        {view === "overview" && <Overview active={active} selected={selected} setSelected={setSelected} go={go} notify={notify} accounts={accountRecords} leads={leadRecords} events={eventRecords}/>}
+        {view === "overview" && <Overview active={active} capabilities={capabilities} selected={selected} setSelected={setSelected} go={go} notify={notify} accounts={accountRecords} leads={leadRecords} events={eventRecords}/>}
         {(["market", "competitors", "marketing", "partners", "executive"] as const).includes(view as keyof typeof intelligenceWorkspaces) && <IntelligencePage workspace={intelligenceWorkspaces[view as keyof typeof intelligenceWorkspaces]} notify={notify}/>}
-        {view === "capabilities" && <Capabilities active={active} selected={selected} setSelected={setSelected}/>} 
+        {view === "capabilities" && <Capabilities active={active} capabilities={capabilities} selected={selected} setSelected={setSelected}/>}
         {view === "accounts" && (selectedAccount
           ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount]} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
           : <Accounts query={query} setQuery={setQuery} accounts={filteredAccounts} openAccount={(id) => navigate("accounts", id)} notify={notify}/>)} 
@@ -215,7 +236,7 @@ function PageIntro({ title, text, action }: { title: string; text: string; actio
   return <div className="page-intro"><div><h1>{title}</h1><p>{text}</p></div>{action}</div>;
 }
 
-function Overview({ active, selected, setSelected, go, notify, accounts, leads, events }: { active: Capability; selected: string; setSelected: (id: string) => void; go: (v: View) => void; notify: (m: string) => void; accounts: Account[]; leads: LeadRecord[]; events: EventRecord[] }) {
+function Overview({ active, capabilities, selected, setSelected, go, notify, accounts, leads, events }: { active: Capability; capabilities: Capability[]; selected: string; setSelected: (id: string) => void; go: (v: View) => void; notify: (m: string) => void; accounts: Account[]; leads: LeadRecord[]; events: EventRecord[] }) {
   const attendees = events.reduce((total, event) => total + event.attendees, 0);
   const opportunities = accounts.filter((account) => account.opportunity !== "Not set").length;
   return <div className="page">
@@ -229,7 +250,7 @@ function Overview({ active, selected, setSelected, go, notify, accounts, leads, 
     <div className="overview-grid">
       <section className="surface capability-surface">
         <div className="section-head"><div><h2>Capability constellation</h2><p>Experience aggregated from delivered work</p></div><button onClick={() => go("capabilities")}>Explore portfolio <ArrowUpRight size={15}/></button></div>
-        <CapabilityGraph selected={selected} setSelected={setSelected}/>
+        <CapabilityGraph capabilities={capabilities} selected={selected} setSelected={setSelected}/>
         <CapabilityDetail capability={active}/>
       </section>
       <section className="surface match-surface empty-workspace">
@@ -274,7 +295,7 @@ function Metric({ label, value, change, icon: Icon }: { label: string; value: st
   return <div className="metric"><div className="metric-label"><span>{label}</span><Icon size={17}/></div><strong>{value}</strong><p>{change}</p></div>;
 }
 
-function CapabilityGraph({ selected, setSelected }: { selected: string; setSelected: (id: string) => void }) {
+function CapabilityGraph({ capabilities, selected, setSelected }: { capabilities: Capability[]; selected: string; setSelected: (id: string) => void }) {
   return <div className="graph" aria-label="Interactive capability graph">
     <svg viewBox="0 0 720 250" preserveAspectRatio="none" aria-hidden="true"><path d="M360 74 C300 88 182 89 118 152 M360 74 C340 112 295 112 273 154 M360 74 C388 110 427 112 447 154 M360 74 C430 86 552 89 608 152"/><path className="pulse-line" d="M360 74 C300 88 182 89 118 152"/></svg>
     <div className="hub"><span className="hub-logo">QS</span><div><strong>QuickSort</strong><small>No evidence added</small></div></div>
@@ -286,9 +307,9 @@ function CapabilityDetail({ capability }: { capability: Capability }) {
   return <div className="capability-detail"><div><span className={`dot ${capability.color}`}/><div><strong>{capability.name}</strong><p>{capability.proof}</p></div></div><div className="tech-list">{capability.technologies.length ? capability.technologies.map((tech) => <span key={tech}>{tech}</span>) : <small>No technology evidence added.</small>}</div><div className="avatars">{capability.experts.length ? capability.experts.map((expert) => <span key={expert.initials} title={expert.name}>{expert.initials}</span>) : <small>No people evidence added.</small>}</div></div>;
 }
 
-function Capabilities({ active, selected, setSelected }: { active: Capability; selected: string; setSelected: (id: string) => void }) {
+function Capabilities({ active, capabilities, selected, setSelected }: { active: Capability; capabilities: Capability[]; selected: string; setSelected: (id: string) => void }) {
   return <div className="page"><PageIntro title="Delivery capability portfolio" text="Every claim is backed by people, deliverables and production experience." action={<button className="secondary"><Filter size={16}/> Filter evidence</button>}/>
-    <div className="capabilities-layout"><section className="surface cap-map"><div className="section-head"><div><h2>QuickSort capability map</h2><p>Select a domain to inspect its evidence</p></div></div><CapabilityGraph selected={selected} setSelected={setSelected}/><div className="cap-grid">{capabilities.map((cap) => <button key={cap.id} className={selected === cap.id ? "cap-card active" : "cap-card"} onClick={() => setSelected(cap.id)}><span className={`dot ${cap.color}`}/><strong>{cap.name}</strong><small>{cap.projects} projects · {cap.people} people</small></button>)}</div></section>
+    <div className="capabilities-layout"><section className="surface cap-map"><div className="section-head"><div><h2>QuickSort capability map</h2><p>Approved candidate skills and delivered project evidence</p></div></div><CapabilityGraph capabilities={capabilities} selected={selected} setSelected={setSelected}/><div className="cap-grid">{capabilities.map((cap) => <button key={cap.id} className={selected === cap.id ? "cap-card active" : "cap-card"} onClick={() => setSelected(cap.id)}><span className={`dot ${cap.color}`}/><strong>{cap.name}</strong><small>{cap.projects} projects · {cap.people} people</small></button>)}</div></section>
       <aside className="surface evidence-panel"><span className={`domain-badge ${active.color}`}>{active.short}</span><h2>{active.name}</h2><p>{active.proof}</p><div className="evidence-stat"><strong>{active.projects}</strong><span>client projects</span><strong>{active.people}</strong><span>experienced people</span></div><h3>Core stack</h3><div className="tech-list">{active.technologies.length ? active.technologies.map((tech) => <span key={tech}>{tech}</span>) : <small>No technology evidence added.</small>}</div><h3>People with evidence</h3>{active.experts.length ? active.experts.map((expert) => <div className="expert" key={expert.initials}><span>{expert.initials}</span><div><strong>{expert.name}</strong><small>{expert.role}</small></div><ArrowUpRight size={15}/></div>) : <div className="data-empty">No people evidence added.</div>}<button className="primary wide">Open capability dossier</button></aside>
     </div>
   </div>;

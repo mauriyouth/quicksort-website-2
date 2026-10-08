@@ -5,6 +5,7 @@ import { BlogManager } from "./BlogManager";
 import { CvAnalyzer } from "./CvAnalyzer";
 import { AiSettings } from "./AiSettings";
 import { AccessManager } from "./AccessManager";
+import { CandidateProfilesManager } from "./CandidateProfilesManager";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   BriefcaseBusiness,
@@ -69,6 +70,9 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
   const
     [jobs, setJobs] = useState<Job[]>([]),
     [people, setPeople] = useState<Row<"profiles">[]>([]),
+    [candidateProfiles, setCandidateProfiles] = useState<Row<"candidate_profiles">[]>([]),
+    [candidateSkills, setCandidateSkills] = useState<Row<"candidate_skills">[]>([]),
+    [candidateProjects, setCandidateProjects] = useState<Row<"candidate_projects">[]>([]),
     [contracts, setContracts] = useState<Row<"contracts">[]>([]),
     [documents, setDocuments] = useState<Row<"candidate_documents">[]>([]),
     [requests, setRequests] = useState<Row<"tool_requests">[]>([]),
@@ -89,6 +93,9 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
           .from("profiles")
           .select("*")
           .order("created_at", { ascending: false }),
+        db().from("candidate_profiles").select("*").order("updated_at", { ascending: false }),
+        db().from("candidate_skills").select("*").order("updated_at", { ascending: false }),
+        db().from("candidate_projects").select("*").order("updated_at", { ascending: false }),
         db()
           .from("contracts")
           .select("*")
@@ -106,10 +113,13 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       for (const r of results) if (r.error) throw r.error;
       setJobs(results[0].data || []);
       setPeople(results[1].data || []);
-      setContracts(results[2].data || []);
-      setDocuments(results[3].data || []);
-      setRequests(results[4].data || []);
-      setSignatures(results[5].data || []);
+      setCandidateProfiles(results[2].data || []);
+      setCandidateSkills(results[3].data || []);
+      setCandidateProjects(results[4].data || []);
+      setContracts(results[5].data || []);
+      setDocuments(results[6].data || []);
+      setRequests(results[7].data || []);
+      setSignatures(results[8].data || []);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -563,37 +573,9 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       {tab === "people" && (
         <>
           <Heading eyebrow="People" title="Candidates">
-            Review onboarding documents and help each person get ready.
+            Review each candidate’s profile, skills and project evidence before it reaches Business.
           </Heading>
-          <section className="panel">
-            <label className="form">
-              Select a candidate
-              <select
-                value={person}
-                onChange={(e) => setPerson(e.target.value)}
-              >
-                <option value="">All accounts</option>
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name || p.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {people
-              .filter((p) => !person || p.id === person)
-              .map((p) => (
-                <div className="list-row" key={p.id}>
-                  <div>
-                    <h3>{p.full_name || "New account"}</h3>
-                    <p className="muted">{p.email}</p>
-                  </div>
-                  <span className="muted small-text">
-                    Joined {formatDate(p.created_at)}
-                  </span>
-                </div>
-              ))}
-          </section>
+          <CandidateProfilesManager people={people} profiles={candidateProfiles} skills={candidateSkills} projects={candidateProjects} selected={person} onSelect={setPerson} busy={busy} action={action}/>
           <section className="panel">
             <h2>Onboarding documents</h2>
             {documents.filter((d) => !person || d.candidate_id === person)

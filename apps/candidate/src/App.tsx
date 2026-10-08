@@ -11,6 +11,7 @@ import {
   Check,
   Download,
   Images,
+  UserRound,
 } from "lucide-react";
 import {
   db,
@@ -34,8 +35,10 @@ import {
   formatDate,
 } from "@quicksort/candidate-ui";
 import { TeamPhotos } from './TeamPhotos';
+import { CandidateCapabilityProfile } from "./CandidateCapabilityProfile";
 const nav = [
   { id: "overview", href: "/onboarding", label: "My onboarding", icon: LayoutDashboard },
+  { id: "profile", href: "/profile", label: "My profile", icon: UserRound },
   { id: "kanban", href: "/kanban", label: "Kanban boards", icon: Columns3 },
   { id: "documents", href: "/documents", label: "My documents", icon: Upload },
   { id: "contracts", href: "/contracts", label: "My contracts", icon: FileText },
@@ -60,6 +63,9 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
   const [tab, setTab] = usePortalRoute(nav);
   const
     [profile, setProfile] = useState<Row<"profiles"> | null>(null),
+    [capabilityProfile, setCapabilityProfile] = useState<Row<"candidate_profiles"> | null>(null),
+    [skills, setSkills] = useState<Row<"candidate_skills">[]>([]),
+    [projects, setProjects] = useState<Row<"candidate_projects">[]>([]),
     [documents, setDocuments] = useState<Row<"candidate_documents">[]>([]),
     [contracts, setContracts] = useState<Row<"contracts">[]>([]),
     [signatures, setSignatures] = useState<Row<"contract_signatures">[]>([]),
@@ -75,6 +81,9 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
     try {
       const results = await Promise.all([
         db().from("profiles").select("*").eq("id", userId).single(),
+        db().from("candidate_profiles").select("*").eq("candidate_id", userId).maybeSingle(),
+        db().from("candidate_skills").select("*").eq("candidate_id", userId).order("updated_at", { ascending: false }),
+        db().from("candidate_projects").select("*").eq("candidate_id", userId).order("updated_at", { ascending: false }),
         db()
           .from("candidate_documents")
           .select("*")
@@ -94,10 +103,13 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
       ]);
       for (const r of results) if (r.error) throw r.error;
       setProfile(results[0].data);
-      setDocuments(results[1].data || []);
-      setContracts(results[2].data || []);
-      setSignatures(results[3].data || []);
-      setRequests(results[4].data || []);
+      setCapabilityProfile(results[1].data);
+      setSkills(results[2].data || []);
+      setProjects(results[3].data || []);
+      setDocuments(results[4].data || []);
+      setContracts(results[5].data || []);
+      setSignatures(results[6].data || []);
+      setRequests(results[7].data || []);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -258,9 +270,9 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
               {[
                 {
                   title: "Complete your profile",
-                  text: "Make sure we know your full name.",
-                  done: !!profile?.full_name,
-                  target: "account",
+                  text: "Add your professional profile, skills and project evidence.",
+                  done: capabilityProfile?.review_status === "approved",
+                  target: "profile",
                 },
                 {
                   title: "Share your documents",
@@ -329,6 +341,14 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
               )}
             </section>
           </div>
+        </>
+      )}
+      {tab === "profile" && (
+        <>
+          <Heading eyebrow="Your experience" title="My capability profile">
+            Your skills and project evidence help QuickSort understand what the team can deliver. Admins review every update before it appears in Business.
+          </Heading>
+          <CandidateCapabilityProfile userId={userId} profile={capabilityProfile} skills={skills} projects={projects} busy={busy} action={action}/>
         </>
       )}
       {tab === "documents" && (

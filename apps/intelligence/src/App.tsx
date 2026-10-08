@@ -36,6 +36,9 @@ const accounts = [
   {
     id: "cdg-capital-morocco", name: "CDG Capital Morocco", sector: "Financial services", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
   },
+  {
+    id: "najm", name: "Najm", sector: "Not set", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
+  },
 ];
 
 type LeadSource = "Event" | "Tool" | "Network";
@@ -163,8 +166,12 @@ export default function App({ email = "" }: { email?: string }) {
   const [capabilities, setCapabilities] = useState<Capability[]>(emptyCapabilities);
   const [query, setQuery] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<string | null>(initialRoute.account);
-  const [accountRecords, setAccountRecords] = useState<Account[]>(storedWorkspace?.accounts ?? accounts);
-  const [intelRecords, setIntelRecords] = useState<Record<string, AccountIntel>>(storedWorkspace?.intel ?? emptyAccountIntel);
+  const [accountRecords, setAccountRecords] = useState<Account[]>(() => {
+    if (!storedWorkspace?.accounts) return accounts;
+    const savedIds = new Set(storedWorkspace.accounts.map((account) => account.id));
+    return [...storedWorkspace.accounts, ...accounts.filter((account) => !savedIds.has(account.id))];
+  });
+  const [intelRecords, setIntelRecords] = useState<Record<string, AccountIntel>>({ ...emptyAccountIntel, ...storedWorkspace?.intel });
   const [leadRecords, setLeadRecords] = useState<LeadRecord[]>(() => {
     try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-leads-v4") || "null") ?? initialLeads; } catch { return initialLeads; }
   });

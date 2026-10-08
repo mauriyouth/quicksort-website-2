@@ -1,7 +1,6 @@
 import { SignIn, useClerk } from "@clerk/react";
 import { useEffect, useState, type ReactNode } from "react";
-import { db } from "@quicksort/candidate-db";
-import { useAuth } from "@quicksort/candidate-db/auth";
+import { db, useWorkspaceAuth } from "./workspaceAuth";
 
 function Brand() {
   return <a className="auth-brand" href="https://www.quicksort.fr" aria-label="Quicksort home">
@@ -43,7 +42,7 @@ function AccessPending({ userId }: { userId: string }) {
 }
 
 export function BusinessAuth({ children }: { children: (email: string) => ReactNode }) {
-  const auth = useAuth();
+  const auth = useWorkspaceAuth();
   const clerk = useClerk();
   if (auth.loading) return <div className="business-auth-loading" role="status">Opening your workspace…</div>;
   if (auth.error) return <AuthLayout><span className="auth-eyebrow">Business intelligence</span><h2>Workspace unavailable.</h2><div className="auth-error" role="alert">{auth.error}</div><button className="auth-primary" onClick={() => location.reload()}>Retry</button><button className="auth-link" onClick={() => clerk.signOut()}>Sign out</button></AuthLayout>;

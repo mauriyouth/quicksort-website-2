@@ -13,5 +13,5 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "../../packages/candidate-db/src"]
+  "include": ["src"]
 }

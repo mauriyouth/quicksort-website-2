@@ -6,7 +6,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Pencil, Save, ShieldCheck, Sparkles, Target, Users, X,
 } from "lucide-react";
 
-type View = "overview" | "market" | "competitors" | "customers" | "marketing" | "partners" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors";
+type View = "overview" | "market" | "competitors" | "marketing" | "partners" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors";
 type Capability = {
   id: string; name: string; short: string; color: string; people: number; projects: number;
   technologies: string[]; proof: string; experts: { initials: string; name: string; role: string }[];
@@ -51,10 +51,9 @@ const initialEvents: EventRecord[] = [
 ];
 
 type IntelligenceWorkspace = { title: string; description: string; outcome: string; focus: string[]; sources: string[]; icon: React.ElementType };
-const intelligenceWorkspaces: Record<"market" | "competitors" | "customers" | "marketing" | "partners" | "executive", IntelligenceWorkspace> = {
+const intelligenceWorkspaces: Record<"market" | "competitors" | "marketing" | "partners" | "executive", IntelligenceWorkspace> = {
   market: { title: "Market intelligence", description: "Understand market size, priority segments, and the companies showing real growth signals.", outcome: "A ranked market map built from verified signals.", focus: ["Market size", "Segment mapping", "Growing companies", "Hiring and funding", "Technology adoption", "Geographic expansion"], sources: ["Company data", "Funding signals", "Hiring activity", "Market research"], icon: Activity },
   competitors: { title: "Competitor analysis", description: "Track the companies you compete with and see how their search, advertising, authority, and messaging change.", outcome: "A focused competitor brief with the changes that matter.", focus: ["Competitor keywords", "Keyword volume and ideas", "Domain and ad history", "Live search results", "Rank tracking", "Backlinks and authority", "Competitor creative", "Messaging changes"], sources: ["Search data", "Ad libraries", "Domain history", "Backlink data"], icon: Search },
-  customers: { title: "Customer intelligence", description: "Turn customer and account evidence into clearer priorities, risks, and expansion opportunities.", outcome: "Enriched customer accounts with clear next actions.", focus: ["Inbound enrichment", "Account classification", "Review analysis", "Customer signals", "Expansion opportunities", "Account routing"], sources: ["Account data", "Reviews", "Customer feedback", "Usage signals"], icon: Users },
   marketing: { title: "Marketing intelligence", description: "Bring acquisition and audience signals together without mixing them into unrelated workflows.", outcome: "A clear performance view across marketing channels.", focus: ["Search demand", "Search Console", "GA4 performance", "Advertising results", "Creator performance", "Social trends"], sources: ["GA4", "Search Console", "Advertising platforms", "Social channels"], icon: CircleDollarSign },
   partners: { title: "Strategic partners", description: "Find and qualify partners that can expand distribution, delivery, and market access.", outcome: "A ranked strategic partner pipeline with fit evidence.", focus: ["Agency partners", "Creators and affiliates", "Integration partners", "Complementary products", "Partner fit", "Introduction paths"], sources: ["Company profiles", "Partner networks", "Audience overlap", "Relationship data"], icon: Network },
   executive: { title: "Executive intelligence", description: "Summarise the signals leadership needs to make weekly commercial decisions.", outcome: "A decision-ready executive brief based on live workspace data.", focus: ["Pipeline movement", "Competitor changes", "Market signals", "Campaign performance", "Customer risks", "Strategic opportunities"], sources: ["Pipeline", "Accounts", "Market signals", "Marketing performance"], icon: FileText },
@@ -67,7 +66,6 @@ const nav = [
   { id: "leads" as View, path: "/leads", label: "Leads", icon: Users },
   { id: "market" as View, path: "/market-intelligence", label: "Market intelligence", icon: Activity },
   { id: "competitors" as View, path: "/competitor-analysis", label: "Competitor analysis", icon: Search },
-  { id: "customers" as View, path: "/customer-intelligence", label: "Customer intelligence", icon: ContactRound },
   { id: "marketing" as View, path: "/marketing-intelligence", label: "Marketing intelligence", icon: CircleDollarSign },
   { id: "partners" as View, path: "/strategic-partners", label: "Strategic partners", icon: Network },
   { id: "executive" as View, path: "/executive-intelligence", label: "Executive intelligence", icon: FileText },
@@ -197,7 +195,7 @@ export default function App({ email = "" }: { email?: string }) {
           <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button><button className="primary" onClick={() => notify("New record ready to configure")}><Plus size={17}/> Add record</button></div>
         </header>
         {view === "overview" && <Overview active={active} selected={selected} setSelected={setSelected} go={go} notify={notify} accounts={accountRecords} leads={leadRecords} events={eventRecords}/>}
-        {(["market", "competitors", "customers", "marketing", "partners", "executive"] as const).includes(view as keyof typeof intelligenceWorkspaces) && <IntelligencePage workspace={intelligenceWorkspaces[view as keyof typeof intelligenceWorkspaces]} notify={notify}/>}
+        {(["market", "competitors", "marketing", "partners", "executive"] as const).includes(view as keyof typeof intelligenceWorkspaces) && <IntelligencePage workspace={intelligenceWorkspaces[view as keyof typeof intelligenceWorkspaces]} notify={notify}/>}
         {view === "capabilities" && <Capabilities active={active} selected={selected} setSelected={setSelected}/>} 
         {view === "accounts" && (selectedAccount
           ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount]} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>

@@ -252,11 +252,21 @@ export default function App({ email = "" }: { email?: string }) {
       db().from("business_partners").select("*").order("updated_at", { ascending: false }),
     ]).then(([accountResult, leadResult, partnerResult]) => {
       if (!activeRequest) return;
-      if (!accountResult.error && accountResult.data) setAccountRecords(accountResult.data.map((row: Record<string, any>) => ({
-        databaseId: String(row.id), id: String(row.slug), name: String(row.name), sector: String(row.sector || "Not set"), contacts: Number(row.contacts) || 0,
-        signal: String(row.signal || "Not set"), opportunity: String(row.opportunity || "Not set"), value: String(row.estimated_value || "—"), stage: String(row.stage || "Not set"), owner: String(row.owner || "—"),
-        fit: Array.isArray(row.fit) ? row.fit.map(String) : [], caseStudies: Array.isArray(row.case_studies) ? row.case_studies : [], opportunitySummary: String(row.opportunity_summary || ""), fitScore: String(row.fit_score || "—"), evidence: Array.isArray(row.evidence) ? row.evidence.map(String) : [],
-      })));
+      if (!accountResult.error && accountResult.data) {
+        setAccountRecords(accountResult.data.map((row: Record<string, any>) => ({
+          databaseId: String(row.id), id: String(row.slug), name: String(row.name), sector: String(row.sector || "Not set"), contacts: Number(row.contacts) || 0,
+          signal: String(row.signal || "Not set"), opportunity: String(row.opportunity || "Not set"), value: String(row.estimated_value || "—"), stage: String(row.stage || "Not set"), owner: String(row.owner || "—"),
+          fit: Array.isArray(row.fit) ? row.fit.map(String) : [], caseStudies: Array.isArray(row.case_studies) ? row.case_studies : [], opportunitySummary: String(row.opportunity_summary || ""), fitScore: String(row.fit_score || "—"), evidence: Array.isArray(row.evidence) ? row.evidence.map(String) : [],
+        })));
+        setIntelRecords(Object.fromEntries(accountResult.data.map((row: Record<string, any>) => {
+          const intelligence = row.intelligence && typeof row.intelligence === "object" ? row.intelligence : {};
+          return [String(row.slug), {
+            leads: Array.isArray(intelligence.leads) ? intelligence.leads : [],
+            events: Array.isArray(intelligence.events) ? intelligence.events : [],
+            contacts: Array.isArray(intelligence.contacts) ? intelligence.contacts : [],
+          }];
+        })));
+      }
       if (!leadResult.error && leadResult.data) setLeadRecords(leadResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), role: String(row.role || ""), company: String(row.company || ""), source: row.source as LeadSource, origin: String(row.origin || ""), score: Number(row.score) || 0, reason: String(row.reason || ""), stage: row.stage as LeadStage, owner: String(row.owner || "—") })));
       if (!partnerResult.error && partnerResult.data) setBusinessPartnerRecords(partnerResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), company: String(row.company || ""), role: String(row.role || ""), origin: String(row.origin || ""), linkedin: String(row.linkedin_url || ""), email: String(row.email || ""), phone: String(row.phone || ""), relationship: String(row.relationship || ""), owner: String(row.owner || ""), notes: String(row.notes || "") })));
     });
@@ -513,7 +523,7 @@ type CaseStudy = { title: string; client: string; summary: string; outcome: stri
 type Account = { databaseId?: string; id: string; name: string; sector: string; contacts: number; signal: string; opportunity: string; value: string; stage: string; owner: string; fit: string[]; caseStudies: CaseStudy[]; opportunitySummary?: string; fitScore?: string; evidence?: string[] };
 type Lead = { name: string; role: string; company: string; status: string; nextStep: string; owner: string };
 type AccountEvent = { date: string; month: string; title: string; type: string; detail: string };
-type RelationshipContact = { name: string; role: string; strength: string; owner: string };
+type RelationshipContact = { name: string; role: string; strength: string; owner: string; linkedin?: string };
 type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: RelationshipContact[] };
 
 const emptyAccountIntel = Object.fromEntries(accounts.map((account) => [account.id, { contacts: [], leads: [], events: [] }])) as Record<string, AccountIntel>;
@@ -582,7 +592,7 @@ function AccountDetail({ account, intel, onSave, onBack, notify }: { account: Ac
         <div className="org-chart">
           <div className="org-root"><span>{draft.name.split(" ").map((part) => part[0]).join("").slice(0,2)}</span><strong>{draft.name}</strong></div>
           <div className="org-line"/>
-          <div className="org-contacts">{draftIntel.contacts.length ? draftIntel.contacts.map((contact, index) => <div className="org-contact" key={index}><span>{contact.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><strong><EditField editing={editing} value={contact.name} label={`Contact ${index + 1} name`} onChange={(name) => patchIntelItem("contacts", index, { name })}/></strong><small><EditField editing={editing} value={contact.role} label={`Contact ${index + 1} role`} onChange={(role) => patchIntelItem("contacts", index, { role })}/></small><em><i/> <EditField editing={editing} value={contact.strength} label={`Contact ${index + 1} strength`} onChange={(strength) => patchIntelItem("contacts", index, { strength })}/> · owner <EditField editing={editing} value={contact.owner} label={`Contact ${index + 1} owner`} onChange={(owner) => patchIntelItem("contacts", index, { owner })}/></em></div>) : <div className="data-empty">No contacts added.</div>}</div>
+          <div className="org-contacts">{draftIntel.contacts.length ? draftIntel.contacts.map((contact, index) => <div className="org-contact" key={index}><span>{contact.name.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><strong><EditField editing={editing} value={contact.name} label={`Contact ${index + 1} name`} onChange={(name) => patchIntelItem("contacts", index, { name })}/></strong><small><EditField editing={editing} value={contact.role} label={`Contact ${index + 1} role`} onChange={(role) => patchIntelItem("contacts", index, { role })}/></small>{editing ? <small><EditField editing value={contact.linkedin || ""} label={`Contact ${index + 1} LinkedIn`} onChange={(linkedin) => patchIntelItem("contacts", index, { linkedin })}/></small> : contact.linkedin ? <a href={contact.linkedin} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>LinkedIn profile <ArrowUpRight size={11}/></a> : null}<em><i/> <EditField editing={editing} value={contact.strength} label={`Contact ${index + 1} strength`} onChange={(strength) => patchIntelItem("contacts", index, { strength })}/> · owner <EditField editing={editing} value={contact.owner} label={`Contact ${index + 1} owner`} onChange={(owner) => patchIntelItem("contacts", index, { owner })}/></em></div>) : <div className="data-empty">No contacts added.</div>}</div>
         </div>
       </section>
       <aside className="surface opportunity-panel editable-block" onClick={beginEditing}>

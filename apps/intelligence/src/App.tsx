@@ -42,7 +42,25 @@ type LeadSource = "Event" | "Tool" | "Network";
 type LeadStage = "New" | "Qualified" | "Contacted" | "Converted";
 type LeadRecord = { id: string; name: string; role: string; company: string; source: LeadSource; origin: string; score: number; reason: string; stage: LeadStage; owner: string };
 type ImportedAttendee = { name: string; role: string; company: string; linkedin: string; email: string; sourceRow: Record<string, string> };
-type EventRecord = { id: string; title: string; date: string; location: string; lumaUrl: string; attendees: number; qualified: number; status: "Awaiting upload" | "Ready to analyze" | "Analyzed"; fileName?: string; attendeeData?: ImportedAttendee[] };
+type MappedField = "name" | "firstName" | "lastName" | "linkedin" | "email" | "phone" | "company" | "role";
+type ColumnMapping = Partial<Record<MappedField, string>>;
+type EventAnalysis = {
+  analyzedAt: string;
+  rows: number;
+  linkedin: number;
+  workEmails: number;
+  personalEmails: number;
+  phones: number;
+  namedPeople: number;
+  companies: { label: string; count: number }[];
+  seniorRoles: number;
+  customFields: { label: string; populated: number; examples: string[] }[];
+};
+type EventRecord = {
+  id: string; title: string; date: string; location: string; lumaUrl: string; attendees: number; qualified: number;
+  status: "Awaiting upload" | "Ready to analyze" | "Analyzed"; fileName?: string; attendeeData?: ImportedAttendee[];
+  headers?: string[]; columnMapping?: ColumnMapping; analysisFields?: string[]; analysis?: EventAnalysis;
+};
 
 const initialLeads: LeadRecord[] = [];
 
@@ -50,6 +68,50 @@ const initialEvents: EventRecord[] = [
   { id: "quicksort-multimodal-ai", title: "Multimodal AI in Production (w/ The AI Collective)", date: "01 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/quicksort-multimodal-ai", attendees: 0, qualified: 0, status: "Awaiting upload" },
   { id: "ccparis", title: "Cafe Compute Meetup: Paris", date: "02 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/ccparis", attendees: 0, qualified: 0, status: "Awaiting upload" },
 ];
+
+const mappedFieldOptions: { id: MappedField; label: string; hint: string }[] = [
+  { id: "name", label: "Full name", hint: "A single full-name column" },
+  { id: "firstName", label: "First name", hint: "Used with last name when full name is absent" },
+  { id: "lastName", label: "Last name", hint: "Used with first name when full name is absent" },
+  { id: "linkedin", label: "LinkedIn", hint: "Profile URL or LinkedIn identifier" },
+  { id: "email", label: "Primary email", hint: "Classified as work or personal" },
+  { id: "phone", label: "Phone", hint: "Optional phone or mobile number" },
+  { id: "company", label: "Company", hint: "Current employer or organisation" },
+  { id: "role", label: "Job title", hint: "Current role or position" },
+];
+
+const normalizeHeader = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+const headerMatches = (header: string, exact: string[], includes: string[]) => {
+  const normalized = normalizeHeader(header);
+  return exact.includes(normalized) || includes.some((needle) => normalized.includes(needle));
+};
+const guessColumnMapping = (headers: string[]): ColumnMapping => {
+  const find = (exact: string[], includes: string[] = []) => headers.find((header) => headerMatches(header, exact, includes));
+  return {
+    name: find(["name", "fullname", "attendeename", "guestname"]),
+    firstName: find(["firstname", "givenname"]),
+    lastName: find(["lastname", "surname", "familyname"]),
+    linkedin: find(["linkedin", "linkedinurl", "linkedinprofile", "profileurl"], ["linkedin"]),
+    email: find(["email", "emailaddress", "primaryemail"]),
+    phone: find(["phone", "phonenumber", "mobile", "mobilenumber"], ["phonenumber", "mobilephone"]),
+    company: find(["company", "companyname", "organisation", "organization", "employer"], ["companydoyouwork", "currentcompany", "employer"]),
+    role: find(["jobtitle", "role", "position", "currentrole"], ["jobtitle", "currentrole", "position"]),
+  };
+};
+const eventRows = (event: EventRecord) => event.attendeeData?.map((attendee) => attendee.sourceRow) ?? [];
+const eventHeaders = (event: EventRecord) => event.headers?.length ? event.headers : Object.keys(eventRows(event)[0] ?? {});
+const eventMapping = (event: EventRecord) => ({ ...guessColumnMapping(eventHeaders(event)), ...event.columnMapping });
+const mapAttendee = (sourceRow: Record<string, string>, mapping: ColumnMapping): ImportedAttendee => {
+  const read = (field: MappedField) => mapping[field] ? String(sourceRow[mapping[field]!] ?? "").trim() : "";
+  const fullName = read("name") || [read("firstName"), read("lastName")].filter(Boolean).join(" ");
+  return { name: fullName, role: read("role"), company: read("company"), linkedin: read("linkedin"), email: read("email"), sourceRow };
+};
+const personalEmailDomains = new Set(["gmail.com", "googlemail.com", "yahoo.com", "yahoo.fr", "hotmail.com", "hotmail.fr", "outlook.com", "live.com", "icloud.com", "me.com", "proton.me", "protonmail.com", "aol.com", "gmx.com", "gmx.fr", "orange.fr", "free.fr", "laposte.net"]);
+const emailKind = (value: string) => {
+  const domain = value.trim().toLowerCase().split("@")[1];
+  if (!domain) return "missing";
+  return personalEmailDomains.has(domain) ? "personal" : "work";
+};
 
 type IntelligenceWorkspace = { title: string; description: string; outcome: string; focus: string[]; sources: string[]; icon: React.ElementType };
 const intelligenceWorkspaces: Record<"market" | "competitors" | "marketing" | "partners" | "executive", IntelligenceWorkspace> = {
@@ -181,12 +243,6 @@ export default function App({ email = "" }: { email?: string }) {
     try { window.localStorage.setItem("quicksort-intelligence-events-v4", JSON.stringify(next)); }
     catch { notify("File loaded for this session, but it is too large for browser storage"); }
   };
-  const qualifyEvent = (event: EventRecord) => {
-    if (!event.attendeeData?.length) { notify("Upload the attendee spreadsheet before analysis"); return; }
-    const linkedinProfiles = event.attendeeData.filter((attendee) => attendee.linkedin).length;
-    if (!linkedinProfiles) { notify("No LinkedIn column or profile URLs were found"); return; }
-    notify(`${linkedinProfiles} LinkedIn profiles are ready · connect an enrichment provider to run AI analysis`);
-  };
   return (
     <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={mobileOpen ? "sidebar open" : "sidebar"}>
@@ -221,7 +277,7 @@ export default function App({ email = "" }: { email?: string }) {
         {view === "accounts" && (selectedAccount
           ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount]} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
           : <Accounts query={query} setQuery={setQuery} accounts={filteredAccounts} openAccount={(id) => navigate("accounts", id)} notify={notify}/>)} 
-        {view === "events" && <Events events={eventRecords} onChange={saveEvents} onQualify={qualifyEvent} notify={notify}/>}
+        {view === "events" && <Events events={eventRecords} onChange={saveEvents} notify={notify}/>}
         {view === "leads" && <Leads leads={leadRecords} onChange={saveLeads} notify={notify}/>}
         {view === "pipeline" && <Pipeline notify={notify}/>} 
         {view === "doors" && <OpenDoors notify={notify}/>}
@@ -422,13 +478,17 @@ function AccountDetail({ account, intel, onSave, onBack, notify }: { account: Ac
   </div>;
 }
 
-function Events({ events, onChange, onQualify, notify }: { events: EventRecord[]; onChange: (events: EventRecord[]) => void; onQualify: (event: EventRecord) => void; notify: (message: string) => void }) {
+function Events({ events, onChange, notify }: { events: EventRecord[]; onChange: (events: EventRecord[]) => void; notify: (message: string) => void }) {
   const [lumaUrl, setLumaUrl] = useState("");
   const [error, setError] = useState("");
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+  const [openEvent, setOpenEvent] = useState<string | null>(null);
   const uploadedEvents = events.filter((event) => event.attendeeData?.length);
   const attendeeRows = events.reduce((total, event) => total + event.attendees, 0);
-  const linkedinProfiles = events.reduce((total, event) => total + (event.attendeeData?.filter((attendee) => attendee.linkedin).length ?? 0), 0);
+  const linkedinProfiles = events.reduce((total, event) => {
+    const mapping = eventMapping(event);
+    return total + eventRows(event).filter((row) => mapping.linkedin && row[mapping.linkedin]).length;
+  }, 0);
   const addEvent = (event: React.FormEvent) => {
     event.preventDefault();
     const value = lumaUrl.trim();
@@ -447,48 +507,103 @@ function Events({ events, onChange, onQualify, notify }: { events: EventRecord[]
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) throw new Error("The spreadsheet has no worksheets.");
       const rows = utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: "", raw: false });
-      const normalized = rows.map((row) => {
-        const sourceRow = Object.fromEntries(Object.entries(row).map(([key, value]) => [key, String(value ?? "").trim()]));
-        const lookup = Object.fromEntries(Object.entries(sourceRow).map(([key, value]) => [key.toLowerCase().replace(/[^a-z0-9]/g, ""), value]));
-        const get = (...keys: string[]) => keys.map((key) => lookup[key]).find(Boolean) ?? "";
-        const linkedin = Object.entries(lookup).find(([key]) => key.includes("linkedin") || key === "profileurl")?.[1] ?? "";
-        const firstName = get("firstname", "givenname");
-        const lastName = get("lastname", "surname", "familyname");
-        return {
-          name: get("fullname", "name", "attendeename") || [firstName, lastName].filter(Boolean).join(" "),
-          role: get("jobtitle", "title", "role", "position"),
-          company: get("company", "companyname", "organisation", "organization"),
-          linkedin,
-          email: get("email", "emailaddress"),
-          sourceRow,
-        } satisfies ImportedAttendee;
-      }).filter((attendee) => Object.values(attendee.sourceRow).some(Boolean));
+      const sourceRows = rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.trim(), String(value ?? "").trim()])))
+        .filter((row) => Object.values(row).some(Boolean));
+      const headers = Array.from(new Set(sourceRows.flatMap((row) => Object.keys(row))));
+      const mapping = guessColumnMapping(headers);
+      const normalized = sourceRows.map((row) => mapAttendee(row, mapping));
       if (!normalized.length) throw new Error("No attendee rows were found in the first worksheet.");
-      const next = events.map((item) => item.id === eventId ? { ...item, fileName: file.name, attendeeData: normalized, attendees: normalized.length, qualified: 0, status: "Ready to analyze" as const } : item);
+      const defaultFields = Array.from(new Set(Object.values(mapping).filter(Boolean) as string[]));
+      const next = events.map((item) => item.id === eventId ? { ...item, fileName: file.name, attendeeData: normalized, headers, columnMapping: mapping, analysisFields: defaultFields, analysis: undefined, attendees: normalized.length, qualified: 0, status: "Ready to analyze" as const } : item);
       onChange(next);
+      setOpenEvent(eventId);
       setUploadErrors((current) => ({ ...current, [eventId]: "" }));
-      notify(`${normalized.length} attendee rows loaded from ${file.name}`);
+      notify(`${normalized.length} rows and ${headers.length} columns loaded · review the mapping`);
     } catch (uploadError) {
       const message = uploadError instanceof Error ? uploadError.message : "This file could not be read.";
       setUploadErrors((current) => ({ ...current, [eventId]: message }));
     }
   };
+  const updateMapping = (event: EventRecord, field: MappedField, header: string) => {
+    const mapping = { ...eventMapping(event), [field]: header };
+    const attendees = eventRows(event).map((row) => mapAttendee(row, mapping));
+    onChange(events.map((item) => item.id === event.id ? { ...item, columnMapping: mapping, attendeeData: attendees, analysis: undefined, qualified: 0, status: "Ready to analyze" } : item));
+  };
+  const toggleAnalysisField = (event: EventRecord, header: string) => {
+    const selected = event.analysisFields ?? Array.from(new Set(Object.values(eventMapping(event)).filter(Boolean) as string[]));
+    const next = selected.includes(header) ? selected.filter((item) => item !== header) : [...selected, header];
+    onChange(events.map((item) => item.id === event.id ? { ...item, analysisFields: next, analysis: undefined, status: "Ready to analyze" } : item));
+  };
+  const analyzeEvent = (event: EventRecord) => {
+    const rows = eventRows(event);
+    if (!rows.length) { notify("Upload an attendee spreadsheet first"); return; }
+    const mapping = eventMapping(event);
+    if (!mapping.name && !(mapping.firstName || mapping.lastName)) { notify("Map a name column before analysis"); return; }
+    const attendees = rows.map((row) => mapAttendee(row, mapping));
+    const selected = event.analysisFields ?? [];
+    const mappedHeaders = new Set(Object.values(mapping).filter(Boolean));
+    const companyCounts = attendees.reduce<Record<string, number>>((result, attendee) => {
+      const company = attendee.company.trim();
+      if (company) result[company] = (result[company] ?? 0) + 1;
+      return result;
+    }, {});
+    const customFields = selected.filter((header) => !mappedHeaders.has(header)).map((header) => {
+      const values = rows.map((row) => row[header]?.trim()).filter(Boolean);
+      return { label: header, populated: values.length, examples: Array.from(new Set(values)).slice(0, 3) };
+    });
+    const workEmails = attendees.filter((attendee) => emailKind(attendee.email) === "work").length;
+    const analysis: EventAnalysis = {
+      analyzedAt: new Date().toISOString(), rows: rows.length,
+      linkedin: attendees.filter((attendee) => attendee.linkedin).length,
+      workEmails, personalEmails: attendees.filter((attendee) => emailKind(attendee.email) === "personal").length,
+      phones: mapping.phone ? rows.filter((row) => row[mapping.phone!]?.trim()).length : 0,
+      namedPeople: attendees.filter((attendee) => attendee.name).length,
+      companies: Object.entries(companyCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, count]) => ({ label, count })),
+      seniorRoles: attendees.filter((attendee) => /\b(founder|owner|chief|ceo|cto|cio|cdo|vp|vice president|director|head|partner)\b/i.test(attendee.role)).length,
+      customFields,
+    };
+    const qualified = attendees.filter((attendee) => attendee.name && (attendee.linkedin || emailKind(attendee.email) === "work")).length;
+    onChange(events.map((item) => item.id === event.id ? { ...item, attendeeData: attendees, analysis, qualified, status: "Analyzed" } : item));
+    notify(`Analysis complete · ${qualified} people have a LinkedIn profile or work email`);
+  };
   return <div className="page events-page">
-    <PageIntro title="Events intelligence" text="Add an event, upload the real attendee sheet, then prepare LinkedIn profiles for authorized enrichment."/>
+    <PageIntro title="Events intelligence" text="Upload each event list, map its columns, and choose exactly which attendee fields to analyze."/>
     <section className="event-importer">
       <div className="event-import-copy"><span className="import-icon"><CalendarDays size={22}/></span><div><h2>Bring in a Luma event</h2><p>The Luma link creates the event only. Attendee data appears after you upload a spreadsheet.</p></div></div>
       <form onSubmit={addEvent}><label htmlFor="luma-link">Luma event link</label><div><input id="luma-link" value={lumaUrl} onChange={(event) => { setLumaUrl(event.target.value); setError(""); }} placeholder="https://lu.ma/your-event"/><button className="primary" type="submit"><Plus size={16}/> Import event</button></div>{error && <p className="form-error" role="alert">{error}</p>}</form>
     </section>
-    <div className="event-flow" aria-label="Event lead workflow"><span><b>1</b> Add Luma event</span><i/><span><b>2</b> Upload attendee sheet</span><i/><span><b>3</b> Enrich LinkedIn profiles</span></div>
+    <div className="event-flow" aria-label="Event lead workflow"><span><b>1</b> Upload attendee sheet</span><i/><span><b>2</b> Map its columns</span><i/><span><b>3</b> Analyze selected fields</span></div>
     <section className="event-metrics"><div><span>Events added</span><strong>{events.length}</strong></div><div><span>Files uploaded</span><strong>{uploadedEvents.length}</strong></div><div><span>Attendee rows</span><strong>{attendeeRows}</strong></div><div><span>LinkedIn profiles</span><strong>{linkedinProfiles}</strong></div></section>
     <section className="surface event-workspace"><div className="section-head"><div><h2>Event queue</h2><p>Analyze new attendee lists or revisit completed results</p></div><span className="case-count">{events.length} events</span></div>
       <div className="event-table-head"><span>Event</span><span>Attendees</span><span>LinkedIn</span><span>Status</span><span>Source data</span></div>
-      <div className="event-work-list">{events.map((event) => <article key={event.id} className="event-work-row">
-        <div className="event-identity"><span><CalendarDays size={18}/></span><div><strong>{event.title}</strong><small>{event.date} · {event.location}</small><a href={event.lumaUrl} target="_blank" rel="noreferrer">Open Luma <ArrowUpRight size={12}/></a>{event.fileName && <em>{event.fileName}</em>}</div></div>
-        <strong className="event-number">{event.attendeeData?.length ? event.attendees : "—"}</strong><strong className="event-number event-qualified">{event.attendeeData?.length ? event.attendeeData.filter((attendee) => attendee.linkedin).length : "—"}</strong>
-        <span className={`analysis-status ${event.status === "Analyzed" ? "complete" : "ready"}`}><i/>{event.status}</span>
-        <div className="event-actions"><label className="secondary file-action"><FileText size={15}/>{event.fileName ? "Replace file" : "Upload file"}<input type="file" accept=".xlsx,.xls,.csv" onChange={(input) => void uploadAttendees(event.id, input.target.files?.[0])}/></label><button className="primary" disabled={!event.attendeeData?.length} onClick={() => onQualify(event)}><Sparkles size={15}/> Analyze with AI</button>{uploadErrors[event.id] && <small className="event-upload-error" role="alert">{uploadErrors[event.id]}</small>}</div>
-      </article>)}</div>
+      <div className="event-work-list">{events.map((event) => {
+        const rows = eventRows(event);
+        const headers = eventHeaders(event);
+        const mapping = eventMapping(event);
+        const selectedFields = event.analysisFields ?? Array.from(new Set(Object.values(mapping).filter(Boolean) as string[]));
+        const linkedInCount = rows.filter((row) => mapping.linkedin && row[mapping.linkedin]?.trim()).length;
+        const isOpen = openEvent === event.id;
+        return <article key={event.id} className={`event-work-item ${isOpen ? "open" : ""}`}>
+          <div className="event-work-row">
+            <div className="event-identity"><span><CalendarDays size={18}/></span><div><strong>{event.title}</strong><small>{event.date} · {event.location}</small><a href={event.lumaUrl} target="_blank" rel="noreferrer">Open Luma <ArrowUpRight size={12}/></a>{event.fileName && <em>{event.fileName}</em>}</div></div>
+            <strong className="event-number">{rows.length || "—"}</strong><strong className="event-number event-qualified">{rows.length ? linkedInCount : "—"}</strong>
+            <span className={`analysis-status ${event.status === "Analyzed" ? "complete" : "ready"}`}><i/>{event.status}</span>
+            <div className="event-actions"><label className="secondary file-action"><FileText size={15}/>{event.fileName ? "Replace file" : "Upload file"}<input type="file" accept=".xlsx,.xls,.csv,.tsv" onChange={(input) => void uploadAttendees(event.id, input.target.files?.[0])}/></label><button className="primary" disabled={!rows.length} onClick={() => setOpenEvent(isOpen ? null : event.id)}>{isOpen ? <ChevronDown size={15}/> : <Pencil size={15}/>} {isOpen ? "Close mapping" : "Map columns"}</button>{uploadErrors[event.id] && <small className="event-upload-error" role="alert">{uploadErrors[event.id]}</small>}</div>
+          </div>
+          {isOpen && rows.length > 0 && <div className="event-mapper">
+            <div className="mapping-head"><div><span>Column mapper</span><h3>{headers.length} headers detected</h3><p>Review the automatic matches. Every original column remains available.</p></div><button className="primary" onClick={() => analyzeEvent(event)}><Sparkles size={15}/> Run analysis</button></div>
+            <div className="mapping-layout">
+              <section className="mapping-fields"><h4>Map core fields</h4>{mappedFieldOptions.map((field) => <label key={field.id}><span><strong>{field.label}</strong><small>{field.hint}</small></span><select value={mapping[field.id] ?? ""} onChange={(input) => updateMapping(event, field.id, input.target.value)}><option value="">Not mapped</option>{headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>)}</section>
+              <section className="detected-columns"><div className="columns-head"><div><h4>Fields to analyze</h4><p>Select custom answers, interests, or any other useful column.</p></div><span>{selectedFields.length} selected</span></div><div className="column-list">{headers.map((header) => {
+                const values = rows.map((row) => row[header]?.trim()).filter(Boolean);
+                const mappedAs = mappedFieldOptions.find((field) => mapping[field.id] === header)?.label;
+                return <label key={header} className={selectedFields.includes(header) ? "selected" : ""}><input type="checkbox" checked={selectedFields.includes(header)} onChange={() => toggleAnalysisField(event, header)}/><span><strong>{header}</strong><small>{mappedAs ? `Mapped as ${mappedAs}` : `${values.length} populated`}</small><em>{Array.from(new Set(values)).slice(0, 2).join(" · ") || "No sample value"}</em></span></label>;
+              })}</div></section>
+            </div>
+            {event.analysis && <section className="event-analysis"><div className="analysis-head"><div><span>Latest result</span><h3>{event.analysis.rows} attendees analyzed</h3></div><small>Local structured analysis · no attendee data sent to an external AI provider</small></div><div className="analysis-metrics"><div><strong>{event.analysis.linkedin}</strong><span>LinkedIn</span></div><div><strong>{event.analysis.workEmails}</strong><span>Work emails</span></div><div><strong>{event.analysis.personalEmails}</strong><span>Personal emails</span></div><div><strong>{event.analysis.phones}</strong><span>Phone numbers</span></div><div><strong>{event.analysis.seniorRoles}</strong><span>Senior roles</span></div></div><div className="analysis-detail"><div><h4>Top companies</h4>{event.analysis.companies.length ? <div className="company-bars">{event.analysis.companies.map((company) => <span key={company.label}><b>{company.label}</b><em>{company.count}</em></span>)}</div> : <p>No company column is mapped or populated.</p>}</div><div><h4>Custom fields</h4>{event.analysis.customFields.length ? event.analysis.customFields.map((field) => <div className="custom-summary" key={field.label}><strong>{field.label}</strong><small>{field.populated} answers</small><p>{field.examples.join(" · ")}</p></div>) : <p>Select custom columns above to include interests and event answers.</p>}</div></div></section>}
+          </div>}
+        </article>;
+      })}</div>
     </section>
   </div>;
 }

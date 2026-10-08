@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useClerk } from "@clerk/react";
 import {
   Activity, ArrowUpRight, BriefcaseBusiness, Building2, CalendarDays, ChevronDown, CircleDollarSign,
   ContactRound, FileText, Filter, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
@@ -83,7 +84,8 @@ function routeFromLocation() {
   return { view: item?.id ?? "overview", account: null };
 }
 
-export default function App() {
+export default function App({ email = "" }: { email?: string }) {
+  const clerk = useClerk();
   const initialRoute = useMemo(routeFromLocation, []);
   const storedWorkspace = useMemo(() => {
     try {
@@ -153,7 +155,7 @@ export default function App() {
         <div className="sidebar-bottom">
           <ShieldCheck size={22}/>
           <p>Your Quicksort workspace.<br/>Connected, from day one.</p>
-          <button><span className="profile-dot">JS</span><span>Jerry S.</span><ChevronDown size={15}/></button>
+          <button onClick={() => clerk.signOut()} title="Sign out"><span className="profile-dot">{email ? email.slice(0, 2).toUpperCase() : "QS"}</span><span>{email || "QuickSort admin"}</span><ChevronDown size={15}/></button>
         </div>
       </aside>
 

@@ -5,11 +5,11 @@ import type { EventAiIntelligence } from "./event-intelligence-schema";
 import type { CompetitorRecord, CompetitorResult } from "./competitor-schema";
 import {
   Activity, ArrowLeft, ArrowUpRight, BookOpen, Building2, CalendarDays, ChevronDown, CircleDollarSign,
-  ContactRound, FileText, Filter, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
+  ContactRound, FileText, Filter, Handshake, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
   PanelLeftClose, PanelLeftOpen, Pencil, Save, ShieldCheck, Sparkles, Target, Users, X,
 } from "lucide-react";
 
-type View = "overview" | "market" | "competitors" | "marketing" | "partners" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors" | "guide";
+type View = "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "doors" | "guide";
 type Capability = {
   id: string; name: string; short: string; color: string; people: number; projects: number;
   technologies: string[]; proof: string; experts: { initials: string; name: string; role: string }[];
@@ -46,6 +46,19 @@ const accounts = [
 type LeadSource = "Event" | "Tool" | "Network";
 type LeadStage = "New" | "Qualified" | "Contacted" | "Converted";
 type LeadRecord = { id: string; name: string; role: string; company: string; source: LeadSource; origin: string; score: number; reason: string; stage: LeadStage; owner: string };
+type BusinessPartnerRecord = {
+  id: string;
+  name: string;
+  company: string;
+  role: string;
+  origin: string;
+  linkedin: string;
+  email: string;
+  phone: string;
+  relationship: string;
+  owner: string;
+  notes: string;
+};
 type ImportedAttendee = { name: string; role: string; company: string; linkedin: string; email: string; sourceRow: Record<string, string> };
 type MappedField = "name" | "firstName" | "lastName" | "linkedin" | "email" | "phone" | "company" | "role";
 type ColumnMapping = Partial<Record<MappedField, string>>;
@@ -137,6 +150,7 @@ const nav = [
   { id: "competitors" as View, path: "/competitor-analysis", label: "Competitor analysis", sidebarLabel: "Competitors", icon: Search },
   { id: "marketing" as View, path: "/marketing-intelligence", label: "Marketing intelligence", sidebarLabel: "Marketing", icon: CircleDollarSign },
   { id: "partners" as View, path: "/strategic-partners", label: "Strategic partners", sidebarLabel: "Strategic partners", icon: Network },
+  { id: "businessPartners" as View, path: "/business-partners", label: "Business partners", sidebarLabel: "Business partners", icon: Handshake },
   { id: "executive" as View, path: "/executive-intelligence", label: "Executive intelligence", sidebarLabel: "Executive", icon: FileText },
   { id: "pipeline" as View, path: "/pipeline", label: "Pipeline", sidebarLabel: "Pipeline", icon: Target },
   { id: "doors" as View, path: "/open-doors", label: "Open doors", sidebarLabel: "Open doors", icon: ContactRound },
@@ -144,6 +158,7 @@ const nav = [
 ];
 
 const accountSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 function routeFromLocation() {
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -186,12 +201,16 @@ export default function App({ email = "" }: { email?: string }) {
   const [competitorRecords, setCompetitorRecords] = useState<CompetitorRecord[]>(() => {
     try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-competitors-v1") || "[]"); } catch { return []; }
   });
+  const [businessPartnerRecords, setBusinessPartnerRecords] = useState<BusinessPartnerRecord[]>(() => {
+    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-business-partners-v1") || "[]"); } catch { return []; }
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return window.localStorage.getItem("quicksort-intelligence-sidebar") === "collapsed"; }
     catch { return false; }
   });
   const [toast, setToast] = useState("");
+  const [createIntent, setCreateIntent] = useState(0);
   const active = capabilities.find((c) => c.id === selected) ?? capabilities[0] ?? emptyCapabilities[0];
   const filteredAccounts = useMemo(() => accountRecords.filter((a) => `${a.name} ${a.sector} ${a.opportunity}`.toLowerCase().includes(query.toLowerCase())), [accountRecords, query]);
   useEffect(() => {
@@ -226,6 +245,24 @@ export default function App({ email = "" }: { email?: string }) {
     return () => { activeRequest = false; };
   }, []);
   useEffect(() => {
+    let activeRequest = true;
+    void Promise.all([
+      db().from("business_accounts").select("*").order("updated_at", { ascending: false }),
+      db().from("business_leads").select("*").order("updated_at", { ascending: false }),
+      db().from("business_partners").select("*").order("updated_at", { ascending: false }),
+    ]).then(([accountResult, leadResult, partnerResult]) => {
+      if (!activeRequest) return;
+      if (!accountResult.error && accountResult.data) setAccountRecords(accountResult.data.map((row: Record<string, any>) => ({
+        databaseId: String(row.id), id: String(row.slug), name: String(row.name), sector: String(row.sector || "Not set"), contacts: Number(row.contacts) || 0,
+        signal: String(row.signal || "Not set"), opportunity: String(row.opportunity || "Not set"), value: String(row.estimated_value || "—"), stage: String(row.stage || "Not set"), owner: String(row.owner || "—"),
+        fit: Array.isArray(row.fit) ? row.fit.map(String) : [], caseStudies: Array.isArray(row.case_studies) ? row.case_studies : [], opportunitySummary: String(row.opportunity_summary || ""), fitScore: String(row.fit_score || "—"), evidence: Array.isArray(row.evidence) ? row.evidence.map(String) : [],
+      })));
+      if (!leadResult.error && leadResult.data) setLeadRecords(leadResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), role: String(row.role || ""), company: String(row.company || ""), source: row.source as LeadSource, origin: String(row.origin || ""), score: Number(row.score) || 0, reason: String(row.reason || ""), stage: row.stage as LeadStage, owner: String(row.owner || "—") })));
+      if (!partnerResult.error && partnerResult.data) setBusinessPartnerRecords(partnerResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), company: String(row.company || ""), role: String(row.role || ""), origin: String(row.origin || ""), linkedin: String(row.linkedin_url || ""), email: String(row.email || ""), phone: String(row.phone || ""), relationship: String(row.relationship || ""), owner: String(row.owner || ""), notes: String(row.notes || "") })));
+    });
+    return () => { activeRequest = false; };
+  }, []);
+  useEffect(() => {
     const label = accountRecords.find((account) => account.id === selectedAccount)?.name ?? eventRecords.find((event) => event.id === selectedEvent)?.title ?? nav.find((item) => item.id === view)?.label ?? "Overview";
     document.title = `${label} · QuickSort Intelligence`;
   }, [view, selectedAccount, selectedEvent, accountRecords, eventRecords]);
@@ -256,19 +293,39 @@ export default function App({ email = "" }: { email?: string }) {
     const nextIntel = { ...intelRecords, [updatedAccount.id]: updatedIntel };
     setAccountRecords(nextAccounts);
     setIntelRecords(nextIntel);
-    window.localStorage.setItem("quicksort-intelligence-accounts-v3", JSON.stringify({ accounts: nextAccounts, intel: nextIntel }));
+    void db().from("business_accounts").upsert({
+      id: updatedAccount.databaseId || crypto.randomUUID(), slug: updatedAccount.id, name: updatedAccount.name, sector: updatedAccount.sector, contacts: updatedAccount.contacts,
+      signal: updatedAccount.signal, opportunity: updatedAccount.opportunity, estimated_value: updatedAccount.value, stage: updatedAccount.stage, owner: updatedAccount.owner,
+      fit: updatedAccount.fit, case_studies: updatedAccount.caseStudies, opportunity_summary: updatedAccount.opportunitySummary || "", fit_score: updatedAccount.fitScore || "—", evidence: updatedAccount.evidence || [], intelligence: updatedIntel,
+    }, { onConflict: "slug" });
     notify("Account changes saved");
   };
-  const saveLeads = (next: LeadRecord[]) => { setLeadRecords(next); window.localStorage.setItem("quicksort-intelligence-leads-v4", JSON.stringify(next)); };
+  const saveLeads = (next: LeadRecord[]) => {
+    setLeadRecords(next);
+    void db().from("business_leads").upsert(next.map((lead) => ({ ...lead, id: isUuid(lead.id) ? lead.id : crypto.randomUUID() })));
+  };
   const saveEvents = (next: EventRecord[]) => {
     setEventRecords(next);
     try { window.localStorage.setItem("quicksort-intelligence-events-v4", JSON.stringify(next)); }
     catch { notify("File loaded for this session, but it is too large for browser storage"); }
   };
   const saveCompetitors = (next: CompetitorRecord[]) => { setCompetitorRecords(next); window.localStorage.setItem("quicksort-intelligence-competitors-v1", JSON.stringify(next)); };
+  const saveBusinessPartners = (next: BusinessPartnerRecord[]) => {
+    setBusinessPartnerRecords(next);
+    void db().from("business_partners").upsert(next.map((partner) => ({ id: partner.id, name: partner.name, company: partner.company, role: partner.role, origin: partner.origin, linkedin_url: partner.linkedin, email: partner.email, phone: partner.phone, relationship: partner.relationship, owner: partner.owner, notes: partner.notes })));
+  };
+  const addManualAccount = (account: Account) => {
+    const nextAccounts = [account, ...accountRecords];
+    const nextIntel = { ...intelRecords, [account.id]: { leads: [], events: [], contacts: [] } };
+    setAccountRecords(nextAccounts);
+    setIntelRecords(nextIntel);
+    void db().from("business_accounts").insert({ id: account.databaseId, slug: account.id, name: account.name, sector: account.sector, contacts: account.contacts, signal: account.signal, opportunity: account.opportunity, estimated_value: account.value, stage: account.stage, owner: account.owner, fit: account.fit, case_studies: account.caseStudies, opportunity_summary: account.opportunitySummary || "", fit_score: account.fitScore || "—", evidence: account.evidence || [], intelligence: nextIntel[account.id] });
+    notify(`${account.name} added to Accounts`);
+    navigate("accounts", account.id);
+  };
   const addEventLead = (event: EventRecord, person: EventAiIntelligence["priorityPeople"][number]) => {
     if (leadRecords.some((lead) => lead.name.toLowerCase() === person.name.toLowerCase() && lead.company.toLowerCase() === person.company.toLowerCase())) { notify("This person is already in Leads"); return; }
-    saveLeads([{ id: `event-${Date.now()}`, name: person.name, role: person.role, company: person.company, source: "Event", origin: event.title, score: person.fitScore, reason: person.why, stage: "New", owner: "—" }, ...leadRecords]);
+    saveLeads([{ id: crypto.randomUUID(), name: person.name, role: person.role, company: person.company, source: "Event", origin: event.title, score: person.fitScore, reason: person.why, stage: "New", owner: "—" }, ...leadRecords]);
     notify(`${person.name} added to Leads for human review`);
   };
   const addEventAccount = (event: EventRecord, organisation: EventAiIntelligence["organisations"][number]) => {
@@ -308,17 +365,18 @@ export default function App({ email = "" }: { email?: string }) {
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={20}/></button>
           <div className="breadcrumbs">Intelligence <span>/</span> {eventRecords.find((event) => event.id === selectedEvent)?.title ?? nav.find((item) => item.id === view)?.label}</div>
-          <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button><button className="primary" onClick={() => notify("New record ready to configure")}><Plus size={17}/> Add record</button></div>
+          <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button><button className="primary" onClick={() => view === "accounts" || view === "leads" || view === "businessPartners" ? setCreateIntent((value) => value + 1) : notify("Open the relevant workspace to add a record")}><Plus size={17}/> Add record</button></div>
         </header>
         {view === "overview" && <Overview active={active} capabilities={capabilities} selected={selected} setSelected={setSelected} go={go} notify={notify} accounts={accountRecords} leads={leadRecords} events={eventRecords}/>}
         {(view === "market" || view === "marketing" || view === "partners" || view === "executive") && <IntelligencePage workspace={intelligenceWorkspaces[view]} notify={notify}/>}
+        {view === "businessPartners" && <BusinessPartners partners={businessPartnerRecords} onChange={saveBusinessPartners} notify={notify} createIntent={createIntent}/>}
         {view === "competitors" && <CompetitorAnalysis competitors={competitorRecords} onChange={saveCompetitors} notify={notify}/>}
         {view === "capabilities" && <Capabilities active={active} capabilities={capabilities} selected={selected} setSelected={setSelected}/>}
         {view === "accounts" && (selectedAccount && accountRecords.some((account) => account.id === selectedAccount)
           ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount] ?? { leads: [], events: [], contacts: [] }} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
-          : <Accounts query={query} setQuery={setQuery} accounts={filteredAccounts} openAccount={(id) => navigate("accounts", id)} notify={notify}/>)} 
+          : <Accounts query={query} setQuery={setQuery} accounts={filteredAccounts} allAccounts={accountRecords} openAccount={(id) => navigate("accounts", id)} onAdd={addManualAccount} createIntent={createIntent}/>)}
         {view === "events" && <Events events={eventRecords} selectedEventId={selectedEvent} onOpenEvent={openEvent} onBack={() => navigate("events")} onChange={saveEvents} onAddLead={addEventLead} onAddAccount={addEventAccount} notify={notify}/>}
-        {view === "leads" && <Leads leads={leadRecords} onChange={saveLeads} notify={notify}/>}
+        {view === "leads" && <Leads leads={leadRecords} onChange={saveLeads} notify={notify} createIntent={createIntent}/>}
         {view === "pipeline" && <Pipeline notify={notify}/>} 
         {view === "doors" && <OpenDoors notify={notify}/>}
         {view === "guide" && <WorkspaceGuide go={go}/>}
@@ -452,7 +510,7 @@ function Capabilities({ active, capabilities, selected, setSelected }: { active:
 }
 
 type CaseStudy = { title: string; client: string; summary: string; outcome: string; evidence: string; tags: string[] };
-type Account = { id: string; name: string; sector: string; contacts: number; signal: string; opportunity: string; value: string; stage: string; owner: string; fit: string[]; caseStudies: CaseStudy[]; opportunitySummary?: string; fitScore?: string; evidence?: string[] };
+type Account = { databaseId?: string; id: string; name: string; sector: string; contacts: number; signal: string; opportunity: string; value: string; stage: string; owner: string; fit: string[]; caseStudies: CaseStudy[]; opportunitySummary?: string; fitScore?: string; evidence?: string[] };
 type Lead = { name: string; role: string; company: string; status: string; nextStep: string; owner: string };
 type AccountEvent = { date: string; month: string; title: string; type: string; detail: string };
 type RelationshipContact = { name: string; role: string; strength: string; owner: string };
@@ -460,8 +518,20 @@ type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: Relations
 
 const emptyAccountIntel = Object.fromEntries(accounts.map((account) => [account.id, { contacts: [], leads: [], events: [] }])) as Record<string, AccountIntel>;
 
-function Accounts({ query, setQuery, accounts, openAccount, notify }: { query: string; setQuery: (s: string) => void; accounts: Account[]; openAccount: (id: string) => void; notify: (m: string) => void }) {
-  return <div className="page"><PageIntro title="Account intelligence" text="See who matters, who knows them and where the opportunity sits." action={<button className="primary" onClick={() => notify("New account ready to configure")}><Plus size={16}/> Add account</button>}/>
+function Accounts({ query, setQuery, accounts, allAccounts, openAccount, onAdd, createIntent }: { query: string; setQuery: (s: string) => void; accounts: Account[]; allAccounts: Account[]; openAccount: (id: string) => void; onAdd: (account: Account) => void; createIntent: number }) {
+  const [adding, setAdding] = useState(false);
+  useEffect(() => { if (createIntent) setAdding(true); }, [createIntent]);
+  const addAccount = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const name = String(values.get("name") || "").trim();
+    let id = accountSlug(name) || `account-${Date.now()}`;
+    if (allAccounts.some((account) => account.id === id)) id = `${id}-${Date.now()}`;
+    onAdd({ databaseId: crypto.randomUUID(), id, name, sector: String(values.get("sector") || "Not set").trim() || "Not set", contacts: 0, signal: String(values.get("signal") || "Not set"), opportunity: String(values.get("opportunity") || "Not set").trim() || "Not set", value: String(values.get("value") || "—").trim() || "—", stage: String(values.get("stage") || "New"), owner: String(values.get("owner") || "—").trim() || "—", fit: [], caseStudies: [], evidence: [] });
+    setAdding(false);
+  };
+  return <div className="page"><PageIntro title="Account intelligence" text="See who matters, who knows them and where the opportunity sits." action={<button className="primary" onClick={() => setAdding(true)}><Plus size={16}/> Add account</button>}/>
+    {adding && <form className="surface quick-create-form" onSubmit={addAccount}><div className="section-head"><div><h2>Add account</h2><p>Create the company record now. You can complete its intelligence page next.</p></div><button type="button" className="icon-button" onClick={() => setAdding(false)} aria-label="Close account form"><X size={17}/></button></div><div className="quick-create-grid"><label>Company name<input name="name" required autoFocus placeholder="Company name"/></label><label>Sector<input name="sector" placeholder="Industry or sector"/></label><label>Relationship<select name="signal"><option>Not set</option><option>Warm</option><option>Strong</option><option>Cold</option></select></label><label>Opportunity<input name="opportunity" placeholder="Opportunity or need"/></label><label>Estimated value<input name="value" placeholder="€—"/></label><label>Stage<select name="stage"><option>New</option><option>Discovery</option><option>Qualified</option><option>Proposal</option><option>Won</option></select></label><label>QuickSort owner<input name="owner" placeholder="Owner"/></label></div><div className="actions"><button type="button" className="secondary" onClick={() => setAdding(false)}>Cancel</button><button className="primary"><Save size={15}/> Create account</button></div></form>}
     <div className="toolbar"><label><Search size={17}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search companies or opportunities"/></label><button className="secondary"><Filter size={16}/> Filters</button><span>{accounts.length} accounts</span></div>
     <div className="account-list">{accounts.map((account) => <a className="account-card" key={account.id} href={`/accounts/${encodeURIComponent(account.id)}`} onClick={(event) => { event.preventDefault(); openAccount(account.id); }} aria-label={`Open ${account.name} account`}><div className="account-monogram">{account.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div><div className="account-title"><h2>{account.name}</h2><p>{account.sector} · {account.contacts} mapped contacts</p></div><div className={`signal ${account.signal.toLowerCase()}`}><i/>{account.signal} relationship</div><div className="account-opportunity"><span>{account.opportunity}</span><strong>{account.value}</strong></div><div className="fit-tags">{account.fit.map((f) => <span key={f}>{f}</span>)}</div><div className="account-owner"><span>{account.owner}</span><div><small>Owner</small><strong>{account.stage}</strong></div></div><span className="open-card" aria-hidden="true"><ArrowUpRight size={18}/></span></a>)}</div>
   </div>;
@@ -713,9 +783,11 @@ function OrganisationGraph({ intelligence }: { intelligence: EventAiIntelligence
   return <section className="organisation-graph"><div className="section-head"><div><h2>People and organisation map</h2><p>Nodes show reviewed prospects, represented companies, and decision-maker paths.</p></div><span className="case-count">{people.length + organisations.length} nodes</span></div>{organisations.length ? <><div className="graph-canvas"><svg viewBox="0 0 1000 420" preserveAspectRatio="none" aria-hidden="true">{people.map((person, index) => { const matchedIndex = organisations.findIndex((org) => person.company && org.name.toLowerCase() === person.company.toLowerCase()); if (matchedIndex < 0) return null; const px = 90 + (index % 5) * 190; const py = index < 5 ? 70 : 350; const ox = 120 + matchedIndex * 190; return <line key={`${person.name}-${index}`} x1={px} y1={py} x2={ox} y2={210}/>; })}</svg>{organisations.map((org, index) => <div className="graph-org" style={{ left: `${12 + index * 19}%`, top: "50%" }} key={org.name}><strong>{org.name}</strong><small>{org.attendeeCount} attendees</small></div>)}{people.map((person, index) => <div className={`graph-person ${person.category.toLowerCase()}`} style={{ left: `${9 + (index % 5) * 19}%`, top: index < 5 ? "12%" : "82%" }} key={`${person.name}-${index}`}><strong>{person.name}</strong><small>{person.category}</small></div>)}</div><div className="graph-legend"><span><i className="professional"/>Professional</span><span><i className="founder"/>Founder</span><span><i className="student"/>Student</span><span><i className="unknown"/>Needs verification</span></div></> : <div className="data-empty">No verified organisation relationships were found.</div>}</section>;
 }
 
-function Leads({ leads, onChange, notify }: { leads: LeadRecord[]; onChange: (leads: LeadRecord[]) => void; notify: (message: string) => void }) {
+function Leads({ leads, onChange, notify, createIntent }: { leads: LeadRecord[]; onChange: (leads: LeadRecord[]) => void; notify: (message: string) => void; createIntent: number }) {
   const [source, setSource] = useState<"All" | LeadSource>("All");
   const [search, setSearch] = useState("");
+  const [adding, setAdding] = useState(false);
+  useEffect(() => { if (createIntent) setAdding(true); }, [createIntent]);
   const stages: LeadStage[] = ["New", "Qualified", "Contacted", "Converted"];
   const visible = leads.filter((lead) => (source === "All" || lead.source === source) && `${lead.name} ${lead.company} ${lead.role}`.toLowerCase().includes(search.toLowerCase()));
   const advance = (lead: LeadRecord) => {
@@ -723,8 +795,17 @@ function Leads({ leads, onChange, notify }: { leads: LeadRecord[]; onChange: (le
     onChange(leads.map((item) => item.id === lead.id ? { ...item, stage: next } : item));
     notify(next === lead.stage ? `${lead.name} is already converted` : `${lead.name} moved to ${next}`);
   };
+  const addLead = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const lead: LeadRecord = { id: crypto.randomUUID(), name: String(values.get("name") || "").trim(), role: String(values.get("role") || "").trim(), company: String(values.get("company") || "").trim(), source: String(values.get("source") || "Tool") as LeadSource, origin: String(values.get("origin") || "").trim(), score: Math.min(100, Math.max(0, Number(values.get("score")) || 0)), reason: String(values.get("reason") || "").trim(), stage: "New", owner: String(values.get("owner") || "—").trim() || "—" };
+    onChange([lead, ...leads]);
+    setAdding(false);
+    notify(`${lead.name} added to Leads`);
+  };
   return <div className="page leads-page">
-    <PageIntro title="Lead pipeline" text="Every prospect in one place, with the source and reason behind the signal." action={<button className="primary" onClick={() => notify("Manual lead ready to configure")}><Plus size={16}/> Add lead</button>}/>
+    <PageIntro title="Lead pipeline" text="Every prospect in one place, with the source and reason behind the signal." action={<button className="primary" onClick={() => setAdding(true)}><Plus size={16}/> Add lead</button>}/>
+    {adding && <form className="surface quick-create-form" onSubmit={addLead}><div className="section-head"><div><h2>Add lead</h2><p>Record the person, their source, and why they matter.</p></div><button type="button" className="icon-button" onClick={() => setAdding(false)} aria-label="Close lead form"><X size={17}/></button></div><div className="quick-create-grid"><label>Full name<input name="name" required autoFocus placeholder="Lead name"/></label><label>Role<input name="role" placeholder="Job title"/></label><label>Company<input name="company" placeholder="Company"/></label><label>Source<select name="source"><option>Event</option><option>Tool</option><option>Network</option></select></label><label>Source detail<input name="origin" placeholder="Event, research, or relationship"/></label><label>Fit score<input name="score" type="number" min="0" max="100" defaultValue="0"/></label><label>QuickSort owner<input name="owner" placeholder="Owner"/></label><label className="quick-create-wide">Why this lead<textarea name="reason" placeholder="Fit, timing, signal, or reason to contact"/></label></div><div className="actions"><button type="button" className="secondary" onClick={() => setAdding(false)}>Cancel</button><button className="primary"><Save size={15}/> Create lead</button></div></form>}
     <section className="lead-intelligence-panel">
       <div><span><Lightbulb size={18}/></span><div><h2>Lead intelligence</h2><p>Build an ICP, identify buyers, enrich profiles, verify emails, and score real leads.</p></div></div>
       <div className="lead-intelligence-actions">{["ICP lists", "Buyer discovery", "Profile enrichment", "Email verification", "Fit scoring", "Why-now signals"].map((item) => <button key={item} onClick={() => notify(`${item} ready to configure`)}>{item}<Plus size={12}/></button>)}</div>
@@ -743,6 +824,71 @@ function Leads({ leads, onChange, notify }: { leads: LeadRecord[]; onChange: (le
         <footer><span>{lead.owner}</span><button onClick={() => advance(lead)}>{stage === "Converted" ? "Complete" : "Advance"} <ArrowUpRight size={13}/></button></footer>
       </article>)}</div>{stageLeads.length === 0 && <p className="empty-stage">No {source === "All" ? "" : source.toLowerCase() + " "}leads here.</p>}</section>;
     })}</div>
+  </div>;
+}
+
+const emptyBusinessPartner = (): BusinessPartnerRecord => ({
+  id: "",
+  name: "",
+  company: "",
+  role: "",
+  origin: "",
+  linkedin: "",
+  email: "",
+  phone: "",
+  relationship: "",
+  owner: "",
+  notes: "",
+});
+
+function BusinessPartners({ partners, onChange, notify, createIntent }: { partners: BusinessPartnerRecord[]; onChange: (partners: BusinessPartnerRecord[]) => void; notify: (message: string) => void; createIntent: number }) {
+  const [editing, setEditing] = useState<BusinessPartnerRecord | null>(null);
+  const [search, setSearch] = useState("");
+  useEffect(() => { if (createIntent) setEditing(emptyBusinessPartner()); }, [createIntent]);
+  const visiblePartners = partners.filter((partner) => `${partner.name} ${partner.company} ${partner.role} ${partner.origin} ${partner.relationship}`.toLowerCase().includes(search.toLowerCase()));
+  const startNew = () => setEditing(emptyBusinessPartner());
+  const patch = (field: keyof BusinessPartnerRecord, value: string) => setEditing((current) => current ? { ...current, [field]: value } : current);
+  const save = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    const record = { ...editing, id: editing.id || crypto.randomUUID() };
+    const next = editing.id ? partners.map((partner) => partner.id === editing.id ? record : partner) : [record, ...partners];
+    onChange(next);
+    setEditing(null);
+    notify(editing.id ? "Business partner updated" : "Business partner added");
+  };
+  return <div className="page business-partners-page">
+    <PageIntro title="Business partners" text="Keep every business relationship in one place, with clear context on who they are, where they come from, and how to reach them." action={<button className="primary" onClick={startNew}><Plus size={16}/> Add business partner</button>}/>
+    <section className="partner-summary" aria-label="Business partner summary">
+      <div><strong>{partners.length}</strong><span>partners mapped</span></div>
+      <div><strong>{partners.filter((partner) => partner.linkedin).length}</strong><span>LinkedIn profiles</span></div>
+      <div><strong>{new Set(partners.map((partner) => partner.origin.trim()).filter(Boolean)).size}</strong><span>origins represented</span></div>
+    </section>
+    <div className="toolbar partner-toolbar"><label><Search size={17}/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search partners, companies or locations"/></label><span>{visiblePartners.length} partners</span></div>
+    {editing && <form className="surface partner-form" onSubmit={save}>
+      <div className="section-head"><div><h2>{editing.id ? "Edit business partner" : "Add business partner"}</h2><p>Record the person, their business context, and the relationship with QuickSort.</p></div><button type="button" className="icon-button" onClick={() => setEditing(null)} aria-label="Close business partner form"><X size={17}/></button></div>
+      <div className="partner-form-grid">
+        <label>Full name<input required value={editing.name} onChange={(event) => patch("name", event.target.value)} placeholder="Partner name"/></label>
+        <label>Company or organisation<input value={editing.company} onChange={(event) => patch("company", event.target.value)} placeholder="Organisation"/></label>
+        <label>Role<input value={editing.role} onChange={(event) => patch("role", event.target.value)} placeholder="Founder, investor, advisor…"/></label>
+        <label>Where they come from<input required value={editing.origin} onChange={(event) => patch("origin", event.target.value)} placeholder="Paris, France · Event · Introduction…"/></label>
+        <label>LinkedIn<input type="url" value={editing.linkedin} onChange={(event) => patch("linkedin", event.target.value)} placeholder="https://www.linkedin.com/in/…"/></label>
+        <label>Email<input type="email" value={editing.email} onChange={(event) => patch("email", event.target.value)} placeholder="name@company.com"/></label>
+        <label>Phone<input value={editing.phone} onChange={(event) => patch("phone", event.target.value)} placeholder="+33 …"/></label>
+        <label>Relationship<input value={editing.relationship} onChange={(event) => patch("relationship", event.target.value)} placeholder="Referral partner, delivery partner…"/></label>
+        <label>QuickSort owner<input value={editing.owner} onChange={(event) => patch("owner", event.target.value)} placeholder="Internal relationship owner"/></label>
+        <label className="partner-notes">Notes<textarea value={editing.notes} onChange={(event) => patch("notes", event.target.value)} placeholder="How you met, mutual value, next step, and any useful context."/></label>
+      </div>
+      <div className="actions"><button type="button" className="secondary" onClick={() => setEditing(null)}>Cancel</button><button className="primary"><Save size={15}/> Save business partner</button></div>
+    </form>}
+    {visiblePartners.length ? <div className="partner-list">{visiblePartners.map((partner) => <article className="surface partner-card" key={partner.id}>
+      <div className="partner-monogram">{partner.name.split(" ").map((part) => part[0]).join("").slice(0,2).toUpperCase()}</div>
+      <div className="partner-identity"><h2>{partner.name}</h2><p>{[partner.role, partner.company].filter(Boolean).join(" · ") || "Business partner"}</p><span><ContactRound size={13}/>{partner.origin}</span></div>
+      <div className="partner-relationship"><small>Relationship</small><strong>{partner.relationship || "Not set"}</strong><span>Owner · {partner.owner || "Not set"}</span></div>
+      <div className="partner-contact">{partner.linkedin && <a href={partner.linkedin} target="_blank" rel="noreferrer">LinkedIn <ArrowUpRight size={12}/></a>}{partner.email && <a href={`mailto:${partner.email}`}>{partner.email}</a>}{partner.phone && <span>{partner.phone}</span>}</div>
+      <button className="secondary small" onClick={() => setEditing(partner)}><Pencil size={13}/> Edit</button>
+      {partner.notes && <p className="partner-card-notes">{partner.notes}</p>}
+    </article>)}</div> : <section className="surface empty-workspace partner-empty"><Handshake size={26}/><h2>{partners.length ? "No partners match your search" : "No business partners added"}</h2><p>{partners.length ? "Try another name, company, location, or relationship." : "Add the first partner when you have a real person and relationship to record."}</p>{!partners.length && <button className="primary" onClick={startNew}><Plus size={15}/> Add first business partner</button>}</section>}
   </div>;
 }
 
@@ -817,6 +963,12 @@ function WorkspaceGuide({ go }: { go: (view: View) => void }) {
       { title: "Find the warm path", detail: "Check Open doors for a trusted introduction before cold outreach." },
       { title: "Approve and assign", detail: "Choose an owner, outreach message, and concrete next step." },
     ], result: "A qualified partner opportunity with a clear reason to collaborate.", icon: Network },
+    { view: "businessPartners", title: "Business partners", purpose: "Maintain a clear directory of the real people behind QuickSort’s commercial partnerships.", when: "Use this when a named partner, introducer, advisor, investor, or delivery contact should be recorded and owned.", steps: [
+      { title: "Add the person", detail: "Record the partner’s name, organisation, role, and where the relationship comes from." },
+      { title: "Add direct context", detail: "Save LinkedIn, email, phone, and the internal QuickSort relationship owner." },
+      { title: "Describe the relationship", detail: "State the partnership type, mutual value, current context, and agreed next step." },
+      { title: "Keep it current", detail: "Edit the record after introductions, meetings, or ownership changes." },
+    ], result: "A usable partner directory with clear origins, contact routes, and ownership.", icon: Handshake },
     { view: "executive", title: "Executive", purpose: "Give leadership a concise view of movement, risk, and decisions.", when: "Use this for the weekly GTM review, not as a second place to edit source records.", steps: [
       { title: "Review the live picture", detail: "Read changes across Accounts, Leads, Pipeline, Events, Market, and Competitors." },
       { title: "Confirm material signals", detail: "Remove noise and keep only evidence that could change a decision." },

@@ -1,15 +1,39 @@
-export function loadTregSettings() { return { token: process.env.TREG_TOKEN || "" }; }
+export function loadTregSettings() {
+  return {
+    token: process.env.TREG_TOKEN || "",
+    org: process.env.TREG_ORG || "",
+  };
+}
 
 export async function callTreg(token: string, endpoint: string, body: Record<string, unknown>, meta: string, maxCost = "0.10") {
-  const response = await fetch(`https://treg.to/call/${endpoint}`, { method: "POST", headers: { "X-Treg-Token": token, "X-Treg-Meta": meta, "X-Treg-Route-Max-Cost": maxCost, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
+  const { org } = loadTregSettings();
+  const response = await fetch(`https://treg.to/call/${endpoint}`, {
+    method: "POST",
+    headers: {
+      "X-Treg-Token": token,
+      ...(org ? { "X-Treg-Org": org } : {}),
+      "X-Treg-Meta": meta,
+      "X-Treg-Route-Max-Cost": maxCost,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000),
+  });
   if (!response.ok) throw new Error(`Treg request failed (${response.status}).`);
   return response.json() as Promise<Record<string, unknown>>;
 }
 
 type Attendee = { name: string; role: string; company: string; linkedin: string; email: string };
 async function enrichOne(attendee: Attendee, token: string, eventId: string) {
-  const identity = { ...(attendee.email ? { email: attendee.email } : {}), ...(attendee.linkedin ? { linkedin_url: attendee.linkedin } : {}), ...(attendee.name ? { full_name: attendee.name } : {}) };
-  if (!Object.keys(identity).length) return null;
+  // Prefer the attendee's professional profile. Personal event-registration
+  // email is a fallback when no profile URL was supplied.
+  const identity = attendee.linkedin
+    ? { linkedin_url: attendee.linkedin }
+    : attendee.email
+      ? { email: attendee.email }
+      : null;
+  if (!identity) return null;
   const payload = await callTreg(token, "treg.people.enrich", identity, `workspace=business,event=${eventId}`);
   const output = payload.output && typeof payload.output === "object" ? payload.output : null;
   if (!output) return null;

@@ -15,9 +15,11 @@
     "lucide-react": "0.453.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "4.5.4"
   },
   "devDependencies": {
+    "@types/node": "^22.20.1",
     "@types/react": "18.2.0",
     "@types/react-dom": "18.2.0",
     "@types/scheduler": "0.26.0",

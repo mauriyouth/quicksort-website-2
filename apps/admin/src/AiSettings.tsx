@@ -40,7 +40,7 @@ export function AiSettings({ isOwner }: { isOwner: boolean }) {
     } catch (e) { setError(e instanceof Error ? e.message : "Could not test the connection."); }
     finally { setBusy(false); setTesting(false); }
   }
-  return <section className="panel" style={{ maxWidth: 700 }} aria-label="AI configuration">
+  return <><section className="panel" style={{ maxWidth: 700 }} aria-label="AI configuration">
     <h2>AI configuration</h2><p className="muted">Connect OpenAI to power candidate evaluations in the CV analyzer.</p>
     {!isOwner ? <p>Ask a portal owner to configure the shared AI key.</p> : <>
       <Notice error>{error}</Notice><Notice>{message}</Notice>
@@ -52,6 +52,47 @@ export function AiSettings({ isOwner }: { isOwner: boolean }) {
         <label>Model<input required maxLength={120} pattern="[a-zA-Z0-9._-]+" value={model} onChange={e => { setModel(e.target.value); setMessage(""); setError(""); }} disabled={busy || !status} /></label>
         <p className="muted small-text">Use a model that supports PDFs and structured output. Saving makes no AI request. Test connection sends a small paid request using the selected model and the entered key, or your existing key if left blank. It checks access, not PDF or structured-output support.</p>
         <div className="actions"><button className="btn" disabled={busy || !status?.canSave}>{busy ? testing ? "Testing…" : "Saving…" : status?.source === "settings" && !apiKey.trim() ? "Save model" : status?.configured ? "Replace API key" : "Save API key"}</button><button type="button" className="btn secondary" disabled={busy || !status || (!status.configured && !apiKey.trim()) || !model.trim()} onClick={() => void testConnection()}>{testing ? "Testing…" : "Test connection"}</button>{status?.source === "settings" && <button type="button" className="btn secondary" disabled={busy} onClick={() => void save(true)}>Remove saved key</button>}<button type="button" className="btn secondary" disabled={busy} onClick={() => void refresh().catch(e => setError(e.message))}>Refresh status</button></div>
+      </form>
+    </>}
+  </section><TregSettings isOwner={isOwner}/></>;
+}
+
+type ToolStatus = { configured: boolean; source: string; updatedAt: string | null; canSave: boolean };
+function TregSettings({ isOwner }: { isOwner: boolean }) {
+  const { session } = useSession();
+  const [status, setStatus] = useState<ToolStatus | null>(null);
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  async function request(method = "GET", body?: unknown) {
+    const authToken = await session?.getToken();
+    if (!authToken) throw new Error("Sign in again to configure tools.");
+    const response = await fetch("/api/treg-settings", { method, headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not update Treg access.");
+    return result;
+  }
+  async function refresh() { setStatus(await request() as ToolStatus); }
+  useEffect(() => { if (isOwner) void refresh().catch((problem) => setError(problem.message)); }, [isOwner, session?.id]);
+  async function save(remove = false) {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      await request(remove ? "DELETE" : "PUT", remove ? undefined : { token: token.trim() });
+      setToken(""); await refresh();
+      setMessage(remove ? "Treg removed. Event enrichment is now disabled." : "Treg connected. Business event intelligence can now enrich approved uploads.");
+    } catch (problem) { setError(problem instanceof Error ? problem.message : "Could not update Treg access."); }
+    finally { setBusy(false); }
+  }
+  return <section className="panel" style={{ maxWidth: 700, marginTop: 18 }} aria-label="Business intelligence tools">
+    <h2>Business intelligence tools</h2><p className="muted">Control the external tools the Business workspace may use. Treg is the only enabled enrichment integration.</p>
+    {!isOwner ? <p>Ask a portal owner to configure business tools.</p> : <>
+      <Notice error>{error}</Notice><Notice>{message}</Notice>
+      <p role="status">{status ? status.configured ? `Treg connected (${status.source === "settings" ? "saved in settings" : "server configuration"}).` : "Treg is not connected. Event AI analysis will remain disabled." : "Checking Treg configuration…"}</p>
+      <form className="form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+        <label>Treg agent token<input type="password" autoComplete="new-password" spellCheck={false} required minLength={12} maxLength={2000} value={token} onChange={(event) => { setToken(event.target.value); setError(""); setMessage(""); }} placeholder={status?.configured ? "Enter a replacement token" : "Treg token"} disabled={busy || !status?.canSave}/></label>
+        <p className="muted small-text">Stored encrypted and used only by the Business event-intelligence API. Uploaded attendee data is sent only after an admin clicks Run analysis. <a href="https://treg.to" target="_blank" rel="noreferrer">Open Treg</a>.</p>
+        <div className="actions"><button className="btn" disabled={busy || !token.trim() || !status?.canSave}>{busy ? "Saving…" : status?.configured ? "Replace Treg token" : "Connect Treg"}</button>{status?.source === "settings" && <button type="button" className="btn secondary" disabled={busy} onClick={() => void save(true)}>Remove Treg</button>}<button type="button" className="btn secondary" disabled={busy} onClick={() => void refresh().catch((problem) => setError(problem.message))}>Refresh status</button></div>
       </form>
     </>}
   </section>;

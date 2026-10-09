@@ -181,13 +181,6 @@ h1,h2,h3,p{margin-top:0}.page-intro h1{font-family:"Inter",sans-serif;font-size:
 .activity-no-detail{margin:0;color:#737373;font-size:9px}
 @media(max-width:700px){.account-activity-log{padding:18px}.activity-list{max-height:480px}.activity-comparison{grid-template-columns:1fr}}
 
-/* Keep playground actions in two compact horizontal groups */
-.relationship-toolbar{align-items:center;justify-content:flex-start;gap:8px}
-.relationship-toolbar>div:first-child{flex:0 1 auto}
-.relationship-toolbar-actions{display:flex;flex:0 1 auto;align-items:center;justify-content:flex-start;gap:7px;flex-wrap:nowrap}
-.relationship-edit-controls,.canvas-controls{display:flex;align-items:center;flex:none}
-@container (max-width:760px){.relationship-toolbar{flex-direction:row}.relationship-toolbar-actions{width:auto;justify-content:flex-start}}
-
 /* Responsive canvas controls, compact hierarchy cards and overlay editor */
 html,body,#root{max-width:100%;overflow-x:hidden}
 main,.page,.surface,.event-workspace,.relationship-workspace,.relationship-layout{min-width:0}
@@ -303,3 +296,10 @@ main,.page,.surface,.event-workspace,.relationship-workspace,.relationship-layou
 
 /* Relationship selection and deletion */
 .relationship-scene>svg .edge-hit-area{stroke:transparent!important;stroke-width:20!important;pointer-events:stroke;cursor:pointer}.relationship-scene>svg .edge-visible-line{pointer-events:none}.relationship-scene>svg .selected-edge .edge-visible-line{stroke:#fafafa;stroke-width:2}.edge-actions{display:flex;align-items:center;gap:6px;width:max-content}.edge-actions-overlay{position:absolute;z-index:7}.edge-label-control{width:124px;height:24px;padding:0 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#111;color:#a3a3a3;border:1px solid #404040;border-radius:999px;font:inherit;font-size:8px;cursor:pointer}.edge-label-control:hover,.edge-actions-overlay:focus-within .edge-label-control{background:#242424;color:#fff;border-color:#fafafa}.edge-label-control:focus-visible{outline:2px solid #fff;outline-offset:2px}.edge-delete-control{width:28px;height:28px;display:grid;place-items:center;padding:0;background:#241616;color:#f5b4b4;border:1px solid #6a3535;border-radius:7px;cursor:pointer}.edge-delete-control:hover,.edge-delete-control:focus-visible{background:#722c2c;color:#fff;border-color:#b95a5a;outline:2px solid #fff;outline-offset:2px}
+
+/* Keep playground actions in two compact horizontal groups */
+.relationship-toolbar{align-items:center;justify-content:flex-start;gap:8px}
+.relationship-toolbar>div:first-child{flex:0 1 auto}
+.relationship-toolbar-actions{display:flex;flex:0 1 auto;align-items:center;justify-content:flex-start;gap:7px;flex-wrap:nowrap;width:auto}
+.relationship-edit-controls,.canvas-controls{display:flex;align-items:center;flex:none}
+@container (max-width:760px){.relationship-toolbar{flex-direction:row}.relationship-toolbar-actions{width:auto;justify-content:flex-start}}

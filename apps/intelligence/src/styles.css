@@ -181,6 +181,13 @@ h1,h2,h3,p{margin-top:0}.page-intro h1{font-family:"Inter",sans-serif;font-size:
 .activity-no-detail{margin:0;color:#737373;font-size:9px}
 @media(max-width:700px){.account-activity-log{padding:18px}.activity-list{max-height:480px}.activity-comparison{grid-template-columns:1fr}}
 
+/* Keep playground actions in two compact horizontal groups */
+.relationship-toolbar{align-items:center;justify-content:flex-start;gap:8px}
+.relationship-toolbar>div:first-child{flex:0 1 auto}
+.relationship-toolbar-actions{display:flex;flex:0 1 auto;align-items:center;justify-content:flex-start;gap:7px;flex-wrap:nowrap}
+.relationship-edit-controls,.canvas-controls{display:flex;align-items:center;flex:none}
+@container (max-width:760px){.relationship-toolbar{flex-direction:row}.relationship-toolbar-actions{width:auto;justify-content:flex-start}}
+
 /* Responsive canvas controls, compact hierarchy cards and overlay editor */
 html,body,#root{max-width:100%;overflow-x:hidden}
 main,.page,.surface,.event-workspace,.relationship-workspace,.relationship-layout{min-width:0}

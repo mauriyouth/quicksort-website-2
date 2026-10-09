@@ -1345,7 +1345,7 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
         <div className="section-head"><div><h2>Relationship playground</h2><p>Arrange teams, map reporting lines, and show who can open the door.</p></div><span className="legend"><i/> Saved to this account</span></div>
         <RelationshipCanvas account={draft} contacts={draftIntel.contacts} teams={draftIntel.teams} nodes={draftIntel.nodes} connections={draftIntel.connections} accountPosition={draftIntel.accountPosition} ownerOptions={ownerOptions} kanbanCards={kanbanCards} actorEmail={actorEmail} onRequestEdit={() => undefined} onChange={saveRelationshipMap}/>
       </section>
-      <aside className="surface opportunity-panel editable-block" onClick={(event) => { if (!(event.target as HTMLElement).closest("button")) beginEditing(); }}>
+      <aside className="surface opportunity-panel editable-block" onClick={editing ? undefined : beginEditing}>
         <div className="opportunity-panel-head">
           <span className="panel-label">Opportunity</span>
           {editing && <button type="button" className="opportunity-cancel" aria-label="Cancel opportunity editing" onClick={(event) => { event.stopPropagation(); cancelEditing(); }}><X size={14}/><span>Cancel</span></button>}

@@ -72,7 +72,8 @@ type BusinessCaseStudyRecord = {
   outcome: string;
   evidenceUrl: string;
   tags: string[];
-  status: "Draft" | "Ready for website";
+  studyType: "Success story" | "Business case" | "Opportunity assessment" | "Strategic study";
+  status: "Draft" | "Validated" | "Published";
 };
 type ImportedAttendee = { name: string; role: string; company: string; linkedin: string; email: string; sourceRow: Record<string, string> };
 type MappedField = "name" | "firstName" | "lastName" | "linkedin" | "email" | "phone" | "company" | "role";
@@ -158,6 +159,7 @@ const intelligenceWorkspaces: Record<"market" | "competitors" | "marketing" | "p
 const nav = [
   { id: "overview" as View, path: "/", label: "Overview", sidebarLabel: "Overview", icon: LayoutGrid },
   { id: "capabilities" as View, path: "/capabilities", label: "Capabilities", sidebarLabel: "Capabilities", icon: Sparkles },
+  { id: "caseStudies" as View, path: "/business-case-studies", label: "Business case studies", sidebarLabel: "Business case studies", icon: FileText },
   { id: "accounts" as View, path: "/accounts", label: "Accounts", sidebarLabel: "Accounts", icon: Building2 },
   { id: "events" as View, path: "/events", label: "Events", sidebarLabel: "Events", icon: CalendarDays },
   { id: "leads" as View, path: "/leads", label: "Leads", sidebarLabel: "Leads", icon: Users },
@@ -166,7 +168,6 @@ const nav = [
   { id: "marketing" as View, path: "/marketing-intelligence", label: "Marketing intelligence", sidebarLabel: "Marketing", icon: CircleDollarSign },
   { id: "partners" as View, path: "/strategic-partners", label: "Strategic partners", sidebarLabel: "Strategic partners", icon: Network },
   { id: "businessPartners" as View, path: "/business-partners", label: "Business partners", sidebarLabel: "Business partners", icon: Handshake },
-  { id: "caseStudies" as View, path: "/business-case-studies", label: "Business case studies", sidebarLabel: "Business case studies", icon: FileText },
   { id: "executive" as View, path: "/executive-intelligence", label: "Executive intelligence", sidebarLabel: "Executive", icon: FileText },
   { id: "pipeline" as View, path: "/pipeline", label: "Pipeline", sidebarLabel: "Pipeline", icon: Target },
   { id: "kanban" as View, path: "/kanban", label: "Kanban", sidebarLabel: "Kanban", icon: LayoutGrid },
@@ -311,7 +312,11 @@ export default function App({ email = "" }: { email?: string }) {
       }
       if (!leadResult.error && leadResult.data) setLeadRecords(leadResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), role: String(row.role || ""), company: String(row.company || ""), source: row.source as LeadSource, origin: String(row.origin || ""), score: Number(row.score) || 0, reason: String(row.reason || ""), stage: row.stage as LeadStage, owner: String(row.owner || "—") })));
       if (!partnerResult.error && partnerResult.data) setBusinessPartnerRecords(partnerResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), company: String(row.company || ""), role: String(row.role || ""), origin: String(row.origin || ""), linkedin: String(row.linkedin_url || ""), email: String(row.email || ""), phone: String(row.phone || ""), relationship: String(row.relationship || ""), owner: String(row.owner || ""), notes: String(row.notes || ""), accountLinks: Array.isArray(row.account_links) ? row.account_links : [] })));
-      if (!caseStudyResult.error && caseStudyResult.data) setBusinessCaseStudies(caseStudyResult.data.map((row: Record<string, any>) => ({ id: String(row.id), title: String(row.title), client: String(row.client || ""), accountId: String(row.account_id || ""), summary: String(row.summary || ""), challenge: String(row.challenge || ""), solution: String(row.solution || ""), outcome: String(row.outcome || ""), evidenceUrl: String(row.evidence_url || ""), tags: Array.isArray(row.tags) ? row.tags.map(String) : [], status: row.status === "Ready for website" ? "Ready for website" : "Draft" })));
+      if (!caseStudyResult.error && caseStudyResult.data) setBusinessCaseStudies(caseStudyResult.data.map((row: Record<string, any>) => ({
+        id: String(row.id), title: String(row.title), client: String(row.client || ""), accountId: String(row.account_id || ""), summary: String(row.summary || ""), challenge: String(row.challenge || ""), solution: String(row.solution || ""), outcome: String(row.outcome || ""), evidenceUrl: String(row.evidence_url || ""), tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+        studyType: (["Success story", "Business case", "Opportunity assessment", "Strategic study"].includes(row.study_type) ? row.study_type : "Success story") as BusinessCaseStudyRecord["studyType"],
+        status: (["Draft", "Validated", "Published"].includes(row.status) ? row.status : row.status === "Ready for website" ? "Validated" : "Draft") as BusinessCaseStudyRecord["status"],
+      })));
     });
     return () => { activeRequest = false; };
   }, []);
@@ -394,7 +399,7 @@ export default function App({ email = "" }: { email?: string }) {
   };
   const saveCaseStudies = (next: BusinessCaseStudyRecord[]) => {
     setBusinessCaseStudies(next);
-    void db().from("business_case_studies").upsert(next.map((study) => ({ id: study.id, title: study.title, client: study.client, account_id: study.accountId, summary: study.summary, challenge: study.challenge, solution: study.solution, outcome: study.outcome, evidence_url: study.evidenceUrl, tags: study.tags, status: study.status })));
+    void db().from("business_case_studies").upsert(next.map((study) => ({ id: study.id, title: study.title, client: study.client, account_id: study.accountId, summary: study.summary, challenge: study.challenge, solution: study.solution, outcome: study.outcome, evidence_url: study.evidenceUrl, tags: study.tags, study_type: study.studyType, status: study.status })));
   };
   const addManualAccount = (account: Account) => {
     const nextAccounts = [account, ...accountRecords];
@@ -505,7 +510,7 @@ export default function App({ email = "" }: { email?: string }) {
         {view === "competitors" && <CompetitorAnalysis competitors={competitorRecords} onChange={saveCompetitors} notify={notify}/>}
         {view === "capabilities" && <Capabilities active={active} capabilities={capabilities} selected={selected} setSelected={setSelected}/>}
         {view === "accounts" && (selectedAccount && accountRecords.some((account) => account.id === selectedAccount)
-          ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount] ?? { leads: [], events: [], contacts: [] }} ownerOptions={ownerOptions} actorEmail={email} kanbanCards={kanbanCards.filter(card => kanbanBoardAccounts.some(link => link.board_id === card.board_id && link.account_id === accountRecords.find(account => account.id === selectedAccount)?.databaseId)).map(card => ({ ...card, boardName: kanbanBoards.find(board => board.id === card.board_id)?.name || "Board", columnName: kanbanColumns.find(column => column.id === card.column_id)?.name || "Status" }))} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
+          ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount] ?? { leads: [], events: [], contacts: [] }} linkedStudies={businessCaseStudies.filter((study) => study.accountId === selectedAccount)} ownerOptions={ownerOptions} actorEmail={email} kanbanCards={kanbanCards.filter(card => kanbanBoardAccounts.some(link => link.board_id === card.board_id && link.account_id === accountRecords.find(account => account.id === selectedAccount)?.databaseId)).map(card => ({ ...card, boardName: kanbanBoards.find(board => board.id === card.board_id)?.name || "Board", columnName: kanbanColumns.find(column => column.id === card.column_id)?.name || "Status" }))} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
           : <Accounts query={query} setQuery={setQuery} accounts={filteredAccounts} allAccounts={accountRecords} openAccount={(id) => navigate("accounts", id)} onAdd={addManualAccount} createIntent={createIntent}/>)}
         {view === "events" && <Events events={eventRecords} selectedEventId={selectedEvent} onOpenEvent={openEvent} onBack={() => navigate("events")} onChange={saveEvents} onAddLead={addEventLead} onAddAccount={addEventAccount} notify={notify}/>}
         {view === "leads" && <Leads leads={leadRecords} onChange={saveLeads} notify={notify} createIntent={createIntent}/>}
@@ -1130,7 +1135,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   </div>;
 }
 
-function AccountDetail({ account, intel, ownerOptions, kanbanCards, actorEmail, onSave, onBack, notify }: { account: Account; intel: AccountIntel; ownerOptions: OwnerOption[]; kanbanCards: (KanbanCard & { boardName: string; columnName: string })[]; actorEmail: string; onSave: (account: Account, intel: AccountIntel) => void; onBack: () => void; notify: (message: string) => void }) {
+function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCards, actorEmail, onSave, onBack, notify }: { account: Account; intel: AccountIntel; linkedStudies: BusinessCaseStudyRecord[]; ownerOptions: OwnerOption[]; kanbanCards: (KanbanCard & { boardName: string; columnName: string })[]; actorEmail: string; onSave: (account: Account, intel: AccountIntel) => void; onBack: () => void; notify: (message: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(account);
   const [draftIntel, setDraftIntel] = useState(intel);
@@ -1196,14 +1201,21 @@ function AccountDetail({ account, intel, ownerOptions, kanbanCards, actorEmail, 
         {editing ? <textarea className="inline-edit textarea" aria-label="Evidence ready" value={evidence.join("\n")} onChange={(event) => patchAccount({ evidence: event.target.value.split("\n").filter(Boolean) })}/> : evidence.length ? <ul>{evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <div className="data-empty">No evidence added.</div>}
       </aside>
     </div>
-    <section className="surface case-studies-section editable-block" onClick={beginEditing}>
-      <div className="section-head"><div><h2>Relevant case studies</h2><p>Delivery evidence selected for {draft.name}</p></div><span className="case-count">{draft.caseStudies.length} ready to use</span></div>
-      {draft.caseStudies.length ? <div className="case-study-grid">{draft.caseStudies.map((study, index) => <article className="case-study-card" key={index}>
+    <section className="surface case-studies-section">
+      <div className="section-head"><div><h2>Company studies</h2><p>Assessments, business cases, strategic studies, and success stories linked to {draft.name}.</p></div><span className="case-count">{linkedStudies.length + draft.caseStudies.length} linked</span></div>
+      {linkedStudies.length > 0 && <div className="case-study-grid account-linked-studies">{linkedStudies.map((study) => <article className="case-study-card" key={study.id}>
+        <div className="case-study-top"><span><FileText size={16}/>{study.studyType}</span><em className={`study-status ${study.status.toLowerCase()}`}>{study.status}</em></div>
+        <div><small>{study.client || draft.name}</small><h3>{study.title}</h3><p>{study.summary}</p></div>
+        {study.outcome && <div className="case-study-outcome"><span>{study.studyType === "Success story" ? "Outcome" : "Expected impact"}</span><strong>{study.outcome}</strong></div>}
+        <div className="fit-tags">{study.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
+      </article>)}</div>}
+      {draft.caseStudies.length ? <div className="case-study-grid legacy-account-studies" onClick={beginEditing}>{draft.caseStudies.map((study, index) => <article className="case-study-card" key={index}>
         <div className="case-study-top"><span><FileText size={16}/><EditField editing={editing} value={study.evidence} label={`Case study ${index + 1} evidence`} onChange={(evidence) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, evidence } : item) })}/></span>{!editing && <Pencil size={15}/>}</div>
         <div><small><EditField editing={editing} value={study.client} label={`Case study ${index + 1} client`} onChange={(client) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, client } : item) })}/></small><h3><EditField editing={editing} value={study.title} label={`Case study ${index + 1} title`} onChange={(title) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, title } : item) })}/></h3><p><EditField editing={editing} multiline value={study.summary} label={`Case study ${index + 1} summary`} onChange={(summary) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, summary } : item) })}/></p></div>
         <div className="case-study-outcome"><span>Proven outcome</span><strong><EditField editing={editing} value={study.outcome} label={`Case study ${index + 1} outcome`} onChange={(outcome) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, outcome } : item) })}/></strong></div>
         {editing ? <input className="inline-edit" aria-label={`Case study ${index + 1} tags`} value={study.tags.join(", ")} onChange={(event) => patchAccount({ caseStudies: draft.caseStudies.map((item, itemIndex) => itemIndex === index ? { ...item, tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) } : item) })}/> : <div className="fit-tags">{study.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
-      </article>)}</div> : <div className="data-empty">No case studies added.</div>}
+      </article>)}</div> : null}
+      {!linkedStudies.length && !draft.caseStudies.length && <div className="data-empty">No studies are linked to this company yet.</div>}
     </section>
     <div className="account-intel-grid">
       <section className="surface leads-section editable-block" onClick={beginEditing}>
@@ -1557,7 +1569,14 @@ function BusinessPartners({ partners, accounts, intel, onChange, openAccount, no
   </div>;
 }
 
-const emptyBusinessCaseStudy = (): BusinessCaseStudyRecord => ({ id: "", title: "", client: "", accountId: "", summary: "", challenge: "", solution: "", outcome: "", evidenceUrl: "", tags: [], status: "Draft" });
+const caseStudyTypes: { id: BusinessCaseStudyRecord["studyType"]; title: string; description: string; empty: string }[] = [
+  { id: "Success story", title: "Success stories", description: "What QuickSort delivered, the result achieved, and the proof behind it.", empty: "Add a completed engagement once its outcome can be documented." },
+  { id: "Business case", title: "Business cases", description: "The investment rationale: costs, projected impact, ROI, and decision assumptions.", empty: "Build the first investment case when an opportunity needs commercial justification." },
+  { id: "Opportunity assessment", title: "Opportunity assessments", description: "Prospective client research covering pain points, AI opportunities, and possible next steps.", empty: "Add an assessment when account research reveals a credible problem to solve." },
+  { id: "Strategic study", title: "Strategic studies", description: "Deeper industry, operating-model, or transformation analysis for long-term decisions.", empty: "Create a strategic study when the question extends beyond a single opportunity." },
+];
+
+const emptyBusinessCaseStudy = (studyType: BusinessCaseStudyRecord["studyType"] = "Success story"): BusinessCaseStudyRecord => ({ id: "", title: "", client: "", accountId: "", summary: "", challenge: "", solution: "", outcome: "", evidenceUrl: "", tags: [], studyType, status: "Draft" });
 
 function BusinessCaseStudies({ studies, accounts, onChange, notify }: {
   studies: BusinessCaseStudyRecord[];
@@ -1566,6 +1585,7 @@ function BusinessCaseStudies({ studies, accounts, onChange, notify }: {
   notify: (message: string) => void;
 }) {
   const [editing, setEditing] = useState<BusinessCaseStudyRecord | null>(null);
+  const startNew = (studyType: BusinessCaseStudyRecord["studyType"] = "Success story") => setEditing(emptyBusinessCaseStudy(studyType));
   const patch = <K extends keyof BusinessCaseStudyRecord>(field: K, value: BusinessCaseStudyRecord[K]) => setEditing((current) => current ? { ...current, [field]: value } : current);
   const save = (event: React.FormEvent) => {
     event.preventDefault();
@@ -1577,14 +1597,16 @@ function BusinessCaseStudies({ studies, accounts, onChange, notify }: {
     notify(editing.id ? "Case study updated" : "Case study saved");
   };
   return <div className="page business-case-studies-page">
-    <PageIntro title="Business case studies" text="Write and maintain delivery stories in one database so approved case studies can be reused for the QuickSort website." action={<button className="primary" onClick={() => setEditing(emptyBusinessCaseStudy())}><Plus size={16}/> Add case study</button>}/>
+    <PageIntro title="Business case studies" text="Build a living knowledge base for delivery evidence, investment decisions, account opportunities, and strategic research." action={<button className="primary" onClick={() => startNew()}><Plus size={16}/> Add study</button>}/>
+    <div className="case-study-type-index">{caseStudyTypes.map((type) => <button key={type.id} onClick={() => startNew(type.id)}><span>{studies.filter((study) => study.studyType === type.id).length}</span><strong>{type.title}</strong><small>{type.description}</small><Plus size={14}/></button>)}</div>
     {editing && <form className="surface case-study-form" onSubmit={save}>
-      <div className="section-head"><div><h2>{editing.id ? "Edit case study" : "New business case study"}</h2><p>Capture the business problem, what QuickSort delivered, and the measurable result.</p></div><button type="button" className="icon-button" onClick={() => setEditing(null)} aria-label="Close case study form"><X size={17}/></button></div>
+      <div className="section-head"><div><h2>{editing.id ? "Edit study" : `New ${editing.studyType.toLowerCase()}`}</h2><p>Keep the study type and publication status separate so the knowledge base remains clear.</p></div><button type="button" className="icon-button" onClick={() => setEditing(null)} aria-label="Close case study form"><X size={17}/></button></div>
       <div className="case-study-form-grid">
         <label>Title<input required value={editing.title} onChange={(event) => patch("title", event.target.value)} placeholder="Clear result-led title"/></label>
         <label>Account<select value={editing.accountId} onChange={(event) => patch("accountId", event.target.value)}><option value="">No linked account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
         <label>Client name<input value={editing.client} onChange={(event) => patch("client", event.target.value)} placeholder="Client or organisation"/></label>
-        <label>Status<select value={editing.status} onChange={(event) => patch("status", event.target.value as BusinessCaseStudyRecord["status"])}><option>Draft</option><option>Ready for website</option></select></label>
+        <label>Study type<select value={editing.studyType} onChange={(event) => patch("studyType", event.target.value as BusinessCaseStudyRecord["studyType"])}>{caseStudyTypes.map((type) => <option key={type.id}>{type.id}</option>)}</select></label>
+        <label>Status<select value={editing.status} onChange={(event) => patch("status", event.target.value as BusinessCaseStudyRecord["status"])}><option>Draft</option><option>Validated</option><option>Published</option></select></label>
         <label className="case-study-wide">Summary<textarea required value={editing.summary} onChange={(event) => patch("summary", event.target.value)} placeholder="A concise overview of the work and its value."/></label>
         <label className="case-study-wide">Business challenge<textarea value={editing.challenge} onChange={(event) => patch("challenge", event.target.value)} placeholder="What business problem needed to be solved?"/></label>
         <label className="case-study-wide">What QuickSort delivered<textarea value={editing.solution} onChange={(event) => patch("solution", event.target.value)} placeholder="Describe the solution, delivery, and key decisions."/></label>
@@ -1592,14 +1614,20 @@ function BusinessCaseStudies({ studies, accounts, onChange, notify }: {
         <label>Evidence or attachment link<input type="url" value={editing.evidenceUrl} onChange={(event) => patch("evidenceUrl", event.target.value)} placeholder="https://…"/></label>
         <label>Tags<input value={editing.tags.join(", ")} onChange={(event) => patch("tags", event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean))} placeholder="Voice AI, RAG, AWS"/></label>
       </div>
-      <div className="actions"><button type="button" className="secondary" onClick={() => setEditing(null)}>Cancel</button><button className="primary"><Save size={15}/> Save case study</button></div>
+      <div className="actions"><button type="button" className="secondary" onClick={() => setEditing(null)}>Cancel</button><button className="primary"><Save size={15}/> Save study</button></div>
     </form>}
-    {studies.length ? <div className="business-case-study-grid">{studies.map((study) => <article className="surface business-case-study-card" key={study.id}>
-      <div className="case-study-card-head"><span>{study.status}</span><button className="secondary small" onClick={() => setEditing(study)}><Pencil size={13}/> Edit</button></div>
-      <small>{study.client || accounts.find((account) => account.id === study.accountId)?.name || "Independent case study"}</small><h2>{study.title}</h2><p>{study.summary}</p>
-      {study.outcome && <div><strong>Outcome</strong><p>{study.outcome}</p></div>}
-      <footer><div className="fit-tags">{study.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{study.evidenceUrl && <a href={study.evidenceUrl} target="_blank" rel="noreferrer">Open evidence <ArrowUpRight size={13}/></a>}</footer>
-    </article>)}</div> : <section className="surface empty-workspace"><FileText size={25}/><h2>No business case studies yet</h2><p>Add the first real delivery story when it is ready to document.</p><button className="primary" onClick={() => setEditing(emptyBusinessCaseStudy())}><Plus size={15}/> Add first case study</button></section>}
+    <div className="case-study-type-sections">{caseStudyTypes.map((type) => {
+      const typeStudies = studies.filter((study) => study.studyType === type.id);
+      return <section className="case-study-type-section" key={type.id}>
+        <header><div><h2>{type.title}</h2><p>{type.description}</p></div><div><span>{typeStudies.length}</span><button className="secondary small" onClick={() => startNew(type.id)}><Plus size={13}/> Add</button></div></header>
+        {typeStudies.length ? <div className="business-case-study-grid">{typeStudies.map((study) => <article className="surface business-case-study-card" key={study.id}>
+          <div className="case-study-card-head"><span className={`study-status ${study.status.toLowerCase()}`}>{study.status}</span><button className="secondary small" onClick={() => setEditing(study)}><Pencil size={13}/> Edit</button></div>
+          <small>{study.client || accounts.find((account) => account.id === study.accountId)?.name || "Independent study"}</small><h2>{study.title}</h2><p>{study.summary}</p>
+          {study.outcome && <div><strong>{study.studyType === "Success story" ? "Outcome" : "Impact"}</strong><p>{study.outcome}</p></div>}
+          <footer><div className="fit-tags">{study.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{study.evidenceUrl && <a href={study.evidenceUrl} target="_blank" rel="noreferrer">Open evidence <ArrowUpRight size={13}/></a>}</footer>
+        </article>)}</div> : <div className="case-study-type-empty"><p>{type.empty}</p><button onClick={() => startNew(type.id)}>Add {type.id.toLowerCase()}</button></div>}
+      </section>;
+    })}</div>
   </div>;
 }
 
@@ -1734,12 +1762,12 @@ function WorkspaceGuide({ go }: { go: (view: View) => void }) {
       { title: "Describe the relationship", detail: "State the partnership type, mutual value, current context, and agreed next step." },
       { title: "Keep it current", detail: "Edit the record after introductions, meetings, or ownership changes." },
     ], result: "A usable partner directory with clear origins, contact routes, and ownership.", icon: Handshake },
-    { view: "caseStudies", title: "Business case studies", purpose: "Maintain reusable evidence of what QuickSort delivered and the business result.", when: "Use this after a real engagement has enough approved information to document.", steps: [
-      { title: "Link the account", detail: "Select the client account when it exists, or keep the case study independent." },
-      { title: "Write the business story", detail: "Document the challenge, the delivery approach, and the outcome in plain language." },
-      { title: "Attach evidence", detail: "Add an approved supporting link and the capability tags needed for discovery." },
-      { title: "Mark it ready", detail: "Keep unfinished records as Draft; use Ready for website only after the content is approved." },
-    ], result: "A structured case study that the website can read from the shared database.", icon: FileText },
+    { view: "caseStudies", title: "Business case studies", purpose: "Maintain the commercial knowledge attached to every account, from early research through proven delivery.", when: "Use this whenever the team creates an opportunity assessment, investment case, strategic study, or success story.", steps: [
+      { title: "Choose the study type", detail: "Use Success story for delivered results, Business case for ROI and investment logic, Opportunity assessment for prospective account research, or Strategic study for deeper transformation analysis." },
+      { title: "Link the account", detail: "Select the company so every related assessment, proposal, study, and outcome appears on its account page." },
+      { title: "Capture the reasoning", detail: "Document the challenge, evidence, proposed or delivered approach, costs, impact, and outcome that matter for this study type." },
+      { title: "Manage status separately", detail: "Keep work in Draft, move reviewed material to Validated, and use Published only when it is approved for wider reuse." },
+    ], result: "A living account-linked knowledge base that supports business development and future website publishing.", icon: FileText },
     { view: "executive", title: "Executive", purpose: "Give leadership a concise view of movement, risk, and decisions.", when: "Use this for the weekly GTM review, not as a second place to edit source records.", steps: [
       { title: "Review the live picture", detail: "Read changes across Accounts, Leads, Pipeline, Events, Market, and Competitors." },
       { title: "Confirm material signals", detail: "Remove noise and keep only evidence that could change a decision." },

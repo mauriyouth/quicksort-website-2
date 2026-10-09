@@ -15,6 +15,15 @@ type Capability = {
   technologies: string[]; proof: string; experts: { initials: string; name: string; role: string }[];
 };
 
+const accountStages = ["New", "Ongoing", "Discovery", "Ended"] as const;
+type AccountStage = typeof accountStages[number];
+const normalizeAccountStage = (stage: unknown): AccountStage => {
+  if (stage === "Discovery" || stage === "New" || stage === "Ongoing" || stage === "Ended") return stage;
+  if (stage === "Won" || stage === "Lost") return "Ended";
+  if (stage === "Qualified" || stage === "Proposal" || stage === "Contacted" || stage === "Converted") return "Ongoing";
+  return "New";
+};
+
 const emptyCapabilities: Capability[] = [
   { id: "ai_for_business", name: "AI for Business", short: "AI", color: "blue", people: 0, projects: 0, technologies: [], proof: "No approved candidate evidence yet", experts: [] },
   { id: "infrastructure_for_ai", name: "Infrastructure for AI", short: "Infra", color: "green", people: 0, projects: 0, technologies: [], proof: "No approved candidate evidence yet", experts: [] },
@@ -22,24 +31,24 @@ const emptyCapabilities: Capability[] = [
   { id: "voice_ai", name: "Voice AI", short: "Voice", color: "violet", people: 0, projects: 0, technologies: [], proof: "No approved candidate evidence yet", experts: [] },
 ];
 
-const accounts = [
+const accounts: Account[] = [
   {
-    id: "bnp-paribas", name: "BNP Paribas", sector: "Financial services", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
+    id: "bnp-paribas", name: "BNP Paribas", sector: "Financial services", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "New", owner: "—", fit: [], caseStudies: [],
   },
   {
-    id: "axa", name: "AXA", sector: "Insurance", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
+    id: "axa", name: "AXA", sector: "Insurance", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "New", owner: "—", fit: [], caseStudies: [],
   },
   {
-    id: "kering", name: "Kering", sector: "Luxury", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
+    id: "kering", name: "Kering", sector: "Luxury", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "New", owner: "—", fit: [], caseStudies: [],
   },
   {
-    id: "foundever", name: "Foundever", sector: "Customer experience", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
+    id: "foundever", name: "Foundever", sector: "Customer experience", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "New", owner: "—", fit: [], caseStudies: [],
   },
   {
-    id: "cdg-capital-morocco", name: "CDG Capital Morocco", sector: "Financial services", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
+    id: "cdg-capital-morocco", name: "CDG Capital Morocco", sector: "Financial services", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "New", owner: "—", fit: [], caseStudies: [],
   },
   {
-    id: "najm", name: "Najm", sector: "Not set", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "Not set", owner: "—", fit: [], caseStudies: [],
+    id: "najm", name: "Najm", sector: "Not set", contacts: 0, signal: "Not set", opportunity: "Not set", value: "—", stage: "New", owner: "—", fit: [], caseStudies: [],
   },
 ];
 
@@ -159,7 +168,7 @@ const intelligenceWorkspaces: Record<"market" | "competitors" | "marketing" | "p
 const nav = [
   { id: "overview" as View, path: "/", label: "Overview", sidebarLabel: "Overview", icon: LayoutGrid },
   { id: "capabilities" as View, path: "/capabilities", label: "Capabilities", sidebarLabel: "Capabilities", icon: Sparkles },
-  { id: "caseStudies" as View, path: "/business-case-studies", label: "Business case studies", sidebarLabel: "Business case studies", icon: FileText },
+  { id: "caseStudies" as View, path: "/business-case-studies", label: "Case studies", sidebarLabel: "Case studies", icon: FileText },
   { id: "accounts" as View, path: "/accounts", label: "Accounts", sidebarLabel: "Accounts", icon: Building2 },
   { id: "events" as View, path: "/events", label: "Events", sidebarLabel: "Events", icon: CalendarDays },
   { id: "leads" as View, path: "/leads", label: "Leads", sidebarLabel: "Leads", icon: Users },
@@ -213,7 +222,7 @@ export default function App({ email = "" }: { email?: string }) {
   const [accountRecords, setAccountRecords] = useState<Account[]>(() => {
     if (!storedWorkspace?.accounts) return accounts;
     const savedIds = new Set(storedWorkspace.accounts.map((account) => account.id));
-    return [...storedWorkspace.accounts, ...accounts.filter((account) => !savedIds.has(account.id))];
+    return [...storedWorkspace.accounts.map((account) => ({ ...account, stage: normalizeAccountStage(account.stage) })), ...accounts.filter((account) => !savedIds.has(account.id))];
   });
   const [intelRecords, setIntelRecords] = useState<Record<string, AccountIntel>>({ ...emptyAccountIntel, ...storedWorkspace?.intel });
   const [leadRecords, setLeadRecords] = useState<LeadRecord[]>(() => {
@@ -295,7 +304,7 @@ export default function App({ email = "" }: { email?: string }) {
       if (!accountResult.error && accountResult.data) {
         setAccountRecords(accountResult.data.map((row: Record<string, any>) => ({
           databaseId: String(row.id), id: String(row.slug), name: String(row.name), sector: String(row.sector || "Not set"), contacts: Number(row.contacts) || 0,
-          signal: String(row.signal || "Not set"), opportunity: String(row.opportunity || "Not set"), value: String(row.estimated_value || "—"), stage: String(row.stage || "Not set"), owner: String(row.owner || "—"),
+          signal: String(row.signal || "Not set"), opportunity: String(row.opportunity || "Not set"), value: String(row.estimated_value || "—"), stage: normalizeAccountStage(row.stage), owner: String(row.owner || "—"),
           fit: Array.isArray(row.fit) ? row.fit.map(String) : [], caseStudies: Array.isArray(row.case_studies) ? row.case_studies : [], opportunitySummary: String(row.opportunity_summary || ""), fitScore: String(row.fit_score || "—"), evidence: Array.isArray(row.evidence) ? row.evidence.map(String) : [],
         })));
         setIntelRecords(Object.fromEntries(accountResult.data.map((row: Record<string, any>) => {
@@ -667,7 +676,7 @@ function Capabilities({ active, capabilities, selected, setSelected }: { active:
 }
 
 type CaseStudy = { title: string; client: string; summary: string; outcome: string; evidence: string; tags: string[] };
-type Account = { databaseId?: string; id: string; name: string; sector: string; contacts: number; signal: string; opportunity: string; value: string; stage: string; owner: string; fit: string[]; caseStudies: CaseStudy[]; opportunitySummary?: string; fitScore?: string; evidence?: string[] };
+type Account = { databaseId?: string; id: string; name: string; sector: string; contacts: number; signal: string; opportunity: string; value: string; stage: AccountStage; owner: string; fit: string[]; caseStudies: CaseStudy[]; opportunitySummary?: string; fitScore?: string; evidence?: string[] };
 type Lead = { name: string; role: string; company: string; status: string; nextStep: string; owner: string };
 type AccountEvent = { date: string; month: string; title: string; type: string; detail: string };
 type RelationshipComment = { id: string; text: string; author: string; createdAt: string };
@@ -698,13 +707,13 @@ function Accounts({ query, setQuery, accounts, allAccounts, openAccount, onAdd, 
     const name = String(values.get("name") || "").trim();
     let id = accountSlug(name) || `account-${Date.now()}`;
     if (allAccounts.some((account) => account.id === id)) id = `${id}-${Date.now()}`;
-    onAdd({ databaseId: crypto.randomUUID(), id, name, sector: String(values.get("sector") || "Not set").trim() || "Not set", contacts: 0, signal: String(values.get("signal") || "Not set"), opportunity: String(values.get("opportunity") || "Not set").trim() || "Not set", value: String(values.get("value") || "—").trim() || "—", stage: String(values.get("stage") || "New"), owner: String(values.get("owner") || "—").trim() || "—", fit: [], caseStudies: [], evidence: [] });
+    onAdd({ databaseId: crypto.randomUUID(), id, name, sector: String(values.get("sector") || "Not set").trim() || "Not set", contacts: 0, signal: String(values.get("signal") || "Not set"), opportunity: String(values.get("opportunity") || "Not set").trim() || "Not set", value: String(values.get("value") || "—").trim() || "—", stage: normalizeAccountStage(values.get("stage")), owner: String(values.get("owner") || "—").trim() || "—", fit: [], caseStudies: [], evidence: [] });
     setAdding(false);
   };
   return <div className="page"><PageIntro title="Account intelligence" text="See who matters, who knows them and where the opportunity sits." action={<button className="primary" onClick={() => setAdding(true)}><Plus size={16}/> Add account</button>}/>
-    {adding && <form className="surface quick-create-form" onSubmit={addAccount}><div className="section-head"><div><h2>Add account</h2><p>Create the company record now. You can complete its intelligence page next.</p></div><button type="button" className="icon-button" onClick={() => setAdding(false)} aria-label="Close account form"><X size={17}/></button></div><div className="quick-create-grid"><label>Company name<input name="name" required autoFocus placeholder="Company name"/></label><label>Sector<input name="sector" placeholder="Industry or sector"/></label><label>Relationship<select name="signal"><option>Not set</option><option>Warm</option><option>Strong</option><option>Cold</option></select></label><label>Opportunity<input name="opportunity" placeholder="Opportunity or need"/></label><label>Estimated value<input name="value" placeholder="€—"/></label><label>Stage<select name="stage"><option>New</option><option>Discovery</option><option>Qualified</option><option>Proposal</option><option>Won</option></select></label><label>QuickSort owner<input name="owner" placeholder="Owner"/></label></div><div className="actions"><button type="button" className="secondary" onClick={() => setAdding(false)}>Cancel</button><button className="primary"><Save size={15}/> Create account</button></div></form>}
+    {adding && <form className="surface quick-create-form" onSubmit={addAccount}><div className="section-head"><div><h2>Add account</h2><p>Create the company record now. You can complete its intelligence page next.</p></div><button type="button" className="icon-button" onClick={() => setAdding(false)} aria-label="Close account form"><X size={17}/></button></div><div className="quick-create-grid"><label>Company name<input name="name" required autoFocus placeholder="Company name"/></label><label>Sector<input name="sector" placeholder="Industry or sector"/></label><label>Relationship<select name="signal"><option>Not set</option><option>Warm</option><option>Strong</option><option>Cold</option></select></label><label>Opportunity<input name="opportunity" placeholder="Opportunity or need"/></label><label>Estimated value<input name="value" placeholder="€—"/></label><label>Opportunity stage<select name="stage">{accountStages.map((stage) => <option key={stage}>{stage}</option>)}</select></label><label>QuickSort owner<input name="owner" placeholder="Owner"/></label></div><div className="actions"><button type="button" className="secondary" onClick={() => setAdding(false)}>Cancel</button><button className="primary"><Save size={15}/> Create account</button></div></form>}
     <div className="toolbar"><label><Search size={17}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search companies or opportunities"/></label><button className="secondary"><Filter size={16}/> Filters</button><span>{accounts.length} accounts</span></div>
-    <div className="account-list">{accounts.map((account) => <a className="account-card" key={account.id} href={`/accounts/${encodeURIComponent(account.id)}`} onClick={(event) => { event.preventDefault(); openAccount(account.id); }} aria-label={`Open ${account.name} account`}><div className="account-monogram">{account.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div><div className="account-title"><h2>{account.name}</h2><p>{account.sector} · {account.contacts} mapped contacts</p></div><div className={`signal ${account.signal.toLowerCase()}`}><i/>{account.signal} relationship</div><div className="account-opportunity"><span>{account.opportunity}</span><strong>{account.value}</strong></div><div className="fit-tags">{account.fit.map((f) => <span key={f}>{f}</span>)}</div><div className="account-owner"><span>{account.owner}</span><div><small>Owner</small><strong>{account.stage}</strong></div></div><span className="open-card" aria-hidden="true"><ArrowUpRight size={18}/></span></a>)}</div>
+    <div className="account-list">{accounts.map((account) => <a className="account-card" key={account.id} href={`/accounts/${encodeURIComponent(account.id)}`} onClick={(event) => { event.preventDefault(); openAccount(account.id); }} aria-label={`Open ${account.name} account`}><div className="account-monogram">{account.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div><div className="account-title"><h2>{account.name}</h2><p>{account.sector} · {account.contacts} mapped contacts</p></div><div className={`signal ${account.signal.toLowerCase()}`}><i/>{account.signal} relationship</div><div className="account-opportunity"><small>Account opportunity</small><span>{account.opportunity}</span><strong>{account.value}</strong></div><div className="fit-tags">{account.fit.map((f) => <span key={f}>{f}</span>)}</div><div className="account-owner"><span>{account.owner === "—" ? "—" : account.owner.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><div><small>QuickSort owner</small><b>{hasValue(account.owner) ? account.owner : "Not assigned"}</b><strong>{account.stage} · opportunity stage</strong></div></div><span className="open-card" aria-hidden="true"><ArrowUpRight size={18}/></span></a>)}</div>
   </div>;
 }
 
@@ -1182,7 +1191,7 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
     <section className="account-brief editable-block" onClick={beginEditing}>
       <div><span>Active opportunity</span><strong><EditField editing={editing} value={draft.opportunity} label="Active opportunity" onChange={(opportunity) => patchAccount({ opportunity })}/></strong></div>
       <div><span>Estimated value</span><strong><EditField editing={editing} value={draft.value} label="Estimated value" onChange={(value) => patchAccount({ value })}/></strong></div>
-      <div><span>Current stage</span><strong>{editing ? <select className="inline-edit" aria-label="Current stage" value={draft.stage} onChange={(event) => patchAccount({ stage: event.target.value })}><option>Not set</option><option>New</option><option>Discovery</option><option>Qualified</option><option>Proposal</option><option>Won</option><option>Lost</option></select> : <span className="editable-value">{hasValue(draft.stage) ? draft.stage : "Choose stage"}</span>}</strong></div>
+      <div><span>Opportunity stage</span><strong>{editing ? <select className="inline-edit" aria-label="Opportunity stage" value={draft.stage} onChange={(event) => patchAccount({ stage: normalizeAccountStage(event.target.value) })}>{accountStages.map((stage) => <option key={stage}>{stage}</option>)}</select> : <span className="editable-value">{draft.stage}</span>}</strong></div>
       <div><span>QuickSort owner</span><strong>{editing ? <select className="inline-edit" aria-label="QuickSort owner" value={draft.owner} onChange={(event) => patchAccount({ owner: event.target.value })}><option value="—">Unassigned</option>{ownerOptions.map((owner) => <option key={owner.id} value={owner.name}>{owner.name}{owner.headline ? ` · ${owner.headline}` : ""}</option>)}</select> : <span className="editable-value">{hasValue(draft.owner) ? draft.owner : "Assign an owner"}</span>}</strong></div>
     </section>
     <div className="account-detail-grid">

@@ -329,3 +329,9 @@ main,.page,.surface,.event-workspace,.relationship-workspace,.relationship-layou
 .account-linked-studies+.legacy-account-studies{margin-top:12px;padding-top:12px;border-top:1px solid #303030}
 @media(max-width:1050px){.case-study-type-index{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.case-study-type-index{grid-template-columns:1fr}.case-study-type-index button{min-height:0}.case-study-type-section>header{align-items:flex-start;flex-direction:column}.case-study-type-empty{align-items:flex-start;flex-direction:column}}
+.account-opportunity{gap:2px}
+.account-opportunity small{font-size:9px;color:var(--muted)}
+.account-owner div{min-width:0;gap:1px}
+.account-owner b{overflow:hidden;color:#fafafa;text-overflow:ellipsis;white-space:nowrap;font-size:9px;font-weight:600}
+.account-owner strong{color:#a3a3a3;font-size:8px;font-weight:500}
+@media(min-width:1151px){.account-card{grid-template-columns:auto minmax(170px,1fr) 140px minmax(175px,1fr) 110px 165px auto}}

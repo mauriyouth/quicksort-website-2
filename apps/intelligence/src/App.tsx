@@ -910,9 +910,9 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
     const dy = (event.clientY - active.startY) / (active.kind === "pan" ? 1 : zoom);
     if (Math.abs(dx) + Math.abs(dy) > 3) active.moved = true;
     if (active.kind === "pan") setPan({ x: active.originX + dx, y: active.originY + dy });
-    if (active.kind === "contact") setLayoutContacts((current) => current.map((item) => item.id === active.id ? { ...item, x: Math.max(20, Math.min(860, active.originX + dx)), y: Math.max(150, Math.min(500, active.originY + dy)) } : item));
-    if (active.kind === "team") setLayoutTeams((current) => current.map((item) => item.id === active.id ? { ...item, x: Math.max(15, Math.min(1080 - item.width, active.originX + dx)), y: Math.max(145, Math.min(590 - item.height, active.originY + dy)) } : item));
-    if (active.kind === "node") setLayoutNodes((current) => current.map((item) => item.id === active.id ? { ...item, x: Math.max(15, Math.min(1080 - item.width, active.originX + dx)), y: Math.max(145, Math.min(590 - item.height, active.originY + dy)) } : item));
+    if (active.kind === "contact") setLayoutContacts((current) => current.map((item) => item.id === active.id ? { ...item, x: active.originX + dx, y: active.originY + dy } : item));
+    if (active.kind === "team") setLayoutTeams((current) => current.map((item) => item.id === active.id ? { ...item, x: active.originX + dx, y: active.originY + dy } : item));
+    if (active.kind === "node") setLayoutNodes((current) => current.map((item) => item.id === active.id ? { ...item, x: active.originX + dx, y: active.originY + dy } : item));
   };
   const endDrag = () => {
     const active = drag.current;

@@ -151,3 +151,69 @@ h1,h2,h3,p{margin-top:0}.page-intro h1{font-family:"Inter",sans-serif;font-size:
 .inspector-prompt{margin:0;padding:10px;background:#171717;color:#a3a3a3;border-left:2px solid #fafafa;font-size:8px;line-height:1.5}
 .relationship-toolbar button:disabled{opacity:.42;cursor:not-allowed}
 @media(max-width:700px){.relationship-toolbar>div:first-child{flex-wrap:wrap}.connection-handle{width:22px;height:22px;right:-11px}}
+
+/* Responsive canvas controls, compact hierarchy cards and overlay editor */
+html,body,#root{max-width:100%;overflow-x:hidden}
+main,.page,.surface,.event-workspace,.relationship-workspace,.relationship-layout{min-width:0}
+.relationship-toolbar{align-items:flex-start;flex-wrap:wrap}
+.relationship-toolbar>div:first-child{flex:1 1 520px;flex-wrap:wrap}
+.relationship-toolbar-actions{flex:0 1 auto;justify-content:flex-end;flex-wrap:wrap}
+.relationship-edit-controls{display:flex;padding:4px;background:#0a0a0a;border:1px solid #303030;border-radius:8px}
+.relationship-edit-controls button{width:30px;height:30px;display:grid;place-items:center;padding:0;background:transparent;color:#d4d4d4;border:0;border-radius:6px}
+.relationship-edit-controls button:hover:not(:disabled){background:#262626;color:#fff}
+.relationship-edit-controls .delete-control:hover:not(:disabled){background:#4b1717;color:#fecaca}
+.relationship-layout{position:relative;display:block}
+.relationship-layout>.relationship-canvas{width:100%;min-width:0}
+.relationship-canvas{background:#050505;background-image:none}
+.relationship-team{z-index:4!important;width:210px!important;height:96px!important;background:#141414;border:1px solid #525252;border-radius:10px;box-shadow:0 12px 32px #0008}
+.relationship-team>div{height:100%;align-items:flex-start;padding:15px 42px 12px 14px;border:0}
+.relationship-team>div>svg{margin-top:1px;flex:none}
+.relationship-team strong{max-width:98px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+.relationship-team>div>span{position:absolute;left:14px;bottom:14px;margin:0;color:#737373}
+.relationship-team>p{position:absolute;left:14px;right:14px;bottom:27px;overflow:hidden;margin:0;color:#a3a3a3;text-overflow:ellipsis;white-space:nowrap}
+.relationship-team .connection-handle{top:50%}
+.relationship-inspector{position:absolute;z-index:30;right:0;top:0;width:min(340px,calc(100% - 12px));height:620px;max-height:none;box-shadow:-24px 0 48px #000c;animation:relationship-inspector-in .2s ease-out}
+@keyframes relationship-inspector-in{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:translateX(0)}}
+.relationship-workspace:fullscreen{height:100vh;padding:18px;background:#000;overflow:hidden}
+.relationship-workspace:fullscreen .relationship-toolbar{flex:none}
+.relationship-workspace:fullscreen .relationship-layout{min-height:0}
+.relationship-workspace:fullscreen .relationship-canvas{height:calc(100vh - 92px)}
+.relationship-workspace:fullscreen .relationship-inspector{height:calc(100vh - 92px)}
+
+@media(min-width:801px) and (max-width:1100px){
+  .app-shell{grid-template-columns:76px minmax(0,1fr)}
+  .sidebar{padding-inline:18px}
+  .sidebar .brand{width:29px}
+  .sidebar .brand-word,.sidebar .portal-label,.sidebar .nav-label,.sidebar .sidebar-bottom>svg,.sidebar .sidebar-bottom>p,.sidebar .sidebar-bottom button>span:not(.profile-dot),.sidebar .sidebar-bottom button>svg{display:none}
+  .sidebar nav{margin-top:62px}
+  .sidebar nav :is(button,a){justify-content:center;padding-inline:10px}
+  .sidebar .sidebar-bottom{display:grid;place-items:center}
+  .sidebar .sidebar-bottom button{justify-content:center;padding:8px 0}
+  .sidebar .profile-dot{width:34px;height:34px}
+  .sidebar .sidebar-toggle{right:-31px}
+  .topbar{padding-inline:22px}
+  .page{padding-inline:22px}
+}
+
+@media(max-width:1000px){
+  .event-importer form>div{flex-wrap:wrap}
+  .event-importer form>div input{flex:1 1 320px}
+  .event-table-head{display:none}
+  .event-work-row{grid-template-columns:minmax(0,1fr) minmax(128px,auto);gap:10px;padding:15px 0}
+  .event-work-row>.event-number,.event-work-row>.event-qualified{display:none}
+  .event-work-row>.analysis-status{grid-column:1}
+  .event-work-row>.primary{grid-column:2;grid-row:1/3;max-width:165px;white-space:normal;text-align:center}
+  .event-identity,.event-identity>div{min-width:0}
+  .event-identity strong,.event-identity small,.event-identity em{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+
+@container (max-width:760px){
+  .relationship-toolbar-actions{width:100%;justify-content:space-between}
+  .relationship-inspector{width:min(340px,100%);height:540px;max-height:none}
+}
+
+@media(max-width:560px){
+  .event-work-row{grid-template-columns:1fr}
+  .event-work-row>.primary{grid-column:1;grid-row:auto;max-width:none;width:100%}
+  .relationship-edit-controls,.canvas-controls{max-width:100%}
+}

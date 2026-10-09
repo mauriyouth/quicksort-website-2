@@ -810,6 +810,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+  const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number } | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [comment, setComment] = useState("");
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -836,6 +837,19 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   useEffect(() => () => {
     if (autoPanFrameRef.current !== null) cancelAnimationFrame(autoPanFrameRef.current);
   }, []);
+  useEffect(() => {
+    if (!selectionMenu) return;
+    const closeMenu = () => setSelectionMenu(null);
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") closeMenu(); };
+    window.addEventListener("pointerdown", closeMenu);
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("scroll", closeMenu, true);
+    return () => {
+      window.removeEventListener("pointerdown", closeMenu);
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [selectionMenu]);
 
   const currentSnapshot = () => ({ contacts: layoutContacts, teams: layoutTeams, nodes: layoutNodes, connections, accountPosition: layoutAccount });
   const persist = (nextContacts = layoutContacts, nextTeams = layoutTeams, nextNodes = layoutNodes, nextConnections = connections, nextAccountPosition = layoutAccount, remember = true) => {
@@ -927,6 +941,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   }, [drawingEdge, connections, layoutContacts, layoutTeams, layoutNodes, pan.x, pan.y, zoom]);
   const startDrag = (event: React.PointerEvent, kind: "account" | "contact" | "team" | "node" | "pan", id: string, originX: number, originY: number) => {
     event.stopPropagation();
+    if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest("input, select, textarea, a")) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     latestPointerRef.current = { x: event.clientX, y: event.clientY };
@@ -1023,11 +1038,11 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   };
   const addTeam = () => {
     const members = layoutContacts.filter((contact) => contact.id && selectedContacts.includes(contact.id));
-    if (!members.length) return;
-    const averageX = members.reduce((total, contact) => total + (contact.x ?? 80) + 105, 0) / members.length;
-    const minY = Math.min(...members.map((contact) => contact.y ?? 220));
-    const x = Math.max(20, Math.min(870, averageX - 105));
-    const y = Math.max(145, minY - 130);
+    const bounds = canvasRef.current?.getBoundingClientRect();
+    const averageX = members.length ? members.reduce((total, contact) => total + (contact.x ?? 80) + 105, 0) / members.length : 0;
+    const minY = members.length ? Math.min(...members.map((contact) => contact.y ?? 220)) : 0;
+    const x = members.length ? averageX - 105 : bounds ? (bounds.width / 2 - pan.x) / zoom - 105 : 420;
+    const y = members.length ? minY - 130 : bounds ? (bounds.height / 2 - pan.y) / zoom - 48 : 220;
     const teamId = crypto.randomUUID();
     const memberIds = members.map((contact) => contact.id!);
     const nextTeam: RelationshipTeam = { id: teamId, name: "New team", memberIds, x, y, width: 210, height: 96 };
@@ -1042,6 +1057,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
     setSelectedContacts([]);
     setSelectedNode(`team:${teamId}`);
     setSelectedEdge(null);
+    setSelectionMenu(null);
     persist(nextContacts, nextTeams, layoutNodes, [...connections, ...membershipEdges]);
   };
   const addNode = (type: "department" | "note") => {
@@ -1084,6 +1100,36 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
       : connections.filter((edge) => !(edge.source === source && edge.target === target && edge.kind === "membership"));
     setLayoutTeams(nextTeams);
     persist(layoutContacts, nextTeams, layoutNodes, nextConnections);
+  };
+  const assignSelectedToDepartment = (department: RelationshipCanvasNode) => {
+    if (!selectedContacts.length) return;
+    const selectedIds = new Set(selectedContacts);
+    const departmentNodeIds = new Set(layoutNodes.filter((node) => node.type === "department").map((node) => `node:${node.id}`));
+    const nextContacts = layoutContacts.map((contact) => selectedIds.has(contact.id || "") ? { ...contact, department: department.title } : contact);
+    const retainedEdges = connections.filter((edge) => !(edge.kind === "membership" && departmentNodeIds.has(edge.source) && selectedIds.has(edge.target)));
+    const departmentEdges: RelationshipEdge[] = selectedContacts.map((contactId) => ({
+      id: crypto.randomUUID(),
+      source: `node:${department.id}`,
+      target: contactId,
+      label: "Department member",
+      strength: "Not assessed",
+      notes: "",
+      kind: "membership",
+    }));
+    setLayoutContacts(nextContacts);
+    setSelectedContacts([]);
+    setSelectedNode(`node:${department.id}`);
+    setSelectedEdge(null);
+    setSelectionMenu(null);
+    persist(nextContacts, layoutTeams, layoutNodes, [...retainedEdges, ...departmentEdges]);
+  };
+  const openSelectionMenu = (event: React.MouseEvent, contactId: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedContacts((current) => current.includes(contactId) ? current : [...current, contactId]);
+    setSelectedNode(null);
+    setSelectedEdge(null);
+    setSelectionMenu({ x: Math.min(event.clientX, window.innerWidth - 250), y: Math.min(event.clientY, window.innerHeight - 300) });
   };
   const deleteSelection = () => {
     if (selectedEdge) {
@@ -1162,7 +1208,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
     <div className="relationship-toolbar">
       <div>
         <button className="secondary small" onClick={addPerson}><UserPlus size={14}/> Add person</button>
-        <button className="secondary small" disabled={!selectedContacts.length} onClick={addTeam}><SquareDashed size={14}/> {selectedContacts.length ? `Create team from ${selectedContacts.length} selected` : "Select people to create a team"}</button>
+        <button className="secondary small" onClick={addTeam}><SquareDashed size={14}/> Add team</button>
         <button className="secondary small" onClick={() => addNode("department")}><Building2 size={14}/> Add department</button>
         <button className="secondary small" onClick={() => addNode("note")}><FileText size={14}/> Add note</button>
       </div>
@@ -1191,7 +1237,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
         <svg viewBox="0 0 1100 620" aria-label="Relationship connections"><defs><marker id="relationship-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>{connections.map((edge) => { const source = nodePoint(edge.source); const target = nodePoint(edge.target); if (!source || !target) return null; const selected = selectedEdge === edge.id; const selectEdge = () => { setSelectedEdge(edge.id); setSelectedNode(null); onRequestEdit(); }; return <g key={edge.id} className={selected ? "selected-edge" : ""} role="button" tabIndex={0} aria-label={`Select ${edge.label || "relationship"}`} onPointerDown={event => event.stopPropagation()} onMouseDown={event => { event.stopPropagation(); selectEdge(); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectEdge(); } }} onClick={event => event.stopPropagation()}><line className="edge-hit-area" x1={source.x} y1={source.y} x2={target.x} y2={target.y}/><line className="edge-visible-line" x1={source.x} y1={source.y} x2={target.x} y2={target.y} markerEnd="url(#relationship-arrow)"/></g>; })}{drawingEdge && (() => { const source = nodePoint(drawingEdge.source); return source ? <line className="relationship-preview-line" x1={source.x} y1={source.y} x2={drawingEdge.x} y2={drawingEdge.y}/> : null; })()}</svg>
         {connections.map((edge) => { const source = nodePoint(edge.source); const target = nodePoint(edge.target); if (!source || !target) return null; const middleX = (source.x + target.x) / 2; const middleY = (source.y + target.y) / 2; const selected = selectedEdge === edge.id; const selectEdge = () => { setSelectedEdge(edge.id); setSelectedNode(null); onRequestEdit(); }; return <div key={`controls:${edge.id}`} className="edge-actions edge-actions-overlay" style={{ left: middleX - 62, top: middleY - 14 }} onPointerDown={event => event.stopPropagation()}><button type="button" className="edge-label-control" aria-label={`Select ${edge.label || "relationship"}`} onClick={event => { event.stopPropagation(); selectEdge(); }}>{edge.label || "Relationship"}</button>{selected && <button type="button" className="edge-delete-control" aria-label={`Delete ${edge.label || "relationship"}`} title="Delete relationship" onClick={event => { event.stopPropagation(); deleteEdge(edge.id); }}><Trash2 size={13}/></button>}</div>; })}
         <article data-connection-node="account" className={`relationship-company ${connectFrom === "account" ? "selected" : ""}`} style={{ left: layoutAccount.x, top: layoutAccount.y }} onPointerDown={(event) => startDrag(event, "account", "account", layoutAccount.x, layoutAccount.y)}><span>{account.name.split(" ").map((part) => part[0]).join("").slice(0,2)}</span><small>Account</small><strong>{account.name}</strong><button className="connection-handle" aria-label={`Draw relationship from ${account.name}`} onPointerDown={event => beginConnection(event, "account")}/></article>
-        {layoutContacts.map((contact) => <article data-connection-node={contact.id} className={`relationship-person ${connectFrom === contact.id ? "selected" : ""} ${selectedContacts.includes(contact.id!) ? "multi-selected" : ""}`} key={contact.id} style={{ left: contact.x, top: contact.y }} onPointerDown={(event) => startDrag(event, "contact", contact.id!, contact.x!, contact.y!)} onClick={(event) => { event.stopPropagation(); if (suppressClickRef.current === `contact:${contact.id}`) return; if (event.metaKey || event.ctrlKey) setSelectedContacts((current) => current.includes(contact.id!) ? current.filter((id) => id !== contact.id) : [...current, contact.id!]); else { setSelectedNode(contact.id!); setSelectedEdge(null); } }}>
+        {layoutContacts.map((contact) => <article data-connection-node={contact.id} className={`relationship-person ${connectFrom === contact.id ? "selected" : ""} ${selectedContacts.includes(contact.id!) ? "multi-selected" : ""}`} key={contact.id} style={{ left: contact.x, top: contact.y }} onPointerDown={(event) => startDrag(event, "contact", contact.id!, contact.x!, contact.y!)} onContextMenu={(event) => openSelectionMenu(event, contact.id!)} onClick={(event) => { event.stopPropagation(); if (suppressClickRef.current === `contact:${contact.id}`) return; if (event.metaKey || event.ctrlKey) setSelectedContacts((current) => current.includes(contact.id!) ? current.filter((id) => id !== contact.id) : [...current, contact.id!]); else { setSelectedNode(contact.id!); setSelectedEdge(null); } }}>
           <button className="contact-select" aria-label={`${selectedContacts.includes(contact.id!) ? "Remove" : "Add"} ${contact.name} ${selectedContacts.includes(contact.id!) ? "from" : "to"} team selection`} aria-pressed={selectedContacts.includes(contact.id!)} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedContacts((current) => current.includes(contact.id!) ? current.filter((id) => id !== contact.id) : [...current, contact.id!]); }}>{selectedContacts.includes(contact.id!) ? "✓" : "+"}</button><button className="node-edit" aria-label={`Edit ${contact.name}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedNode(contact.id!); setSelectedEdge(null); onRequestEdit(); }}><Pencil size={12}/></button><header><span>{contact.name.split(" ").map((part) => part[0]).join("").slice(0,2) || "?"}</span><div><small>Person</small><strong>{contact.name}</strong></div></header>
           <dl>
             <div><dt>Position</dt><dd>{hasValue(contact.role) ? contact.role : "Add position"}</dd></div>
@@ -1204,7 +1250,22 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
         </article>)}
         {!layoutContacts.length && <div className="relationship-empty"><Users size={24}/><strong>No people mapped yet</strong><span>Add a person, place them in a team, then connect the reporting line.</span></div>}
       </div>
+      {selectedContacts.length > 0 && <div className="relationship-selection-tray" role="toolbar" aria-label={`${selectedContacts.length} people selected`} onPointerDown={(event) => event.stopPropagation()}>
+        <strong>{selectedContacts.length} selected</strong>
+        <button type="button" onClick={addTeam}><SquareDashed size={13}/> Create team</button>
+        <select aria-label="Assign selected people to department" defaultValue="" onChange={(event) => { const department = layoutNodes.find((node) => node.id === event.target.value); if (department) assignSelectedToDepartment(department); event.currentTarget.value = ""; }}>
+          <option value="" disabled>Assign to department</option>
+          {layoutNodes.filter((node) => node.type === "department").map((department) => <option key={department.id} value={department.id}>{department.title}</option>)}
+        </select>
+        <button type="button" className="selection-clear" onClick={() => setSelectedContacts([])}>Clear</button>
+      </div>}
     </div>{selectedNode && <aside className="relationship-inspector"><div className="inspector-head"><div><small>Card inspector</small><strong>Edit details</strong></div><button onClick={() => setSelectedNode(null)} aria-label="Close inspector"><X size={15}/></button></div>{(() => { const contact = layoutContacts.find(item => item.id === selectedNode); if (contact) return <div className="inspector-fields"><label>Name<input value={contact.name} onChange={e => patchContact(contact.id!, { name: e.target.value })}/></label><label>Position<input value={contact.role} onChange={e => patchContact(contact.id!, { role: e.target.value })}/></label><label>Team<input value={contact.team || ""} onChange={e => patchContact(contact.id!, { team: e.target.value })}/></label><label>Department<input value={contact.department || ""} onChange={e => patchContact(contact.id!, { department: e.target.value })}/></label><label>Relationship<input value={contact.strength} onChange={e => patchContact(contact.id!, { strength: e.target.value })}/></label><label>QuickSort owner<select value={contact.owner} onChange={e => patchContact(contact.id!, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>LinkedIn<input value={contact.linkedin || ""} onChange={e => patchContact(contact.id!, { linkedin: e.target.value })}/></label><fieldset><legend>Known by at QuickSort</legend>{ownerOptions.length ? ownerOptions.map(owner => { const connection = (contact.knownBy || []).find(item => item.ownerId === owner.id || item.email === owner.email); return <label className="inspector-check" key={owner.id}><input type="checkbox" checked={Boolean(connection)} onChange={e => patchContact(contact.id!, { knownBy: e.target.checked ? [...(contact.knownBy || []), { ownerId: owner.id, name: owner.name, email: owner.email, relationship: "Known contact", strength: "Developing", createdAt: new Date().toISOString() }] : (contact.knownBy || []).filter(item => item.ownerId !== owner.id && item.email !== owner.email) })}/><span>{owner.name}<small>{connection ? `${connection.relationship} · ${connection.strength}` : owner.headline || "QuickSort teammate"}</small></span></label>; }) : <p>Add approved teammates in Admin before assigning internal connections.</p>}</fieldset><fieldset><legend>Linked Kanban cards</legend>{kanbanCards.length ? kanbanCards.map(card => <label className="inspector-check" key={card.id}><input type="checkbox" checked={(contact.kanbanCardIds || []).includes(card.id)} onChange={e => patchContact(contact.id!, { kanbanCardIds: e.target.checked ? [...(contact.kanbanCardIds || []), card.id] : (contact.kanbanCardIds || []).filter(id => id !== card.id) })}/><span>CARD-{String(card.card_number).padStart(6, "0")} · {card.title}<small>{card.boardName} · {card.columnName}</small></span></label>) : <p>No account boards are mapped yet.</p>}</fieldset><fieldset><legend>Comments</legend>{(contact.comments || []).map(item => <article className="contact-comment" key={item.id}><p>{item.text}</p><small>{item.author} · {new Date(item.createdAt).toLocaleString()}</small></article>)}<textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add context or a follow-up note"/><button className="secondary small" disabled={!comment.trim()} onClick={() => { patchContact(contact.id!, { comments: [...(contact.comments || []), { id: crypto.randomUUID(), text: comment.trim(), author: actorEmail || "Workspace admin", createdAt: new Date().toISOString() }] }); setComment(""); }}>Add comment</button></fieldset></div>; const teamId = selectedNode.startsWith("team:") ? selectedNode.slice(5) : ""; const team = layoutTeams.find(item => item.id === teamId); if (team) return <div className="inspector-fields"><label>Team name<input value={team.name} onChange={e => patchTeam(team.id, { name: e.target.value })}/></label><label>Description<textarea value={team.description || ""} onChange={e => patchTeam(team.id, { description: e.target.value })}/></label><fieldset><legend>People in this team</legend><p>Select people to place and align inside this team.</p>{layoutContacts.map(contactItem => <label className="inspector-check" key={contactItem.id}><input type="checkbox" checked={(team.memberIds || []).includes(contactItem.id!)} onChange={event => setTeamMembers(team, event.target.checked ? [...(team.memberIds || []), contactItem.id!] : (team.memberIds || []).filter(id => id !== contactItem.id))}/><span>{contactItem.name}<small>{contactItem.role || "Position not added"}</small></span></label>)}</fieldset></div>; const nodeId = selectedNode.startsWith("node:") ? selectedNode.slice(5) : ""; const node = layoutNodes.find(item => item.id === nodeId); return node ? <div className="inspector-fields"><label>Title<input value={node.title} onChange={e => patchNode(node.id, { title: e.target.value })}/></label><label>Details<textarea value={node.body} onChange={e => patchNode(node.id, { body: e.target.value })}/></label>{node.type === "department" && <fieldset><legend>Teams in this department</legend><p>Select teams to map beneath this department.</p>{layoutTeams.map(teamItem => <label className="inspector-check" key={teamItem.id}><input type="checkbox" checked={teamItem.departmentId === node.id} onChange={event => setDepartmentTeam(node, teamItem, event.target.checked)}/><span>{teamItem.name}<small>{teamItem.memberIds?.length || 0} people</small></span></label>)}</fieldset>}</div> : null; })()}</aside>}{selectedEdge && (() => { const edge = connections.find(item => item.id === selectedEdge); return edge ? <aside className="relationship-inspector"><div className="inspector-head"><div><small>Relationship mapping</small><strong>How are these connected?</strong></div><button onClick={() => setSelectedEdge(null)} aria-label="Close relationship editor"><X size={15}/></button></div><div className="inspector-fields"><p className="inspector-prompt">Name the relationship and add any context the team should know.</p><label>Relationship<input placeholder="Reports to, introduced by, works with…" value={edge.label} onChange={e => patchEdge(edge.id, { label: e.target.value })}/></label><label>Strength<select value={edge.strength || "Not assessed"} onChange={e => patchEdge(edge.id, { strength: e.target.value })}><option>Not assessed</option><option>Weak</option><option>Developing</option><option>Strong</option><option>Trusted</option></select></label><label>Owner<select value={edge.owner || ""} onChange={e => patchEdge(edge.id, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>Comment or context<textarea value={edge.notes || ""} placeholder="Add context about this relationship" onChange={e => patchEdge(edge.id, { notes: e.target.value })}/></label><button className="danger-link" onClick={() => { persist(layoutContacts, layoutTeams, layoutNodes, connections.filter(item => item.id !== edge.id)); setSelectedEdge(null); }}>Remove relationship</button></div></aside> : null; })()}</div>
+    {selectionMenu && <div className="relationship-context-menu" role="menu" aria-label="Selected people actions" style={{ left: selectionMenu.x, top: selectionMenu.y }} onPointerDown={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
+      <header><strong>{selectedContacts.length} selected</strong><span>Group actions</span></header>
+      <button type="button" role="menuitem" onClick={addTeam}><SquareDashed size={14}/> Create team</button>
+      {layoutNodes.filter((node) => node.type === "department").length > 0 ? <div className="relationship-context-departments"><small>Assign to department</small>{layoutNodes.filter((node) => node.type === "department").map((department) => <button type="button" role="menuitem" key={department.id} onClick={() => assignSelectedToDepartment(department)}><Building2 size={14}/>{department.title}</button>)}</div> : <button type="button" role="menuitem" onClick={() => { addNode("department"); setSelectionMenu(null); }}><Building2 size={14}/> Add a department</button>}
+      <button type="button" role="menuitem" className="context-clear" onClick={() => { setSelectedContacts([]); setSelectionMenu(null); }}><X size={14}/> Clear selection</button>
+    </div>}
   </div>;
 }
 

@@ -144,6 +144,20 @@ h1,h2,h3,p{margin-top:0}.page-intro h1{font-family:"Inter",sans-serif;font-size:
 .contact-select{position:absolute;z-index:7;left:8px;top:8px;width:25px;height:25px;display:grid;place-items:center;padding:0;background:#101010;color:#a3a3a3;border:1px solid #404040;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700}
 .contact-select:hover,.contact-select[aria-pressed="true"]{background:#fafafa;color:#111;border-color:#fafafa}
 .relationship-person.multi-selected{border-color:#fafafa;box-shadow:0 0 0 3px #ffffff24,0 12px 32px #0007}
+.relationship-selection-tray{position:absolute;z-index:30;left:50%;bottom:16px;display:flex;align-items:center;gap:6px;max-width:calc(100% - 24px);padding:6px;transform:translateX(-50%);background:#0b0b0bf2;border:1px solid #525252;border-radius:9px;box-shadow:0 12px 32px #000b;backdrop-filter:blur(10px)}
+.relationship-selection-tray strong{padding:0 7px;color:#d4d4d4;font-size:8px;white-space:nowrap}
+.relationship-selection-tray button,.relationship-selection-tray select{height:31px;padding:0 10px;background:#1b1b1b;color:#fafafa;border:1px solid #404040;border-radius:6px;font:inherit;font-size:8px;cursor:pointer}
+.relationship-selection-tray button{display:flex;align-items:center;gap:6px}
+.relationship-selection-tray select{max-width:170px}
+.relationship-selection-tray button:hover,.relationship-selection-tray select:hover{border-color:#737373;background:#262626}
+.relationship-selection-tray .selection-clear{color:#a3a3a3;background:transparent;border-color:transparent}
+.relationship-context-menu{position:fixed;z-index:120;display:grid;width:230px;padding:7px;background:#0b0b0bf5;color:#fafafa;border:1px solid #525252;border-radius:9px;box-shadow:0 18px 55px #000d;backdrop-filter:blur(12px)}
+.relationship-context-menu header{display:grid;gap:2px;padding:8px 9px 10px;border-bottom:1px solid #292929}
+.relationship-context-menu header strong{font-size:9px}.relationship-context-menu header span,.relationship-context-menu small{color:#737373;font-size:7px}
+.relationship-context-menu>button,.relationship-context-departments button{display:flex;align-items:center;gap:8px;width:100%;padding:9px;background:transparent;color:#d4d4d4;border:0;border-radius:6px;text-align:left;font:inherit;font-size:9px;cursor:pointer}
+.relationship-context-menu button:hover,.relationship-context-menu button:focus-visible{background:#242424;color:#fff;outline:0}
+.relationship-context-departments{display:grid;padding-top:5px;border-top:1px solid #242424}.relationship-context-departments small{padding:6px 9px 3px;text-transform:uppercase;letter-spacing:.08em}
+.relationship-context-menu .context-clear{margin-top:3px;color:#a3a3a3;border-top:1px solid #242424;border-radius:0 0 6px 6px}
 .relationship-person header{padding-left:29px}
 .relationship-team>div>span{margin-left:auto;margin-right:27px;color:#737373;font-size:8px}
 .relationship-team .connection-handle{right:-9px;top:31px}
@@ -151,7 +165,7 @@ h1,h2,h3,p{margin-top:0}.page-intro h1{font-family:"Inter",sans-serif;font-size:
 .relationship-free-node.department::before{content:"Department";position:absolute;left:14px;bottom:11px;color:#737373;font-size:7px;letter-spacing:.06em}
 .inspector-prompt{margin:0;padding:10px;background:#171717;color:#a3a3a3;border-left:2px solid #fafafa;font-size:8px;line-height:1.5}
 .relationship-toolbar button:disabled{opacity:.42;cursor:not-allowed}
-@media(max-width:700px){.relationship-toolbar>div:first-child{flex-wrap:wrap}.connection-handle{width:22px;height:22px;right:-11px}}
+@media(max-width:700px){.relationship-toolbar>div:first-child{flex-wrap:wrap}.connection-handle{width:22px;height:22px;right:-11px}.relationship-selection-tray{left:12px;right:12px;max-width:none;overflow-x:auto;transform:none}.relationship-selection-tray strong{display:none}}
 
 /* Scrollable, inspectable account audit history */
 .account-activity-log{padding:24px;margin-top:16px}

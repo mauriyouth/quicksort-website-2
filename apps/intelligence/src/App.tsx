@@ -1346,7 +1346,10 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
         <RelationshipCanvas account={draft} contacts={draftIntel.contacts} teams={draftIntel.teams} nodes={draftIntel.nodes} connections={draftIntel.connections} accountPosition={draftIntel.accountPosition} ownerOptions={ownerOptions} kanbanCards={kanbanCards} actorEmail={actorEmail} onRequestEdit={() => undefined} onChange={saveRelationshipMap}/>
       </section>
       <aside className="surface opportunity-panel editable-block" onClick={beginEditing}>
-        <span className="panel-label">Opportunity</span>
+        <div className="opportunity-panel-head">
+          <span className="panel-label">Opportunity</span>
+          {editing && <button type="button" className="opportunity-cancel" aria-label="Cancel opportunity editing" onClick={(event) => { event.stopPropagation(); cancelEditing(); }}><X size={14}/><span>Cancel</span></button>}
+        </div>
         <h2><EditField editing={editing} value={draft.opportunity} label="Opportunity name" onChange={(opportunity) => patchAccount({ opportunity })}/></h2>
         <p>{editing || summary ? <EditField editing={editing} multiline value={summary} label="Opportunity summary" onChange={(opportunitySummary) => patchAccount({ opportunitySummary })}/> : "No opportunity details added."}</p>
         <div className="opportunity-score"><strong><EditField editing={editing} value={draft.fitScore ?? "—"} label="Capability fit" onChange={(fitScore) => patchAccount({ fitScore })}/></strong><span>capability fit</span></div>

@@ -41,3 +41,15 @@ test("card inspector stays below the app header and closes on outside pointer ac
   assert.match(app, /window\.addEventListener\("pointerdown", dismissInspector, true\)/);
   assert.match(app, /<aside ref=\{inspectorRef\} className="relationship-inspector">/);
 });
+
+test("Teleperformance relationship seed maps researched leadership without replacing existing contacts", () => {
+  const app = readFileSync(new URL("../apps/intelligence/src/App.tsx", import.meta.url), "utf8");
+  assert.match(app, /tp-relationship-map-2026-10-09-v1/);
+  assert.match(app, /name: "Danny Kuivenhoven"/);
+  assert.match(app, /name: "Akash Pugalia"/);
+  assert.match(app, /name: "Rob Lewington", role: "SVP, Head of Trust & Safety"/);
+  assert.match(app, /name: "Paul Joustra", role: "AI and CX transformation leader \(exact title to verify\)"/);
+  assert.match(app, /Cross-functional connections show working alignment, not unverified HR reporting lines/);
+  assert.match(app, /usefulExistingContacts/);
+  assert.match(app, /mappingVersion: tpMappingVersion/);
+});

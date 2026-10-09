@@ -348,14 +348,9 @@ export default function App({ email = "" }: { email?: string }) {
     ]).then(([accountResult, leadResult, partnerResult, caseStudyResult]) => {
       if (!activeRequest) return;
       if (!accountResult.error && accountResult.data) {
-        setAccountRecords(accountResult.data.map((row: Record<string, any>) => ({
-          databaseId: String(row.id), id: String(row.slug), name: String(row.name), sector: String(row.sector || "Not set"), contacts: Number(row.contacts) || 0,
-          signal: String(row.signal || "Not set"), opportunity: String(row.opportunity || "Not set"), value: String(row.estimated_value || "—"), stage: normalizeAccountStage(row.stage), owner: String(row.owner || "—"),
-          fit: Array.isArray(row.fit) ? row.fit.map(String) : [], caseStudies: Array.isArray(row.case_studies) ? row.case_studies : [], opportunitySummary: String(row.opportunity_summary || ""), fitScore: String(row.fit_score || "—"), evidence: Array.isArray(row.evidence) ? row.evidence.map(String) : [],
-        })));
-        setIntelRecords(Object.fromEntries(accountResult.data.map((row: Record<string, any>) => {
+        const hydratedAccounts = accountResult.data.map((row: Record<string, any>) => {
           const intelligence = row.intelligence && typeof row.intelligence === "object" ? row.intelligence : {};
-          return [String(row.slug), {
+          const savedIntel: AccountIntel = {
             leads: Array.isArray(intelligence.leads) ? intelligence.leads : [],
             events: Array.isArray(intelligence.events) ? intelligence.events : [],
             contacts: Array.isArray(intelligence.contacts) ? intelligence.contacts : [],
@@ -363,8 +358,18 @@ export default function App({ email = "" }: { email?: string }) {
             connections: Array.isArray(intelligence.connections) ? intelligence.connections : [],
             nodes: Array.isArray(intelligence.nodes) ? intelligence.nodes : [],
             accountPosition: intelligence.accountPosition && Number.isFinite(intelligence.accountPosition.x) && Number.isFinite(intelligence.accountPosition.y) ? intelligence.accountPosition : undefined,
-          }];
+            mappingVersion: typeof intelligence.mappingVersion === "string" ? intelligence.mappingVersion : undefined,
+          };
+          const mergedIntel = mergeRelationshipSeed(String(row.slug), savedIntel);
+          if (mergedIntel !== savedIntel) void db().from("business_accounts").update({ contacts: mergedIntel.contacts.length, intelligence: mergedIntel }).eq("id", row.id);
+          return { row, intelligence: mergedIntel };
+        });
+        setAccountRecords(hydratedAccounts.map(({ row, intelligence }) => ({
+          databaseId: String(row.id), id: String(row.slug), name: String(row.name), sector: String(row.sector || "Not set"), contacts: Math.max(Number(row.contacts) || 0, intelligence.contacts.length),
+          signal: String(row.signal || "Not set"), opportunity: String(row.opportunity || "Not set"), value: String(row.estimated_value || "—"), stage: normalizeAccountStage(row.stage), owner: String(row.owner || "—"),
+          fit: Array.isArray(row.fit) ? row.fit.map(String) : [], caseStudies: Array.isArray(row.case_studies) ? row.case_studies : [], opportunitySummary: String(row.opportunity_summary || ""), fitScore: String(row.fit_score || "—"), evidence: Array.isArray(row.evidence) ? row.evidence.map(String) : [],
         })));
+        setIntelRecords(Object.fromEntries(hydratedAccounts.map(({ row, intelligence }) => [String(row.slug), intelligence])));
       }
       if (!leadResult.error && leadResult.data) setLeadRecords(leadResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), role: String(row.role || ""), company: String(row.company || ""), source: row.source as LeadSource, origin: String(row.origin || ""), score: Number(row.score) || 0, reason: String(row.reason || ""), stage: row.stage as LeadStage, owner: String(row.owner || "—") })));
       if (!partnerResult.error && partnerResult.data) setBusinessPartnerRecords(partnerResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), company: String(row.company || ""), role: String(row.role || ""), origin: String(row.origin || ""), linkedin: String(row.linkedin_url || ""), email: String(row.email || ""), phone: String(row.phone || ""), relationship: String(row.relationship || ""), owner: String(row.owner || ""), notes: String(row.notes || ""), accountLinks: Array.isArray(row.account_links) ? row.account_links : [] })));
@@ -760,7 +765,7 @@ type RelationshipTeam = { id: string; name: string; description?: string; member
 type RelationshipCanvasNode = { id: string; type: "department" | "note"; title: string; body: string; x: number; y: number; width: number; height: number };
 type RelationshipEdge = { id: string; source: string; target: string; label: string; strength?: string; owner?: string; notes?: string; kind?: "manual" | "membership" };
 type CanvasPoint = { x: number; y: number };
-type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: RelationshipContact[]; teams?: RelationshipTeam[]; nodes?: RelationshipCanvasNode[]; connections?: RelationshipEdge[]; accountPosition?: CanvasPoint };
+type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: RelationshipContact[]; teams?: RelationshipTeam[]; nodes?: RelationshipCanvasNode[]; connections?: RelationshipEdge[]; accountPosition?: CanvasPoint; mappingVersion?: string };
 type OwnerOption = { id: string; name: string; email: string; headline: string };
 type AuditLog = { id: string; section: string; action: string; changes: Record<string, unknown>; actor_email: string; created_at: string };
 type AuditChange = { field: string; before?: unknown; after?: unknown };
@@ -770,6 +775,115 @@ type KanbanColumn = { id: string; board_id: string; name: string; position: numb
 type KanbanCard = { id: string; board_id: string; column_id: string; title: string; description: string; card_number: number; due_at: string | null };
 type KanbanBoardAccount = { board_id: string; account_id: string };
 type OpenDoorInput = { company: string; sector: string; contactName: string; role: string; linkedin: string; connector: OwnerOption; relationship: string; strength: string; notes: string };
+
+const tpMappingVersion = "tp-relationship-map-2026-10-09-v1";
+type TpContactSeed = {
+  id: string; name: string; role: string; team: string; department: string; priority: 1 | 2 | 3;
+  linkedin?: string; angle: string; verification: string; x: number; y: number;
+};
+const tpContact = (seed: TpContactSeed): RelationshipContact => ({
+  id: seed.id,
+  name: seed.name,
+  role: seed.role,
+  team: seed.team,
+  department: seed.department,
+  strength: `Priority ${seed.priority}`,
+  owner: "",
+  linkedin: seed.linkedin || "",
+  knownBy: [],
+  comments: [{
+    id: `${seed.id}-brief`,
+    text: `QuickSort angle: ${seed.angle}\nVerification: ${seed.verification}`,
+    author: "QuickSort research",
+    createdAt: "2026-10-09T00:00:00.000Z",
+  }],
+  x: seed.x,
+  y: seed.y,
+});
+
+const teleperformanceRelationshipSeed: AccountIntel = (() => {
+  const contacts = [
+    tpContact({ id: "tp-jorge-amar", name: "Jorge Amar", role: "Chief Executive Officer", team: "Group leadership", department: "Executive leadership", priority: 3, linkedin: "https://www.linkedin.com/in/jorgeeliasamar", angle: "Executive sponsorship after a concrete internal champion and joint opportunity exist.", verification: "Official TP leadership page and current LinkedIn profile.", x: 100, y: 500 }),
+    tpContact({ id: "tp-agustin-grisanti", name: "Agustin Grisanti", role: "Chief Executive Officer EMEA & APAC", team: "EMEA & APAC leadership", department: "Regional leadership", priority: 3, angle: "Regional executive sponsorship for a material EMEA partnership; not a first cold contact.", verification: "Official TP leadership page.", x: 360, y: 500 }),
+    tpContact({ id: "tp-danny-kuivenhoven", name: "Danny Kuivenhoven", role: "Chief Technology Officer EMEA & APAC", team: "EMEA & APAC leadership", department: "Regional leadership", priority: 1, linkedin: "https://nl.linkedin.com/in/dannykuivenhoven", angle: "European regulated-industry co-delivery; private/on-prem AI; agent orchestration; multilingual voice AI.", verification: "Current TP profile and TP-authored 2026 AI publications.", x: 600, y: 500 }),
+    tpContact({ id: "tp-anish-mukker", name: "Anish Mukker", role: "President – India, Philippines & ANZ", team: "EMEA & APAC leadership", department: "Regional leadership", priority: 2, linkedin: "https://in.linkedin.com/in/anishmukker", angle: "Large-scale AI delivery partnership and engineering capacity; lower priority for the French market.", verification: "Current LinkedIn profile; regional placement supplied for account research.", x: 840, y: 500 }),
+    tpContact({ id: "tp-paul-joustra", name: "Paul Joustra", role: "AI and CX transformation leader (exact title to verify)", team: "EMEA & APAC leadership", department: "Regional leadership", priority: 3, linkedin: "https://nl.linkedin.com/in/paul-joustra", angle: "Accessible internal champion for European data-layer and agent-orchestration discussions.", verification: "Current LinkedIn profile; exact title is not publicly exposed and must be verified before outreach.", x: 1080, y: 500 }),
+    tpContact({ id: "tp-miranda-collard", name: "Miranda Collard", role: "Chief Executive Officer Americas", team: "Americas leadership", department: "Regional leadership", priority: 3, angle: "Americas executive sponsorship after traction with Akash Pugalia, Himadri Sarkar, or Jojo Pacis.", verification: "Official TP leadership page.", x: 1320, y: 500 }),
+    tpContact({ id: "tp-himadri-sarkar", name: "Himadri Sarkar", role: "Chief Solutions Officer, Americas", team: "Americas leadership", department: "Regional leadership", priority: 1, linkedin: "https://www.linkedin.com/in/himadri-sarkar-5ab22a12", angle: "Specialist inclusion in client solutions and RFPs; banking and regulated verticals; agentic workflows.", verification: "Current TP event and 2026 thought-leadership pages.", x: 1560, y: 500 }),
+    tpContact({ id: "tp-jojo-pacis", name: "Jojo Pacis", role: "Chief Transformation Officer, US Market", team: "Americas leadership", department: "Regional leadership", priority: 2, linkedin: "https://www.linkedin.com/in/jojo-pacis-b75bb758", angle: "Production agent harnesses; context; orchestration; governance and learning loops.", verification: "Current TP 2026 AI orchestration publications.", x: 1800, y: 500 }),
+    tpContact({ id: "tp-akash-pugalia", name: "Akash Pugalia", role: "Chief Digital Officer", team: "TP.ai Dataservices", department: "AI & data", priority: 1, linkedin: "https://www.linkedin.com/in/akashpug03", angle: "Responsible AI; governed data and agent systems; model evaluation; human-in-the-loop operations.", verification: "Official TP.ai Dataservices leadership page.", x: 100, y: 1020 }),
+    tpContact({ id: "tp-sheel-singh", name: "Sheel D. Singh", role: "SVP, AIML Ops", team: "TP.ai Dataservices", department: "AI & data", priority: 1, linkedin: "https://in.linkedin.com/in/sheel-dashrath-singh", angle: "AI/ML operations; productionization; evaluations; specialist engineering capacity.", verification: "Official TP.ai Dataservices leadership page; official page currently lists SVP.", x: 340, y: 1020 }),
+    tpContact({ id: "tp-saravanan-dantu", name: "Saravanan Dantu", role: "EVP, Data Engineering", team: "TP.ai Dataservices", department: "AI & data", priority: 1, linkedin: "https://www.linkedin.com/in/saravanan-dantu-21a9386", angle: "Enterprise data platforms; AI-ready data; cloud/private infrastructure; knowledge and context layers.", verification: "Official TP.ai Dataservices leadership page.", x: 580, y: 1020 }),
+    tpContact({ id: "tp-samanth-duvvuru", name: "Samanth Duvvuru", role: "EVP, Data Consulting", team: "TP.ai Dataservices", department: "AI & data", priority: 1, linkedin: "https://www.linkedin.com/in/samanth-duvvuru-4351a93b", angle: "Joint enterprise transformation pursuits; regulated-industry data and AI programs; delivery partnership.", verification: "Official TP.ai Dataservices leadership page.", x: 820, y: 1020 }),
+    tpContact({ id: "tp-yun-choi", name: "Yun Choi", role: "VP, Product & Program Management", team: "TP.ai Dataservices", department: "AI & data", priority: 1, linkedin: "https://www.linkedin.com/in/yunychoi", angle: "Product integration; pilot-to-production programs; responsible AI; program partnership.", verification: "Official TP.ai Dataservices leadership page and current TP thought leadership.", x: 1060, y: 1020 }),
+    tpContact({ id: "tp-sachin-garg", name: "Sachin Garg", role: "EVP, Data Analytics", team: "TP.ai Dataservices", department: "AI & data", priority: 2, angle: "Predictive and decision analytics; CX analytics; agentic analytics; data modernization.", verification: "Official TP.ai Dataservices leadership page.", x: 1300, y: 1020 }),
+    tpContact({ id: "tp-arnav-sharma", name: "Arnav Sharma", role: "VP, Principal Data Scientist", team: "TP.ai Dataservices", department: "AI & data", priority: 2, linkedin: "https://www.linkedin.com/posts/arnavsharma1_great-opportunity-to-join-my-team-we-are-activity-7476567531802243072-4pPQ", angle: "Advanced AI/LLM research; agentic systems; evaluation; rapid prototyping.", verification: "Official TP.ai Dataservices leadership page and current LinkedIn post.", x: 1540, y: 1020 }),
+    tpContact({ id: "tp-rob-lewington", name: "Rob Lewington", role: "SVP, Head of Trust & Safety", team: "Trust & Safety", department: "Trust & Safety", priority: 2, angle: "AI safety; red teaming; adversarial testing; governance for autonomous agents.", verification: "Official TP.ai Dataservices leadership page and September 2026 TP publication.", x: 1780, y: 1020 }),
+    tpContact({ id: "tp-camilla-hegarty", name: "Camilla Hegarty", role: "SVP, Trust & Safety Practice Lead and Business Development", team: "Trust & Safety", department: "Trust & Safety", priority: 2, linkedin: "https://ie.linkedin.com/in/camilla-hegarty-6a88a43", angle: "Approachable commercial sponsor for responsible AI and European trust-and-safety collaborations.", verification: "Current LinkedIn profile and official TP Women biography.", x: 2020, y: 1020 }),
+    tpContact({ id: "tp-daniel-hong", name: "Daniel Hong", role: "VP, Global Market Strategy", team: "Market strategy & alliances", department: "AI & growth", priority: 2, angle: "Market-facing alliance; joint thought leadership; routing to TP.ai commercial owners.", verification: "Current official TP.ai Talks profile.", x: 2260, y: 1020 }),
+    tpContact({ id: "tp-shiva-mathur", name: "Shiva Mathur", role: "SVP, Sales – Data Services", team: "Market strategy & alliances", department: "AI & growth", priority: 2, angle: "Commercial route into a partner or subcontracting discussion; joint European enterprise pursuits.", verification: "Current TP employee announcement supplied for account research; verify before outreach.", x: 2500, y: 1020 }),
+  ];
+  const teams: RelationshipTeam[] = [
+    { id: "tp-team-group", name: "Group leadership", description: "Group-level sponsorship and strategic direction.", memberIds: ["tp-jorge-amar"], departmentId: "tp-dept-executive", x: 100, y: 360, width: 210, height: 96 },
+    { id: "tp-team-emea-apac", name: "EMEA & APAC leadership", description: "Regional executive, technology, and delivery leadership.", memberIds: ["tp-agustin-grisanti", "tp-danny-kuivenhoven", "tp-anish-mukker", "tp-paul-joustra"], departmentId: "tp-dept-regions", x: 600, y: 360, width: 210, height: 96 },
+    { id: "tp-team-americas", name: "Americas leadership", description: "Regional executive, solutions, and transformation leadership.", memberIds: ["tp-miranda-collard", "tp-himadri-sarkar", "tp-jojo-pacis"], departmentId: "tp-dept-regions", x: 1440, y: 360, width: 210, height: 96 },
+    { id: "tp-team-dataservices", name: "TP.ai Dataservices", description: "Data engineering, consulting, analytics, AIML Ops, product, and data science.", memberIds: ["tp-akash-pugalia", "tp-sheel-singh", "tp-saravanan-dantu", "tp-samanth-duvvuru", "tp-yun-choi", "tp-sachin-garg", "tp-arnav-sharma"], departmentId: "tp-dept-ai", x: 700, y: 850, width: 210, height: 96 },
+    { id: "tp-team-trust", name: "Trust & Safety", description: "Responsible AI, safety evaluation, red teaming, policy, and operational governance.", memberIds: ["tp-akash-pugalia", "tp-yun-choi", "tp-rob-lewington", "tp-camilla-hegarty"], departmentId: "tp-dept-ai", x: 1850, y: 850, width: 210, height: 96 },
+    { id: "tp-team-market", name: "Market strategy & alliances", description: "Commercial routing, market strategy, and partnership development.", memberIds: ["tp-daniel-hong", "tp-shiva-mathur"], departmentId: "tp-dept-ai", x: 2380, y: 850, width: 210, height: 96 },
+  ];
+  const nodes: RelationshipCanvasNode[] = [
+    { id: "tp-dept-executive", type: "department", title: "Executive leadership", body: "TP Group executive sponsorship.", x: 80, y: 190, width: 250, height: 120 },
+    { id: "tp-dept-regions", type: "department", title: "Regional leadership", body: "EMEA & APAC and Americas operating leadership.", x: 900, y: 190, width: 300, height: 120 },
+    { id: "tp-dept-ai", type: "department", title: "AI, data & growth", body: "TP.ai Dataservices, Trust & Safety, and commercial market leadership.", x: 1350, y: 680, width: 330, height: 120 },
+    { id: "tp-note-map", type: "note", title: "Architecture note", body: "Departments and teams reflect TP's public operating structure. Cross-functional connections show working alignment, not unverified HR reporting lines. Verify titles marked for review before outreach.", x: 2010, y: 190, width: 300, height: 160 },
+  ];
+  const membershipConnections: RelationshipEdge[] = [
+    ...teams.map((team) => ({ id: `tp-edge-dept-${team.id}`, source: `node:${team.departmentId}`, target: `team:${team.id}`, label: "Contains team", strength: "Not assessed", notes: "Official operating-structure grouping.", kind: "membership" as const })),
+    ...teams.flatMap((team) => (team.memberIds || []).map((contactId) => ({ id: `tp-edge-${team.id}-${contactId}`, source: `team:${team.id}`, target: contactId, label: "Team member", strength: "Not assessed", notes: "Public-role grouping; not a claim of direct reporting.", kind: "membership" as const }))),
+  ];
+  const leadershipConnections: RelationshipEdge[] = [
+    { id: "tp-edge-account-jorge", source: "account", target: "tp-jorge-amar", label: "Group CEO", strength: "Not assessed", notes: "Confirmed on the official TP leadership page.", kind: "manual" },
+    { id: "tp-edge-jorge-agustin", source: "tp-jorge-amar", target: "tp-agustin-grisanti", label: "Regional CEO – EMEA & APAC", strength: "Not assessed", notes: "Official regional executive structure.", kind: "manual" },
+    { id: "tp-edge-jorge-miranda", source: "tp-jorge-amar", target: "tp-miranda-collard", label: "Regional CEO – Americas", strength: "Not assessed", notes: "Official regional executive structure.", kind: "manual" },
+    { id: "tp-edge-jorge-akash", source: "tp-jorge-amar", target: "tp-akash-pugalia", label: "TP.ai and Trust & Safety leadership", strength: "Not assessed", notes: "Functional leadership alignment; direct reporting line not asserted.", kind: "manual" },
+    { id: "tp-edge-agustin-danny", source: "tp-agustin-grisanti", target: "tp-danny-kuivenhoven", label: "Regional technology leadership", strength: "Not assessed", notes: "EMEA & APAC operating alignment.", kind: "manual" },
+    { id: "tp-edge-miranda-himadri", source: "tp-miranda-collard", target: "tp-himadri-sarkar", label: "Americas solutions leadership", strength: "Not assessed", notes: "Americas operating alignment.", kind: "manual" },
+    { id: "tp-edge-miranda-jojo", source: "tp-miranda-collard", target: "tp-jojo-pacis", label: "Americas transformation leadership", strength: "Not assessed", notes: "Americas operating alignment.", kind: "manual" },
+    { id: "tp-edge-akash-rob", source: "tp-akash-pugalia", target: "tp-rob-lewington", label: "Trust & Safety leadership", strength: "Not assessed", notes: "Functional leadership alignment based on TP's public service structure.", kind: "manual" },
+    { id: "tp-edge-akash-shiva", source: "tp-akash-pugalia", target: "tp-shiva-mathur", label: "Commercial alignment", strength: "Not assessed", notes: "Working commercial route; verify exact organizational line before outreach.", kind: "manual" },
+  ];
+  return { leads: [], events: [], contacts, teams, nodes, connections: [...membershipConnections, ...leadershipConnections], accountPosition: { x: 1180, y: 40 }, mappingVersion: tpMappingVersion };
+})();
+
+const mergeRelationshipSeed = (accountId: string, current: AccountIntel) => {
+  if (accountId !== "teleperformance" || current.mappingVersion === tpMappingVersion) return current;
+  const usefulExistingContacts = current.contacts.filter((contact) => !(contact.name === "New contact" && !contact.role && !contact.linkedin));
+  const existingByName = new Map(usefulExistingContacts.map((contact) => [contact.name.trim().toLowerCase(), contact]));
+  const seededNames = new Set(teleperformanceRelationshipSeed.contacts.map((contact) => contact.name.trim().toLowerCase()));
+  const contacts = [
+    ...teleperformanceRelationshipSeed.contacts.map((seedContact) => {
+      const existing = existingByName.get(seedContact.name.trim().toLowerCase());
+      if (!existing) return seedContact;
+      const seedCommentIds = new Set((existing.comments || []).map((comment) => comment.id));
+      return { ...seedContact, ...existing, id: existing.id || seedContact.id, role: existing.role || seedContact.role, team: existing.team || seedContact.team, department: existing.department || seedContact.department, linkedin: existing.linkedin || seedContact.linkedin, comments: [...(existing.comments || []), ...(seedContact.comments || []).filter((comment) => !seedCommentIds.has(comment.id))] };
+    }),
+    ...usefulExistingContacts.filter((contact) => !seededNames.has(contact.name.trim().toLowerCase())),
+  ];
+  const mergeById = <T extends { id: string }>(seedItems: T[], existingItems: T[] = []) => {
+    const existing = new Map(existingItems.map((item) => [item.id, item]));
+    const seededIds = new Set(seedItems.map((item) => item.id));
+    return [...seedItems.map((item) => ({ ...item, ...(existing.get(item.id) || {}) })), ...existingItems.filter((item) => !seededIds.has(item.id))];
+  };
+  return {
+    ...current,
+    contacts,
+    teams: mergeById(teleperformanceRelationshipSeed.teams || [], current.teams || []),
+    nodes: mergeById(teleperformanceRelationshipSeed.nodes || [], current.nodes || []),
+    connections: mergeById(teleperformanceRelationshipSeed.connections || [], current.connections || []),
+    accountPosition: current.accountPosition || teleperformanceRelationshipSeed.accountPosition,
+    mappingVersion: tpMappingVersion,
+  };
+};
 
 const emptyAccountIntel = Object.fromEntries(accounts.map((account) => [account.id, { contacts: [], leads: [], events: [] }])) as Record<string, AccountIntel>;
 

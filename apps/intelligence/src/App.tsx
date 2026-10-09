@@ -1292,12 +1292,13 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
 
 function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCards, actorEmail, onSave, onBack, notify }: { account: Account; intel: AccountIntel; linkedStudies: BusinessCaseStudyRecord[]; ownerOptions: OwnerOption[]; kanbanCards: (KanbanCard & { boardName: string; columnName: string })[]; actorEmail: string; onSave: (account: Account, intel: AccountIntel) => void; onBack: () => void; notify: (message: string) => void }) {
   const [editing, setEditing] = useState(false);
+  const [opportunityEditing, setOpportunityEditing] = useState(false);
   const [draft, setDraft] = useState(account);
   const [draftIntel, setDraftIntel] = useState(intel);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
   const suppressEditRef = useRef(false);
-  useEffect(() => { setDraft(account); setDraftIntel(intel); setEditing(false); }, [account, intel]);
+  useEffect(() => { setDraft(account); setDraftIntel(intel); setEditing(false); setOpportunityEditing(false); }, [account, intel]);
   useEffect(() => {
     let activeRequest = true;
     let request = db().from("business_audit_logs").select("id, section, action, changes, actor_email, created_at").eq("entity_type", "business_accounts");
@@ -1320,6 +1321,18 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
     window.setTimeout(() => { suppressEditRef.current = false; }, 1200);
   };
   const saveEditing = () => { onSave(draft, draftIntel); setEditing(false); };
+  const cancelOpportunityEditing = () => {
+    setDraft((current) => ({
+      ...current,
+      opportunity: account.opportunity,
+      opportunitySummary: account.opportunitySummary,
+      fitScore: account.fitScore,
+      fit: account.fit,
+      evidence: account.evidence,
+    }));
+    setOpportunityEditing(false);
+  };
+  const saveOpportunityEditing = () => { onSave(draft, draftIntel); setOpportunityEditing(false); };
   const saveRelationshipMap = (contacts: RelationshipContact[], teams: RelationshipTeam[], nodes: RelationshipCanvasNode[], connections: RelationshipEdge[], accountPosition: CanvasPoint) => {
     const nextAccount = { ...draft, contacts: contacts.length };
     const nextIntel = { ...draftIntel, contacts, teams, nodes, connections, accountPosition };
@@ -1329,6 +1342,7 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
   };
   const summary = draft.opportunitySummary ?? "";
   const evidence = draft.evidence ?? [];
+  const editingOpportunity = editing || opportunityEditing;
 
   return <div className={`page account-detail-page ${editing ? "edit-mode" : ""}`}>
     <div className="account-page-actions">
@@ -1352,18 +1366,18 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
         <div className="section-head"><div><h2>Relationship playground</h2><p>Arrange teams, map reporting lines, and show who can open the door.</p></div><span className="legend"><i/> Saved to this account</span></div>
         <RelationshipCanvas account={draft} contacts={draftIntel.contacts} teams={draftIntel.teams} nodes={draftIntel.nodes} connections={draftIntel.connections} accountPosition={draftIntel.accountPosition} ownerOptions={ownerOptions} kanbanCards={kanbanCards} actorEmail={actorEmail} onRequestEdit={() => undefined} onChange={saveRelationshipMap}/>
       </section>
-      <aside className="surface opportunity-panel editable-block" onPointerDown={editing ? undefined : beginEditing}>
+      <aside className="surface opportunity-panel editable-block" onClick={(event) => { if ((event.target as HTMLElement).closest("button, input, textarea, select, a")) return; if (!editingOpportunity) setOpportunityEditing(true); }}>
         <div className="opportunity-panel-head">
           <span className="panel-label">Opportunity</span>
-          {editing && <button type="button" className="opportunity-cancel" aria-label="Cancel opportunity editing" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); cancelEditing(); }}><X size={14}/><span>Cancel</span></button>}
+          {opportunityEditing && <div className="opportunity-panel-actions"><button type="button" className="opportunity-cancel" aria-label="Cancel opportunity editing" onClick={(event) => { event.stopPropagation(); cancelOpportunityEditing(); }}><X size={14}/><span>Cancel</span></button><button type="button" className="opportunity-save" onClick={(event) => { event.stopPropagation(); saveOpportunityEditing(); }}><Save size={14}/><span>Save</span></button></div>}
         </div>
-        <h2><EditField editing={editing} value={draft.opportunity} label="Opportunity name" onChange={(opportunity) => patchAccount({ opportunity })}/></h2>
-        <p>{editing || summary ? <EditField editing={editing} multiline value={summary} label="Opportunity summary" onChange={(opportunitySummary) => patchAccount({ opportunitySummary })}/> : "No opportunity details added."}</p>
-        <div className="opportunity-score"><strong><EditField editing={editing} value={draft.fitScore ?? "—"} label="Capability fit" onChange={(fitScore) => patchAccount({ fitScore })}/></strong><span>capability fit</span></div>
+        <h2><EditField editing={editingOpportunity} value={draft.opportunity} label="Opportunity name" onChange={(opportunity) => patchAccount({ opportunity })}/></h2>
+        <p>{editingOpportunity || summary ? <EditField editing={editingOpportunity} multiline value={summary} label="Opportunity summary" onChange={(opportunitySummary) => patchAccount({ opportunitySummary })}/> : "No opportunity details added."}</p>
+        <div className="opportunity-score"><strong><EditField editing={editingOpportunity} value={draft.fitScore ?? "—"} label="Capability fit" onChange={(fitScore) => patchAccount({ fitScore })}/></strong><span>capability fit</span></div>
         <h3>Recommended capabilities</h3>
-        {editing ? <input className="inline-edit" aria-label="Recommended capabilities" value={draft.fit.join(", ")} onChange={(event) => patchAccount({ fit: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })}/> : draft.fit.length ? <div className="fit-tags">{draft.fit.map((fit) => <span key={fit}>{fit}</span>)}</div> : <div className="data-empty">No capability matches added.</div>}
+        {editingOpportunity ? <input className="inline-edit" aria-label="Recommended capabilities" value={draft.fit.join(", ")} onChange={(event) => patchAccount({ fit: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })}/> : draft.fit.length ? <div className="fit-tags">{draft.fit.map((fit) => <span key={fit}>{fit}</span>)}</div> : <div className="data-empty">No capability matches added.</div>}
         <h3>Evidence ready</h3>
-        {editing ? <textarea className="inline-edit textarea" aria-label="Evidence ready" value={evidence.join("\n")} onChange={(event) => patchAccount({ evidence: event.target.value.split("\n").filter(Boolean) })}/> : evidence.length ? <ul>{evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <div className="data-empty">No evidence added.</div>}
+        {editingOpportunity ? <textarea className="inline-edit textarea" aria-label="Evidence ready" value={evidence.join("\n")} onChange={(event) => patchAccount({ evidence: event.target.value.split("\n").filter(Boolean) })}/> : evidence.length ? <ul>{evidence.map((item) => <li key={item}>{item}</li>)}</ul> : <div className="data-empty">No evidence added.</div>}
       </aside>
     </div>
     <section className="surface case-studies-section">

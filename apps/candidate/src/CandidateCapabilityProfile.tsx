@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ArrowUpRight, Plus, Trash2 } from "lucide-react";
 import { capabilityName, capabilityVerticals, db, type Row } from "@quicksort/candidate-db";
 import { Empty, Pill } from "@quicksort/candidate-ui";
 
@@ -66,6 +66,7 @@ export function CandidateCapabilityProfile({ userId, profile, skills, projects, 
         outcome: String(values.get("outcome")).trim(),
         technologies,
         project_url: String(values.get("project_url")).trim(),
+        video_urls: String(values.get("video_urls")).split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean).slice(0, 10),
       });
       if (result.error) throw result.error;
       form.reset();
@@ -75,7 +76,7 @@ export function CandidateCapabilityProfile({ userId, profile, skills, projects, 
 
   return <>
     <section className="profile-status-card">
-      <div><span className="eyebrow">Admin review</span><h2>{profile?.review_status === "approved" ? "Your profile is approved" : profile?.review_status === "in_review" ? "Your updates are in review" : "Build your capability profile"}</h2><p>Only admin-approved skills and project evidence appear in Business capabilities.</p></div>
+      <div><span className="eyebrow">Admin review</span><h2>{profile?.review_status === "approved" ? "Your profile is approved" : profile?.review_status === "in_review" ? "Your updates are in review" : "Build your capability profile"}</h2><p>Only admin-approved skills and projects appear in Business capabilities.</p></div>
       <Pill status={profile?.review_status ?? "draft"}/>
     </section>
     <section className="panel">
@@ -97,16 +98,17 @@ export function CandidateCapabilityProfile({ userId, profile, skills, projects, 
       {!skills.length ? <Empty title="No skills added yet">Add the skills that show how you contribute to QuickSort’s four service verticals.</Empty> : <div className="capability-record-list">{skills.map((skill) => <article key={skill.id}><div><span className="record-vertical">{capabilityName(skill.vertical)}</span><h3>{skill.name}</h3><p>{skill.proficiency} · {skill.years_experience} years</p></div><div className="actions"><Pill status={skill.approved ? "approved" : "in review"}/><button className="icon-danger" aria-label={`Remove ${skill.name}`} disabled={busy} onClick={() => void action(async () => { const result = await db().from("candidate_skills").delete().eq("id", skill.id); if (result.error) throw result.error; }, "Skill removed.")}><Trash2 size={15}/></button></div></article>)}</div>}
     </section>
     <section className="panel">
-      <div className="panel-head"><div><h2>Project evidence</h2><p className="muted">Add work that proves your experience. Do not include confidential details.</p></div><button className="btn secondary small" onClick={() => setAddingProject((value) => !value)}><Plus size={14}/> Add project</button></div>
+      <div className="panel-head"><div><h2>Projects</h2><p className="muted">Add the projects you have worked on and describe what you delivered.</p></div><button className="btn secondary small" onClick={() => setAddingProject((value) => !value)}><Plus size={14}/> Add project</button></div>
       {addingProject && <form className="form capability-inline-form" onSubmit={addProject}>
         <div className="form-columns"><label>Vertical<select name="vertical">{capabilityVerticals.map((vertical) => <option key={vertical.id} value={vertical.id}>{vertical.name}</option>)}</select></label><label>Project title<input name="title" required maxLength={200}/></label></div>
         <label>Client or organisation (optional)<input name="client_name" maxLength={200}/></label>
         <label>What you delivered<textarea name="summary" required maxLength={3000}/></label>
         <label>Outcome or impact<textarea name="outcome" maxLength={1000}/></label>
         <div className="form-columns"><label>Technologies<input name="technologies" placeholder="Python, Kubernetes, Azure"/><span className="muted">Separate technologies with commas.</span></label><label>Project link (optional)<input name="project_url" type="url" placeholder="https://…"/></label></div>
+        <label>Video links (optional)<textarea name="video_urls" rows={3} placeholder={"https://youtube.com/…\nhttps://vimeo.com/…"}/><span className="muted">Add one video link per line.</span></label>
         <div className="actions"><button className="btn" disabled={busy}>Add project</button><button type="button" className="btn secondary" onClick={() => setAddingProject(false)}>Cancel</button></div>
       </form>}
-      {!projects.length ? <Empty title="No project evidence yet">Add a project to show how you have used your skills in practice.</Empty> : <div className="capability-record-list">{projects.map((project) => <article key={project.id}><div><span className="record-vertical">{capabilityName(project.vertical)}</span><h3>{project.title}</h3><p>{project.summary}</p>{project.technologies.length > 0 && <div className="record-tags">{project.technologies.map((technology) => <span key={technology}>{technology}</span>)}</div>}</div><div className="actions"><Pill status={project.approved ? "approved" : "in review"}/><button className="icon-danger" aria-label={`Remove ${project.title}`} disabled={busy} onClick={() => void action(async () => { const result = await db().from("candidate_projects").delete().eq("id", project.id); if (result.error) throw result.error; }, "Project removed.")}><Trash2 size={15}/></button></div></article>)}</div>}
+      {!projects.length ? <Empty title="No projects yet">Add the first project you have worked on.</Empty> : <div className="capability-record-list">{projects.map((project) => <article key={project.id}><div><span className="record-vertical">{capabilityName(project.vertical)}</span><h3>{project.title}</h3><p>{project.summary}</p>{project.technologies.length > 0 && <div className="record-tags">{project.technologies.map((technology) => <span key={technology}>{technology}</span>)}</div>}{(project.project_url || project.video_urls.length > 0) && <div className="project-links">{project.project_url && <a href={project.project_url} target="_blank" rel="noreferrer">Open project <ArrowUpRight size={13}/></a>}{project.video_urls.map((url, index) => <a href={url} target="_blank" rel="noreferrer" key={url}>Watch video {project.video_urls.length > 1 ? index + 1 : ""}<ArrowUpRight size={13}/></a>)}</div>}</div><div className="actions"><Pill status={project.approved ? "approved" : "in review"}/><button className="icon-danger" aria-label={`Remove ${project.title}`} disabled={busy} onClick={() => void action(async () => { const result = await db().from("candidate_projects").delete().eq("id", project.id); if (result.error) throw result.error; }, "Project removed.")}><Trash2 size={15}/></button></div></article>)}</div>}
     </section>
   </>;
 }

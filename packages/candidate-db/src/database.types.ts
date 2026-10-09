@@ -28,9 +28,9 @@ export type Database = {
         Relationships: [];
       };
       candidate_projects: {
-        Row: { id: string; candidate_id: string; vertical: string; title: string; client_name: string; summary: string; outcome: string; technologies: string[]; project_url: string; approved: boolean; updated_at: string };
-        Insert: { id?: string; candidate_id?: string; vertical: string; title: string; client_name?: string; summary: string; outcome?: string; technologies?: string[]; project_url?: string; approved?: boolean; updated_at?: string };
-        Update: { id?: string; candidate_id?: string; vertical?: string; title?: string; client_name?: string; summary?: string; outcome?: string; technologies?: string[]; project_url?: string; approved?: boolean; updated_at?: string };
+        Row: { id: string; candidate_id: string | null; vertical: string; title: string; client_name: string; summary: string; outcome: string; technologies: string[]; project_url: string; video_urls: string[]; contributor_name: string; contributor_email: string; approved: boolean; updated_at: string };
+        Insert: { id?: string; candidate_id?: string | null; vertical: string; title: string; client_name?: string; summary: string; outcome?: string; technologies?: string[]; project_url?: string; video_urls?: string[]; contributor_name?: string; contributor_email?: string; approved?: boolean; updated_at?: string };
+        Update: { id?: string; candidate_id?: string | null; vertical?: string; title?: string; client_name?: string; summary?: string; outcome?: string; technologies?: string[]; project_url?: string; video_urls?: string[]; contributor_name?: string; contributor_email?: string; approved?: boolean; updated_at?: string };
         Relationships: [];
       };
       events: {

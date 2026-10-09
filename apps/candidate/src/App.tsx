@@ -270,7 +270,7 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
               {[
                 {
                   title: "Complete your profile",
-                  text: "Add your professional profile, skills and project evidence.",
+                  text: "Add your professional profile, skills and projects.",
                   done: capabilityProfile?.review_status === "approved",
                   target: "profile",
                 },
@@ -346,7 +346,7 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
       {tab === "profile" && (
         <>
           <Heading eyebrow="Your experience" title="My capability profile">
-            Your skills and project evidence help QuickSort understand what the team can deliver. Admins review every update before it appears in Business.
+            Your skills and projects help QuickSort understand what the team can deliver. Admins review every update before it appears in Business.
           </Heading>
           <CandidateCapabilityProfile userId={userId} profile={capabilityProfile} skills={skills} projects={projects} busy={busy} action={action}/>
         </>

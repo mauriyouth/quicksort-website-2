@@ -6,6 +6,7 @@ import { CvAnalyzer } from "./CvAnalyzer";
 import { AiSettings } from "./AiSettings";
 import { AccessManager } from "./AccessManager";
 import { CandidateProfilesManager } from "./CandidateProfilesManager";
+import { ProjectsDirectory } from "./ProjectsDirectory";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   BriefcaseBusiness,
@@ -20,6 +21,7 @@ import {
   ArrowUpRight,
   Settings,
   RefreshCw,
+  FolderKanban,
 } from "lucide-react";
 import {
   db,
@@ -52,6 +54,7 @@ const nav = [
   { id: "events", href: "/events", label: "Events", icon: CalendarDays },
   { id: "blogs", href: "/blog-posts", label: "Blog posts", icon: FileText },
   { id: "people", href: "/candidates", label: "Candidates", icon: Users },
+  { id: "projects", href: "/projects", label: "Projects", icon: FolderKanban },
   { id: "contracts", href: "/contracts", label: "Contracts", icon: FileText },
   { id: "requests", href: "/tool-requests", label: "Tool requests", icon: KeyRound },
   { id: "account", href: "/settings", label: "Settings", icon: Settings },
@@ -573,7 +576,7 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       {tab === "people" && (
         <>
           <Heading eyebrow="People" title="Candidates">
-            Review each candidate’s profile, skills and project evidence before it reaches Business.
+            Review each candidate’s profile, skills and projects before they reach Business.
           </Heading>
           <CandidateProfilesManager people={people} profiles={candidateProfiles} skills={candidateSkills} projects={candidateProjects} selected={person} onSelect={setPerson} busy={busy} action={action}/>
           <section className="panel">
@@ -616,6 +619,14 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
               </Empty>
             )}
           </section>
+        </>
+      )}
+      {tab === "projects" && (
+        <>
+          <Heading eyebrow="Team delivery" title="Projects">
+            Every project submitted by current and former QuickSort contributors, collected in one place.
+          </Heading>
+          <ProjectsDirectory projects={candidateProjects} people={people}/>
         </>
       )}
       {tab === "contracts" && (

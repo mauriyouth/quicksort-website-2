@@ -1355,7 +1355,7 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
       <aside className="surface opportunity-panel editable-block" onPointerDown={editing ? undefined : beginEditing}>
         <div className="opportunity-panel-head">
           <span className="panel-label">Opportunity</span>
-          <button type="button" className="opportunity-cancel" aria-label="Cancel opportunity editing" hidden={!editing} onClick={(event) => { event.preventDefault(); event.stopPropagation(); cancelEditing(); }}><X size={14}/><span>Cancel</span></button>
+          {editing && <a className="opportunity-cancel" aria-label="Cancel opportunity editing" href={`/accounts/${account.id}`}><X size={14}/><span>Cancel</span></a>}
         </div>
         <h2><EditField editing={editing} value={draft.opportunity} label="Opportunity name" onChange={(opportunity) => patchAccount({ opportunity })}/></h2>
         <p>{editing || summary ? <EditField editing={editing} multiline value={summary} label="Opportunity summary" onChange={(opportunitySummary) => patchAccount({ opportunitySummary })}/> : "No opportunity details added."}</p>

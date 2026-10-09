@@ -206,7 +206,7 @@ main,.page,.surface,.event-workspace,.relationship-workspace,.relationship-layou
 .relationship-edit-controls button{width:30px;height:30px;display:grid;place-items:center;padding:0;background:transparent;color:#d4d4d4;border:0;border-radius:6px}
 .relationship-edit-controls button:hover:not(:disabled){background:#262626;color:#fff}
 .relationship-edit-controls .delete-control:hover:not(:disabled){background:#4b1717;color:#fecaca}
-.relationship-layout{position:relative;display:block}
+.relationship-layout{position:relative;display:block;isolation:isolate}
 .relationship-layout>.relationship-canvas{width:100%;min-width:0}
 .relationship-canvas{height:max(620px,calc(100vh - 230px));background:#050505;background-image:none}
 .relationship-scene{overflow:visible}

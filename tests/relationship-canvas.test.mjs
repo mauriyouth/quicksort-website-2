@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { autoPanVelocity, draggedPosition, zoomPanAtPoint } from "../apps/intelligence/src/relationshipCanvasMath.ts";
 
 test("cards can move to any world coordinate without clamping", () => {
@@ -29,4 +30,14 @@ test("pinch zoom keeps the world point under two fingers anchored", () => {
     x: nextPan.x + ((pointer.x - currentPan.x) / 1) * 1.5,
     y: nextPan.y + ((pointer.y - currentPan.y) / 1) * 1.5,
   }, pointer);
+});
+
+test("card inspector stays below the app header and closes on outside pointer actions", () => {
+  const app = readFileSync(new URL("../apps/intelligence/src/App.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../apps/intelligence/src/styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.relationship-layout\{[^}]*isolation:isolate/);
+  assert.match(app, /inspectorRef\.current\?\.contains\(event\.target as Node\)/);
+  assert.match(app, /window\.addEventListener\("pointerdown", dismissInspector, true\)/);
+  assert.match(app, /<aside ref=\{inspectorRef\} className="relationship-inspector">/);
 });

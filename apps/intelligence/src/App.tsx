@@ -1296,6 +1296,7 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
   const [draftIntel, setDraftIntel] = useState(intel);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
+  const suppressEditRef = useRef(false);
   useEffect(() => { setDraft(account); setDraftIntel(intel); setEditing(false); }, [account, intel]);
   useEffect(() => {
     let activeRequest = true;
@@ -1310,8 +1311,14 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
   const patchIntelItem = <K extends "contacts" | "leads" | "events">(group: K, index: number, patch: Partial<AccountIntel[K][number]>) => {
     setDraftIntel((current) => ({ ...current, [group]: current[group].map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item) }));
   };
-  const beginEditing = () => { if (!editing) setEditing(true); };
-  const cancelEditing = () => { setDraft(account); setDraftIntel(intel); setEditing(false); };
+  const beginEditing = () => { if (!editing && !suppressEditRef.current) setEditing(true); };
+  const cancelEditing = () => {
+    suppressEditRef.current = true;
+    setDraft(account);
+    setDraftIntel(intel);
+    setEditing(false);
+    window.setTimeout(() => { suppressEditRef.current = false; }, 250);
+  };
   const saveEditing = () => { onSave(draft, draftIntel); setEditing(false); };
   const saveRelationshipMap = (contacts: RelationshipContact[], teams: RelationshipTeam[], nodes: RelationshipCanvasNode[], connections: RelationshipEdge[], accountPosition: CanvasPoint) => {
     const nextAccount = { ...draft, contacts: contacts.length };

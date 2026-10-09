@@ -5,13 +5,14 @@ import type { EventAiIntelligence } from "./event-intelligence-schema";
 import type { CompetitorRecord, CompetitorResult } from "./competitor-schema";
 import { autoPanVelocity, draggedPosition, zoomPanAtPoint } from "./relationshipCanvasMath";
 import { filterWorkspaceSearch, type WorkspaceSearchEntry } from "./workspaceSearch";
+import PublicOpportunities from "./PublicOpportunities";
 import {
   Activity, ArrowLeft, ArrowUpRight, BookOpen, Building2, CalendarDays, ChevronDown, CircleDollarSign,
   ClipboardPaste, ContactRound, Copy, FileText, Filter, Handshake, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
-  Maximize2, Minus, PanelLeftClose, PanelLeftOpen, Pencil, Redo2, Save, Scissors, ShieldCheck, Sparkles, SquareDashed, Target, Trash2, Undo2, UserPlus, Users, X,
+  Landmark, Maximize2, Minus, PanelLeftClose, PanelLeftOpen, Pencil, Redo2, Save, Scissors, ShieldCheck, Sparkles, SquareDashed, Target, Trash2, Undo2, UserPlus, Users, X,
 } from "lucide-react";
 
-type View = "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "caseStudies" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "kanban" | "doors" | "guide";
+type View = "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "caseStudies" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "opportunities" | "pipeline" | "kanban" | "doors" | "guide";
 type GlobalSearchEntry = WorkspaceSearchEntry & {
   target: "view" | "account" | "event";
   view: View;
@@ -180,6 +181,7 @@ const nav = [
   { id: "accounts" as View, path: "/accounts", label: "Accounts", sidebarLabel: "Accounts", icon: Building2 },
   { id: "events" as View, path: "/events", label: "Events", sidebarLabel: "Events", icon: CalendarDays },
   { id: "leads" as View, path: "/leads", label: "Leads", sidebarLabel: "Leads", icon: Users },
+  { id: "opportunities" as View, path: "/public-opportunities", label: "Public opportunities", sidebarLabel: "Public opportunities", icon: Landmark },
   { id: "market" as View, path: "/market-intelligence", label: "Market intelligence", sidebarLabel: "Market", icon: Activity },
   { id: "competitors" as View, path: "/competitor-analysis", label: "Competitor analysis", sidebarLabel: "Competitors", icon: Search },
   { id: "marketing" as View, path: "/marketing-intelligence", label: "Marketing intelligence", sidebarLabel: "Marketing", icon: CircleDollarSign },
@@ -563,6 +565,7 @@ export default function App({ email = "" }: { email?: string }) {
           : <Accounts query={query} setQuery={setQuery} accounts={filteredAccounts} allAccounts={accountRecords} openAccount={(id) => navigate("accounts", id)} onAdd={addManualAccount} createIntent={createIntent}/>)}
         {view === "events" && <Events events={eventRecords} selectedEventId={selectedEvent} onOpenEvent={openEvent} onBack={() => navigate("events")} onChange={saveEvents} onAddLead={addEventLead} onAddAccount={addEventAccount} notify={notify}/>}
         {view === "leads" && <Leads leads={leadRecords} onChange={saveLeads} notify={notify} createIntent={createIntent}/>}
+        {view === "opportunities" && <PublicOpportunities notify={notify}/>}
         {view === "pipeline" && <Pipeline notify={notify}/>} 
         {view === "kanban" && <BusinessKanban projects={kanbanProjects} boards={kanbanBoards} columns={kanbanColumns} cards={kanbanCards} boardAccounts={kanbanBoardAccounts} accounts={accountRecords} onRefresh={loadKanban} notify={notify}/>}
         {view === "doors" && <OpenDoors accounts={accountRecords} intel={intelRecords} ownerOptions={ownerOptions} actorEmail={email} onAdd={addOpenDoorRelationship} openAccount={(id) => navigate("accounts", id)} notify={notify}/>}

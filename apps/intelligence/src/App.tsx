@@ -26,6 +26,17 @@ type Capability = {
 
 const accountStages = ["New", "Ongoing", "Discovery", "Ended"] as const;
 type AccountStage = typeof accountStages[number];
+const primaryIndustries = ["Luxury", "BPO", "Banking", "Insurance"] as const;
+const industryOptions = [...primaryIndustries, "Technology", "Retail", "Healthcare", "Public sector", "Telecommunications", "Energy", "Professional services", "Not set"];
+const normalizeIndustry = (sector: string, accountName = "") => {
+  const value = sector.trim() || "Not set";
+  const searchable = `${value} ${accountName}`.toLowerCase();
+  if (searchable.includes("luxury")) return "Luxury";
+  if (["bpo", "business process outsourcing", "customer experience", "contact center", "contact centre", "call center", "call centre"].some((term) => searchable.includes(term))) return "BPO";
+  if (["bank", "banking", "financial services", "capital"].some((term) => searchable.includes(term))) return "Banking";
+  if (searchable.includes("insurance") || searchable.includes("insurer")) return "Insurance";
+  return value;
+};
 const normalizeAccountStage = (stage: unknown): AccountStage => {
   if (stage === "Discovery" || stage === "New" || stage === "Ongoing" || stage === "Ended") return stage;
   if (stage === "Won" || stage === "Lost") return "Ended";
@@ -262,7 +273,7 @@ export default function App({ email = "" }: { email?: string }) {
   const [createIntent] = useState(0);
   const workspaceSearchEntries = useMemo<GlobalSearchEntry[]>(() => [
     ...nav.map(({ id, label, icon }) => ({ id: `view-${id}`, label, detail: "Workspace page", keywords: `${id} ${label}`, target: "view" as const, view: id, icon })),
-    ...accountRecords.map((account) => ({ id: `account-${account.id}`, label: account.name, detail: `${account.sector} · Account`, keywords: `${account.opportunity} ${account.owner} ${account.signal} ${account.stage}`, target: "account" as const, view: "accounts" as const, recordId: account.id, icon: Building2 })),
+    ...accountRecords.map((account) => ({ id: `account-${account.id}`, label: account.name, detail: `${normalizeIndustry(account.sector, account.name)} · Account`, keywords: `${account.sector} ${normalizeIndustry(account.sector, account.name)} ${account.opportunity} ${account.owner} ${account.signal} ${account.stage}`, target: "account" as const, view: "accounts" as const, recordId: account.id, icon: Building2 })),
     ...eventRecords.map((event) => ({ id: `event-${event.id}`, label: event.title, detail: `${event.date} · ${event.location || "Event"}`, keywords: `${event.status} event ${event.lumaUrl}`, target: "event" as const, view: "events" as const, recordId: event.id, icon: CalendarDays })),
     ...leadRecords.map((lead) => ({ id: `lead-${lead.id}`, label: lead.name, detail: `${lead.role || "Lead"}${lead.company ? ` · ${lead.company}` : ""}`, keywords: `${lead.source} ${lead.origin} ${lead.reason} ${lead.owner}`, target: "view" as const, view: "leads" as const, icon: Users })),
     ...businessPartnerRecords.map((partner) => ({ id: `partner-${partner.id}`, label: partner.name, detail: `${partner.role || "Business partner"}${partner.company ? ` · ${partner.company}` : ""}`, keywords: `${partner.origin} ${partner.relationship} ${partner.owner}`, target: "view" as const, view: "businessPartners" as const, icon: Handshake })),
@@ -270,7 +281,7 @@ export default function App({ email = "" }: { email?: string }) {
   ], [accountRecords, businessCaseStudies, businessPartnerRecords, eventRecords, leadRecords]);
   const workspaceSearchResults = useMemo(() => filterWorkspaceSearch(workspaceSearchEntries, workspaceSearchQuery), [workspaceSearchEntries, workspaceSearchQuery]);
   const active = capabilities.find((c) => c.id === selected) ?? capabilities[0] ?? emptyCapabilities[0];
-  const filteredAccounts = useMemo(() => accountRecords.filter((a) => `${a.name} ${a.sector} ${a.opportunity}`.toLowerCase().includes(query.toLowerCase())), [accountRecords, query]);
+  const filteredAccounts = useMemo(() => accountRecords.filter((a) => `${a.name} ${a.sector} ${normalizeIndustry(a.sector, a.name)} ${a.opportunity}`.toLowerCase().includes(query.toLowerCase())), [accountRecords, query]);
   const openWorkspaceSearch = () => { setWorkspaceSearchQuery(""); setWorkspaceSearchOpen(true); };
   const closeWorkspaceSearch = () => { setWorkspaceSearchOpen(false); setWorkspaceSearchQuery(""); };
   useEffect(() => {
@@ -764,7 +775,18 @@ const emptyAccountIntel = Object.fromEntries(accounts.map((account) => [account.
 
 function Accounts({ query, setQuery, accounts, allAccounts, openAccount, onAdd, createIntent }: { query: string; setQuery: (s: string) => void; accounts: Account[]; allAccounts: Account[]; openAccount: (id: string) => void; onAdd: (account: Account) => void; createIntent: number }) {
   const [adding, setAdding] = useState(false);
+  const [industry, setIndustry] = useState("All");
   useEffect(() => { if (createIntent) setAdding(true); }, [createIntent]);
+  const industries = useMemo(() => {
+    const discovered = allAccounts.map((account) => normalizeIndustry(account.sector, account.name)).filter((item) => item !== "Not set");
+    return ["All", ...new Set([...primaryIndustries, ...discovered])];
+  }, [allAccounts]);
+  const industryCounts = useMemo(() => allAccounts.reduce<Record<string, number>>((counts, account) => {
+    const category = normalizeIndustry(account.sector, account.name);
+    counts[category] = (counts[category] || 0) + 1;
+    return counts;
+  }, {}), [allAccounts]);
+  const visibleAccounts = useMemo(() => industry === "All" ? accounts : accounts.filter((account) => normalizeIndustry(account.sector, account.name) === industry), [accounts, industry]);
   const addAccount = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
@@ -775,9 +797,10 @@ function Accounts({ query, setQuery, accounts, allAccounts, openAccount, onAdd, 
     setAdding(false);
   };
   return <div className="page"><PageIntro title="Account intelligence" text="See who matters, who knows them and where the opportunity sits." action={<button className="primary" onClick={() => setAdding(true)}><Plus size={16}/> Add account</button>}/>
-    {adding && <form className="surface quick-create-form" onSubmit={addAccount}><div className="section-head"><div><h2>Add account</h2><p>Create the company record now. You can complete its intelligence page next.</p></div><button type="button" className="icon-button" onClick={() => setAdding(false)} aria-label="Close account form"><X size={17}/></button></div><div className="quick-create-grid"><label>Company name<input name="name" required autoFocus placeholder="Company name"/></label><label>Sector<input name="sector" placeholder="Industry or sector"/></label><label>Relationship<select name="signal"><option>Not set</option><option>Warm</option><option>Strong</option><option>Cold</option></select></label><label>Opportunity<input name="opportunity" placeholder="Opportunity or need"/></label><label>Estimated value<input name="value" placeholder="€—"/></label><label>Opportunity stage<select name="stage">{accountStages.map((stage) => <option key={stage}>{stage}</option>)}</select></label><label>QuickSort owner<input name="owner" placeholder="Owner"/></label></div><div className="actions"><button type="button" className="secondary" onClick={() => setAdding(false)}>Cancel</button><button className="primary"><Save size={15}/> Create account</button></div></form>}
-    <div className="toolbar"><label><Search size={17}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search companies or opportunities"/></label><button className="secondary"><Filter size={16}/> Filters</button><span>{accounts.length} accounts</span></div>
-    <div className="account-list">{accounts.map((account) => <a className="account-card" key={account.id} href={`/accounts/${encodeURIComponent(account.id)}`} onClick={(event) => { event.preventDefault(); openAccount(account.id); }} aria-label={`Open ${account.name} account`}><div className="account-monogram">{account.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div><div className="account-title"><h2>{account.name}</h2><p>{account.sector} · {account.contacts} mapped contacts</p></div><div className={`signal ${account.signal.toLowerCase()}`}><i/>{account.signal} relationship</div><div className="account-opportunity"><small>Account opportunity</small><span>{account.opportunity}</span><strong>{account.value}</strong></div><div className="fit-tags">{account.fit.map((f) => <span key={f}>{f}</span>)}</div><div className="account-owner"><span>{account.owner === "—" ? "—" : account.owner.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><div><small>QuickSort owner</small><b>{hasValue(account.owner) ? account.owner : "Not assigned"}</b><strong>{account.stage} · opportunity stage</strong></div></div><span className="open-card" aria-hidden="true"><ArrowUpRight size={18}/></span></a>)}</div>
+    {adding && <form className="surface quick-create-form" onSubmit={addAccount}><div className="section-head"><div><h2>Add account</h2><p>Create the company record now. You can complete its intelligence page next.</p></div><button type="button" className="icon-button" onClick={() => setAdding(false)} aria-label="Close account form"><X size={17}/></button></div><div className="quick-create-grid"><label>Company name<input name="name" required autoFocus placeholder="Company name"/></label><label>Industry<select name="sector" defaultValue="Not set">{industryOptions.map((item) => <option key={item}>{item}</option>)}</select></label><label>Relationship<select name="signal"><option>Not set</option><option>Warm</option><option>Strong</option><option>Cold</option></select></label><label>Opportunity<input name="opportunity" placeholder="Opportunity or need"/></label><label>Estimated value<input name="value" placeholder="€—"/></label><label>Opportunity stage<select name="stage">{accountStages.map((stage) => <option key={stage}>{stage}</option>)}</select></label><label>QuickSort owner<input name="owner" placeholder="Owner"/></label></div><div className="actions"><button type="button" className="secondary" onClick={() => setAdding(false)}>Cancel</button><button className="primary"><Save size={15}/> Create account</button></div></form>}
+    <div className="toolbar account-toolbar"><label><Search size={17}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search companies or opportunities"/></label><span>{visibleAccounts.length}{visibleAccounts.length !== allAccounts.length ? ` of ${allAccounts.length}` : ""} accounts</span></div>
+    <nav className="industry-filter" aria-label="Filter accounts by industry">{industries.map((item) => <button type="button" key={item} className={industry === item ? "active" : ""} aria-pressed={industry === item} onClick={() => setIndustry(item)}><span>{item}</span><strong>{item === "All" ? allAccounts.length : industryCounts[item] || 0}</strong></button>)}</nav>
+    {visibleAccounts.length ? <div className="account-list">{visibleAccounts.map((account) => <a className="account-card" key={account.id} href={`/accounts/${encodeURIComponent(account.id)}`} onClick={(event) => { event.preventDefault(); openAccount(account.id); }} aria-label={`Open ${account.name} account`}><div className="account-monogram">{account.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}</div><div className="account-title"><h2>{account.name}</h2><p>{normalizeIndustry(account.sector, account.name)} · {account.contacts} mapped contacts</p></div><div className={`signal ${account.signal.toLowerCase()}`}><i/>{account.signal} relationship</div><div className="account-opportunity"><small>Account opportunity</small><span>{account.opportunity}</span><strong>{account.value}</strong></div><div className="fit-tags">{account.fit.map((f) => <span key={f}>{f}</span>)}</div><div className="account-owner"><span>{account.owner === "—" ? "—" : account.owner.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span><div><small>QuickSort owner</small><b>{hasValue(account.owner) ? account.owner : "Not assigned"}</b><strong>{account.stage} · opportunity stage</strong></div></div><span className="open-card" aria-hidden="true"><ArrowUpRight size={18}/></span></a>)}</div> : <section className="surface account-filter-empty"><Filter size={18}/><strong>No accounts in {industry}</strong><span>Choose another industry or clear the search.</span><button type="button" className="secondary small" onClick={() => { setIndustry("All"); setQuery(""); }}>Show all accounts</button></section>}
   </div>;
 }
 
@@ -1423,7 +1446,7 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
     </div>
     <div className="page-intro editable-block" onClick={beginEditing}>
       <div><h1><EditField editing={editing} value={draft.name} label="Account name" onChange={(name) => patchAccount({ name })}/></h1>
-        <div className="account-subtitle"><EditField editing={editing} value={draft.sector} label="Sector" onChange={(sector) => patchAccount({ sector })}/><span>·</span><EditField editing={editing} value={draft.contacts} label="Mapped contacts" onChange={(contacts) => patchAccount({ contacts: Number(contacts) || 0 })}/><span>mapped contacts ·</span>{editing ? <select className="inline-edit" aria-label="Relationship strength" value={draft.signal} onChange={(event) => patchAccount({ signal: event.target.value })}><option>Not set</option><option>Cold</option><option>Warm</option><option>Strong</option></select> : <span className="editable-value">{hasValue(draft.signal) ? draft.signal : "Relationship not assessed"}</span>}</div>
+        <div className="account-subtitle">{editing ? <select className="inline-edit" aria-label="Industry" value={normalizeIndustry(draft.sector, draft.name)} onChange={(event) => patchAccount({ sector: event.target.value })}>{[...new Set([...industryOptions, normalizeIndustry(draft.sector, draft.name)])].map((item) => <option key={item}>{item}</option>)}</select> : <span className="editable-value">{normalizeIndustry(draft.sector, draft.name)}</span>}<span>·</span><EditField editing={editing} value={draft.contacts} label="Mapped contacts" onChange={(contacts) => patchAccount({ contacts: Number(contacts) || 0 })}/><span>mapped contacts ·</span>{editing ? <select className="inline-edit" aria-label="Relationship strength" value={draft.signal} onChange={(event) => patchAccount({ signal: event.target.value })}><option>Not set</option><option>Cold</option><option>Warm</option><option>Strong</option></select> : <span className="editable-value">{hasValue(draft.signal) ? draft.signal : "Relationship not assessed"}</span>}</div>
       </div>
       {!editing && <span className="edit-hint"><Pencil size={13}/> Click content to edit</span>}
     </div>

@@ -10,6 +10,8 @@ type Project = Row<"kanban_projects">;
 type Board = Row<"kanban_boards">;
 type Column = Row<"kanban_columns">;
 type Card = Row<"kanban_cards">;
+type BusinessAccount = Row<"business_accounts">;
+type BoardAccount = Row<"kanban_board_accounts">;
 type Panel = "project" | "board" | "edit-board" | "card" | "access" | "delete-project" | "delete-board" | null;
 
 // Supabase caps each response; fetch all pages so larger boards are not silently truncated.
@@ -31,6 +33,9 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const [people, setPeople] = useState<Row<"profiles">[]>([]);
   const [projectMembers, setProjectMembers] = useState<Row<"kanban_project_members">[]>([]);
   const [boardMembers, setBoardMembers] = useState<Row<"kanban_board_members">[]>([]);
+  const [businessAccounts, setBusinessAccounts] = useState<BusinessAccount[]>([]);
+  const [boardAccounts, setBoardAccounts] = useState<BoardAccount[]>([]);
+  const [accountToMap, setAccountToMap] = useState("");
   const [projectId, setProjectId] = useState("");
   const [boardId, setBoardId] = useState("");
   const [creator, setCreator] = useState("");
@@ -55,7 +60,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const load = useCallback(async () => {
     const version = ++request.current;
     try {
-      const [p, b, c, t, users, pm, bm] = await Promise.all([
+      const [p, b, c, t, users, pm, bm, accounts, accountLinks] = await Promise.all([
         readAll(() => db().from("kanban_projects").select("*").order("created_at").order("id")),
         readAll(() => db().from("kanban_boards").select("*").order("created_at").order("id")),
         readAll(() => db().from("kanban_columns").select("*").order("position").order("id")),
@@ -63,15 +68,19 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
         admin ? readAll(() => db().from("profiles").select("*").order("full_name").order("id")) : Promise.resolve({ data: [], error: null }),
         admin ? readAll(() => db().from("kanban_project_members").select("*").order("project_id").order("user_id")) : Promise.resolve({ data: [], error: null }),
         admin ? readAll(() => db().from("kanban_board_members").select("*").order("board_id").order("user_id")) : Promise.resolve({ data: [], error: null }),
+        admin ? readAll(() => db().from("business_accounts").select("id, slug, name").order("name")) : Promise.resolve({ data: [], error: null }),
+        admin ? readAll(() => db().from("kanban_board_accounts").select("*").order("created_at")) : Promise.resolve({ data: [], error: null }),
       ]);
-      for (const result of [p, b, c, t, users, pm, bm]) if (result.error) throw result.error;
+      for (const result of [p, b, c, t, users, pm, bm, accounts, accountLinks]) if (result.error) throw result.error;
       if (version !== request.current) return;
       setProjects(p.data || []); setBoards(b.data || []); setColumns(c.data || []); setCards(t.data || []);
       setPeople(users.data || []); setProjectMembers(pm.data || []); setBoardMembers(bm.data || []);
+      setBusinessAccounts(accounts.data || []); setBoardAccounts(accountLinks.data || []);
     } catch (err) {
       if (version === request.current) {
         setProjects([]); setBoards([]); setColumns([]); setCards([]);
         setPeople([]); setProjectMembers([]); setBoardMembers([]);
+        setBusinessAccounts([]); setBoardAccounts([]);
         setPanel(null);
         setError(errorMessage(err));
       }
@@ -95,6 +104,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
   const board = projectBoards.find(b => b.id === boardId) || projectBoards[0];
   const boardColumns = columns.filter(c => c.board_id === board?.id);
   const boardCards = cards.filter(c => c.board_id === board?.id);
+  const mappedAccounts = businessAccounts.filter(account => boardAccounts.some(link => link.board_id === board?.id && link.account_id === account.id));
   const selectedCard = boardCards.find(card => card.id === selectedCardId);
   const creators = [...new Map(boardCards.map(c => [c.created_by, c.creator_name])).entries()];
   useEffect(() => {
@@ -103,6 +113,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
     setDeletingCard(null);
     setSelectedCardId(null);
     setCreator("");
+    setAccountToMap("");
   }, [project?.id, board?.id]);
   const personName = (id: string) => people.find(p => p.id === id)?.full_name || people.find(p => p.id === id)?.email || "Workspace member";
 
@@ -238,7 +249,7 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       {admin ? "Create your first project for sales, events, marketing, or internal work." : "Your admin can give you access to a project or a specific board."}
     </Empty>}
     {!!projects.length && <>
-      <nav className="kanban-projects" aria-label="Projects">{projects.map(p => <button key={p.id} disabled={busy} className={p.id === project?.id ? "active" : ""} aria-current={p.id === project?.id ? "page" : undefined} onClick={() => changeProject(p.id)}>{p.name}<span>{boards.filter(b => b.project_id === p.id).length}</span></button>)}</nav>
+      <nav className="kanban-projects" aria-label="Projects">{projects.map(p => <button key={p.id} disabled={busy} className={p.id === project?.id ? "active" : ""} aria-current={p.id === project?.id ? "page" : undefined} onClick={() => changeProject(p.id)}><small>PRJ-{String(p.project_number).padStart(4, "0")}</small>{p.name}<span>{boards.filter(b => b.project_id === p.id).length}</span></button>)}</nav>
       <div className="kanban-toolbar">
         <label>Board<select value={board?.id || ""} disabled={busy || !projectBoards.length} onChange={e => { setBoardId(e.target.value); setCreator(""); setPanel(null); }}>
           {!projectBoards.length && <option value="">No boards yet</option>}{projectBoards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -290,14 +301,14 @@ export function KanbanWorkspace({ admin }: { admin: boolean }) {
       </div>}
     </section>}
     {board && <>
-      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag cards between columns to move them.</p></div><div className="kanban-actions">{admin && <button className="btn secondary kanban-magic" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
+      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag cards between columns to move them.</p>{admin && <div className="kanban-account-links"><strong>Linked accounts</strong>{mappedAccounts.map(account => <span key={account.id}>{account.name}<button aria-label={`Remove ${account.name}`} onClick={() => void action(async () => { const result = await db().from("kanban_board_accounts").delete().eq("board_id", board.id).eq("account_id", account.id); if (result.error) throw result.error; }, `${account.name} removed from this board.`, false, false)}><X size={12}/></button></span>)}<select aria-label="Account to map" value={accountToMap} onChange={event => setAccountToMap(event.target.value)}><option value="">Select account…</option>{businessAccounts.filter(account => !mappedAccounts.some(item => item.id === account.id)).map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select><button className="btn secondary" disabled={!accountToMap || busy} onClick={() => void action(async () => { const result = await db().from("kanban_board_accounts").upsert({ board_id: board.id, account_id: accountToMap }, { onConflict: "board_id,account_id" }); if (result.error) throw result.error; setAccountToMap(""); }, "Account mapped to this board.", false, false)}>Map account</button></div>}</div><div className="kanban-actions">{admin && <button className="btn secondary kanban-magic" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
       <div className="kanban-columns" aria-label={`${board.name} columns`}>
         {boardColumns.map(column => {
           const visibleCards = boardCards.filter(c => c.column_id === column.id && (!creator || c.created_by === creator));
           return <section className="kanban-column" key={column.id} aria-label={column.name} onDragOver={e => { if (!busy) e.preventDefault(); }} onDrop={e => { e.preventDefault(); const card = boardCards.find(c => c.id === e.dataTransfer.getData("text/plain")); if (card && !busy) moveCard(card, column.id); }}>
             <header><h3>{column.name}</h3><span>{visibleCards.length}</span></header>
             {visibleCards.map(card => <article className="kanban-card" key={card.id} onClick={() => { if (!busy) { setError(""); setSelectedCardId(card.id); } }} draggable={!busy} onDragStart={e => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; }}>
-              <div className="kanban-card-heading"><h4><button className="kanban-card-open" disabled={busy} aria-label={`Open card: ${card.title}`} onClick={event => { event.stopPropagation(); setError(""); setSelectedCardId(card.id); }}>{card.title}</button></h4>{admin && <button className="kanban-delete-card" aria-label={`Delete card: ${card.title}`} title="Delete card" disabled={busy} onClick={event => { event.stopPropagation(); setError(""); setDeletingCard(card); }}><Trash2 size={14} /></button>}</div>{card.description && <p className="kanban-description">{card.description}</p>}
+              <span className="kanban-card-number">CARD-{String(card.card_number).padStart(6, "0")}</span><div className="kanban-card-heading"><h4><button className="kanban-card-open" disabled={busy} aria-label={`Open card: ${card.title}`} onClick={event => { event.stopPropagation(); setError(""); setSelectedCardId(card.id); }}>{card.title}</button></h4>{admin && <button className="kanban-delete-card" aria-label={`Delete card: ${card.title}`} title="Delete card" disabled={busy} onClick={event => { event.stopPropagation(); setError(""); setDeletingCard(card); }}><Trash2 size={14} /></button>}</div>{card.description && <p className="kanban-description">{card.description}</p>}
               {card.due_at && <p className="kanban-deadline">Due <time dateTime={card.due_at}>{new Date(card.due_at).toLocaleString()}</time></p>}
               <span className="kanban-creator" title={`Created by ${card.creator_name}`}>Created by {card.creator_name}</span>
             </article>)}
@@ -403,7 +414,7 @@ function CardDetailsDialog({ card, columns, admin, busy, error, onClose, onSave 
       </fieldset>
     </form> : <>
       <dl className="kanban-card-metadata">
-        <div><dt>Status</dt><dd>{columns.find(column => column.id === card.column_id)?.name}</dd></div>
+        <div><dt>Card number</dt><dd>CARD-{String(card.card_number).padStart(6, "0")}</dd></div><div><dt>Status</dt><dd>{columns.find(column => column.id === card.column_id)?.name}</dd></div>
         <div><dt>Created by</dt><dd>{card.creator_name}</dd></div>
         <div><dt>Created</dt><dd><time dateTime={card.created_at}>{new Date(card.created_at).toLocaleString()}</time></dd></div>
         <div><dt>Deadline</dt><dd>{card.due_at ? <time dateTime={card.due_at}>{new Date(card.due_at).toLocaleString()}</time> : "No deadline"}</dd></div>

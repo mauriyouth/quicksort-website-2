@@ -589,9 +589,9 @@ type Lead = { name: string; role: string; company: string; status: string; nextS
 type AccountEvent = { date: string; month: string; title: string; type: string; detail: string };
 type RelationshipComment = { id: string; text: string; author: string; createdAt: string };
 type RelationshipContact = { id?: string; name: string; role: string; team?: string; department?: string; strength: string; owner: string; linkedin?: string; comments?: RelationshipComment[]; kanbanCardIds?: string[]; x?: number; y?: number };
-type RelationshipTeam = { id: string; name: string; description?: string; x: number; y: number; width: number; height: number };
+type RelationshipTeam = { id: string; name: string; description?: string; memberIds?: string[]; departmentId?: string; x: number; y: number; width: number; height: number };
 type RelationshipCanvasNode = { id: string; type: "department" | "note"; title: string; body: string; x: number; y: number; width: number; height: number };
-type RelationshipEdge = { id: string; source: string; target: string; label: string; strength?: string; owner?: string; notes?: string };
+type RelationshipEdge = { id: string; source: string; target: string; label: string; strength?: string; owner?: string; notes?: string; kind?: "manual" | "membership" };
 type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: RelationshipContact[]; teams?: RelationshipTeam[]; nodes?: RelationshipCanvasNode[]; connections?: RelationshipEdge[] };
 type OwnerOption = { id: string; name: string; email: string; headline: string };
 type AuditLog = { id: string; section: string; action: string; changes: Record<string, unknown>; actor_email: string; created_at: string };
@@ -661,11 +661,13 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   const [layoutNodes, setLayoutNodes] = useState<RelationshipCanvasNode[]>(nodes);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [connecting, setConnecting] = useState(false);
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
+  const [drawingEdge, setDrawingEdge] = useState<{ source: string; x: number; y: number } | null>(null);
+  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const [comment, setComment] = useState("");
+  const canvasRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<{ kind: "contact" | "team" | "node" | "pan"; id: string; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
   useEffect(() => setLayoutContacts(normalizedContacts), [normalizedContacts]);
   useEffect(() => setLayoutTeams(teams), [teams]);
@@ -685,21 +687,54 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
     const node = layoutNodes.find((item) => `node:${item.id}` === id);
     return node ? { x: node.x + node.width / 2, y: node.y + node.height / 2 } : null;
   };
-  const selectConnectionNode = (id: string) => {
-    if (!connecting) return;
-    if (!connectFrom) { setConnectFrom(id); return; }
-    if (connectFrom === id) { setConnectFrom(null); return; }
-    const exists = connections.some((edge) => (edge.source === connectFrom && edge.target === id) || (edge.source === id && edge.target === connectFrom));
-    const edge = { id: crypto.randomUUID(), source: connectFrom, target: id, label: "Define relationship", strength: "Not assessed", owner: "", notes: "" };
-    const next = exists ? connections : [...connections, edge];
-    persist(layoutContacts, layoutTeams, layoutNodes, next);
-    if (!exists) { setSelectedEdge(edge.id); setSelectedNode(null); }
-    setConnectFrom(null);
+  const beginConnection = (event: React.PointerEvent, source: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const point = nodePoint(source);
+    if (!point) return;
+    setConnectFrom(source);
+    setDrawingEdge({ source, x: point.x, y: point.y });
+    setSelectedNode(null);
+    setSelectedEdge(null);
   };
+  useEffect(() => {
+    if (!drawingEdge) return;
+    const move = (event: PointerEvent) => {
+      const bounds = canvasRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      setDrawingEdge((current) => current ? {
+        ...current,
+        x: (event.clientX - bounds.left - pan.x) / zoom,
+        y: (event.clientY - bounds.top - pan.y) / zoom,
+      } : null);
+    };
+    const finish = (event: PointerEvent) => {
+      const targetElement = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-connection-node]");
+      const target = targetElement?.dataset.connectionNode;
+      if (target && target !== drawingEdge.source) {
+        const existing = connections.find((edge) => (edge.source === drawingEdge.source && edge.target === target) || (edge.source === target && edge.target === drawingEdge.source));
+        if (existing) {
+          setSelectedEdge(existing.id);
+        } else {
+          const edge: RelationshipEdge = { id: crypto.randomUUID(), source: drawingEdge.source, target, label: "", strength: "Not assessed", owner: "", notes: "", kind: "manual" };
+          persist(layoutContacts, layoutTeams, layoutNodes, [...connections, edge]);
+          setSelectedEdge(edge.id);
+        }
+      }
+      setSelectedNode(null);
+      setConnectFrom(null);
+      setDrawingEdge(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+    };
+  }, [drawingEdge, connections, layoutContacts, layoutTeams, layoutNodes, pan.x, pan.y, zoom]);
   const startDrag = (event: React.PointerEvent, kind: "contact" | "team" | "node" | "pan", id: string, originX: number, originY: number) => {
     event.stopPropagation();
     if ((event.target as HTMLElement).closest("input, select, textarea, a")) return;
-    if (connecting && kind !== "pan") return;
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = { kind, id, startX: event.clientX, startY: event.clientY, originX, originY, moved: false };
   };
@@ -726,30 +761,85 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
     persist(nextContacts);
   };
   const addTeam = () => {
-    const nextTeam: RelationshipTeam = { id: crypto.randomUUID(), name: "New team", x: 70, y: 220, width: 960, height: 280 };
+    const members = layoutContacts.filter((contact) => contact.id && selectedContacts.includes(contact.id));
+    if (!members.length) return;
+    const minX = Math.min(...members.map((contact) => contact.x ?? 80));
+    const minY = Math.min(...members.map((contact) => contact.y ?? 220));
+    const columns = Math.max(1, Math.ceil(Math.sqrt(members.length)));
+    const rows = Math.ceil(members.length / columns);
+    const x = Math.max(20, minX - 24);
+    const y = Math.max(145, minY - 54);
+    const width = Math.min(1060 - x, Math.max(270, columns * 230 + 28));
+    const height = Math.max(220, rows * 166 + 52);
+    const teamId = crypto.randomUUID();
+    const memberIds = members.map((contact) => contact.id!);
+    const nextTeam: RelationshipTeam = { id: teamId, name: "New team", memberIds, x, y, width, height };
+    let memberIndex = 0;
+    const nextContacts = layoutContacts.map((contact) => memberIds.includes(contact.id || "") ? {
+      ...contact,
+      team: nextTeam.name,
+      x: x + 14 + (memberIndex % columns) * 230,
+      y: y + 50 + Math.floor(memberIndex++ / columns) * 166,
+    } : contact);
     const nextTeams = [...layoutTeams, nextTeam];
+    setLayoutContacts(nextContacts);
     setLayoutTeams(nextTeams);
-    setSelectedNode(`team:${nextTeam.id}`); setSelectedEdge(null);
-    persist(layoutContacts, nextTeams);
+    setSelectedContacts([]);
+    setSelectedNode(`team:${teamId}`);
+    setSelectedEdge(null);
+    persist(nextContacts, nextTeams);
   };
   const addNode = (type: "department" | "note") => {
     const nextNode: RelationshipCanvasNode = { id: crypto.randomUUID(), type, title: type === "department" ? "New department" : "New note", body: "", x: type === "department" ? 110 : 720, y: type === "department" ? 180 : 210, width: type === "department" ? 250 : 220, height: type === "department" ? 120 : 150 };
     const nextNodes = [...layoutNodes, nextNode]; setLayoutNodes(nextNodes); setSelectedNode(`node:${nextNode.id}`); setSelectedEdge(null); persist(layoutContacts, layoutTeams, nextNodes);
   };
   const patchContact = (id: string, patch: Partial<RelationshipContact>) => { const next = layoutContacts.map(item => item.id === id ? { ...item, ...patch } : item); setLayoutContacts(next); persist(next); };
-  const patchTeam = (id: string, patch: Partial<RelationshipTeam>) => { const next = layoutTeams.map(item => item.id === id ? { ...item, ...patch } : item); setLayoutTeams(next); persist(layoutContacts, next); };
+  const patchTeam = (id: string, patch: Partial<RelationshipTeam>) => {
+    const currentTeam = layoutTeams.find((item) => item.id === id);
+    const next = layoutTeams.map((item) => item.id === id ? { ...item, ...patch } : item);
+    const nextContacts = patch.name && currentTeam
+      ? layoutContacts.map((contact) => (currentTeam.memberIds || []).includes(contact.id || "") || contact.team === currentTeam.name ? { ...contact, team: patch.name } : contact)
+      : layoutContacts;
+    setLayoutTeams(next);
+    if (nextContacts !== layoutContacts) setLayoutContacts(nextContacts);
+    persist(nextContacts, next);
+  };
   const patchNode = (id: string, patch: Partial<RelationshipCanvasNode>) => { const next = layoutNodes.map(item => item.id === id ? { ...item, ...patch } : item); setLayoutNodes(next); persist(layoutContacts, layoutTeams, next); };
   const patchEdge = (id: string, patch: Partial<RelationshipEdge>) => persist(layoutContacts, layoutTeams, layoutNodes, connections.map(item => item.id === id ? { ...item, ...patch } : item));
+  const setTeamMembers = (team: RelationshipTeam, memberIds: string[]) => {
+    const columns = Math.max(1, Math.floor((team.width - 28) / 230));
+    let memberIndex = 0;
+    const nextContacts = layoutContacts.map((contact) => {
+      const isMember = memberIds.includes(contact.id || "");
+      if (isMember) return { ...contact, team: team.name, x: team.x + 14 + (memberIndex % columns) * 230, y: team.y + 50 + Math.floor(memberIndex++ / columns) * 166 };
+      return contact.team === team.name ? { ...contact, team: "" } : contact;
+    });
+    const rows = Math.max(1, Math.ceil(memberIds.length / columns));
+    const nextTeams = layoutTeams.map((item) => item.id === team.id ? { ...item, memberIds, height: Math.max(220, rows * 166 + 52) } : item);
+    setLayoutContacts(nextContacts);
+    setLayoutTeams(nextTeams);
+    persist(nextContacts, nextTeams);
+  };
+  const setDepartmentTeam = (department: RelationshipCanvasNode, team: RelationshipTeam, checked: boolean) => {
+    const source = `node:${department.id}`;
+    const target = `team:${team.id}`;
+    const nextTeams = layoutTeams.map((item) => item.id === team.id ? { ...item, departmentId: checked ? department.id : undefined } : item);
+    const existing = connections.find((edge) => edge.source === source && edge.target === target && edge.kind === "membership");
+    const nextConnections = checked
+      ? existing ? connections : [...connections, { id: crypto.randomUUID(), source, target, label: "Contains team", strength: "Not assessed", notes: "", kind: "membership" as const }]
+      : connections.filter((edge) => !(edge.source === source && edge.target === target && edge.kind === "membership"));
+    setLayoutTeams(nextTeams);
+    persist(layoutContacts, nextTeams, layoutNodes, nextConnections);
+  };
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
 
   return <div className="relationship-workspace">
     <div className="relationship-toolbar">
       <div>
         <button className="secondary small" onClick={addPerson}><UserPlus size={14}/> Add person</button>
-        <button className="secondary small" onClick={addTeam}><SquareDashed size={14}/> Add team</button>
+        <button className="secondary small" disabled={!selectedContacts.length} onClick={addTeam}><SquareDashed size={14}/> {selectedContacts.length ? `Create team from ${selectedContacts.length} selected` : "Select people to create a team"}</button>
         <button className="secondary small" onClick={() => addNode("department")}><Building2 size={14}/> Add department</button>
         <button className="secondary small" onClick={() => addNode("note")}><FileText size={14}/> Add note</button>
-        <button className={connecting ? "primary small" : "secondary small"} onClick={() => { setConnecting((value) => !value); setConnectFrom(null); }}><Link2 size={14}/> {connecting ? "Connecting" : "Connect"}</button>
       </div>
       <div className="canvas-controls" aria-label="Canvas controls">
         <button onClick={() => setZoom((value) => Math.max(.55, value - .1))} aria-label="Zoom out"><Minus size={14}/></button>
@@ -758,27 +848,27 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
         <button onClick={resetView} aria-label="Reset view"><Maximize2 size={14}/></button>
       </div>
     </div>
-    {connecting && <div className="connection-guide">{connectFrom ? "Select the person, team, or company to connect." : "Select the first person, team, or company."}</div>}
-    <div className="relationship-layout"><div className={`relationship-canvas ${connecting ? "is-connecting" : ""}`} onPointerDown={(event) => startDrag(event, "pan", "canvas", pan.x, pan.y)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
+    <div className="connection-guide"><Link2 size={13}/>{drawingEdge ? "Drop the line on another card to create the relationship." : "Draw a relationship from the round handle on any card to another card."}</div>
+    <div className="relationship-layout"><div ref={canvasRef} className={`relationship-canvas ${drawingEdge ? "is-connecting" : ""}`} onPointerDown={(event) => startDrag(event, "pan", "canvas", pan.x, pan.y)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
       <div className="relationship-scene" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
-        {layoutTeams.map((team) => <div key={team.id} className={`relationship-team ${connectFrom === `team:${team.id}` ? "selected" : ""}`} style={{ left: team.x, top: team.y, width: team.width, height: team.height }} onPointerDown={(event) => startDrag(event, "team", team.id, team.x, team.y)} onClick={(event) => { event.stopPropagation(); if (connecting) selectConnectionNode(`team:${team.id}`); }}><div><SquareDashed size={13}/><strong>{team.name}</strong><button className="node-edit" aria-label={`Edit ${team.name}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedNode(`team:${team.id}`); setSelectedEdge(null); onRequestEdit(); }}><Pencil size={12}/></button></div>{team.description && <p>{team.description}</p>}</div>)}
-        {layoutNodes.map(node => <article key={node.id} className={`relationship-free-node ${node.type} ${connectFrom === `node:${node.id}` ? "selected" : ""}`} style={{ left: node.x, top: node.y, width: node.width, minHeight: node.height }} onPointerDown={event => startDrag(event, "node", node.id, node.x, node.y)} onClick={event => { event.stopPropagation(); if (connecting) selectConnectionNode(`node:${node.id}`); }}><small>{node.type}</small><strong>{node.title}</strong>{node.body && <p>{node.body}</p>}<button className="node-edit" aria-label={`Edit ${node.title}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedNode(`node:${node.id}`); setSelectedEdge(null); onRequestEdit(); }}><Pencil size={12}/></button></article>)}
-        <svg viewBox="0 0 1100 620" aria-label="Relationship connections"><defs><marker id="relationship-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>{connections.map((edge) => { const source = nodePoint(edge.source); const target = nodePoint(edge.target); if (!source || !target) return null; const middleX = (source.x + target.x) / 2; const middleY = (source.y + target.y) / 2; return <g key={edge.id} className={selectedEdge === edge.id ? "selected-edge" : ""} onClick={event => { event.stopPropagation(); setSelectedEdge(edge.id); setSelectedNode(null); onRequestEdit(); }}><line x1={source.x} y1={source.y} x2={target.x} y2={target.y} markerEnd="url(#relationship-arrow)"/><rect x={middleX - 62} y={middleY - 12} width="124" height="24" rx="12"/><text x={middleX} y={middleY + 4}>{edge.label}</text></g>; })}</svg>
-        <button className={`relationship-company ${connectFrom === "account" ? "selected" : ""}`} style={{ left: 445, top: 42 }} onClick={(event) => { event.stopPropagation(); selectConnectionNode("account"); }}><span>{account.name.split(" ").map((part) => part[0]).join("").slice(0,2)}</span><small>Account</small><strong>{account.name}</strong></button>
-        {layoutContacts.map((contact) => <article className={`relationship-person ${connectFrom === contact.id ? "selected" : ""}`} key={contact.id} style={{ left: contact.x, top: contact.y }} onPointerDown={(event) => startDrag(event, "contact", contact.id!, contact.x!, contact.y!)} onClick={(event) => { event.stopPropagation(); if (!drag.current?.moved && connecting) selectConnectionNode(contact.id!); }}>
-          <button className="node-edit" aria-label={`Edit ${contact.name}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedNode(contact.id!); setSelectedEdge(null); onRequestEdit(); }}><Pencil size={12}/></button><header><span>{contact.name.split(" ").map((part) => part[0]).join("").slice(0,2) || "?"}</span><div><small>Person</small><strong>{contact.name}</strong></div></header>
+        {layoutTeams.map((team) => <div key={team.id} data-connection-node={`team:${team.id}`} className={`relationship-team ${connectFrom === `team:${team.id}` ? "selected" : ""}`} style={{ left: team.x, top: team.y, width: team.width, height: team.height }} onPointerDown={(event) => startDrag(event, "team", team.id, team.x, team.y)}><div><SquareDashed size={13}/><strong>{team.name}</strong><span>{team.memberIds?.length || 0} people</span><button className="node-edit" aria-label={`Edit ${team.name}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedNode(`team:${team.id}`); setSelectedEdge(null); onRequestEdit(); }}><Pencil size={12}/></button></div>{team.description && <p>{team.description}</p>}<button className="connection-handle" aria-label={`Draw relationship from ${team.name}`} onPointerDown={event => beginConnection(event, `team:${team.id}`)}/></div>)}
+        {layoutNodes.map(node => <article key={node.id} data-connection-node={`node:${node.id}`} className={`relationship-free-node ${node.type} ${connectFrom === `node:${node.id}` ? "selected" : ""}`} style={{ left: node.x, top: node.y, width: node.width, minHeight: node.height }} onPointerDown={event => startDrag(event, "node", node.id, node.x, node.y)}><small>{node.type}</small><strong>{node.title}</strong>{node.body && <p>{node.body}</p>}<button className="node-edit" aria-label={`Edit ${node.title}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedNode(`node:${node.id}`); setSelectedEdge(null); onRequestEdit(); }}><Pencil size={12}/></button><button className="connection-handle" aria-label={`Draw relationship from ${node.title}`} onPointerDown={event => beginConnection(event, `node:${node.id}`)}/></article>)}
+        <svg viewBox="0 0 1100 620" aria-label="Relationship connections"><defs><marker id="relationship-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>{connections.map((edge) => { const source = nodePoint(edge.source); const target = nodePoint(edge.target); if (!source || !target) return null; const middleX = (source.x + target.x) / 2; const middleY = (source.y + target.y) / 2; return <g key={edge.id} className={selectedEdge === edge.id ? "selected-edge" : ""} onClick={event => { event.stopPropagation(); setSelectedEdge(edge.id); setSelectedNode(null); onRequestEdit(); }}><line x1={source.x} y1={source.y} x2={target.x} y2={target.y} markerEnd="url(#relationship-arrow)"/><rect x={middleX - 62} y={middleY - 12} width="124" height="24" rx="12"/><text x={middleX} y={middleY + 4}>{edge.label || "Relationship"}</text></g>; })}{drawingEdge && (() => { const source = nodePoint(drawingEdge.source); return source ? <line className="relationship-preview-line" x1={source.x} y1={source.y} x2={drawingEdge.x} y2={drawingEdge.y}/> : null; })()}</svg>
+        <article data-connection-node="account" className={`relationship-company ${connectFrom === "account" ? "selected" : ""}`} style={{ left: 445, top: 42 }}><span>{account.name.split(" ").map((part) => part[0]).join("").slice(0,2)}</span><small>Account</small><strong>{account.name}</strong><button className="connection-handle" aria-label={`Draw relationship from ${account.name}`} onPointerDown={event => beginConnection(event, "account")}/></article>
+        {layoutContacts.map((contact) => <article data-connection-node={contact.id} className={`relationship-person ${connectFrom === contact.id ? "selected" : ""} ${selectedContacts.includes(contact.id!) ? "multi-selected" : ""}`} key={contact.id} style={{ left: contact.x, top: contact.y }} onPointerDown={(event) => startDrag(event, "contact", contact.id!, contact.x!, contact.y!)}>
+          <button className="contact-select" aria-label={`${selectedContacts.includes(contact.id!) ? "Remove" : "Add"} ${contact.name} ${selectedContacts.includes(contact.id!) ? "from" : "to"} team selection`} aria-pressed={selectedContacts.includes(contact.id!)} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedContacts((current) => current.includes(contact.id!) ? current.filter((id) => id !== contact.id) : [...current, contact.id!]); }}>{selectedContacts.includes(contact.id!) ? "✓" : "+"}</button><button className="node-edit" aria-label={`Edit ${contact.name}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedNode(contact.id!); setSelectedEdge(null); onRequestEdit(); }}><Pencil size={12}/></button><header><span>{contact.name.split(" ").map((part) => part[0]).join("").slice(0,2) || "?"}</span><div><small>Person</small><strong>{contact.name}</strong></div></header>
           <dl>
             <div><dt>Position</dt><dd>{hasValue(contact.role) ? contact.role : "Add position"}</dd></div>
             <div><dt>Department</dt><dd>{hasValue(contact.department) ? contact.department : "Add department"}</dd></div>
             <div><dt>Relationship</dt><dd>{hasValue(contact.strength) ? contact.strength : "Define relationship"}</dd></div>
             <div><dt>QuickSort owner</dt><dd>{hasValue(contact.owner) ? contact.owner : "Assign owner"}</dd></div>
           </dl>
-          {contact.linkedin ? <a href={contact.linkedin} target="_blank" rel="noreferrer" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>LinkedIn profile <ArrowUpRight size={11}/></a> : <span className="missing-profile">No LinkedIn added</span>}
+          {contact.linkedin ? <a href={contact.linkedin} target="_blank" rel="noreferrer" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>LinkedIn profile <ArrowUpRight size={11}/></a> : <span className="missing-profile">No LinkedIn added</span>}<button className="connection-handle" aria-label={`Draw relationship from ${contact.name}`} onPointerDown={event => beginConnection(event, contact.id!)}/>
         </article>)}
         {!layoutContacts.length && <div className="relationship-empty"><Users size={24}/><strong>No people mapped yet</strong><span>Add a person, place them in a team, then connect the reporting line.</span></div>}
       </div>
-    </div>{selectedNode && <aside className="relationship-inspector"><div className="inspector-head"><div><small>Card inspector</small><strong>Edit details</strong></div><button onClick={() => setSelectedNode(null)} aria-label="Close inspector"><X size={15}/></button></div>{(() => { const contact = layoutContacts.find(item => item.id === selectedNode); if (contact) return <div className="inspector-fields"><label>Name<input value={contact.name} onChange={e => patchContact(contact.id!, { name: e.target.value })}/></label><label>Position<input value={contact.role} onChange={e => patchContact(contact.id!, { role: e.target.value })}/></label><label>Team<input value={contact.team || ""} onChange={e => patchContact(contact.id!, { team: e.target.value })}/></label><label>Department<input value={contact.department || ""} onChange={e => patchContact(contact.id!, { department: e.target.value })}/></label><label>Relationship<input value={contact.strength} onChange={e => patchContact(contact.id!, { strength: e.target.value })}/></label><label>QuickSort owner<select value={contact.owner} onChange={e => patchContact(contact.id!, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>LinkedIn<input value={contact.linkedin || ""} onChange={e => patchContact(contact.id!, { linkedin: e.target.value })}/></label><fieldset><legend>Linked Kanban cards</legend>{kanbanCards.length ? kanbanCards.map(card => <label className="inspector-check" key={card.id}><input type="checkbox" checked={(contact.kanbanCardIds || []).includes(card.id)} onChange={e => patchContact(contact.id!, { kanbanCardIds: e.target.checked ? [...(contact.kanbanCardIds || []), card.id] : (contact.kanbanCardIds || []).filter(id => id !== card.id) })}/><span>CARD-{String(card.card_number).padStart(6, "0")} · {card.title}<small>{card.boardName} · {card.columnName}</small></span></label>) : <p>No account boards are mapped yet.</p>}</fieldset><fieldset><legend>Comments</legend>{(contact.comments || []).map(item => <article className="contact-comment" key={item.id}><p>{item.text}</p><small>{item.author} · {new Date(item.createdAt).toLocaleString()}</small></article>)}<textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add context or a follow-up note"/><button className="secondary small" disabled={!comment.trim()} onClick={() => { patchContact(contact.id!, { comments: [...(contact.comments || []), { id: crypto.randomUUID(), text: comment.trim(), author: actorEmail || "Workspace admin", createdAt: new Date().toISOString() }] }); setComment(""); }}>Add comment</button></fieldset></div>; const teamId = selectedNode.startsWith("team:") ? selectedNode.slice(5) : ""; const team = layoutTeams.find(item => item.id === teamId); if (team) return <div className="inspector-fields"><label>Team name<input value={team.name} onChange={e => patchTeam(team.id, { name: e.target.value })}/></label><label>Description<textarea value={team.description || ""} onChange={e => patchTeam(team.id, { description: e.target.value })}/></label></div>; const nodeId = selectedNode.startsWith("node:") ? selectedNode.slice(5) : ""; const node = layoutNodes.find(item => item.id === nodeId); return node ? <div className="inspector-fields"><label>Title<input value={node.title} onChange={e => patchNode(node.id, { title: e.target.value })}/></label><label>Details<textarea value={node.body} onChange={e => patchNode(node.id, { body: e.target.value })}/></label></div> : null; })()}</aside>}{selectedEdge && (() => { const edge = connections.find(item => item.id === selectedEdge); return edge ? <aside className="relationship-inspector"><div className="inspector-head"><div><small>Connection inspector</small><strong>Define the edge</strong></div><button onClick={() => setSelectedEdge(null)} aria-label="Close inspector"><X size={15}/></button></div><div className="inspector-fields"><label>Relationship<input value={edge.label} onChange={e => patchEdge(edge.id, { label: e.target.value })}/></label><label>Strength<select value={edge.strength || "Not assessed"} onChange={e => patchEdge(edge.id, { strength: e.target.value })}><option>Not assessed</option><option>Weak</option><option>Developing</option><option>Strong</option><option>Trusted</option></select></label><label>Owner<select value={edge.owner || ""} onChange={e => patchEdge(edge.id, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>Notes<textarea value={edge.notes || ""} onChange={e => patchEdge(edge.id, { notes: e.target.value })}/></label><button className="danger-link" onClick={() => { persist(layoutContacts, layoutTeams, layoutNodes, connections.filter(item => item.id !== edge.id)); setSelectedEdge(null); }}>Remove connection</button></div></aside> : null; })()}</div>
-    <div className="relationship-help"><span>Nothing connects automatically.</span><span>Drag any card or the empty canvas.</span><span>Use Connect, select two nodes, then click the edge label to define it.</span></div>
+    </div>{selectedNode && <aside className="relationship-inspector"><div className="inspector-head"><div><small>Card inspector</small><strong>Edit details</strong></div><button onClick={() => setSelectedNode(null)} aria-label="Close inspector"><X size={15}/></button></div>{(() => { const contact = layoutContacts.find(item => item.id === selectedNode); if (contact) return <div className="inspector-fields"><label>Name<input value={contact.name} onChange={e => patchContact(contact.id!, { name: e.target.value })}/></label><label>Position<input value={contact.role} onChange={e => patchContact(contact.id!, { role: e.target.value })}/></label><label>Team<input value={contact.team || ""} onChange={e => patchContact(contact.id!, { team: e.target.value })}/></label><label>Department<input value={contact.department || ""} onChange={e => patchContact(contact.id!, { department: e.target.value })}/></label><label>Relationship<input value={contact.strength} onChange={e => patchContact(contact.id!, { strength: e.target.value })}/></label><label>QuickSort owner<select value={contact.owner} onChange={e => patchContact(contact.id!, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>LinkedIn<input value={contact.linkedin || ""} onChange={e => patchContact(contact.id!, { linkedin: e.target.value })}/></label><fieldset><legend>Linked Kanban cards</legend>{kanbanCards.length ? kanbanCards.map(card => <label className="inspector-check" key={card.id}><input type="checkbox" checked={(contact.kanbanCardIds || []).includes(card.id)} onChange={e => patchContact(contact.id!, { kanbanCardIds: e.target.checked ? [...(contact.kanbanCardIds || []), card.id] : (contact.kanbanCardIds || []).filter(id => id !== card.id) })}/><span>CARD-{String(card.card_number).padStart(6, "0")} · {card.title}<small>{card.boardName} · {card.columnName}</small></span></label>) : <p>No account boards are mapped yet.</p>}</fieldset><fieldset><legend>Comments</legend>{(contact.comments || []).map(item => <article className="contact-comment" key={item.id}><p>{item.text}</p><small>{item.author} · {new Date(item.createdAt).toLocaleString()}</small></article>)}<textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add context or a follow-up note"/><button className="secondary small" disabled={!comment.trim()} onClick={() => { patchContact(contact.id!, { comments: [...(contact.comments || []), { id: crypto.randomUUID(), text: comment.trim(), author: actorEmail || "Workspace admin", createdAt: new Date().toISOString() }] }); setComment(""); }}>Add comment</button></fieldset></div>; const teamId = selectedNode.startsWith("team:") ? selectedNode.slice(5) : ""; const team = layoutTeams.find(item => item.id === teamId); if (team) return <div className="inspector-fields"><label>Team name<input value={team.name} onChange={e => patchTeam(team.id, { name: e.target.value })}/></label><label>Description<textarea value={team.description || ""} onChange={e => patchTeam(team.id, { description: e.target.value })}/></label><fieldset><legend>People in this team</legend><p>Select people to place and align inside this team.</p>{layoutContacts.map(contactItem => <label className="inspector-check" key={contactItem.id}><input type="checkbox" checked={(team.memberIds || []).includes(contactItem.id!)} onChange={event => setTeamMembers(team, event.target.checked ? [...(team.memberIds || []), contactItem.id!] : (team.memberIds || []).filter(id => id !== contactItem.id))}/><span>{contactItem.name}<small>{contactItem.role || "Position not added"}</small></span></label>)}</fieldset></div>; const nodeId = selectedNode.startsWith("node:") ? selectedNode.slice(5) : ""; const node = layoutNodes.find(item => item.id === nodeId); return node ? <div className="inspector-fields"><label>Title<input value={node.title} onChange={e => patchNode(node.id, { title: e.target.value })}/></label><label>Details<textarea value={node.body} onChange={e => patchNode(node.id, { body: e.target.value })}/></label>{node.type === "department" && <fieldset><legend>Teams in this department</legend><p>Select teams to map beneath this department.</p>{layoutTeams.map(teamItem => <label className="inspector-check" key={teamItem.id}><input type="checkbox" checked={teamItem.departmentId === node.id} onChange={event => setDepartmentTeam(node, teamItem, event.target.checked)}/><span>{teamItem.name}<small>{teamItem.memberIds?.length || 0} people</small></span></label>)}</fieldset>}</div> : null; })()}</aside>}{selectedEdge && (() => { const edge = connections.find(item => item.id === selectedEdge); return edge ? <aside className="relationship-inspector"><div className="inspector-head"><div><small>Relationship mapping</small><strong>How are these connected?</strong></div><button onClick={() => setSelectedEdge(null)} aria-label="Close relationship editor"><X size={15}/></button></div><div className="inspector-fields"><p className="inspector-prompt">Name the relationship and add any context the team should know.</p><label>Relationship<input placeholder="Reports to, introduced by, works with…" value={edge.label} onChange={e => patchEdge(edge.id, { label: e.target.value })}/></label><label>Strength<select value={edge.strength || "Not assessed"} onChange={e => patchEdge(edge.id, { strength: e.target.value })}><option>Not assessed</option><option>Weak</option><option>Developing</option><option>Strong</option><option>Trusted</option></select></label><label>Owner<select value={edge.owner || ""} onChange={e => patchEdge(edge.id, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>Comment or context<textarea value={edge.notes || ""} placeholder="Add context about this relationship" onChange={e => patchEdge(edge.id, { notes: e.target.value })}/></label><button className="danger-link" onClick={() => { persist(layoutContacts, layoutTeams, layoutNodes, connections.filter(item => item.id !== edge.id)); setSelectedEdge(null); }}>Remove relationship</button></div></aside> : null; })()}</div>
+    <div className="relationship-help"><span>Use + on person cards to select a team.</span><span>Drag cards or the empty canvas to arrange the map.</span><span>Drag from a round handle to another card to draw a relationship.</span></div>
   </div>;
 }
 

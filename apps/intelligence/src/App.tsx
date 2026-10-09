@@ -674,6 +674,7 @@ type RelationshipEdge = { id: string; source: string; target: string; label: str
 type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: RelationshipContact[]; teams?: RelationshipTeam[]; nodes?: RelationshipCanvasNode[]; connections?: RelationshipEdge[] };
 type OwnerOption = { id: string; name: string; email: string; headline: string };
 type AuditLog = { id: string; section: string; action: string; changes: Record<string, unknown>; actor_email: string; created_at: string };
+type AuditChange = { field: string; before?: unknown; after?: unknown };
 type KanbanProject = { id: string; name: string; project_number: number };
 type KanbanBoard = { id: string; project_id: string; name: string };
 type KanbanColumn = { id: string; board_id: string; name: string; position: number };
@@ -717,6 +718,49 @@ const auditFieldLabel = (field: string) => ({
   opportunity_summary: "Opportunity summary",
   fit_score: "Capability fit",
 }[field] ?? field.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase()));
+
+const auditValueSummary = (field: string, value: unknown) => {
+  if (value === null || value === undefined || value === "") return "Empty";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.length ? `${value.length} item${value.length === 1 ? "" : "s"}` : "None";
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (field === "intelligence") {
+      const groups = ["contacts", "teams", "nodes", "connections", "leads", "events"]
+        .map((key) => [key, Array.isArray(record[key]) ? record[key].length : 0] as const)
+        .filter(([, count]) => count > 0)
+        .map(([key, count]) => `${count} ${key}`);
+      return groups.length ? groups.join(" · ") : "Empty relationship map";
+    }
+    return `${Object.keys(record).length} field${Object.keys(record).length === 1 ? "" : "s"}`;
+  }
+  return String(value);
+};
+
+const auditValueDetail = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return "Empty";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  try { return JSON.stringify(value, null, 2); } catch { return String(value); }
+};
+
+const auditChangeDetails = (log: AuditLog): AuditChange[] => {
+  const changes = log.changes || {};
+  const wrapped = log.action === "created" ? changes.created : log.action === "deleted" ? changes.deleted : undefined;
+  if (wrapped && typeof wrapped === "object" && !Array.isArray(wrapped)) {
+    return Object.entries(wrapped as Record<string, unknown>).map(([field, value]) => ({
+      field,
+      ...(log.action === "created" ? { after: value } : { before: value }),
+    }));
+  }
+  return Object.entries(changes).map(([field, value]) => {
+    if (value && typeof value === "object" && !Array.isArray(value) && ("before" in value || "after" in value)) {
+      const comparison = value as { before?: unknown; after?: unknown };
+      return { field, before: comparison.before, after: comparison.after };
+    }
+    return { field, after: value };
+  });
+};
 
 function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connections = [], ownerOptions, kanbanCards, actorEmail, onRequestEdit, onChange }: {
   account: Account;
@@ -1091,6 +1135,7 @@ function AccountDetail({ account, intel, ownerOptions, kanbanCards, actorEmail, 
   const [draft, setDraft] = useState(account);
   const [draftIntel, setDraftIntel] = useState(intel);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
   useEffect(() => { setDraft(account); setDraftIntel(intel); setEditing(false); }, [account, intel]);
   useEffect(() => {
     let activeRequest = true;
@@ -1183,8 +1228,26 @@ function AccountDetail({ account, intel, ownerOptions, kanbanCards, actorEmail, 
     <section className="surface account-activity-log">
       <div className="section-head"><div><h2>Change history</h2><p>Server-recorded edits for this account, including who changed each section.</p></div><span className="case-count">{auditLogs.length} recent</span></div>
       {auditLogs.length ? <div className="activity-list">{auditLogs.map((log) => {
-        const fields = Object.keys(log.changes || {});
-        return <article key={log.id}><span className="activity-dot"/><div><strong>{log.actor_email || "Workspace administrator"}</strong><p>{log.action === "created" ? "Created this account" : log.action === "deleted" ? "Deleted this account" : `Updated ${fields.map(auditFieldLabel).join(", ") || log.section}`}</p><small>{log.section} · {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(log.created_at))}</small></div></article>;
+        const changes = auditChangeDetails(log);
+        const fields = changes.map((change) => change.field);
+        const expanded = expandedAuditId === log.id;
+        return <article className={expanded ? "expanded" : ""} key={log.id}>
+          <button className="activity-summary" type="button" aria-expanded={expanded} onClick={() => setExpandedAuditId(expanded ? null : log.id)}>
+            <span className="activity-dot"/>
+            <span className="activity-copy"><strong>{log.actor_email || "Workspace administrator"}</strong><span>{log.action === "created" ? "Created this account" : log.action === "deleted" ? "Deleted this account" : `Updated ${fields.map(auditFieldLabel).join(", ") || log.section}`}</span><small>{log.section} · {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(log.created_at))}</small></span>
+            <ChevronDown className="activity-chevron" size={15}/>
+          </button>
+          {expanded && <div className="activity-details">
+            <div className="activity-details-head"><strong>What changed</strong><span>{changes.length} field{changes.length === 1 ? "" : "s"}</span></div>
+            {changes.length ? changes.map((change) => <section className="activity-change" key={change.field}>
+              <h3>{auditFieldLabel(change.field)}</h3>
+              <div className={`activity-comparison ${log.action === "created" || log.action === "deleted" ? "single" : ""}`}>
+                {log.action !== "created" && <div><small>Previous</small><strong>{auditValueSummary(change.field, change.before)}</strong><pre>{auditValueDetail(change.before)}</pre></div>}
+                {log.action !== "deleted" && <div><small>New</small><strong>{auditValueSummary(change.field, change.after)}</strong><pre>{auditValueDetail(change.after)}</pre></div>}
+              </div>
+            </section>) : <p className="activity-no-detail">No field-level details were recorded for this change.</p>}
+          </div>}
+        </article>;
       })}</div> : <div className="data-empty">No recorded changes yet. New saves will appear here automatically.</div>}
     </section>
   </div>;

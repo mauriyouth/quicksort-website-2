@@ -153,6 +153,34 @@ h1,h2,h3,p{margin-top:0}.page-intro h1{font-family:"Inter",sans-serif;font-size:
 .relationship-toolbar button:disabled{opacity:.42;cursor:not-allowed}
 @media(max-width:700px){.relationship-toolbar>div:first-child{flex-wrap:wrap}.connection-handle{width:22px;height:22px;right:-11px}}
 
+/* Scrollable, inspectable account audit history */
+.account-activity-log{padding:24px;margin-top:16px}
+.activity-list{display:grid;max-height:min(52vh,540px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;margin-top:15px;padding-right:8px}
+.activity-list article{display:block;padding:0;border-top:1px solid #292929}
+.activity-summary{width:100%;display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:start;gap:10px;padding:14px 4px;background:transparent;color:#fafafa;border:0;text-align:left;cursor:pointer}
+.activity-summary:hover,.activity-summary:focus-visible{background:#181818;outline:0}
+.activity-summary .activity-dot{width:7px;height:7px;margin-top:5px;background:#fafafa;border-radius:50%;box-shadow:0 0 0 4px #262626}
+.activity-copy{display:grid;gap:3px}
+.activity-copy strong{font-size:9px}
+.activity-copy>span{color:#d4d4d4;font-size:10px}
+.activity-copy small{color:#737373;font-size:8px}
+.activity-chevron{margin-top:7px;color:#737373;transition:transform .16s ease}
+.activity-list article.expanded .activity-chevron{transform:rotate(180deg);color:#fafafa}
+.activity-details{display:grid;gap:10px;padding:0 4px 16px 24px}
+.activity-details-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#0a0a0a;border:1px solid #303030;border-radius:7px}
+.activity-details-head strong{font-size:10px}
+.activity-details-head span{color:#737373;font-size:8px}
+.activity-change{padding:12px;background:#101010;border:1px solid #303030;border-radius:8px}
+.activity-change h3{margin:0 0 9px;font-size:10px}
+.activity-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.activity-comparison.single{grid-template-columns:1fr}
+.activity-comparison>div{min-width:0;padding:10px;background:#080808;border-radius:6px}
+.activity-comparison small{display:block;margin-bottom:4px;color:#737373;font-size:7px;text-transform:uppercase;letter-spacing:.08em}
+.activity-comparison strong{display:block;overflow-wrap:anywhere;color:#d4d4d4;font-size:9px}
+.activity-comparison pre{max-height:160px;overflow:auto;margin:8px 0 0;padding:8px;background:#141414;color:#a3a3a3;border:1px solid #292929;border-radius:5px;white-space:pre-wrap;overflow-wrap:anywhere;font:7px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+.activity-no-detail{margin:0;color:#737373;font-size:9px}
+@media(max-width:700px){.account-activity-log{padding:18px}.activity-list{max-height:480px}.activity-comparison{grid-template-columns:1fr}}
+
 /* Responsive canvas controls, compact hierarchy cards and overlay editor */
 html,body,#root{max-width:100%;overflow-x:hidden}
 main,.page,.surface,.event-workspace,.relationship-workspace,.relationship-layout{min-width:0}

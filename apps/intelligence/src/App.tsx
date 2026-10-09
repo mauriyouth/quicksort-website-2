@@ -3,7 +3,7 @@ import { useClerk, useSession } from "@clerk/react";
 import { db } from "./workspaceAuth";
 import type { EventAiIntelligence } from "./event-intelligence-schema";
 import type { CompetitorRecord, CompetitorResult } from "./competitor-schema";
-import { autoPanVelocity, draggedPosition } from "./relationshipCanvasMath";
+import { autoPanVelocity, draggedPosition, zoomPanAtPoint } from "./relationshipCanvasMath";
 import {
   Activity, ArrowLeft, ArrowUpRight, BookOpen, Building2, CalendarDays, ChevronDown, CircleDollarSign,
   ClipboardPaste, ContactRound, Copy, FileText, Filter, Handshake, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
@@ -822,6 +822,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   const [, refreshCommands] = useState(0);
   const drag = useRef<{ kind: "account" | "contact" | "team" | "node" | "pan"; id: string; startX: number; startY: number; originX: number; originY: number; originPanX: number; originPanY: number; moved: boolean } | null>(null);
   const panRef = useRef(pan);
+  const zoomRef = useRef(zoom);
   const latestPointerRef = useRef<CanvasPoint | null>(null);
   const autoPanFrameRef = useRef<number | null>(null);
   useEffect(() => setLayoutContacts(normalizedContacts), [normalizedContacts]);
@@ -829,6 +830,26 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   useEffect(() => setLayoutNodes(nodes), [nodes]);
   useEffect(() => setLayoutAccount(accountPosition), [accountPosition.x, accountPosition.y]);
   useEffect(() => { panRef.current = pan; }, [pan]);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handlePinch = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const bounds = canvas.getBoundingClientRect();
+      const currentZoom = zoomRef.current;
+      const nextZoom = Math.min(1.7, Math.max(.55, currentZoom * Math.exp(-event.deltaY * .012)));
+      const pointer = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+      const nextPan = zoomPanAtPoint(panRef.current, currentZoom, nextZoom, pointer);
+      panRef.current = nextPan;
+      zoomRef.current = nextZoom;
+      setPan(nextPan);
+      setZoom(nextZoom);
+    };
+    canvas.addEventListener("wheel", handlePinch, { passive: false });
+    return () => canvas.removeEventListener("wheel", handlePinch);
+  }, []);
   useEffect(() => {
     const updateFullscreen = () => setFullscreen(document.fullscreenElement === workspaceRef.current);
     document.addEventListener("fullscreenchange", updateFullscreen);

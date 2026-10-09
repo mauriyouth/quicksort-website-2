@@ -20,3 +20,14 @@ export function autoPanVelocity(pointer: Point, bounds: Bounds): Point {
     y: axisVelocity(pointer.y, bounds.top, bounds.bottom),
   };
 }
+
+export function zoomPanAtPoint(pan: Point, currentZoom: number, nextZoom: number, pointer: Point): Point {
+  const worldPoint = {
+    x: (pointer.x - pan.x) / currentZoom,
+    y: (pointer.y - pan.y) / currentZoom,
+  };
+  return {
+    x: pointer.x - worldPoint.x * nextZoom,
+    y: pointer.y - worldPoint.y * nextZoom,
+  };
+}

@@ -4,6 +4,7 @@ import { db } from "./workspaceAuth";
 import type { EventAiIntelligence } from "./event-intelligence-schema";
 import type { CompetitorRecord, CompetitorResult } from "./competitor-schema";
 import { autoPanVelocity, draggedPosition, zoomPanAtPoint } from "./relationshipCanvasMath";
+import { filterWorkspaceSearch, type WorkspaceSearchEntry } from "./workspaceSearch";
 import {
   Activity, ArrowLeft, ArrowUpRight, BookOpen, Building2, CalendarDays, ChevronDown, CircleDollarSign,
   ClipboardPaste, ContactRound, Copy, FileText, Filter, Handshake, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
@@ -11,6 +12,12 @@ import {
 } from "lucide-react";
 
 type View = "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "caseStudies" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "kanban" | "doors" | "guide";
+type GlobalSearchEntry = WorkspaceSearchEntry & {
+  target: "view" | "account" | "event";
+  view: View;
+  recordId?: string;
+  icon: React.ElementType;
+};
 type Capability = {
   id: string; name: string; short: string; color: string; people: number; projects: number;
   technologies: string[]; proof: string; experts: { initials: string; name: string; role: string }[];
@@ -218,6 +225,8 @@ export default function App({ email = "" }: { email?: string }) {
   const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>([]);
   const [kanbanBoardAccounts, setKanbanBoardAccounts] = useState<KanbanBoardAccount[]>([]);
   const [query, setQuery] = useState("");
+  const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
+  const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<string | null>(initialRoute.account);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(initialRoute.event);
   const [accountRecords, setAccountRecords] = useState<Account[]>(() => {
@@ -249,8 +258,31 @@ export default function App({ email = "" }: { email?: string }) {
   });
   const [toast, setToast] = useState("");
   const [createIntent] = useState(0);
+  const workspaceSearchEntries = useMemo<GlobalSearchEntry[]>(() => [
+    ...nav.map(({ id, label, icon }) => ({ id: `view-${id}`, label, detail: "Workspace page", keywords: `${id} ${label}`, target: "view" as const, view: id, icon })),
+    ...accountRecords.map((account) => ({ id: `account-${account.id}`, label: account.name, detail: `${account.sector} · Account`, keywords: `${account.opportunity} ${account.owner} ${account.signal} ${account.stage}`, target: "account" as const, view: "accounts" as const, recordId: account.id, icon: Building2 })),
+    ...eventRecords.map((event) => ({ id: `event-${event.id}`, label: event.title, detail: `${event.date} · ${event.location || "Event"}`, keywords: `${event.status} event ${event.lumaUrl}`, target: "event" as const, view: "events" as const, recordId: event.id, icon: CalendarDays })),
+    ...leadRecords.map((lead) => ({ id: `lead-${lead.id}`, label: lead.name, detail: `${lead.role || "Lead"}${lead.company ? ` · ${lead.company}` : ""}`, keywords: `${lead.source} ${lead.origin} ${lead.reason} ${lead.owner}`, target: "view" as const, view: "leads" as const, icon: Users })),
+    ...businessPartnerRecords.map((partner) => ({ id: `partner-${partner.id}`, label: partner.name, detail: `${partner.role || "Business partner"}${partner.company ? ` · ${partner.company}` : ""}`, keywords: `${partner.origin} ${partner.relationship} ${partner.owner}`, target: "view" as const, view: "businessPartners" as const, icon: Handshake })),
+    ...businessCaseStudies.map((study) => ({ id: `study-${study.id}`, label: study.title, detail: `${study.studyType}${study.client ? ` · ${study.client}` : ""}`, keywords: `${study.summary} ${study.challenge} ${study.outcome} ${study.tags.join(" ")}`, target: "view" as const, view: "caseStudies" as const, icon: FileText })),
+  ], [accountRecords, businessCaseStudies, businessPartnerRecords, eventRecords, leadRecords]);
+  const workspaceSearchResults = useMemo(() => filterWorkspaceSearch(workspaceSearchEntries, workspaceSearchQuery), [workspaceSearchEntries, workspaceSearchQuery]);
   const active = capabilities.find((c) => c.id === selected) ?? capabilities[0] ?? emptyCapabilities[0];
   const filteredAccounts = useMemo(() => accountRecords.filter((a) => `${a.name} ${a.sector} ${a.opportunity}`.toLowerCase().includes(query.toLowerCase())), [accountRecords, query]);
+  const openWorkspaceSearch = () => { setWorkspaceSearchQuery(""); setWorkspaceSearchOpen(true); };
+  const closeWorkspaceSearch = () => { setWorkspaceSearchOpen(false); setWorkspaceSearchQuery(""); };
+  useEffect(() => {
+    const handleWorkspaceSearchShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openWorkspaceSearch();
+      } else if (event.key === "Escape") {
+        setWorkspaceSearchOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleWorkspaceSearchShortcut);
+    return () => window.removeEventListener("keydown", handleWorkspaceSearchShortcut);
+  }, []);
   useEffect(() => {
     const syncRoute = () => {
       const route = routeFromLocation();
@@ -365,6 +397,12 @@ export default function App({ email = "" }: { email?: string }) {
     window.history.pushState({}, "", `/events/${encodeURIComponent(eventId)}`);
     setView("events"); setSelectedAccount(null); setSelectedEvent(eventId); setMobileOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const openWorkspaceSearchResult = (result: GlobalSearchEntry) => {
+    closeWorkspaceSearch();
+    if (result.target === "account" && result.recordId) navigate("accounts", result.recordId);
+    else if (result.target === "event" && result.recordId) openEvent(result.recordId);
+    else navigate(result.view);
   };
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2400); };
   const toggleSidebar = () => {
@@ -512,7 +550,7 @@ export default function App({ email = "" }: { email?: string }) {
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={20}/></button>
           <div className="breadcrumbs">Intelligence <span>/</span> {eventRecords.find((event) => event.id === selectedEvent)?.title ?? nav.find((item) => item.id === view)?.label}</div>
-          <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button></div>
+          <div className="top-actions"><button className="icon-button" aria-label="Search workspace" aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} onClick={openWorkspaceSearch}><Search size={18}/></button></div>
         </header>
         {view === "overview" && <Overview active={active} capabilities={capabilities} selected={selected} setSelected={setSelected} go={go} notify={notify} accounts={accountRecords} leads={leadRecords} events={eventRecords}/>}
         {(view === "market" || view === "marketing" || view === "partners" || view === "executive") && <IntelligencePage workspace={intelligenceWorkspaces[view]} notify={notify}/>}
@@ -530,6 +568,26 @@ export default function App({ email = "" }: { email?: string }) {
         {view === "doors" && <OpenDoors accounts={accountRecords} intel={intelRecords} ownerOptions={ownerOptions} actorEmail={email} onAdd={addOpenDoorRelationship} openAccount={(id) => navigate("accounts", id)} notify={notify}/>}
         {view === "guide" && <WorkspaceGuide go={go}/>}
       </main>
+      {workspaceSearchOpen && <div className="workspace-search-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeWorkspaceSearch(); }}>
+        <section className="workspace-search-dialog" role="dialog" aria-modal="true" aria-labelledby="workspace-search-title">
+          <div className="workspace-search-field">
+            <Search size={20}/>
+            <label id="workspace-search-title" className="sr-only" htmlFor="workspace-search-input">Search workspace</label>
+            <input id="workspace-search-input" autoFocus value={workspaceSearchQuery} onChange={(event) => setWorkspaceSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && workspaceSearchResults[0]) openWorkspaceSearchResult(workspaceSearchResults[0]); }} placeholder="Search pages, accounts, people, events…"/>
+            <kbd>Esc</kbd>
+            <button type="button" onClick={closeWorkspaceSearch} aria-label="Close workspace search"><X size={17}/></button>
+          </div>
+          <div className="workspace-search-results" aria-live="polite">
+            <div className="workspace-search-caption">{workspaceSearchQuery.trim() ? `${workspaceSearchResults.length} result${workspaceSearchResults.length === 1 ? "" : "s"}` : "Quick access"}</div>
+            {workspaceSearchResults.map((result) => {
+              const Icon = result.icon;
+              return <button type="button" key={result.id} onClick={() => openWorkspaceSearchResult(result)}><span><Icon size={17}/></span><span><strong>{result.label}</strong><small>{result.detail}</small></span><ArrowUpRight size={15}/></button>;
+            })}
+            {workspaceSearchResults.length === 0 && <div className="workspace-search-empty"><Search size={22}/><strong>No results found</strong><span>Try an account, person, event, or workspace page.</span></div>}
+          </div>
+          <footer><span><kbd>↵</kbd> Open first result</span><span><kbd>⌘</kbd><kbd>K</kbd> Open search</span></footer>
+        </section>
+      </div>}
       {toast && <div className="toast" role="status">{toast}</div>}
       {mobileOpen && <button className="scrim" onClick={() => setMobileOpen(false)} aria-label="Close navigation"/>}
     </div>

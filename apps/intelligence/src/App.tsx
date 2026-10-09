@@ -9,7 +9,7 @@ import {
   Maximize2, Minus, PanelLeftClose, PanelLeftOpen, Pencil, Redo2, Save, Scissors, ShieldCheck, Sparkles, SquareDashed, Target, Trash2, Undo2, UserPlus, Users, X,
 } from "lucide-react";
 
-type View = "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "kanban" | "doors" | "guide";
+type View = "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "caseStudies" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "pipeline" | "kanban" | "doors" | "guide";
 type Capability = {
   id: string; name: string; short: string; color: string; people: number; projects: number;
   technologies: string[]; proof: string; experts: { initials: string; name: string; role: string }[];
@@ -46,6 +46,7 @@ const accounts = [
 type LeadSource = "Event" | "Tool" | "Network";
 type LeadStage = "New" | "Qualified" | "Contacted" | "Converted";
 type LeadRecord = { id: string; name: string; role: string; company: string; source: LeadSource; origin: string; score: number; reason: string; stage: LeadStage; owner: string };
+type PartnerAccountLink = { accountId: string; contactKeys: string[] };
 type BusinessPartnerRecord = {
   id: string;
   name: string;
@@ -58,6 +59,20 @@ type BusinessPartnerRecord = {
   relationship: string;
   owner: string;
   notes: string;
+  accountLinks: PartnerAccountLink[];
+};
+type BusinessCaseStudyRecord = {
+  id: string;
+  title: string;
+  client: string;
+  accountId: string;
+  summary: string;
+  challenge: string;
+  solution: string;
+  outcome: string;
+  evidenceUrl: string;
+  tags: string[];
+  status: "Draft" | "Ready for website";
 };
 type ImportedAttendee = { name: string; role: string; company: string; linkedin: string; email: string; sourceRow: Record<string, string> };
 type MappedField = "name" | "firstName" | "lastName" | "linkedin" | "email" | "phone" | "company" | "role";
@@ -151,6 +166,7 @@ const nav = [
   { id: "marketing" as View, path: "/marketing-intelligence", label: "Marketing intelligence", sidebarLabel: "Marketing", icon: CircleDollarSign },
   { id: "partners" as View, path: "/strategic-partners", label: "Strategic partners", sidebarLabel: "Strategic partners", icon: Network },
   { id: "businessPartners" as View, path: "/business-partners", label: "Business partners", sidebarLabel: "Business partners", icon: Handshake },
+  { id: "caseStudies" as View, path: "/business-case-studies", label: "Business case studies", sidebarLabel: "Case studies", icon: FileText },
   { id: "executive" as View, path: "/executive-intelligence", label: "Executive intelligence", sidebarLabel: "Executive", icon: FileText },
   { id: "pipeline" as View, path: "/pipeline", label: "Pipeline", sidebarLabel: "Pipeline", icon: Target },
   { id: "kanban" as View, path: "/kanban", label: "Kanban", sidebarLabel: "Kanban", icon: LayoutGrid },
@@ -209,15 +225,19 @@ export default function App({ email = "" }: { email?: string }) {
     try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-competitors-v1") || "[]"); } catch { return []; }
   });
   const [businessPartnerRecords, setBusinessPartnerRecords] = useState<BusinessPartnerRecord[]>(() => {
-    try { return JSON.parse(window.localStorage.getItem("quicksort-intelligence-business-partners-v1") || "[]"); } catch { return []; }
+    try {
+      const saved = JSON.parse(window.localStorage.getItem("quicksort-intelligence-business-partners-v1") || "[]") as Partial<BusinessPartnerRecord>[];
+      return saved.map((partner) => ({ ...emptyBusinessPartner(), ...partner, accountLinks: Array.isArray(partner.accountLinks) ? partner.accountLinks : [] }));
+    } catch { return []; }
   });
+  const [businessCaseStudies, setBusinessCaseStudies] = useState<BusinessCaseStudyRecord[]>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return window.localStorage.getItem("quicksort-intelligence-sidebar") === "collapsed"; }
     catch { return false; }
   });
   const [toast, setToast] = useState("");
-  const [createIntent, setCreateIntent] = useState(0);
+  const [createIntent] = useState(0);
   const active = capabilities.find((c) => c.id === selected) ?? capabilities[0] ?? emptyCapabilities[0];
   const filteredAccounts = useMemo(() => accountRecords.filter((a) => `${a.name} ${a.sector} ${a.opportunity}`.toLowerCase().includes(query.toLowerCase())), [accountRecords, query]);
   useEffect(() => {
@@ -268,7 +288,8 @@ export default function App({ email = "" }: { email?: string }) {
       db().from("business_accounts").select("*").order("updated_at", { ascending: false }),
       db().from("business_leads").select("*").order("updated_at", { ascending: false }),
       db().from("business_partners").select("*").order("updated_at", { ascending: false }),
-    ]).then(([accountResult, leadResult, partnerResult]) => {
+      db().from("business_case_studies").select("*").order("updated_at", { ascending: false }),
+    ]).then(([accountResult, leadResult, partnerResult, caseStudyResult]) => {
       if (!activeRequest) return;
       if (!accountResult.error && accountResult.data) {
         setAccountRecords(accountResult.data.map((row: Record<string, any>) => ({
@@ -289,7 +310,8 @@ export default function App({ email = "" }: { email?: string }) {
         })));
       }
       if (!leadResult.error && leadResult.data) setLeadRecords(leadResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), role: String(row.role || ""), company: String(row.company || ""), source: row.source as LeadSource, origin: String(row.origin || ""), score: Number(row.score) || 0, reason: String(row.reason || ""), stage: row.stage as LeadStage, owner: String(row.owner || "—") })));
-      if (!partnerResult.error && partnerResult.data) setBusinessPartnerRecords(partnerResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), company: String(row.company || ""), role: String(row.role || ""), origin: String(row.origin || ""), linkedin: String(row.linkedin_url || ""), email: String(row.email || ""), phone: String(row.phone || ""), relationship: String(row.relationship || ""), owner: String(row.owner || ""), notes: String(row.notes || "") })));
+      if (!partnerResult.error && partnerResult.data) setBusinessPartnerRecords(partnerResult.data.map((row: Record<string, any>) => ({ id: String(row.id), name: String(row.name), company: String(row.company || ""), role: String(row.role || ""), origin: String(row.origin || ""), linkedin: String(row.linkedin_url || ""), email: String(row.email || ""), phone: String(row.phone || ""), relationship: String(row.relationship || ""), owner: String(row.owner || ""), notes: String(row.notes || ""), accountLinks: Array.isArray(row.account_links) ? row.account_links : [] })));
+      if (!caseStudyResult.error && caseStudyResult.data) setBusinessCaseStudies(caseStudyResult.data.map((row: Record<string, any>) => ({ id: String(row.id), title: String(row.title), client: String(row.client || ""), accountId: String(row.account_id || ""), summary: String(row.summary || ""), challenge: String(row.challenge || ""), solution: String(row.solution || ""), outcome: String(row.outcome || ""), evidenceUrl: String(row.evidence_url || ""), tags: Array.isArray(row.tags) ? row.tags.map(String) : [], status: row.status === "Ready for website" ? "Ready for website" : "Draft" })));
     });
     return () => { activeRequest = false; };
   }, []);
@@ -337,7 +359,9 @@ export default function App({ email = "" }: { email?: string }) {
   const saveAccount = (updatedAccount: Account, updatedIntel: AccountIntel) => {
     const databaseId = updatedAccount.databaseId || crypto.randomUUID();
     const savedAccount = { ...updatedAccount, databaseId };
-    const nextAccounts = accountRecords.map((account) => account.id === updatedAccount.id ? savedAccount : account);
+    const nextAccounts = accountRecords.some((account) => account.id === updatedAccount.id)
+      ? accountRecords.map((account) => account.id === updatedAccount.id ? savedAccount : account)
+      : [savedAccount, ...accountRecords];
     const nextIntel = { ...intelRecords, [updatedAccount.id]: updatedIntel };
     setAccountRecords(nextAccounts);
     setIntelRecords(nextIntel);
@@ -366,7 +390,11 @@ export default function App({ email = "" }: { email?: string }) {
   const saveCompetitors = (next: CompetitorRecord[]) => { setCompetitorRecords(next); window.localStorage.setItem("quicksort-intelligence-competitors-v1", JSON.stringify(next)); };
   const saveBusinessPartners = (next: BusinessPartnerRecord[]) => {
     setBusinessPartnerRecords(next);
-    void db().from("business_partners").upsert(next.map((partner) => ({ id: partner.id, name: partner.name, company: partner.company, role: partner.role, origin: partner.origin, linkedin_url: partner.linkedin, email: partner.email, phone: partner.phone, relationship: partner.relationship, owner: partner.owner, notes: partner.notes })));
+    void db().from("business_partners").upsert(next.map((partner) => ({ id: partner.id, name: partner.name, company: partner.company, role: partner.role, origin: partner.origin, linkedin_url: partner.linkedin, email: partner.email, phone: partner.phone, relationship: partner.relationship, owner: partner.owner, notes: partner.notes, account_links: partner.accountLinks })));
+  };
+  const saveCaseStudies = (next: BusinessCaseStudyRecord[]) => {
+    setBusinessCaseStudies(next);
+    void db().from("business_case_studies").upsert(next.map((study) => ({ id: study.id, title: study.title, client: study.client, account_id: study.accountId, summary: study.summary, challenge: study.challenge, solution: study.solution, outcome: study.outcome, evidence_url: study.evidenceUrl, tags: study.tags, status: study.status })));
   };
   const addManualAccount = (account: Account) => {
     const nextAccounts = [account, ...accountRecords];
@@ -392,6 +420,55 @@ export default function App({ email = "" }: { email?: string }) {
     setAccountRecords(nextAccounts); setIntelRecords(nextIntel);
     window.localStorage.setItem("quicksort-intelligence-accounts-v3", JSON.stringify({ accounts: nextAccounts, intel: nextIntel }));
     navigate("accounts", id);
+  };
+  const addOpenDoorRelationship = (input: OpenDoorInput) => {
+    const existingAccount = accountRecords.find((account) => account.name.trim().toLowerCase() === input.company.trim().toLowerCase());
+    let slug = existingAccount?.id || accountSlug(input.company) || `account-${Date.now()}`;
+    if (!existingAccount && accountRecords.some((account) => account.id === slug)) slug = `${slug}-${Date.now()}`;
+    const currentIntel = existingAccount ? (intelRecords[existingAccount.id] || { leads: [], events: [], contacts: [] }) : { leads: [], events: [], contacts: [] };
+    const linkedinKey = input.linkedin.trim().replace(/\/$/, "").toLowerCase();
+    const contactIndex = currentIntel.contacts.findIndex((contact) => {
+      const sameProfile = linkedinKey && (contact.linkedin || "").trim().replace(/\/$/, "").toLowerCase() === linkedinKey;
+      return Boolean(sameProfile) || contact.name.trim().toLowerCase() === input.contactName.trim().toLowerCase();
+    });
+    const connection: KnownByConnection = {
+      ownerId: input.connector.id,
+      name: input.connector.name,
+      email: input.connector.email,
+      relationship: input.relationship,
+      strength: input.strength,
+      notes: input.notes,
+      createdAt: new Date().toISOString(),
+    };
+    const existingContact = contactIndex >= 0 ? currentIntel.contacts[contactIndex] : null;
+    const knownBy = [...(existingContact?.knownBy || []).filter((item) => item.ownerId !== connection.ownerId && item.email !== connection.email && item.name.toLowerCase() !== connection.name.toLowerCase()), connection];
+    const contact: RelationshipContact = existingContact ? {
+      ...existingContact,
+      role: input.role || existingContact.role,
+      linkedin: input.linkedin || existingContact.linkedin,
+      owner: existingContact.owner || input.connector.name,
+      strength: existingContact.strength || input.strength,
+      knownBy,
+    } : {
+      id: crypto.randomUUID(), name: input.contactName, role: input.role, strength: input.strength, owner: input.connector.name,
+      linkedin: input.linkedin, knownBy, x: 120 + (currentIntel.contacts.length % 4) * 245, y: 270 + Math.floor(currentIntel.contacts.length / 4) * 185,
+    };
+    const contacts = contactIndex >= 0
+      ? currentIntel.contacts.map((item, index) => index === contactIndex ? contact : item)
+      : [...currentIntel.contacts, contact];
+    const nextIntel = { ...currentIntel, contacts };
+    const nextAccount: Account = existingAccount ? {
+      ...existingAccount,
+      contacts: contacts.length,
+      signal: hasValue(existingAccount.signal) ? existingAccount.signal : input.strength === "Trusted" ? "Strong" : "Warm",
+      owner: hasValue(existingAccount.owner) ? existingAccount.owner : input.connector.name,
+    } : {
+      databaseId: crypto.randomUUID(), id: slug, name: input.company.trim(), sector: input.sector.trim() || "Not set", contacts: 1,
+      signal: input.strength === "Trusted" ? "Strong" : "Warm", opportunity: "Not set", value: "—", stage: "New", owner: input.connector.name,
+      fit: [], caseStudies: [], evidence: [],
+    };
+    saveAccount(nextAccount, nextIntel);
+    notify(existingAccount ? `${input.connector.name}'s relationship was linked to ${existingAccount.name}` : `${input.company} was created in Accounts with this relationship`);
   };
   return (
     <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
@@ -419,11 +496,12 @@ export default function App({ email = "" }: { email?: string }) {
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={20}/></button>
           <div className="breadcrumbs">Intelligence <span>/</span> {eventRecords.find((event) => event.id === selectedEvent)?.title ?? nav.find((item) => item.id === view)?.label}</div>
-          <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button><button className="primary" onClick={() => view === "accounts" || view === "leads" || view === "businessPartners" ? setCreateIntent((value) => value + 1) : notify("Open the relevant workspace to add a record")}><Plus size={17}/> Add record</button></div>
+          <div className="top-actions"><button className="icon-button" aria-label="Search"><Search size={18}/></button></div>
         </header>
         {view === "overview" && <Overview active={active} capabilities={capabilities} selected={selected} setSelected={setSelected} go={go} notify={notify} accounts={accountRecords} leads={leadRecords} events={eventRecords}/>}
         {(view === "market" || view === "marketing" || view === "partners" || view === "executive") && <IntelligencePage workspace={intelligenceWorkspaces[view]} notify={notify}/>}
-        {view === "businessPartners" && <BusinessPartners partners={businessPartnerRecords} onChange={saveBusinessPartners} notify={notify} createIntent={createIntent}/>}
+        {view === "businessPartners" && <BusinessPartners partners={businessPartnerRecords} accounts={accountRecords} intel={intelRecords} onChange={saveBusinessPartners} openAccount={(id) => navigate("accounts", id)} notify={notify}/>}
+        {view === "caseStudies" && <BusinessCaseStudies studies={businessCaseStudies} accounts={accountRecords} onChange={saveCaseStudies} notify={notify}/>}
         {view === "competitors" && <CompetitorAnalysis competitors={competitorRecords} onChange={saveCompetitors} notify={notify}/>}
         {view === "capabilities" && <Capabilities active={active} capabilities={capabilities} selected={selected} setSelected={setSelected}/>}
         {view === "accounts" && (selectedAccount && accountRecords.some((account) => account.id === selectedAccount)
@@ -433,7 +511,7 @@ export default function App({ email = "" }: { email?: string }) {
         {view === "leads" && <Leads leads={leadRecords} onChange={saveLeads} notify={notify} createIntent={createIntent}/>}
         {view === "pipeline" && <Pipeline notify={notify}/>} 
         {view === "kanban" && <BusinessKanban projects={kanbanProjects} boards={kanbanBoards} columns={kanbanColumns} cards={kanbanCards} boardAccounts={kanbanBoardAccounts} accounts={accountRecords} onRefresh={loadKanban} notify={notify}/>}
-        {view === "doors" && <OpenDoors notify={notify}/>}
+        {view === "doors" && <OpenDoors accounts={accountRecords} intel={intelRecords} ownerOptions={ownerOptions} actorEmail={email} onAdd={addOpenDoorRelationship} openAccount={(id) => navigate("accounts", id)} notify={notify}/>}
         {view === "guide" && <WorkspaceGuide go={go}/>}
       </main>
       {toast && <div className="toast" role="status">{toast}</div>}
@@ -588,7 +666,8 @@ type Account = { databaseId?: string; id: string; name: string; sector: string; 
 type Lead = { name: string; role: string; company: string; status: string; nextStep: string; owner: string };
 type AccountEvent = { date: string; month: string; title: string; type: string; detail: string };
 type RelationshipComment = { id: string; text: string; author: string; createdAt: string };
-type RelationshipContact = { id?: string; name: string; role: string; team?: string; department?: string; strength: string; owner: string; linkedin?: string; comments?: RelationshipComment[]; kanbanCardIds?: string[]; x?: number; y?: number };
+type KnownByConnection = { ownerId?: string; name: string; email?: string; relationship: string; strength: string; notes?: string; createdAt: string };
+type RelationshipContact = { id?: string; name: string; role: string; team?: string; department?: string; strength: string; owner: string; linkedin?: string; knownBy?: KnownByConnection[]; comments?: RelationshipComment[]; kanbanCardIds?: string[]; x?: number; y?: number };
 type RelationshipTeam = { id: string; name: string; description?: string; memberIds?: string[]; departmentId?: string; x: number; y: number; width: number; height: number };
 type RelationshipCanvasNode = { id: string; type: "department" | "note"; title: string; body: string; x: number; y: number; width: number; height: number };
 type RelationshipEdge = { id: string; source: string; target: string; label: string; strength?: string; owner?: string; notes?: string; kind?: "manual" | "membership" };
@@ -600,6 +679,7 @@ type KanbanBoard = { id: string; project_id: string; name: string };
 type KanbanColumn = { id: string; board_id: string; name: string; position: number };
 type KanbanCard = { id: string; board_id: string; column_id: string; title: string; description: string; card_number: number; due_at: string | null };
 type KanbanBoardAccount = { board_id: string; account_id: string };
+type OpenDoorInput = { company: string; sector: string; contactName: string; role: string; linkedin: string; connector: OwnerOption; relationship: string; strength: string; notes: string };
 
 const emptyAccountIntel = Object.fromEntries(accounts.map((account) => [account.id, { contacts: [], leads: [], events: [] }])) as Record<string, AccountIntel>;
 
@@ -813,7 +893,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
     drag.current = null;
   };
   const addPerson = () => {
-    const nextContact: RelationshipContact = { id: crypto.randomUUID(), name: "New contact", role: "", team: "", strength: "", owner: "", linkedin: "", x: 420, y: 300 };
+    const nextContact: RelationshipContact = { id: crypto.randomUUID(), name: "New contact", role: "", team: "", strength: "", owner: "", linkedin: "", knownBy: [], x: 420, y: 300 };
     const nextContacts = [...layoutContacts, nextContact];
     setLayoutContacts(nextContacts);
     setSelectedNode(nextContact.id!); setSelectedEdge(null);
@@ -991,12 +1071,13 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
             <div><dt>Department</dt><dd>{hasValue(contact.department) ? contact.department : "Add department"}</dd></div>
             <div><dt>Relationship</dt><dd>{hasValue(contact.strength) ? contact.strength : "Define relationship"}</dd></div>
             <div><dt>QuickSort owner</dt><dd>{hasValue(contact.owner) ? contact.owner : "Assign owner"}</dd></div>
+            <div className="known-by-summary"><dt>Known by</dt><dd>{contact.knownBy?.length ? contact.knownBy.map((item) => item.name).join(", ") : "Add QuickSort connection"}</dd></div>
           </dl>
           {contact.linkedin ? <a href={contact.linkedin} target="_blank" rel="noreferrer" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>LinkedIn profile <ArrowUpRight size={11}/></a> : <span className="missing-profile">No LinkedIn added</span>}<button className="connection-handle" aria-label={`Draw relationship from ${contact.name}`} onPointerDown={event => beginConnection(event, contact.id!)}/>
         </article>)}
         {!layoutContacts.length && <div className="relationship-empty"><Users size={24}/><strong>No people mapped yet</strong><span>Add a person, place them in a team, then connect the reporting line.</span></div>}
       </div>
-    </div>{selectedNode && <aside className="relationship-inspector"><div className="inspector-head"><div><small>Card inspector</small><strong>Edit details</strong></div><button onClick={() => setSelectedNode(null)} aria-label="Close inspector"><X size={15}/></button></div>{(() => { const contact = layoutContacts.find(item => item.id === selectedNode); if (contact) return <div className="inspector-fields"><label>Name<input value={contact.name} onChange={e => patchContact(contact.id!, { name: e.target.value })}/></label><label>Position<input value={contact.role} onChange={e => patchContact(contact.id!, { role: e.target.value })}/></label><label>Team<input value={contact.team || ""} onChange={e => patchContact(contact.id!, { team: e.target.value })}/></label><label>Department<input value={contact.department || ""} onChange={e => patchContact(contact.id!, { department: e.target.value })}/></label><label>Relationship<input value={contact.strength} onChange={e => patchContact(contact.id!, { strength: e.target.value })}/></label><label>QuickSort owner<select value={contact.owner} onChange={e => patchContact(contact.id!, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>LinkedIn<input value={contact.linkedin || ""} onChange={e => patchContact(contact.id!, { linkedin: e.target.value })}/></label><fieldset><legend>Linked Kanban cards</legend>{kanbanCards.length ? kanbanCards.map(card => <label className="inspector-check" key={card.id}><input type="checkbox" checked={(contact.kanbanCardIds || []).includes(card.id)} onChange={e => patchContact(contact.id!, { kanbanCardIds: e.target.checked ? [...(contact.kanbanCardIds || []), card.id] : (contact.kanbanCardIds || []).filter(id => id !== card.id) })}/><span>CARD-{String(card.card_number).padStart(6, "0")} · {card.title}<small>{card.boardName} · {card.columnName}</small></span></label>) : <p>No account boards are mapped yet.</p>}</fieldset><fieldset><legend>Comments</legend>{(contact.comments || []).map(item => <article className="contact-comment" key={item.id}><p>{item.text}</p><small>{item.author} · {new Date(item.createdAt).toLocaleString()}</small></article>)}<textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add context or a follow-up note"/><button className="secondary small" disabled={!comment.trim()} onClick={() => { patchContact(contact.id!, { comments: [...(contact.comments || []), { id: crypto.randomUUID(), text: comment.trim(), author: actorEmail || "Workspace admin", createdAt: new Date().toISOString() }] }); setComment(""); }}>Add comment</button></fieldset></div>; const teamId = selectedNode.startsWith("team:") ? selectedNode.slice(5) : ""; const team = layoutTeams.find(item => item.id === teamId); if (team) return <div className="inspector-fields"><label>Team name<input value={team.name} onChange={e => patchTeam(team.id, { name: e.target.value })}/></label><label>Description<textarea value={team.description || ""} onChange={e => patchTeam(team.id, { description: e.target.value })}/></label><fieldset><legend>People in this team</legend><p>Select people to place and align inside this team.</p>{layoutContacts.map(contactItem => <label className="inspector-check" key={contactItem.id}><input type="checkbox" checked={(team.memberIds || []).includes(contactItem.id!)} onChange={event => setTeamMembers(team, event.target.checked ? [...(team.memberIds || []), contactItem.id!] : (team.memberIds || []).filter(id => id !== contactItem.id))}/><span>{contactItem.name}<small>{contactItem.role || "Position not added"}</small></span></label>)}</fieldset></div>; const nodeId = selectedNode.startsWith("node:") ? selectedNode.slice(5) : ""; const node = layoutNodes.find(item => item.id === nodeId); return node ? <div className="inspector-fields"><label>Title<input value={node.title} onChange={e => patchNode(node.id, { title: e.target.value })}/></label><label>Details<textarea value={node.body} onChange={e => patchNode(node.id, { body: e.target.value })}/></label>{node.type === "department" && <fieldset><legend>Teams in this department</legend><p>Select teams to map beneath this department.</p>{layoutTeams.map(teamItem => <label className="inspector-check" key={teamItem.id}><input type="checkbox" checked={teamItem.departmentId === node.id} onChange={event => setDepartmentTeam(node, teamItem, event.target.checked)}/><span>{teamItem.name}<small>{teamItem.memberIds?.length || 0} people</small></span></label>)}</fieldset>}</div> : null; })()}</aside>}{selectedEdge && (() => { const edge = connections.find(item => item.id === selectedEdge); return edge ? <aside className="relationship-inspector"><div className="inspector-head"><div><small>Relationship mapping</small><strong>How are these connected?</strong></div><button onClick={() => setSelectedEdge(null)} aria-label="Close relationship editor"><X size={15}/></button></div><div className="inspector-fields"><p className="inspector-prompt">Name the relationship and add any context the team should know.</p><label>Relationship<input placeholder="Reports to, introduced by, works with…" value={edge.label} onChange={e => patchEdge(edge.id, { label: e.target.value })}/></label><label>Strength<select value={edge.strength || "Not assessed"} onChange={e => patchEdge(edge.id, { strength: e.target.value })}><option>Not assessed</option><option>Weak</option><option>Developing</option><option>Strong</option><option>Trusted</option></select></label><label>Owner<select value={edge.owner || ""} onChange={e => patchEdge(edge.id, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>Comment or context<textarea value={edge.notes || ""} placeholder="Add context about this relationship" onChange={e => patchEdge(edge.id, { notes: e.target.value })}/></label><button className="danger-link" onClick={() => { persist(layoutContacts, layoutTeams, layoutNodes, connections.filter(item => item.id !== edge.id)); setSelectedEdge(null); }}>Remove relationship</button></div></aside> : null; })()}</div>
+    </div>{selectedNode && <aside className="relationship-inspector"><div className="inspector-head"><div><small>Card inspector</small><strong>Edit details</strong></div><button onClick={() => setSelectedNode(null)} aria-label="Close inspector"><X size={15}/></button></div>{(() => { const contact = layoutContacts.find(item => item.id === selectedNode); if (contact) return <div className="inspector-fields"><label>Name<input value={contact.name} onChange={e => patchContact(contact.id!, { name: e.target.value })}/></label><label>Position<input value={contact.role} onChange={e => patchContact(contact.id!, { role: e.target.value })}/></label><label>Team<input value={contact.team || ""} onChange={e => patchContact(contact.id!, { team: e.target.value })}/></label><label>Department<input value={contact.department || ""} onChange={e => patchContact(contact.id!, { department: e.target.value })}/></label><label>Relationship<input value={contact.strength} onChange={e => patchContact(contact.id!, { strength: e.target.value })}/></label><label>QuickSort owner<select value={contact.owner} onChange={e => patchContact(contact.id!, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>LinkedIn<input value={contact.linkedin || ""} onChange={e => patchContact(contact.id!, { linkedin: e.target.value })}/></label><fieldset><legend>Known by at QuickSort</legend>{ownerOptions.length ? ownerOptions.map(owner => { const connection = (contact.knownBy || []).find(item => item.ownerId === owner.id || item.email === owner.email); return <label className="inspector-check" key={owner.id}><input type="checkbox" checked={Boolean(connection)} onChange={e => patchContact(contact.id!, { knownBy: e.target.checked ? [...(contact.knownBy || []), { ownerId: owner.id, name: owner.name, email: owner.email, relationship: "Known contact", strength: "Developing", createdAt: new Date().toISOString() }] : (contact.knownBy || []).filter(item => item.ownerId !== owner.id && item.email !== owner.email) })}/><span>{owner.name}<small>{connection ? `${connection.relationship} · ${connection.strength}` : owner.headline || "QuickSort teammate"}</small></span></label>; }) : <p>Add approved teammates in Admin before assigning internal connections.</p>}</fieldset><fieldset><legend>Linked Kanban cards</legend>{kanbanCards.length ? kanbanCards.map(card => <label className="inspector-check" key={card.id}><input type="checkbox" checked={(contact.kanbanCardIds || []).includes(card.id)} onChange={e => patchContact(contact.id!, { kanbanCardIds: e.target.checked ? [...(contact.kanbanCardIds || []), card.id] : (contact.kanbanCardIds || []).filter(id => id !== card.id) })}/><span>CARD-{String(card.card_number).padStart(6, "0")} · {card.title}<small>{card.boardName} · {card.columnName}</small></span></label>) : <p>No account boards are mapped yet.</p>}</fieldset><fieldset><legend>Comments</legend>{(contact.comments || []).map(item => <article className="contact-comment" key={item.id}><p>{item.text}</p><small>{item.author} · {new Date(item.createdAt).toLocaleString()}</small></article>)}<textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add context or a follow-up note"/><button className="secondary small" disabled={!comment.trim()} onClick={() => { patchContact(contact.id!, { comments: [...(contact.comments || []), { id: crypto.randomUUID(), text: comment.trim(), author: actorEmail || "Workspace admin", createdAt: new Date().toISOString() }] }); setComment(""); }}>Add comment</button></fieldset></div>; const teamId = selectedNode.startsWith("team:") ? selectedNode.slice(5) : ""; const team = layoutTeams.find(item => item.id === teamId); if (team) return <div className="inspector-fields"><label>Team name<input value={team.name} onChange={e => patchTeam(team.id, { name: e.target.value })}/></label><label>Description<textarea value={team.description || ""} onChange={e => patchTeam(team.id, { description: e.target.value })}/></label><fieldset><legend>People in this team</legend><p>Select people to place and align inside this team.</p>{layoutContacts.map(contactItem => <label className="inspector-check" key={contactItem.id}><input type="checkbox" checked={(team.memberIds || []).includes(contactItem.id!)} onChange={event => setTeamMembers(team, event.target.checked ? [...(team.memberIds || []), contactItem.id!] : (team.memberIds || []).filter(id => id !== contactItem.id))}/><span>{contactItem.name}<small>{contactItem.role || "Position not added"}</small></span></label>)}</fieldset></div>; const nodeId = selectedNode.startsWith("node:") ? selectedNode.slice(5) : ""; const node = layoutNodes.find(item => item.id === nodeId); return node ? <div className="inspector-fields"><label>Title<input value={node.title} onChange={e => patchNode(node.id, { title: e.target.value })}/></label><label>Details<textarea value={node.body} onChange={e => patchNode(node.id, { body: e.target.value })}/></label>{node.type === "department" && <fieldset><legend>Teams in this department</legend><p>Select teams to map beneath this department.</p>{layoutTeams.map(teamItem => <label className="inspector-check" key={teamItem.id}><input type="checkbox" checked={teamItem.departmentId === node.id} onChange={event => setDepartmentTeam(node, teamItem, event.target.checked)}/><span>{teamItem.name}<small>{teamItem.memberIds?.length || 0} people</small></span></label>)}</fieldset>}</div> : null; })()}</aside>}{selectedEdge && (() => { const edge = connections.find(item => item.id === selectedEdge); return edge ? <aside className="relationship-inspector"><div className="inspector-head"><div><small>Relationship mapping</small><strong>How are these connected?</strong></div><button onClick={() => setSelectedEdge(null)} aria-label="Close relationship editor"><X size={15}/></button></div><div className="inspector-fields"><p className="inspector-prompt">Name the relationship and add any context the team should know.</p><label>Relationship<input placeholder="Reports to, introduced by, works with…" value={edge.label} onChange={e => patchEdge(edge.id, { label: e.target.value })}/></label><label>Strength<select value={edge.strength || "Not assessed"} onChange={e => patchEdge(edge.id, { strength: e.target.value })}><option>Not assessed</option><option>Weak</option><option>Developing</option><option>Strong</option><option>Trusted</option></select></label><label>Owner<select value={edge.owner || ""} onChange={e => patchEdge(edge.id, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>Comment or context<textarea value={edge.notes || ""} placeholder="Add context about this relationship" onChange={e => patchEdge(edge.id, { notes: e.target.value })}/></label><button className="danger-link" onClick={() => { persist(layoutContacts, layoutTeams, layoutNodes, connections.filter(item => item.id !== edge.id)); setSelectedEdge(null); }}>Remove relationship</button></div></aside> : null; })()}</div>
   </div>;
 }
 
@@ -1315,15 +1396,33 @@ const emptyBusinessPartner = (): BusinessPartnerRecord => ({
   relationship: "",
   owner: "",
   notes: "",
+  accountLinks: [],
 });
 
-function BusinessPartners({ partners, onChange, notify, createIntent }: { partners: BusinessPartnerRecord[]; onChange: (partners: BusinessPartnerRecord[]) => void; notify: (message: string) => void; createIntent: number }) {
+const partnerContactKey = (contact: RelationshipContact) => contact.id || `name:${contact.name.trim().toLowerCase()}`;
+
+function BusinessPartners({ partners, accounts, intel, onChange, openAccount, notify }: {
+  partners: BusinessPartnerRecord[];
+  accounts: Account[];
+  intel: Record<string, AccountIntel>;
+  onChange: (partners: BusinessPartnerRecord[]) => void;
+  openAccount: (id: string) => void;
+  notify: (message: string) => void;
+}) {
   const [editing, setEditing] = useState<BusinessPartnerRecord | null>(null);
   const [search, setSearch] = useState("");
-  useEffect(() => { if (createIntent) setEditing(emptyBusinessPartner()); }, [createIntent]);
   const visiblePartners = partners.filter((partner) => `${partner.name} ${partner.company} ${partner.role} ${partner.origin} ${partner.relationship}`.toLowerCase().includes(search.toLowerCase()));
   const startNew = () => setEditing(emptyBusinessPartner());
   const patch = (field: keyof BusinessPartnerRecord, value: string) => setEditing((current) => current ? { ...current, [field]: value } : current);
+  const toggleAccount = (accountId: string) => setEditing((current) => {
+    if (!current) return current;
+    const exists = current.accountLinks.some((link) => link.accountId === accountId);
+    return { ...current, accountLinks: exists ? current.accountLinks.filter((link) => link.accountId !== accountId) : [...current.accountLinks, { accountId, contactKeys: [] }] };
+  });
+  const toggleContact = (accountId: string, contactKey: string) => setEditing((current) => {
+    if (!current) return current;
+    return { ...current, accountLinks: current.accountLinks.map((link) => link.accountId !== accountId ? link : { ...link, contactKeys: link.contactKeys.includes(contactKey) ? link.contactKeys.filter((key) => key !== contactKey) : [...link.contactKeys, contactKey] }) };
+  });
   const save = (event: React.FormEvent) => {
     event.preventDefault();
     if (!editing) return;
@@ -1334,7 +1433,7 @@ function BusinessPartners({ partners, onChange, notify, createIntent }: { partne
     notify(editing.id ? "Business partner updated" : "Business partner added");
   };
   return <div className="page business-partners-page">
-    <PageIntro title="Business partners" text="Keep every business relationship in one place, with clear context on who they are, where they come from, and how to reach them." action={<button className="primary" onClick={startNew}><Plus size={16}/> Add business partner</button>}/>
+    <PageIntro title="Business partners" text="Manage external people who support QuickSort projects, referrals, or delivery on a commission or partnership basis. They are not QuickSort employees." action={<button className="primary" onClick={startNew}><Plus size={16}/> Add business partner</button>}/>
     <section className="partner-summary" aria-label="Business partner summary">
       <div><strong>{partners.length}</strong><span>partners mapped</span></div>
       <div><strong>{partners.filter((partner) => partner.linkedin).length}</strong><span>LinkedIn profiles</span></div>
@@ -1355,6 +1454,22 @@ function BusinessPartners({ partners, onChange, notify, createIntent }: { partne
         <label>QuickSort owner<input value={editing.owner} onChange={(event) => patch("owner", event.target.value)} placeholder="Internal relationship owner"/></label>
         <label className="partner-notes">Notes<textarea value={editing.notes} onChange={(event) => patch("notes", event.target.value)} placeholder="How you met, mutual value, next step, and any useful context."/></label>
       </div>
+      <fieldset className="partner-account-mapping">
+        <legend>Optional account mapping</legend>
+        <p>Choose the accounts this external partner supports. You can then select the people they are contacting or working with.</p>
+        <div className="partner-account-options">{accounts.map((account) => {
+          const link = editing.accountLinks.find((item) => item.accountId === account.id);
+          const contacts = intel[account.id]?.contacts || [];
+          return <section className={link ? "selected" : ""} key={account.id}>
+            <label><input type="checkbox" checked={Boolean(link)} onChange={() => toggleAccount(account.id)}/><span><strong>{account.name}</strong><small>{account.sector}</small></span></label>
+            {link && contacts.length > 0 && <div className="partner-contact-options">{contacts.map((contact) => {
+              const key = partnerContactKey(contact);
+              return <label key={key}><input type="checkbox" checked={link.contactKeys.includes(key)} onChange={() => toggleContact(account.id, key)}/><span>{contact.name}<small>{contact.role || "Contact"}</small></span></label>;
+            })}</div>}
+            {link && contacts.length === 0 && <small className="no-account-contacts">No contacts have been added to this account yet.</small>}
+          </section>;
+        })}</div>
+      </fieldset>
       <div className="actions"><button type="button" className="secondary" onClick={() => setEditing(null)}>Cancel</button><button className="primary"><Save size={15}/> Save business partner</button></div>
     </form>}
     {visiblePartners.length ? <div className="partner-list">{visiblePartners.map((partner) => <article className="surface partner-card" key={partner.id}>
@@ -1363,8 +1478,60 @@ function BusinessPartners({ partners, onChange, notify, createIntent }: { partne
       <div className="partner-relationship"><small>Relationship</small><strong>{partner.relationship || "Not set"}</strong><span>Owner · {partner.owner || "Not set"}</span></div>
       <div className="partner-contact">{partner.linkedin && <a href={partner.linkedin} target="_blank" rel="noreferrer">LinkedIn <ArrowUpRight size={12}/></a>}{partner.email && <a href={`mailto:${partner.email}`}>{partner.email}</a>}{partner.phone && <span>{partner.phone}</span>}</div>
       <button className="secondary small" onClick={() => setEditing(partner)}><Pencil size={13}/> Edit</button>
+      {partner.accountLinks.length > 0 && <div className="partner-linked-accounts">{partner.accountLinks.map((link) => {
+        const account = accounts.find((item) => item.id === link.accountId);
+        if (!account) return null;
+        const contacts = (intel[link.accountId]?.contacts || []).filter((contact) => link.contactKeys.includes(partnerContactKey(contact)));
+        return <button key={link.accountId} onClick={() => openAccount(link.accountId)}><Building2 size={14}/><span><strong>{account.name}</strong><small>{contacts.length ? contacts.map((contact) => contact.name).join(", ") : "Account relationship"}</small></span><ArrowUpRight size={13}/></button>;
+      })}</div>}
       {partner.notes && <p className="partner-card-notes">{partner.notes}</p>}
     </article>)}</div> : <section className="surface empty-workspace partner-empty"><Handshake size={26}/><h2>{partners.length ? "No partners match your search" : "No business partners added"}</h2><p>{partners.length ? "Try another name, company, location, or relationship." : "Add the first partner when you have a real person and relationship to record."}</p>{!partners.length && <button className="primary" onClick={startNew}><Plus size={15}/> Add first business partner</button>}</section>}
+  </div>;
+}
+
+const emptyBusinessCaseStudy = (): BusinessCaseStudyRecord => ({ id: "", title: "", client: "", accountId: "", summary: "", challenge: "", solution: "", outcome: "", evidenceUrl: "", tags: [], status: "Draft" });
+
+function BusinessCaseStudies({ studies, accounts, onChange, notify }: {
+  studies: BusinessCaseStudyRecord[];
+  accounts: Account[];
+  onChange: (studies: BusinessCaseStudyRecord[]) => void;
+  notify: (message: string) => void;
+}) {
+  const [editing, setEditing] = useState<BusinessCaseStudyRecord | null>(null);
+  const patch = <K extends keyof BusinessCaseStudyRecord>(field: K, value: BusinessCaseStudyRecord[K]) => setEditing((current) => current ? { ...current, [field]: value } : current);
+  const save = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    const account = accounts.find((item) => item.id === editing.accountId);
+    const record = { ...editing, id: editing.id || crypto.randomUUID(), client: editing.client || account?.name || "" };
+    onChange(editing.id ? studies.map((study) => study.id === editing.id ? record : study) : [record, ...studies]);
+    setEditing(null);
+    notify(editing.id ? "Case study updated" : "Case study saved");
+  };
+  return <div className="page business-case-studies-page">
+    <PageIntro title="Business case studies" text="Write and maintain delivery stories in one database so approved case studies can be reused for the QuickSort website." action={<button className="primary" onClick={() => setEditing(emptyBusinessCaseStudy())}><Plus size={16}/> Add case study</button>}/>
+    {editing && <form className="surface case-study-form" onSubmit={save}>
+      <div className="section-head"><div><h2>{editing.id ? "Edit case study" : "New business case study"}</h2><p>Capture the business problem, what QuickSort delivered, and the measurable result.</p></div><button type="button" className="icon-button" onClick={() => setEditing(null)} aria-label="Close case study form"><X size={17}/></button></div>
+      <div className="case-study-form-grid">
+        <label>Title<input required value={editing.title} onChange={(event) => patch("title", event.target.value)} placeholder="Clear result-led title"/></label>
+        <label>Account<select value={editing.accountId} onChange={(event) => patch("accountId", event.target.value)}><option value="">No linked account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        <label>Client name<input value={editing.client} onChange={(event) => patch("client", event.target.value)} placeholder="Client or organisation"/></label>
+        <label>Status<select value={editing.status} onChange={(event) => patch("status", event.target.value as BusinessCaseStudyRecord["status"])}><option>Draft</option><option>Ready for website</option></select></label>
+        <label className="case-study-wide">Summary<textarea required value={editing.summary} onChange={(event) => patch("summary", event.target.value)} placeholder="A concise overview of the work and its value."/></label>
+        <label className="case-study-wide">Business challenge<textarea value={editing.challenge} onChange={(event) => patch("challenge", event.target.value)} placeholder="What business problem needed to be solved?"/></label>
+        <label className="case-study-wide">What QuickSort delivered<textarea value={editing.solution} onChange={(event) => patch("solution", event.target.value)} placeholder="Describe the solution, delivery, and key decisions."/></label>
+        <label className="case-study-wide">Outcome<textarea value={editing.outcome} onChange={(event) => patch("outcome", event.target.value)} placeholder="Add measurable or observable business results."/></label>
+        <label>Evidence or attachment link<input type="url" value={editing.evidenceUrl} onChange={(event) => patch("evidenceUrl", event.target.value)} placeholder="https://…"/></label>
+        <label>Tags<input value={editing.tags.join(", ")} onChange={(event) => patch("tags", event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean))} placeholder="Voice AI, RAG, AWS"/></label>
+      </div>
+      <div className="actions"><button type="button" className="secondary" onClick={() => setEditing(null)}>Cancel</button><button className="primary"><Save size={15}/> Save case study</button></div>
+    </form>}
+    {studies.length ? <div className="business-case-study-grid">{studies.map((study) => <article className="surface business-case-study-card" key={study.id}>
+      <div className="case-study-card-head"><span>{study.status}</span><button className="secondary small" onClick={() => setEditing(study)}><Pencil size={13}/> Edit</button></div>
+      <small>{study.client || accounts.find((account) => account.id === study.accountId)?.name || "Independent case study"}</small><h2>{study.title}</h2><p>{study.summary}</p>
+      {study.outcome && <div><strong>Outcome</strong><p>{study.outcome}</p></div>}
+      <footer><div className="fit-tags">{study.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>{study.evidenceUrl && <a href={study.evidenceUrl} target="_blank" rel="noreferrer">Open evidence <ArrowUpRight size={13}/></a>}</footer>
+    </article>)}</div> : <section className="surface empty-workspace"><FileText size={25}/><h2>No business case studies yet</h2><p>Add the first real delivery story when it is ready to document.</p><button className="primary" onClick={() => setEditing(emptyBusinessCaseStudy())}><Plus size={15}/> Add first case study</button></section>}
   </div>;
 }
 
@@ -1375,9 +1542,63 @@ function Pipeline({ notify }: { notify: (m: string) => void }) {
   </div>;
 }
 
-function OpenDoors({ notify }: { notify: (message: string) => void }) {
-  return <div className="page"><PageIntro title="Open doors" text="Record verified relationships to find the shortest trusted path into an account." action={<button className="primary" onClick={() => notify("New relationship ready to configure")}><Plus size={16}/> Add relationship</button>}/>
-    <section className="surface door-map empty-workspace"><ContactRound size={26}/><h2>No relationships added</h2><p>Network leads will appear only after a real relationship is recorded here.</p><button className="secondary" onClick={() => notify("New relationship ready to configure")}><Plus size={15}/> Add first relationship</button></section>
+function OpenDoors({ accounts, intel, ownerOptions, actorEmail, onAdd, openAccount, notify }: {
+  accounts: Account[];
+  intel: Record<string, AccountIntel>;
+  ownerOptions: OwnerOption[];
+  actorEmail: string;
+  onAdd: (input: OpenDoorInput) => void;
+  openAccount: (id: string) => void;
+  notify: (message: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const currentUser = actorEmail && !ownerOptions.some((owner) => owner.email.toLowerCase() === actorEmail.toLowerCase())
+    ? [{ id: `current:${actorEmail}`, name: actorEmail.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()), email: actorEmail, headline: "QuickSort team" }]
+    : [];
+  const connectors = [...currentUser, ...ownerOptions];
+  const relationships = accounts.flatMap((account) => (intel[account.id]?.contacts || []).flatMap((contact) => (contact.knownBy || []).map((connection) => ({ account, contact, connection }))));
+  const submitRelationship = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const connector = connectors.find((item) => item.id === String(values.get("connector")));
+    if (!connector) { notify("Choose the QuickSort teammate who knows this person"); return; }
+    onAdd({
+      company: String(values.get("company") || "").trim(),
+      sector: String(values.get("sector") || "").trim(),
+      contactName: String(values.get("contactName") || "").trim(),
+      role: String(values.get("role") || "").trim(),
+      linkedin: String(values.get("linkedin") || "").trim(),
+      connector,
+      relationship: String(values.get("relationship") || "").trim(),
+      strength: String(values.get("strength") || "Developing"),
+      notes: String(values.get("notes") || "").trim(),
+    });
+    event.currentTarget.reset();
+    setAdding(false);
+  };
+  return <div className="page"><PageIntro title="Open doors" text="Record who at QuickSort knows a person, then connect that relationship to the company account." action={<button className="primary" onClick={() => setAdding(true)}><Plus size={16}/> Add relationship</button>}/>
+    {adding && <form className="surface open-door-form" onSubmit={submitRelationship}>
+      <div className="section-head"><div><h2>Record a trusted connection</h2><p>The company will be created in Accounts if it does not already exist.</p></div><button type="button" className="icon-button" onClick={() => setAdding(false)} aria-label="Close relationship form"><X size={17}/></button></div>
+      <div className="open-door-form-grid">
+        <label>QuickSort teammate<select name="connector" required defaultValue=""><option value="" disabled>Choose teammate</option>{connectors.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}{owner.headline ? ` · ${owner.headline}` : ""}</option>)}</select></label>
+        <label>Company<input name="company" required placeholder="Company name"/></label>
+        <label>Sector<input name="sector" placeholder="Industry or sector"/></label>
+        <label>Person<input name="contactName" required placeholder="Contact name"/></label>
+        <label>Position<input name="role" placeholder="Role or position"/></label>
+        <label>LinkedIn<input name="linkedin" type="url" placeholder="https://www.linkedin.com/in/…"/></label>
+        <label>How they know this person<input name="relationship" required placeholder="Former colleague, client, friend…"/></label>
+        <label>Relationship strength<select name="strength" defaultValue="Developing"><option>Weak</option><option>Developing</option><option>Strong</option><option>Trusted</option></select></label>
+        <label className="open-door-notes">Context<textarea name="notes" placeholder="Useful history, introduction route, or next step"/></label>
+      </div>
+      <div className="actions"><button type="button" className="secondary" onClick={() => setAdding(false)}>Cancel</button><button className="primary"><Save size={15}/> Save relationship</button></div>
+    </form>}
+    {relationships.length ? <section className="surface door-map"><div className="section-head"><div><h2>Trusted paths</h2><p>Each connection is also visible on the contact card inside its Account.</p></div><span className="case-count">{relationships.length} relationships</span></div><div className="open-door-list">{relationships.map(({ account, contact, connection }) => <article className="open-door-card" key={`${account.id}:${contact.id}:${connection.ownerId || connection.email || connection.name}`}>
+      <div className="open-door-connector"><span>{connection.name.split(" ").map((part) => part[0]).join("").slice(0,2).toUpperCase()}</span><div><small>Known by</small><strong>{connection.name}</strong><em>{connection.email || "QuickSort teammate"}</em></div></div>
+      <div className="open-door-path" aria-hidden="true"><i/><ArrowUpRight size={15}/></div>
+      <div className="open-door-contact"><small>{connection.relationship}</small><strong>{contact.name}</strong><span>{[contact.role, account.name].filter(Boolean).join(" · ")}</span>{contact.linkedin && <a href={contact.linkedin} target="_blank" rel="noreferrer">LinkedIn <ArrowUpRight size={11}/></a>}</div>
+      <div className="open-door-strength"><small>Strength</small><strong>{connection.strength}</strong>{connection.notes && <p>{connection.notes}</p>}</div>
+      <button className="secondary small" onClick={() => openAccount(account.id)}>Open account <ArrowUpRight size={12}/></button>
+    </article>)}</div></section> : <section className="surface door-map empty-workspace"><ContactRound size={26}/><h2>No relationships added</h2><p>Add the person, their company, and the QuickSort teammate who knows them. The company account and contact mapping are created together.</p><button className="secondary" onClick={() => setAdding(true)}><Plus size={15}/> Add first relationship</button></section>}
   </div>;
 }
 
@@ -1445,6 +1666,12 @@ function WorkspaceGuide({ go }: { go: (view: View) => void }) {
       { title: "Describe the relationship", detail: "State the partnership type, mutual value, current context, and agreed next step." },
       { title: "Keep it current", detail: "Edit the record after introductions, meetings, or ownership changes." },
     ], result: "A usable partner directory with clear origins, contact routes, and ownership.", icon: Handshake },
+    { view: "caseStudies", title: "Business case studies", purpose: "Maintain reusable evidence of what QuickSort delivered and the business result.", when: "Use this after a real engagement has enough approved information to document.", steps: [
+      { title: "Link the account", detail: "Select the client account when it exists, or keep the case study independent." },
+      { title: "Write the business story", detail: "Document the challenge, the delivery approach, and the outcome in plain language." },
+      { title: "Attach evidence", detail: "Add an approved supporting link and the capability tags needed for discovery." },
+      { title: "Mark it ready", detail: "Keep unfinished records as Draft; use Ready for website only after the content is approved." },
+    ], result: "A structured case study that the website can read from the shared database.", icon: FileText },
     { view: "executive", title: "Executive", purpose: "Give leadership a concise view of movement, risk, and decisions.", when: "Use this for the weekly GTM review, not as a second place to edit source records.", steps: [
       { title: "Review the live picture", detail: "Read changes across Accounts, Leads, Pipeline, Events, Market, and Competitors." },
       { title: "Confirm material signals", detail: "Remove noise and keep only evidence that could change a decision." },

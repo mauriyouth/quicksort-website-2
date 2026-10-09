@@ -1317,7 +1317,7 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
     setDraft(account);
     setDraftIntel(intel);
     setEditing(false);
-    window.setTimeout(() => { suppressEditRef.current = false; }, 250);
+    window.setTimeout(() => { suppressEditRef.current = false; }, 1200);
   };
   const saveEditing = () => { onSave(draft, draftIntel); setEditing(false); };
   const saveRelationshipMap = (contacts: RelationshipContact[], teams: RelationshipTeam[], nodes: RelationshipCanvasNode[], connections: RelationshipEdge[], accountPosition: CanvasPoint) => {

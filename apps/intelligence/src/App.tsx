@@ -3,6 +3,7 @@ import { useClerk, useSession } from "@clerk/react";
 import { db } from "./workspaceAuth";
 import type { EventAiIntelligence } from "./event-intelligence-schema";
 import type { CompetitorRecord, CompetitorResult } from "./competitor-schema";
+import { autoPanVelocity, draggedPosition } from "./relationshipCanvasMath";
 import {
   Activity, ArrowLeft, ArrowUpRight, BookOpen, Building2, CalendarDays, ChevronDown, CircleDollarSign,
   ClipboardPaste, ContactRound, Copy, FileText, Filter, Handshake, LayoutGrid, Lightbulb, Menu, Network, Plus, Search,
@@ -314,8 +315,9 @@ export default function App({ email = "" }: { email?: string }) {
             events: Array.isArray(intelligence.events) ? intelligence.events : [],
             contacts: Array.isArray(intelligence.contacts) ? intelligence.contacts : [],
             teams: Array.isArray(intelligence.teams) ? intelligence.teams : [],
-          connections: Array.isArray(intelligence.connections) ? intelligence.connections : [],
+            connections: Array.isArray(intelligence.connections) ? intelligence.connections : [],
             nodes: Array.isArray(intelligence.nodes) ? intelligence.nodes : [],
+            accountPosition: intelligence.accountPosition && Number.isFinite(intelligence.accountPosition.x) && Number.isFinite(intelligence.accountPosition.y) ? intelligence.accountPosition : undefined,
           }];
         })));
       }
@@ -685,7 +687,8 @@ type RelationshipContact = { id?: string; name: string; role: string; team?: str
 type RelationshipTeam = { id: string; name: string; description?: string; memberIds?: string[]; departmentId?: string; x: number; y: number; width: number; height: number };
 type RelationshipCanvasNode = { id: string; type: "department" | "note"; title: string; body: string; x: number; y: number; width: number; height: number };
 type RelationshipEdge = { id: string; source: string; target: string; label: string; strength?: string; owner?: string; notes?: string; kind?: "manual" | "membership" };
-type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: RelationshipContact[]; teams?: RelationshipTeam[]; nodes?: RelationshipCanvasNode[]; connections?: RelationshipEdge[] };
+type CanvasPoint = { x: number; y: number };
+type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: RelationshipContact[]; teams?: RelationshipTeam[]; nodes?: RelationshipCanvasNode[]; connections?: RelationshipEdge[]; accountPosition?: CanvasPoint };
 type OwnerOption = { id: string; name: string; email: string; headline: string };
 type AuditLog = { id: string; section: string; action: string; changes: Record<string, unknown>; actor_email: string; created_at: string };
 type AuditChange = { field: string; before?: unknown; after?: unknown };
@@ -776,17 +779,18 @@ const auditChangeDetails = (log: AuditLog): AuditChange[] => {
   });
 };
 
-function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connections = [], ownerOptions, kanbanCards, actorEmail, onRequestEdit, onChange }: {
+function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connections = [], accountPosition = { x: 445, y: 42 }, ownerOptions, kanbanCards, actorEmail, onRequestEdit, onChange }: {
   account: Account;
   contacts: RelationshipContact[];
   teams?: RelationshipTeam[];
   nodes?: RelationshipCanvasNode[];
   connections?: RelationshipEdge[];
+  accountPosition?: CanvasPoint;
   ownerOptions: OwnerOption[];
   kanbanCards: (KanbanCard & { boardName: string; columnName: string })[];
   actorEmail: string;
   onRequestEdit: () => void;
-  onChange: (contacts: RelationshipContact[], teams: RelationshipTeam[], nodes: RelationshipCanvasNode[], connections: RelationshipEdge[]) => void;
+  onChange: (contacts: RelationshipContact[], teams: RelationshipTeam[], nodes: RelationshipCanvasNode[], connections: RelationshipEdge[], accountPosition: CanvasPoint) => void;
 }) {
   const normalizedContacts = useMemo(() => contacts.map((contact, index) => ({
     ...contact,
@@ -798,6 +802,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   const [layoutContacts, setLayoutContacts] = useState<RelationshipContact[]>(normalizedContacts);
   const [layoutTeams, setLayoutTeams] = useState<RelationshipTeam[]>(normalizedTeams);
   const [layoutNodes, setLayoutNodes] = useState<RelationshipCanvasNode[]>(nodes);
+  const [layoutAccount, setLayoutAccount] = useState<CanvasPoint>(accountPosition);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
@@ -809,38 +814,47 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   const [comment, setComment] = useState("");
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
-  const historyRef = useRef<{ contacts: RelationshipContact[]; teams: RelationshipTeam[]; nodes: RelationshipCanvasNode[]; connections: RelationshipEdge[] }[]>([]);
-  const redoRef = useRef<{ contacts: RelationshipContact[]; teams: RelationshipTeam[]; nodes: RelationshipCanvasNode[]; connections: RelationshipEdge[] }[]>([]);
+  const historyRef = useRef<{ contacts: RelationshipContact[]; teams: RelationshipTeam[]; nodes: RelationshipCanvasNode[]; connections: RelationshipEdge[]; accountPosition: CanvasPoint }[]>([]);
+  const redoRef = useRef<{ contacts: RelationshipContact[]; teams: RelationshipTeam[]; nodes: RelationshipCanvasNode[]; connections: RelationshipEdge[]; accountPosition: CanvasPoint }[]>([]);
   const clipboardRef = useRef<{ contacts: RelationshipContact[]; teams: RelationshipTeam[]; nodes: RelationshipCanvasNode[] } | null>(null);
   const suppressClickRef = useRef<string | null>(null);
   const [, refreshCommands] = useState(0);
-  const drag = useRef<{ kind: "contact" | "team" | "node" | "pan"; id: string; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
+  const drag = useRef<{ kind: "account" | "contact" | "team" | "node" | "pan"; id: string; startX: number; startY: number; originX: number; originY: number; originPanX: number; originPanY: number; moved: boolean } | null>(null);
+  const panRef = useRef(pan);
+  const latestPointerRef = useRef<CanvasPoint | null>(null);
+  const autoPanFrameRef = useRef<number | null>(null);
   useEffect(() => setLayoutContacts(normalizedContacts), [normalizedContacts]);
   useEffect(() => setLayoutTeams(normalizedTeams), [normalizedTeams]);
   useEffect(() => setLayoutNodes(nodes), [nodes]);
+  useEffect(() => setLayoutAccount(accountPosition), [accountPosition.x, accountPosition.y]);
+  useEffect(() => { panRef.current = pan; }, [pan]);
   useEffect(() => {
     const updateFullscreen = () => setFullscreen(document.fullscreenElement === workspaceRef.current);
     document.addEventListener("fullscreenchange", updateFullscreen);
     return () => document.removeEventListener("fullscreenchange", updateFullscreen);
   }, []);
+  useEffect(() => () => {
+    if (autoPanFrameRef.current !== null) cancelAnimationFrame(autoPanFrameRef.current);
+  }, []);
 
-  const currentSnapshot = () => ({ contacts: layoutContacts, teams: layoutTeams, nodes: layoutNodes, connections });
-  const persist = (nextContacts = layoutContacts, nextTeams = layoutTeams, nextNodes = layoutNodes, nextConnections = connections, remember = true) => {
+  const currentSnapshot = () => ({ contacts: layoutContacts, teams: layoutTeams, nodes: layoutNodes, connections, accountPosition: layoutAccount });
+  const persist = (nextContacts = layoutContacts, nextTeams = layoutTeams, nextNodes = layoutNodes, nextConnections = connections, nextAccountPosition = layoutAccount, remember = true) => {
     if (remember) {
       historyRef.current = [...historyRef.current.slice(-29), currentSnapshot()];
       redoRef.current = [];
       refreshCommands((value) => value + 1);
     }
     onRequestEdit();
-    onChange(nextContacts, nextTeams, nextNodes, nextConnections);
+    onChange(nextContacts, nextTeams, nextNodes, nextConnections, nextAccountPosition);
   };
   const applySnapshot = (snapshot: ReturnType<typeof currentSnapshot>) => {
     setLayoutContacts(snapshot.contacts);
     setLayoutTeams(snapshot.teams);
     setLayoutNodes(snapshot.nodes);
+    setLayoutAccount(snapshot.accountPosition);
     setSelectedNode(null);
     setSelectedEdge(null);
-    onChange(snapshot.contacts, snapshot.teams, snapshot.nodes, snapshot.connections);
+    onChange(snapshot.contacts, snapshot.teams, snapshot.nodes, snapshot.connections, snapshot.accountPosition);
   };
   const undo = () => {
     const snapshot = historyRef.current.pop();
@@ -858,7 +872,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   };
 
   const nodePoint = (id: string) => {
-    if (id === "account") return { x: 550, y: 90 };
+    if (id === "account") return { x: layoutAccount.x + 105, y: layoutAccount.y + 48 };
     const contact = layoutContacts.find((item) => item.id === id);
     if (contact) return { x: (contact.x ?? 0) + 105, y: (contact.y ?? 0) + 73 };
     const team = layoutTeams.find((item) => `team:${item.id}` === id);
@@ -911,43 +925,93 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
       window.removeEventListener("pointerup", finish);
     };
   }, [drawingEdge, connections, layoutContacts, layoutTeams, layoutNodes, pan.x, pan.y, zoom]);
-  const startDrag = (event: React.PointerEvent, kind: "contact" | "team" | "node" | "pan", id: string, originX: number, originY: number) => {
+  const startDrag = (event: React.PointerEvent, kind: "account" | "contact" | "team" | "node" | "pan", id: string, originX: number, originY: number) => {
     event.stopPropagation();
     if ((event.target as HTMLElement).closest("input, select, textarea, a")) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { kind, id, startX: event.clientX, startY: event.clientY, originX, originY, moved: false };
+    latestPointerRef.current = { x: event.clientX, y: event.clientY };
+    drag.current = { kind, id, startX: event.clientX, startY: event.clientY, originX, originY, originPanX: panRef.current.x, originPanY: panRef.current.y, moved: false };
+    if (kind !== "pan" && autoPanFrameRef.current === null) autoPanFrameRef.current = requestAnimationFrame(autoPanDrag);
   };
+  const updateDraggedCard = (active: NonNullable<typeof drag.current>, clientX: number, clientY: number, currentPan = panRef.current) => {
+    const nextPosition = draggedPosition(
+      { x: active.originX, y: active.originY },
+      { x: active.startX, y: active.startY },
+      { x: clientX, y: clientY },
+      { x: active.originPanX, y: active.originPanY },
+      currentPan,
+      zoom,
+    );
+    const dx = nextPosition.x - active.originX;
+    const dy = nextPosition.y - active.originY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) active.moved = true;
+    if (active.kind === "account") setLayoutAccount(nextPosition);
+    if (active.kind === "contact") setLayoutContacts((current) => current.map((item) => item.id === active.id ? { ...item, ...nextPosition } : item));
+    if (active.kind === "team") setLayoutTeams((current) => current.map((item) => item.id === active.id ? { ...item, ...nextPosition } : item));
+    if (active.kind === "node") setLayoutNodes((current) => current.map((item) => item.id === active.id ? { ...item, ...nextPosition } : item));
+  };
+  function autoPanDrag() {
+    const active = drag.current;
+    const pointer = latestPointerRef.current;
+    const bounds = canvasRef.current?.getBoundingClientRect();
+    if (!active || active.kind === "pan" || !pointer || !bounds) { autoPanFrameRef.current = null; return; }
+    const velocity = autoPanVelocity(pointer, bounds);
+    if (velocity.x || velocity.y) {
+      const nextPan = { x: panRef.current.x + velocity.x, y: panRef.current.y + velocity.y };
+      panRef.current = nextPan;
+      setPan(nextPan);
+      updateDraggedCard(active, pointer.x, pointer.y, nextPan);
+    }
+    autoPanFrameRef.current = requestAnimationFrame(autoPanDrag);
+  }
   const moveDrag = (event: React.PointerEvent) => {
     const active = drag.current;
     if (!active) return;
-    const dx = (event.clientX - active.startX) / (active.kind === "pan" ? 1 : zoom);
-    const dy = (event.clientY - active.startY) / (active.kind === "pan" ? 1 : zoom);
+    latestPointerRef.current = { x: event.clientX, y: event.clientY };
+    const dx = event.clientX - active.startX;
+    const dy = event.clientY - active.startY;
     if (Math.abs(dx) + Math.abs(dy) > 3) active.moved = true;
-    if (active.kind === "pan") setPan({ x: active.originX + dx, y: active.originY + dy });
-    if (active.kind === "contact") setLayoutContacts((current) => current.map((item) => item.id === active.id ? { ...item, x: active.originX + dx, y: active.originY + dy } : item));
-    if (active.kind === "team") setLayoutTeams((current) => current.map((item) => item.id === active.id ? { ...item, x: active.originX + dx, y: active.originY + dy } : item));
-    if (active.kind === "node") setLayoutNodes((current) => current.map((item) => item.id === active.id ? { ...item, x: active.originX + dx, y: active.originY + dy } : item));
+    if (active.kind === "pan") {
+      const nextPan = { x: active.originX + dx, y: active.originY + dy };
+      panRef.current = nextPan;
+      setPan(nextPan);
+    } else updateDraggedCard(active, event.clientX, event.clientY);
   };
   const endDrag = () => {
     const active = drag.current;
     if (active?.moved && active.kind !== "pan") {
-      const previousContacts = active.kind === "contact"
-        ? layoutContacts.map((item) => item.id === active.id ? { ...item, x: active.originX, y: active.originY } : item)
-        : layoutContacts;
-      const previousTeams = active.kind === "team"
-        ? layoutTeams.map((item) => item.id === active.id ? { ...item, x: active.originX, y: active.originY } : item)
-        : layoutTeams;
-      const previousNodes = active.kind === "node"
-        ? layoutNodes.map((item) => item.id === active.id ? { ...item, x: active.originX, y: active.originY } : item)
-        : layoutNodes;
-      historyRef.current = [...historyRef.current.slice(-29), { contacts: previousContacts, teams: previousTeams, nodes: previousNodes, connections }];
+      const pointer = latestPointerRef.current ?? { x: active.startX, y: active.startY };
+      const finalPosition = draggedPosition(
+        { x: active.originX, y: active.originY },
+        { x: active.startX, y: active.startY },
+        pointer,
+        { x: active.originPanX, y: active.originPanY },
+        panRef.current,
+        zoom,
+      );
+      const nextContacts = active.kind === "contact" ? layoutContacts.map((item) => item.id === active.id ? { ...item, ...finalPosition } : item) : layoutContacts;
+      const nextTeams = active.kind === "team" ? layoutTeams.map((item) => item.id === active.id ? { ...item, ...finalPosition } : item) : layoutTeams;
+      const nextNodes = active.kind === "node" ? layoutNodes.map((item) => item.id === active.id ? { ...item, ...finalPosition } : item) : layoutNodes;
+      const nextAccount = active.kind === "account" ? finalPosition : layoutAccount;
+      const previousContacts = active.kind === "contact" ? nextContacts.map((item) => item.id === active.id ? { ...item, x: active.originX, y: active.originY } : item) : nextContacts;
+      const previousTeams = active.kind === "team" ? nextTeams.map((item) => item.id === active.id ? { ...item, x: active.originX, y: active.originY } : item) : nextTeams;
+      const previousNodes = active.kind === "node" ? nextNodes.map((item) => item.id === active.id ? { ...item, x: active.originX, y: active.originY } : item) : nextNodes;
+      const previousAccount = active.kind === "account" ? { x: active.originX, y: active.originY } : layoutAccount;
+      historyRef.current = [...historyRef.current.slice(-29), { contacts: previousContacts, teams: previousTeams, nodes: previousNodes, connections, accountPosition: previousAccount }];
+      setLayoutContacts(nextContacts);
+      setLayoutTeams(nextTeams);
+      setLayoutNodes(nextNodes);
+      setLayoutAccount(nextAccount);
       redoRef.current = [];
       suppressClickRef.current = `${active.kind}:${active.id}`;
       window.setTimeout(() => { suppressClickRef.current = null; }, 0);
       refreshCommands((value) => value + 1);
       onRequestEdit();
-      onChange(layoutContacts, layoutTeams, layoutNodes, connections);
+      onChange(nextContacts, nextTeams, nextNodes, connections, nextAccount);
     }
+    if (autoPanFrameRef.current !== null) cancelAnimationFrame(autoPanFrameRef.current);
+    autoPanFrameRef.current = null;
+    latestPointerRef.current = null;
     drag.current = null;
   };
   const addPerson = () => {
@@ -1126,7 +1190,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
         {layoutNodes.map(node => <article key={node.id} data-connection-node={`node:${node.id}`} className={`relationship-free-node ${node.type} ${connectFrom === `node:${node.id}` || selectedNode === `node:${node.id}` ? "selected" : ""}`} style={{ left: node.x, top: node.y, width: node.width, minHeight: node.height }} onPointerDown={event => startDrag(event, "node", node.id, node.x, node.y)} onClick={event => { event.stopPropagation(); if (suppressClickRef.current !== `node:${node.id}`) { setSelectedNode(`node:${node.id}`); setSelectedEdge(null); } }}><small>{node.type}</small><strong>{node.title}</strong>{node.body && <p>{node.body}</p>}<button className="node-edit" aria-label={`Edit ${node.title}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedNode(`node:${node.id}`); setSelectedEdge(null); onRequestEdit(); }}><Pencil size={12}/></button><button className="connection-handle" aria-label={`Draw relationship from ${node.title}`} onPointerDown={event => beginConnection(event, `node:${node.id}`)}/></article>)}
         <svg viewBox="0 0 1100 620" aria-label="Relationship connections"><defs><marker id="relationship-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>{connections.map((edge) => { const source = nodePoint(edge.source); const target = nodePoint(edge.target); if (!source || !target) return null; const selected = selectedEdge === edge.id; const selectEdge = () => { setSelectedEdge(edge.id); setSelectedNode(null); onRequestEdit(); }; return <g key={edge.id} className={selected ? "selected-edge" : ""} role="button" tabIndex={0} aria-label={`Select ${edge.label || "relationship"}`} onPointerDown={event => event.stopPropagation()} onMouseDown={event => { event.stopPropagation(); selectEdge(); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectEdge(); } }} onClick={event => event.stopPropagation()}><line className="edge-hit-area" x1={source.x} y1={source.y} x2={target.x} y2={target.y}/><line className="edge-visible-line" x1={source.x} y1={source.y} x2={target.x} y2={target.y} markerEnd="url(#relationship-arrow)"/></g>; })}{drawingEdge && (() => { const source = nodePoint(drawingEdge.source); return source ? <line className="relationship-preview-line" x1={source.x} y1={source.y} x2={drawingEdge.x} y2={drawingEdge.y}/> : null; })()}</svg>
         {connections.map((edge) => { const source = nodePoint(edge.source); const target = nodePoint(edge.target); if (!source || !target) return null; const middleX = (source.x + target.x) / 2; const middleY = (source.y + target.y) / 2; const selected = selectedEdge === edge.id; const selectEdge = () => { setSelectedEdge(edge.id); setSelectedNode(null); onRequestEdit(); }; return <div key={`controls:${edge.id}`} className="edge-actions edge-actions-overlay" style={{ left: middleX - 62, top: middleY - 14 }} onPointerDown={event => event.stopPropagation()}><button type="button" className="edge-label-control" aria-label={`Select ${edge.label || "relationship"}`} onClick={event => { event.stopPropagation(); selectEdge(); }}>{edge.label || "Relationship"}</button>{selected && <button type="button" className="edge-delete-control" aria-label={`Delete ${edge.label || "relationship"}`} title="Delete relationship" onClick={event => { event.stopPropagation(); deleteEdge(edge.id); }}><Trash2 size={13}/></button>}</div>; })}
-        <article data-connection-node="account" className={`relationship-company ${connectFrom === "account" ? "selected" : ""}`} style={{ left: 445, top: 42 }}><span>{account.name.split(" ").map((part) => part[0]).join("").slice(0,2)}</span><small>Account</small><strong>{account.name}</strong><button className="connection-handle" aria-label={`Draw relationship from ${account.name}`} onPointerDown={event => beginConnection(event, "account")}/></article>
+        <article data-connection-node="account" className={`relationship-company ${connectFrom === "account" ? "selected" : ""}`} style={{ left: layoutAccount.x, top: layoutAccount.y }} onPointerDown={(event) => startDrag(event, "account", "account", layoutAccount.x, layoutAccount.y)}><span>{account.name.split(" ").map((part) => part[0]).join("").slice(0,2)}</span><small>Account</small><strong>{account.name}</strong><button className="connection-handle" aria-label={`Draw relationship from ${account.name}`} onPointerDown={event => beginConnection(event, "account")}/></article>
         {layoutContacts.map((contact) => <article data-connection-node={contact.id} className={`relationship-person ${connectFrom === contact.id ? "selected" : ""} ${selectedContacts.includes(contact.id!) ? "multi-selected" : ""}`} key={contact.id} style={{ left: contact.x, top: contact.y }} onPointerDown={(event) => startDrag(event, "contact", contact.id!, contact.x!, contact.y!)} onClick={(event) => { event.stopPropagation(); if (suppressClickRef.current === `contact:${contact.id}`) return; if (event.metaKey || event.ctrlKey) setSelectedContacts((current) => current.includes(contact.id!) ? current.filter((id) => id !== contact.id) : [...current, contact.id!]); else { setSelectedNode(contact.id!); setSelectedEdge(null); } }}>
           <button className="contact-select" aria-label={`${selectedContacts.includes(contact.id!) ? "Remove" : "Add"} ${contact.name} ${selectedContacts.includes(contact.id!) ? "from" : "to"} team selection`} aria-pressed={selectedContacts.includes(contact.id!)} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedContacts((current) => current.includes(contact.id!) ? current.filter((id) => id !== contact.id) : [...current, contact.id!]); }}>{selectedContacts.includes(contact.id!) ? "✓" : "+"}</button><button className="node-edit" aria-label={`Edit ${contact.name}`} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); setSelectedNode(contact.id!); setSelectedEdge(null); onRequestEdit(); }}><Pencil size={12}/></button><header><span>{contact.name.split(" ").map((part) => part[0]).join("").slice(0,2) || "?"}</span><div><small>Person</small><strong>{contact.name}</strong></div></header>
           <dl>
@@ -1167,9 +1231,9 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
   const beginEditing = () => { if (!editing) setEditing(true); };
   const cancelEditing = () => { setDraft(account); setDraftIntel(intel); setEditing(false); };
   const saveEditing = () => { onSave(draft, draftIntel); setEditing(false); };
-  const saveRelationshipMap = (contacts: RelationshipContact[], teams: RelationshipTeam[], nodes: RelationshipCanvasNode[], connections: RelationshipEdge[]) => {
+  const saveRelationshipMap = (contacts: RelationshipContact[], teams: RelationshipTeam[], nodes: RelationshipCanvasNode[], connections: RelationshipEdge[], accountPosition: CanvasPoint) => {
     const nextAccount = { ...draft, contacts: contacts.length };
-    const nextIntel = { ...draftIntel, contacts, teams, nodes, connections };
+    const nextIntel = { ...draftIntel, contacts, teams, nodes, connections, accountPosition };
     setDraft(nextAccount);
     setDraftIntel(nextIntel);
     onSave(nextAccount, nextIntel);
@@ -1197,7 +1261,7 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
     <div className="account-detail-grid">
       <section className="surface org-surface">
         <div className="section-head"><div><h2>Relationship playground</h2><p>Arrange teams, map reporting lines, and show who can open the door.</p></div><span className="legend"><i/> Saved to this account</span></div>
-        <RelationshipCanvas account={draft} contacts={draftIntel.contacts} teams={draftIntel.teams} nodes={draftIntel.nodes} connections={draftIntel.connections} ownerOptions={ownerOptions} kanbanCards={kanbanCards} actorEmail={actorEmail} onRequestEdit={() => undefined} onChange={saveRelationshipMap}/>
+        <RelationshipCanvas account={draft} contacts={draftIntel.contacts} teams={draftIntel.teams} nodes={draftIntel.nodes} connections={draftIntel.connections} accountPosition={draftIntel.accountPosition} ownerOptions={ownerOptions} kanbanCards={kanbanCards} actorEmail={actorEmail} onRequestEdit={() => undefined} onChange={saveRelationshipMap}/>
       </section>
       <aside className="surface opportunity-panel editable-block" onClick={beginEditing}>
         <span className="panel-label">Opportunity</span>

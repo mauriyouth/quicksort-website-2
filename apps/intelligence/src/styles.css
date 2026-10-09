@@ -193,7 +193,9 @@ main,.page,.surface,.event-workspace,.relationship-workspace,.relationship-layou
 .relationship-edit-controls .delete-control:hover:not(:disabled){background:#4b1717;color:#fecaca}
 .relationship-layout{position:relative;display:block}
 .relationship-layout>.relationship-canvas{width:100%;min-width:0}
-.relationship-canvas{background:#050505;background-image:none}
+.relationship-canvas{height:max(620px,calc(100vh - 230px));background:#050505;background-image:none}
+.relationship-scene{overflow:visible}
+.relationship-company{cursor:move;user-select:none}
 .relationship-team{z-index:4!important;width:210px!important;height:96px!important;background:#141414;border:1px solid #525252;border-radius:10px;box-shadow:0 12px 32px #0008}
 .relationship-team>div{height:100%;align-items:flex-start;padding:15px 42px 12px 14px;border:0}
 .relationship-team>div>svg{margin-top:1px;flex:none}
@@ -201,7 +203,7 @@ main,.page,.surface,.event-workspace,.relationship-workspace,.relationship-layou
 .relationship-team>div>span{position:absolute;left:14px;bottom:14px;margin:0;color:#737373}
 .relationship-team>p{position:absolute;left:14px;right:14px;bottom:27px;overflow:hidden;margin:0;color:#a3a3a3;text-overflow:ellipsis;white-space:nowrap}
 .relationship-team .connection-handle{top:50%}
-.relationship-inspector{position:absolute;z-index:30;right:0;top:0;width:min(340px,calc(100% - 12px));height:620px;max-height:none;box-shadow:-24px 0 48px #000c;animation:relationship-inspector-in .2s ease-out}
+.relationship-inspector{position:absolute;z-index:30;right:0;top:0;width:min(340px,calc(100% - 12px));height:100%;max-height:none;box-shadow:-24px 0 48px #000c;animation:relationship-inspector-in .2s ease-out}
 @keyframes relationship-inspector-in{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:translateX(0)}}
 .relationship-workspace:fullscreen{height:100vh;padding:18px;background:#000;overflow:hidden}
 .relationship-workspace:fullscreen .relationship-toolbar{flex:none}

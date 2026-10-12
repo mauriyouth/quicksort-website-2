@@ -1,6 +1,7 @@
 import { generateText, Output } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { loadAiSettings } from "../server/ai-settings.ts";
+import { classifyAiFailure } from "../server/ai-failure.ts";
 import { createClient } from "@supabase/supabase-js";
 import {
   intakeRequest,
@@ -22,6 +23,7 @@ return async function handler(req: Request, res: Response) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) return res.status(503).json({ error: "The portal connection is not configured." });
+  let configuredModel: string | null = null;
   try {
     // Supabase verifies the Clerk token and applies the existing RLS policies.
     // Never use a service-role key here or trust a role supplied by the browser.
@@ -29,11 +31,12 @@ return async function handler(req: Request, res: Response) {
     const identity = await client.rpc("sync_clerk_profile");
     if (identity.error || !identity.data) return res.status(401).json({ error: "Your session expired. Sign in again." });
     const role = await client.from("user_roles").select("role").eq("user_id", identity.data).single();
-    if (role.error || role.data?.role !== "admin") return res.status(403).json({ error: "Admin access is required." });
+    if (role.error || !["admin", "hr"].includes(role.data?.role || "")) return res.status(403).json({ error: "HR access is required." });
     const parsed = intakeRequest.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Provide a PDF up to 3 MB, or profile text between 50 and 60,000 characters (LinkedIn: profile URL plus pasted sections)." });
     const input = parsed.data.profile;
     const aiSettings = await deps.loadAiSettings(client);
+    configuredModel = aiSettings.model;
     if (!aiSettings.apiKey) return res.status(503).json({ error: "Add an OpenAI API key in Settings → AI configuration." });
     const pdf = input.kind === "pdf" ? Buffer.from(input.data, "base64") : null;
     if (pdf && (pdf.length > MAX_INTAKE_PDF_BYTES || pdf.subarray(0, 5).toString() !== "%PDF-")) return res.status(400).json({ error: "Upload a valid PDF up to 3 MB." });
@@ -50,9 +53,14 @@ return async function handler(req: Request, res: Response) {
       providerOptions: { openai: { store: false } },
     });
     return res.status(200).json({ profile: parsedProfileSchema.parse(output), model: aiSettings.model });
-  } catch {
-    // Do not log CVs, prompts, tokens, or provider request/response bodies.
-    return res.status(502).json({ error: "The profile could not be parsed. Try again or paste the profile text." });
+  } catch (failure) {
+    // Log only a sanitized signature — never CVs, prompts, tokens, or provider bodies.
+    const { log, client } = classifyAiFailure(failure, {
+      model: configuredModel,
+      fallback: "The profile could not be parsed. Try again or paste the profile text.",
+    });
+    console.error(`[parse-candidate] ${log}`);
+    return res.status(502).json({ error: client });
   }
 }
 }

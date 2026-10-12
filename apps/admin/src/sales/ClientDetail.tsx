@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { ArrowLeft, Pencil, Plus, Trash2, X } from "lucide-react";
 import { db } from "@quicksort/hr-db";
 import { Empty, Notice } from "@quicksort/hr-ui";
 import {
@@ -14,6 +14,7 @@ import {
   useSales,
   type SalesClient,
 } from "./data";
+import { DateField } from "../DateField";
 
 type Sales = ReturnType<typeof useSales>;
 
@@ -38,6 +39,20 @@ export function ClientDetail({
   const [editing, setEditing] = useState(false);
   const [showPerson, setShowPerson] = useState(false);
   const [showOpportunity, setShowOpportunity] = useState(false);
+  const [pricingModel, setPricingModel] = useState("regie");
+
+  /** Close the open modal with Escape, like the backdrop click. */
+  useEffect(() => {
+    if (!showPerson && !showOpportunity) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setShowPerson(false);
+        setShowOpportunity(false);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showPerson, showOpportunity]);
 
   const people = data.people.filter((p) => p.client_id === client.id);
   const opportunities = data.opportunities.filter((o) => o.client_id === client.id);
@@ -82,13 +97,14 @@ export function ClientDetail({
     if (!name) return;
     void action(async () => {
       const result = await db()
-        .from("sales_people")
+        .from("sales_contacts")
         .insert({
           name,
           role: String(f.get("role")).trim(),
           client_id: client.id,
           email: String(f.get("email")).trim(),
           phone: String(f.get("phone")).trim(),
+          linkedin: String(f.get("linkedin")).trim(),
           is_decision_maker: f.get("is_decision_maker") === "on",
         })
         .select("id")
@@ -296,41 +312,65 @@ export function ClientDetail({
         <section className="panel">
           <div className="panel-head">
             <h2>People ({people.length})</h2>
-            <button className="btn secondary small" onClick={() => setShowPerson((v) => !v)}>
+            <button className="btn secondary small" onClick={() => setShowPerson(true)}>
               <Plus size={14} />
-              Add person
+              Add
             </button>
           </div>
           {showPerson && (
-            <form className="form panel-inset" onSubmit={addPerson}>
-              <div className="form-columns">
-                <label>
-                  Name
-                  <input name="name" required maxLength={200} />
-                </label>
-                <label>
-                  Role
-                  <input name="role" maxLength={200} placeholder="e.g. CTO" />
-                </label>
-                <label>
-                  Email
-                  <input name="email" type="email" maxLength={200} />
-                </label>
-                <label>
-                  Phone
-                  <input name="phone" maxLength={40} />
-                </label>
-              </div>
-              <label className="check">
-                <input type="checkbox" name="is_decision_maker" />
-                Decision-maker
-              </label>
-              <div className="actions">
-                <button className="btn small" disabled={busy}>
-                  Add person
-                </button>
-              </div>
-            </form>
+            <div
+              className="modal-backdrop"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setShowPerson(false);
+              }}
+            >
+              <section className="modal" role="dialog" aria-modal="true">
+                <div className="modal-head">
+                  <h2>Add a person</h2>
+                  <button
+                    type="button"
+                    className="btn secondary small"
+                    aria-label="Close"
+                    onClick={() => setShowPerson(false)}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <form className="form" onSubmit={addPerson}>
+                  <div className="form-columns">
+                    <label>
+                      Name
+                      <input name="name" required maxLength={200} />
+                    </label>
+                    <label>
+                      Role
+                      <input name="role" maxLength={200} placeholder="e.g. CTO" />
+                    </label>
+                    <label>
+                      Email
+                      <input name="email" type="email" maxLength={200} />
+                    </label>
+                    <label>
+                      Phone
+                      <input name="phone" maxLength={40} />
+                    </label>
+                    <label>
+                      LinkedIn
+                      <input name="linkedin" type="url" maxLength={300} placeholder="https://linkedin.com/in/…" />
+                    </label>
+                  </div>
+                  <label className="check">
+                    <input type="checkbox" name="is_decision_maker" />
+                    Decision-maker
+                  </label>
+                  <div className="actions">
+                    <button className="btn small" disabled={busy}>
+                      Add
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
           )}
           {people.length ? (
             people.map((p) => {
@@ -351,6 +391,13 @@ export function ClientDetail({
                       {daysSince(p.last_contact_at) !== null &&
                         ` · last contact ${daysSince(p.last_contact_at)}d ago`}
                     </p>
+                    {p.linkedin && (
+                      <p className="small-text">
+                        <a href={p.linkedin} target="_blank" rel="noopener noreferrer">
+                          {p.linkedin.replace(/^https?:\/\//, "")}
+                        </a>
+                      </p>
+                    )}
                     {!!sponsorLinks.length && (
                       <p className="small-text">
                         {sponsorLinks.map((s) => {
@@ -380,7 +427,7 @@ export function ClientDetail({
                     onClick={() => {
                       if (!confirm(`Remove ${p.name}? They will also be removed from opportunity sponsors.`)) return;
                       void action(async () => {
-                        const result = await db().from("sales_people").delete().eq("id", p.id);
+                        const result = await db().from("sales_contacts").delete().eq("id", p.id);
                         if (result.error) throw result.error;
                       }, `${p.name} removed.`);
                     }}
@@ -400,56 +447,88 @@ export function ClientDetail({
         <section className="panel">
           <div className="panel-head">
             <h2>Opportunities ({opportunities.length})</h2>
-            <button className="btn secondary small" onClick={() => setShowOpportunity((v) => !v)}>
+            <button className="btn secondary small" onClick={() => setShowOpportunity(true)}>
               <Plus size={14} />
-              Add opportunity
+              Add
             </button>
           </div>
           {showOpportunity && (
-            <form className="form panel-inset" onSubmit={addOpportunity}>
-              <div className="form-columns">
-                <label>
-                  Title
-                  <input name="title" required maxLength={200} />
-                </label>
-                <label>
-                  Pricing model
-                  <select name="pricing_model" defaultValue="regie">
-                    <option value="regie">Régie (TJM × days)</option>
-                    <option value="forfait">Forfait (fixed price)</option>
-                  </select>
-                </label>
-                <label>
-                  TJM (€ / day)
-                  <input name="tjm" type="number" min="0" step="10" />
-                </label>
-                <label>
-                  Estimated days
-                  <input name="estimated_days" type="number" min="0" step="1" />
-                </label>
-                <label>
-                  Fixed price (€)
-                  <input name="fixed_price" type="number" min="0" step="100" />
-                </label>
-                <label>
-                  Expected close
-                  <input name="expected_close" type="date" />
-                </label>
-                <label>
-                  Owner
-                  <input name="owner_email" type="email" defaultValue={actorEmail} maxLength={200} />
-                </label>
-              </div>
-              <p className="small-text muted">
-                Régie needs TJM + estimated days; forfait needs the fixed price.
-                The amount is derived automatically.
-              </p>
-              <div className="actions">
-                <button className="btn small" disabled={busy}>
-                  Create opportunity
-                </button>
-              </div>
-            </form>
+            <div
+              className="modal-backdrop"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setShowOpportunity(false);
+              }}
+            >
+              <section className="modal" role="dialog" aria-modal="true">
+                <div className="modal-head">
+                  <h2>Add an opportunity</h2>
+                  <button
+                    type="button"
+                    className="btn secondary small"
+                    aria-label="Close"
+                    onClick={() => setShowOpportunity(false)}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <form className="form" onSubmit={addOpportunity}>
+                  <div className="form-columns">
+                    <label>
+                      Title
+                      <input name="title" required maxLength={200} />
+                    </label>
+                    <label>
+                      Pricing model
+                      <select
+                        name="pricing_model"
+                        value={pricingModel}
+                        onChange={(e) => setPricingModel(e.target.value)}
+                      >
+                        <option value="regie">Régie</option>
+                        <option value="forfait">Forfait</option>
+                      </select>
+                    </label>
+                    {pricingModel === "regie" && (
+                      <>
+                        <label>
+                          TJM (€ / day)
+                          <input name="tjm" type="number" min="0" step="10" />
+                        </label>
+                        <label>
+                          Estimated days
+                          <input name="estimated_days" type="number" min="0" step="1" />
+                        </label>
+                      </>
+                    )}
+                    {pricingModel === "forfait" && (
+                      <label>
+                        Forfait (€)
+                        <input name="fixed_price" type="number" min="0" step="100" />
+                      </label>
+                    )}
+                    <label>
+                      Expected close
+                      <DateField name="expected_close" />
+                    </label>
+                    <label>
+                      Owner
+                      <input name="owner_email" type="email" defaultValue={actorEmail} maxLength={200} />
+                    </label>
+                  </div>
+                  <p className="small-text muted">
+                    {pricingModel === "regie"
+                      ? "Régie is priced as TJM × estimated days."
+                      : "Forfait is a lump-sum price."}{" "}
+                    The amount is derived automatically.
+                  </p>
+                  <div className="actions">
+                    <button className="btn small" disabled={busy}>
+                      Add
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
           )}
           {opportunities.length ? (
             opportunities.map((o) => {

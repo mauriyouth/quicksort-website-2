@@ -34,6 +34,9 @@
   letter-spacing: -0.1px;
   color: var(--qs-ink);
   padding: 15px 0;
+  /* Fixed width keeps the divider bar at the same spot on every page,
+     regardless of section name length (HR vs Operations, etc.). */
+  min-width: 150px;
   white-space: nowrap;
 }
 .section-header-divider {

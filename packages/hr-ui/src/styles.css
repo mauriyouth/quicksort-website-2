@@ -36,6 +36,18 @@ button:disabled {
   outline: 2px solid var(--qs-accent);
   outline-offset: 2px;
 }
+/* Text fields: the lime ring hugs the field's own border instead of
+   floating outside it (border-color + 1px ring = the 2px spec). An
+   offset outline on an input reads as a detached, mismatched-radius
+   halo — see the design-system components note. Checkboxes/radios keep
+   the standard outline above. */
+input:focus-visible:where(:not([type="checkbox"]):not([type="radio"])),
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
+}
 .shell {
   min-height: 100vh;
   display: grid;
@@ -372,6 +384,15 @@ p {
   flex-wrap: wrap;
   align-items: center;
 }
+.row-heading {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.row-heading h3 {
+  margin: 0;
+}
 .pill {
   display: inline-flex;
   padding: 4px 9px;
@@ -436,6 +457,9 @@ select {
   background: var(--qs-paper);
   color: var(--qs-ink);
   min-width: 0;
+  transition:
+    border-color var(--qs-dur-2) var(--qs-ease),
+    box-shadow var(--qs-dur-2) var(--qs-ease);
 }
 textarea {
   resize: vertical;
@@ -920,7 +944,8 @@ input::placeholder, textarea::placeholder { color: var(--qs-fg-3); }
   color: var(--qs-muted);
 }
 .pipeline-search:focus-within {
-  border-color: var(--qs-border-strong);
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
 }
 .pipeline-search input {
   flex: 1;
@@ -934,6 +959,8 @@ input::placeholder, textarea::placeholder { color: var(--qs-fg-3); }
 }
 .pipeline-search input:focus-visible {
   outline: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 .pipeline-filter {
   display: inline-flex;
@@ -969,6 +996,12 @@ input::placeholder, textarea::placeholder { color: var(--qs-fg-3); }
 }
 .pipeline-filter select:focus-visible {
   outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+.pipeline-filter:focus-within {
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
 }
 .pipeline-filter svg {
   flex-shrink: 0;
@@ -1721,6 +1754,30 @@ input::placeholder, textarea::placeholder { color: var(--qs-fg-3); }
 .record-record:last-child {
   border-bottom: 0;
 }
+.inline-edit {
+  cursor: text;
+  border-radius: 4px;
+  min-height: 1em;
+  white-space: pre-wrap;
+}
+.inline-edit:hover {
+  outline: 1px dashed var(--qs-line);
+  outline-offset: 2px;
+}
+.inline-edit-input {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--qs-bg-2);
+  border: 1px solid var(--qs-border-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.inline-edit-input:focus-visible {
+  outline: none;
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
+}
 .record-record-label {
   font-size: 11.5px;
   color: var(--qs-muted);
@@ -1798,7 +1855,9 @@ input::placeholder, textarea::placeholder { color: var(--qs-fg-3); }
   outline: none;
 }
 .record-note textarea:focus-visible {
-  border-color: var(--qs-fg-3);
+  outline: none;
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
 }
 .record-note-foot {
   display: flex;
@@ -2057,6 +2116,20 @@ input::placeholder, textarea::placeholder { color: var(--qs-fg-3); }
 .pill.confirmed {
   background: var(--qs-fg-1);
   color: var(--qs-bg-0);
+}
+.pill.hr,
+.pill.sales {
+  background: var(--qs-fg-1);
+  color: var(--qs-bg-0);
+}
+.pill.admin {
+  background: color-mix(in srgb, var(--qs-danger) 14%, transparent);
+  color: var(--qs-danger);
+}
+.pill.candidate {
+  background: transparent;
+  color: var(--qs-fg-2);
+  border: 1px dashed var(--qs-border-strong);
 }
 .pill.alumni,
 .pill.accepted,

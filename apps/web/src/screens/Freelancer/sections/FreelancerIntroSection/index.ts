@@ -1,0 +1,1 @@
+export { FreelancerIntroSection } from "./FreelancerIntroSection";

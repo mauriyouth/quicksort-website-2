@@ -17,15 +17,17 @@ export const SALES_TABS: SectionTab[] = [
   { id: "sales-dashboard", href: "/sales", label: "Dashboard" },
   { id: "sales-pipeline", href: "/sales/pipeline", label: "Pipeline" },
   { id: "sales-clients", href: "/sales/clients", label: "Clients" },
-  { id: "sales-people", href: "/sales/people", label: "People" },
+  { id: "sales-people", href: "/sales/people", label: "Contacts" },
   { id: "opportunities", href: "/sales/opportunities", label: "Opportunities" },
+  { id: "sales-projects", href: "/sales/projects", label: "Projects" },
 ];
 
 export const HR_TABS: SectionTab[] = [
-  { id: "pipeline", href: "/hr/pipeline", label: "Pipeline" },
+  { id: "hr-overview", href: "/hr", label: "Overview" },
+  { id: "recruiting", href: "/hr/recruiting", label: "Recruiting" },
+  { id: "hr-people", href: "/hr/people", label: "People" },
+  { id: "journeys", href: "/hr/journeys", label: "Journeys" },
   { id: "jobs", href: "/hr/jobs", label: "Job posts" },
-  { id: "employees", href: "/hr/employees", label: "Employees" },
-  { id: "analyzer", href: "/hr/cv-analyzer", label: "CV analyzer" },
   { id: "contracts", href: "/hr/contracts", label: "Contracts" },
 ];
 

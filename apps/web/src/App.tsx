@@ -10,6 +10,7 @@ import { Blog } from "./screens/Blog";
 import { BlogPostDetail } from "./screens/BlogPostDetail";
 import { DataForAi } from "./screens/DataForAi";
 import { Carreer } from "./screens/Carreer";
+import { Freelancer } from "./screens/Freelancer";
 import { JobDetail } from "./screens/JobDetail";
 import { InfrastructureFor } from "./screens/InfrastructureFor";
 import { VoiceAi } from "./screens/VoiceAi";
@@ -31,6 +32,7 @@ const AppContent = () => {
         <Route path="/blog/:slug" element={<BlogPostDetail />} />
         <Route path="/data-for-ai" element={<DataForAi />} />
         <Route path="/career" element={<Carreer />} />
+        <Route path="/freelancer" element={<Freelancer />} />
         <Route path="/career/:slug" element={<JobDetail />} />
         <Route path="/infrastructure-for-ai" element={<InfrastructureFor />} />
         <Route path="/voice-ai" element={<VoiceAi />} />

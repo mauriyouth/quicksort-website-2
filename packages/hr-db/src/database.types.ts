@@ -1,3 +1,4 @@
+import type { HrTable, HrPerson, HrApplication, HrEmployee, HrOpportunity, HrInterview, HrOffer, HrJourneyTask, HrReview, HrExit, HrExitItem, HrAssignment, HrEvent, HrContract, HrSignature, HrCountersignature, HrSuggestion, HrAccount } from "./hr.types";
 import type { BlogRecord, BlogInsert } from "./blog";
 export type Json =
   | string
@@ -15,6 +16,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      hr_people: HrTable<HrPerson>;
+      hr_applications: HrTable<HrApplication>;
+      hr_events: HrTable<HrEvent>;
+      contract_countersignatures: HrTable<HrCountersignature>;
+      hr_ai_suggestions: HrTable<HrSuggestion>;
+      hr_person_accounts: HrTable<HrAccount>;
       blog_posts: { Row: BlogRecord; Insert: BlogInsert; Update: Partial<BlogRecord>; Relationships: [] };
       admin_access_audit: {
         Row: {
@@ -132,79 +139,54 @@ export type Database = {
           },
         ]
       }
-      contract_signatures: {
+      contract_signatures: HrTable<HrSignature>;
+      contracts: HrTable<HrContract>;
+      cra_entries: {
         Row: {
-          candidate_id: string
-          consent_text: string
-          contract_id: string
-          document_sha256: string
-          signed_at: string
-          signer_name: string
+          employee_id: string
+          month: string
+          day: string
+          part: "full" | "am" | "pm"
+          status:
+            | "rtt"
+            | "unpaid_leave"
+            | "paid_leave"
+            | "internal"
+            | "client_project"
+          project_id: string | null
         }
         Insert: {
-          candidate_id?: string
-          consent_text?: string
-          contract_id: string
-          document_sha256?: string
-          signed_at?: string
-          signer_name: string
+          employee_id: string
+          month: string
+          day: string
+          part?: "full" | "am" | "pm"
+          status:
+            | "rtt"
+            | "unpaid_leave"
+            | "paid_leave"
+            | "internal"
+            | "client_project"
+          project_id?: string | null
         }
         Update: {
-          candidate_id?: string
-          consent_text?: string
-          contract_id?: string
-          document_sha256?: string
-          signed_at?: string
-          signer_name?: string
+          employee_id?: string
+          month?: string
+          day?: string
+          part?: "full" | "am" | "pm"
+          status?:
+            | "rtt"
+            | "unpaid_leave"
+            | "paid_leave"
+            | "internal"
+            | "client_project"
+          project_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "contract_signatures_candidate_id_fkey"
-            columns: ["candidate_id"]
+            foreignKeyName: "cra_entries_project_id_fkey"
+            columns: ["project_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contract_signatures_contract_id_fkey"
-            columns: ["contract_id"]
-            isOneToOne: true
-            referencedRelation: "contracts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      contracts: {
-        Row: {
-          candidate_id: string
-          created_at: string
-          document_sha256: string
-          id: string
-          storage_path: string
-          title: string
-        }
-        Insert: {
-          candidate_id: string
-          created_at?: string
-          document_sha256: string
-          id?: string
-          storage_path: string
-          title: string
-        }
-        Update: {
-          candidate_id?: string
-          created_at?: string
-          document_sha256?: string
-          id?: string
-          storage_path?: string
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "contracts_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "sales_projects"
             referencedColumns: ["id"]
           },
         ]
@@ -239,63 +221,7 @@ export type Database = {
         }
         Relationships: []
       }
-      interviews: {
-        Row: {
-          id: string
-          candidate_id: string
-          opportunity_id: string | null
-          kind: string
-          scheduled_at: string
-          panel: string
-          location: string
-          status: string
-          scorecard: Json
-          ai_summary: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          candidate_id: string
-          opportunity_id?: string | null
-          kind: string
-          scheduled_at: string
-          panel?: string
-          location?: string
-          status?: string
-          scorecard?: Json
-          ai_summary?: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          candidate_id?: string
-          opportunity_id?: string | null
-          kind?: string
-          scheduled_at?: string
-          panel?: string
-          location?: string
-          status?: string
-          scorecard?: Json
-          ai_summary?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "interviews_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "pipeline_candidates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "interviews_opportunity_id_fkey"
-            columns: ["opportunity_id"]
-            isOneToOne: false
-            referencedRelation: "opportunities"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      interviews: HrTable<HrInterview>;
       jobs: {
         Row: {
           created_at: string
@@ -338,169 +264,9 @@ export type Database = {
         }
         Relationships: []
       }
-      offboarding_items: {
-        Row: {
-          id: string
-          offboarding_id: string
-          title: string
-          done: boolean
-          done_at: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          offboarding_id: string
-          title: string
-          done?: boolean
-          done_at?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          offboarding_id?: string
-          title?: string
-          done?: boolean
-          done_at?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "offboarding_items_offboarding_id_fkey"
-            columns: ["offboarding_id"]
-            isOneToOne: false
-            referencedRelation: "offboarding_records"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      offboarding_records: {
-        Row: {
-          id: string
-          candidate_id: string
-          kind: string
-          status: string
-          exit_date: string
-          notice_end: string | null
-          prerequis_waived: boolean
-          handover_plan: string
-          successor: string
-          exit_interview: string
-          rehire_eligible: boolean | null
-          rehire_rationale: string
-          legal_docs_done: boolean
-          completed_at: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          candidate_id: string
-          kind: string
-          status?: string
-          exit_date: string
-          notice_end?: string | null
-          prerequis_waived?: boolean
-          handover_plan?: string
-          successor?: string
-          exit_interview?: string
-          rehire_eligible?: boolean | null
-          rehire_rationale?: string
-          legal_docs_done?: boolean
-          completed_at?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          candidate_id?: string
-          kind?: string
-          status?: string
-          exit_date?: string
-          notice_end?: string | null
-          prerequis_waived?: boolean
-          handover_plan?: string
-          successor?: string
-          exit_interview?: string
-          rehire_eligible?: boolean | null
-          rehire_rationale?: string
-          legal_docs_done?: boolean
-          completed_at?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "offboarding_records_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "pipeline_candidates"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      offers: {
-        Row: {
-          id: string
-          candidate_id: string
-          opportunity_id: string | null
-          title: string
-          contract_type: string
-          salary_monthly: number
-          cjm: number
-          target_tjm: number
-          margin_pct: number
-          status: string
-          approver_note: string
-          decided_by: string
-          sent_at: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          candidate_id: string
-          opportunity_id?: string | null
-          title: string
-          contract_type?: string
-          salary_monthly: number
-          cjm: number
-          target_tjm: number
-          margin_pct?: number
-          status?: string
-          approver_note?: string
-          decided_by?: string
-          sent_at?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          candidate_id?: string
-          opportunity_id?: string | null
-          title?: string
-          contract_type?: string
-          salary_monthly?: number
-          cjm?: number
-          target_tjm?: number
-          margin_pct?: number
-          status?: string
-          approver_note?: string
-          decided_by?: string
-          sent_at?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "offers_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "pipeline_candidates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "offers_opportunity_id_fkey"
-            columns: ["opportunity_id"]
-            isOneToOne: false
-            referencedRelation: "opportunities"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      offboarding_items: HrTable<HrExitItem>;
+      offboarding_records: HrTable<HrExit>;
+      offers: HrTable<HrOffer>;
       ops_boards: {
         Row: {
           id: string
@@ -566,6 +332,7 @@ export type Database = {
           board_id: string
           column_id: string
           title: string
+          content: string
           priority: string
           owner_email: string
           counters: Json
@@ -578,6 +345,7 @@ export type Database = {
           board_id: string
           column_id: string
           title: string
+          content?: string
           priority?: string
           owner_email?: string
           counters?: Json
@@ -590,6 +358,7 @@ export type Database = {
           board_id?: string
           column_id?: string
           title?: string
+          content?: string
           priority?: string
           owner_email?: string
           counters?: Json
@@ -614,171 +383,11 @@ export type Database = {
           },
         ]
       }
-      onboarding_items: {
-        Row: {
-          id: string
-          candidate_id: string
-          phase: string
-          title: string
-          assignee: string
-          due_date: string | null
-          done: boolean
-          done_at: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          candidate_id: string
-          phase: string
-          title: string
-          assignee?: string
-          due_date?: string | null
-          done?: boolean
-          done_at?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          candidate_id?: string
-          phase?: string
-          title?: string
-          assignee?: string
-          due_date?: string | null
-          done?: boolean
-          done_at?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "onboarding_items_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "pipeline_candidates"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pipeline_candidates: {
-        Row: {
-          id: string
-          full_name: string
-          email: string
-          phone: string
-          source: string
-          referrer: string
-          opportunity_id: string | null
-          stage: string
-          person_status: string
-          disposition: string | null
-          disposition_reason: string
-          match_score: number | null
-          match_explanation: string
-          screening_summary: string
-          screening_recommendation: string
-          skills: string
-          notes: string
-          start_date: string | null
-          probation_end: string | null
-          parrain: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          full_name: string
-          email?: string
-          phone?: string
-          source?: string
-          referrer?: string
-          opportunity_id?: string | null
-          stage?: string
-          person_status?: string
-          disposition?: string | null
-          disposition_reason?: string
-          match_score?: number | null
-          match_explanation?: string
-          screening_summary?: string
-          screening_recommendation?: string
-          skills?: string
-          notes?: string
-          start_date?: string | null
-          probation_end?: string | null
-          parrain?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          full_name?: string
-          email?: string
-          phone?: string
-          source?: string
-          referrer?: string
-          opportunity_id?: string | null
-          stage?: string
-          person_status?: string
-          disposition?: string | null
-          disposition_reason?: string
-          match_score?: number | null
-          match_explanation?: string
-          screening_summary?: string
-          screening_recommendation?: string
-          skills?: string
-          notes?: string
-          start_date?: string | null
-          probation_end?: string | null
-          parrain?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pipeline_candidates_opportunity_id_fkey"
-            columns: ["opportunity_id"]
-            isOneToOne: false
-            referencedRelation: "opportunities"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pipeline_events: {
-        Row: {
-          id: number
-          candidate_id: string
-          from_stage: string
-          to_stage: string
-          actor_email: string
-          rationale: string
-          created_at: string
-        }
-        Insert: {
-          id?: never
-          candidate_id: string
-          from_stage?: string
-          to_stage?: string
-          actor_email: string
-          rationale?: string
-          created_at?: string
-        }
-        Update: {
-          id?: never
-          candidate_id?: string
-          from_stage?: string
-          to_stage?: string
-          actor_email?: string
-          rationale?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pipeline_events_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "pipeline_candidates"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      onboarding_items: HrTable<HrJourneyTask>;
+      employee_project_assignments: HrTable<HrAssignment>;
+      employees: HrTable<HrEmployee>;
+
+
       portal_owners: {
         Row: {
           created_at: string
@@ -823,68 +432,7 @@ export type Database = {
         }
         Relationships: []
       }
-      opportunities: {
-        Row: {
-          id: string
-          title: string
-          hiring_mode: string
-          job_id: string | null
-          client_need: string
-          skill_family: string
-          owner_email: string
-          target_tjm: number | null
-          status: string
-          justification: string
-          decided_by: string
-          decided_at: string | null
-          decision_rationale: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          title: string
-          hiring_mode: string
-          job_id?: string | null
-          client_need?: string
-          skill_family?: string
-          owner_email?: string
-          target_tjm?: number | null
-          status?: string
-          justification?: string
-          decided_by?: string
-          decided_at?: string | null
-          decision_rationale?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          title?: string
-          hiring_mode?: string
-          job_id?: string | null
-          client_need?: string
-          skill_family?: string
-          owner_email?: string
-          target_tjm?: number | null
-          status?: string
-          justification?: string
-          decided_by?: string
-          decided_at?: string | null
-          decision_rationale?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "opportunities_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      opportunities: HrTable<HrOpportunity>;
       sales_activities: {
         Row: {
           id: string
@@ -1037,7 +585,7 @@ export type Database = {
           },
         ]
       }
-      sales_people: {
+      sales_contacts: {
         Row: {
           id: string
           name: string
@@ -1082,10 +630,168 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "sales_people_client_id_fkey"
+            foreignKeyName: "sales_contacts_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "sales_clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_project_extensions: {
+        Row: {
+          id: string
+          project_id: string
+          label: string
+          pricing_model: string
+          currency: string
+          tjm: number | null
+          estimated_days: number | null
+          fixed_price: number | null
+          amount: number
+          status: string
+          start_date: string | null
+          end_date: string | null
+          notes: string
+          created_at: string
+          updated_at: string
+          tjm_profiles: Json
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          label?: string
+          pricing_model: string
+          currency?: string
+          tjm?: number | null
+          estimated_days?: number | null
+          fixed_price?: number | null
+          amount?: number
+          status?: string
+          start_date?: string | null
+          end_date?: string | null
+          notes?: string
+          created_at?: string
+          updated_at?: string
+          tjm_profiles?: Json
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          label?: string
+          pricing_model?: string
+          currency?: string
+          tjm?: number | null
+          estimated_days?: number | null
+          fixed_price?: number | null
+          amount?: number
+          status?: string
+          start_date?: string | null
+          end_date?: string | null
+          notes?: string
+          created_at?: string
+          updated_at?: string
+          tjm_profiles?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_project_extensions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "sales_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_projects: {
+        Row: {
+          version: number
+          id: string
+          title: string
+          client_id: string
+          opportunity_id: string | null
+          type: string
+          pricing_model: string
+          currency: string
+          tjm: number | null
+          estimated_days: number | null
+          tjm_profiles: Json
+          fixed_price: number | null
+          amount: number
+          status: string
+          start_date: string | null
+          end_date: string | null
+          owner_email: string
+          notes: string
+          drive_folder_id: string | null
+          drive_folder_name: string | null
+          drive_folder_link: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          version?: number
+          id?: string
+          title: string
+          client_id: string
+          opportunity_id?: string | null
+          type?: string
+          pricing_model: string
+          currency?: string
+          tjm?: number | null
+          estimated_days?: number | null
+          tjm_profiles?: Json
+          fixed_price?: number | null
+          amount?: number
+          status?: string
+          start_date?: string | null
+          end_date?: string | null
+          owner_email?: string
+          notes?: string
+          drive_folder_id?: string | null
+          drive_folder_name?: string | null
+          drive_folder_link?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          version?: number
+          id?: string
+          title?: string
+          client_id?: string
+          opportunity_id?: string | null
+          type?: string
+          pricing_model?: string
+          currency?: string
+          tjm?: number | null
+          estimated_days?: number | null
+          tjm_profiles?: Json
+          fixed_price?: number | null
+          amount?: number
+          status?: string
+          start_date?: string | null
+          end_date?: string | null
+          owner_email?: string
+          notes?: string
+          drive_folder_id?: string | null
+          drive_folder_name?: string | null
+          drive_folder_link?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "sales_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_projects_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "sales_opportunities"
             referencedColumns: ["id"]
           },
         ]
@@ -1114,50 +820,70 @@ export type Database = {
         }
         Relationships: []
       }
-      reviews: {
+      admin_statuses: {
         Row: {
-          id: string
-          candidate_id: string
           kind: string
-          due_date: string
-          status: string
-          outcome: string
-          rationale: string
-          held_at: string | null
-          created_at: string
+          key: string
+          label: string
+          color: string
+          position: number
+          is_default: boolean
+          is_terminal: boolean
+          visible: boolean
+          updated_at: string
         }
         Insert: {
-          id?: string
-          candidate_id: string
           kind: string
-          due_date: string
-          status?: string
-          outcome?: string
-          rationale?: string
-          held_at?: string | null
-          created_at?: string
+          key: string
+          label: string
+          color?: string
+          position?: number
+          is_default?: boolean
+          is_terminal?: boolean
+          visible?: boolean
+          updated_at?: string
         }
         Update: {
-          id?: string
-          candidate_id?: string
           kind?: string
-          due_date?: string
-          status?: string
-          outcome?: string
-          rationale?: string
-          held_at?: string | null
-          created_at?: string
+          key?: string
+          label?: string
+          color?: string
+          position?: number
+          is_default?: boolean
+          is_terminal?: boolean
+          visible?: boolean
+          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "reviews_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "pipeline_candidates"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
+      admin_types: {
+        Row: {
+          key: string
+          label: string
+          mode: string
+          position: number
+          visible: boolean
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          label: string
+          mode?: string
+          position?: number
+          visible?: boolean
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          label?: string
+          mode?: string
+          position?: number
+          visible?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      reviews: HrTable<HrReview>;
       tool_requests: {
         Row: {
           admin_note: string
@@ -1221,59 +947,26 @@ export type Database = {
       }
     }
     Views: {
-      my_application: {
-        Row: {
-          id: string
-          full_name: string
-          stage: string
-          start_date: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          full_name?: string
-          stage?: string
-          start_date?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          full_name?: string
-          stage?: string
-          start_date?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      my_application_events: {
-        Row: {
-          id: number
-          candidate_id: string
-          to_stage: string
-          created_at: string
-        }
-        Insert: {
-          id?: number
-          candidate_id?: string
-          to_stage?: string
-          created_at?: string
-        }
-        Update: {
-          id?: number
-          candidate_id?: string
-          to_stage?: string
-          created_at?: string
-        }
-        Relationships: []
-      }
+      my_applications: HrTable<{ id: string; person_id: string; opportunity_id: string; full_name: string; title: string; stage: string; status: string; created_at: string; updated_at: string }>;
+      my_application_events: HrTable<{ id: number; application_id: string; to_stage: string; kind: string; created_at: string }>;
+      my_employment: HrTable<Pick<HrEmployee, 'id' | 'person_id' | 'role' | 'start_date' | 'end_date' | 'status' | 'onboarding_completed_at' | 'probation_status' | 'probation_end'>>;
+      my_onboarding_items: HrTable<Omit<HrJourneyTask,'completed_by'|'created_at'>>;
+      my_offers: HrTable<Pick<HrOffer,'id'|'application_id'|'title'|'contract_type'|'salary_monthly'|'status'|'shared_at'|'valid_until'|'version'>>;
     }
     Functions: {
+      cra_context: { Args: Record<PropertyKey, never>; Returns: Json };
+      cra_month_snapshot: { Args: { target_employee: string; target_month: string }; Returns: Json };
+      cra_save_month: { Args: { target_employee: string; target_month: string; expected_version: number; entries: Json }; Returns: Json };
+      hr_command: { Args: { command: Json }; Returns: Json };
+      hr_workspace_snapshot: { Args: Record<PropertyKey, never>; Returns: Json };
+      hr_application_requirements: { Args: { application_id: string; to_stage: string }; Returns: Json };
       sync_clerk_profile: { Args: Record<PropertyKey, never>; Returns: string };
       review_admin_access: {
         Args: { decision: string; target_email: string }
+        Returns: undefined
+      }
+      assign_workspace_role: {
+        Args: { role: string; target_email: string }
         Returns: undefined
       }
     }

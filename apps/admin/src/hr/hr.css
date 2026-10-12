@@ -1,9 +1,0 @@
-/* Right-aligned action row that replaced the old page headers (eyebrow +
-   title + lede) — the HR tabs now name the current screen. Mirrors
-   .sales-actions. */
-.hr-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 0 22px;
-}
-

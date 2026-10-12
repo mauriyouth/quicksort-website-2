@@ -1,6 +1,7 @@
 import { generateText, Output } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { loadAiSettings } from "../server/ai-settings.ts";
+import { classifyAiFailure } from "../server/ai-failure.ts";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { analysisRequest, evaluationSchema, MAX_CV_BYTES, CRITERIA } from "../src/analysis.ts";
@@ -19,6 +20,7 @@ return async function handler(req: Request, res: Response) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) return res.status(503).json({ error: "The analyzer needs its portal connection configured." });
+  let configuredModel: string | null = null;
   try {
     // Supabase verifies the Clerk token and applies the existing RLS policies.
     // Never use a service-role key here or trust a role supplied by the browser.
@@ -26,8 +28,9 @@ return async function handler(req: Request, res: Response) {
     const identity = await client.rpc("sync_clerk_profile");
     if (identity.error || !identity.data) return res.status(401).json({ error: "Your session expired. Sign in again." });
     const role = await client.from("user_roles").select("role").eq("user_id", identity.data).single();
-    if (role.error || role.data?.role !== "admin") return res.status(403).json({ error: "Admin access is required." });
+    if (role.error || !["admin", "hr"].includes(role.data?.role || "")) return res.status(403).json({ error: "HR access is required." });
     const aiSettings = await deps.loadAiSettings(client);
+    configuredModel = aiSettings.model;
     if (!aiSettings.apiKey) return res.status(503).json({ error: "Add an OpenAI API key in Settings → AI configuration." });
     const parsed = analysisRequest.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Choose a job and provide a PDF up to 3 MB or CV text between 50 and 60,000 characters." });
@@ -82,9 +85,14 @@ return async function handler(req: Request, res: Response) {
       return res.status(503).json({ error: "The evaluation could not be saved. Retry this file; it has not been marked complete." });
     }
     return res.status(200).json(report);
-  } catch {
-    // Do not log CVs, prompts, tokens, or provider request/response bodies.
-    return res.status(502).json({ error: "Analysis could not be completed. Try again or paste the CV text if the PDF could not be read." });
+  } catch (failure) {
+    // Log only a sanitized signature — never CVs, prompts, tokens, or provider bodies.
+    const { log, client } = classifyAiFailure(failure, {
+      model: configuredModel,
+      fallback: "Analysis could not be completed. Try again or paste the CV text if the PDF could not be read.",
+    });
+    console.error(`[analyze] ${log}`);
+    return res.status(502).json({ error: client });
   }
 }
 }

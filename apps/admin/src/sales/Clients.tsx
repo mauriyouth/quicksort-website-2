@@ -484,7 +484,7 @@ export function Clients({ actorEmail }: { actorEmail: string }) {
                 <tr>
                   <th>Client</th>
                   <th>Industry</th>
-                  <th>People</th>
+                  <th>Contacts</th>
                   <th>Open deals</th>
                   <th>Pipeline value</th>
                   <th>Health</th>

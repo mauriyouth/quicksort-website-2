@@ -1,0 +1,794 @@
+/* Project create/edit page (src/sales/Projects.tsx).
+   Visual source: "Edit Project.html" — dark Quicksort layout: header with
+   the actions top-right, a 4-up stat strip, then a two-column grid of
+   section cards (General / Schedule / Extensions / Pricing / Notes) with a
+   sidebar (Consumption CRA / Main contract). Sunken fields, Signal Lime
+   accents, lime marker on the schedule track.
+   Tokens are the portal semantic aliases so the page flips with data-theme;
+   the source design is the dark variant (card #1E1E1E, sunken fields #0C0C0C,
+   Signal Lime primary). */
+
+.pj-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Page header — back link, title + mono chip, meta row, and the
+     Cancel / Save actions flush right (the source design keeps them in
+     the header; they submit #pj-form via the form attribute). */
+.pj-head {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.pj-back {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--qs-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color var(--qs-dur-2) var(--qs-ease);
+}
+.pj-back:hover {
+  color: var(--qs-ink);
+}
+.pj-head-row {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.pj-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.pj-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pj-title {
+  margin: 0;
+  font-family: var(--qs-font-display);
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--qs-ink);
+}
+/* Mono pill carrying the edited project's key, per the source design. */
+.pj-title-chip {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--qs-radius-pill, 999px);
+  border: 1px solid var(--qs-border-strong);
+  font-size: 13px;
+  font-family: var(--qs-font-mono, ui-monospace, monospace);
+  color: var(--qs-fg-2, rgba(250, 250, 250, 0.78));
+  display: inline-flex;
+  align-items: center;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Meta row under the title — status dot · client · pricing · window. */
+.pj-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--qs-fg-2);
+}
+.pj-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.pj-meta-item:not(:last-child)::after {
+  content: "·";
+  color: var(--qs-muted);
+  margin: 0 8px 0 4px;
+}
+.pj-meta-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.pj-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+/* ── Stat strip — one raised card, hairline dividers, display figures. */
+.pj-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  background: var(--qs-paper);
+  border: 1px solid var(--qs-border);
+  border-radius: var(--qs-radius-lg);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.pj-stat {
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: -1px 0 0 var(--qs-border);
+}
+.pj-stat:first-child {
+  box-shadow: none;
+}
+.pj-stat-label {
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pj-stat-value {
+  font-family: var(--qs-font-display);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--qs-ink);
+}
+.pj-stat-sub {
+  font-size: 13px;
+  color: var(--qs-fg-2);
+}
+
+/* ── Body — two-column grid: main section cards + sidebar cards. */
+.pj-form {
+  display: flex;
+  flex-direction: column;
+}
+.pj-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pj-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+/* Create mode has no sidebar — let the section cards stretch full width. */
+.pj-layout-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+.pj-main,
+.pj-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.pj-card {
+  background: var(--qs-paper);
+  border: 1px solid var(--qs-border);
+  border-radius: var(--qs-radius-lg);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.pj-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.pj-card-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pj-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--qs-ink);
+}
+.pj-card-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+/* Small dark pill for figures like "212 working days". */
+.pj-chip {
+  flex: none;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: var(--qs-radius-pill, 999px);
+  background: var(--qs-bg-2);
+  color: var(--qs-ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* ── Initial contract row — the same sunken surface and numbered badge
+   language as extension rows (project-extensions.css .pe-ext), so the
+   contract and its extensions read as one numbered sequence. */
+.pj-contract {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  border: 1px solid var(--qs-line);
+}
+.pj-contract-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.pj-contract-index {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--qs-active);
+  color: var(--qs-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.pj-contract-name {
+  font-weight: 600;
+  color: var(--qs-ink);
+}
+.pj-contract-from {
+  color: var(--qs-muted);
+}
+
+/* ── Fields — quiet 13px labels over sunken 40px wells. */
+.pj-grid {
+  display: grid;
+  gap: 16px;
+}
+.pj-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.pj-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pj-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.pj-label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--qs-muted);
+}
+.pj-field input,
+.pj-field select,
+.pj-field textarea {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  border: 1px solid var(--qs-line);
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.pj-field textarea,
+textarea.pj-notes-area {
+  height: auto;
+  min-height: 96px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  border: 1px solid var(--qs-line);
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+  width: 100%;
+}
+.pj-field input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.pj-field input[type="number"]::-webkit-inner-spin-button,
+.pj-field input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pj-field-help {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--qs-muted);
+}
+.pj-field-owner {
+  max-width: 300px;
+}
+.pj-field-fixed {
+  max-width: 320px;
+}
+
+/* Date picker (shared DateField) matches the sunken wells inside the
+   form — the component's own chrome uses the raised card surface. */
+.pj-field .date-field-trigger {
+  height: 40px;
+  padding: 0 12px;
+  background: var(--qs-bg-2);
+  border-color: var(--qs-line);
+}
+
+/* TJM well with the currency suffix inside. */
+.pj-affix {
+  height: 40px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg);
+  border: 1px solid var(--qs-line);
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 12px;
+  gap: 6px;
+}
+.pj-affix input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  padding: 0;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+.pj-affix input:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+.pj-affix:focus-within {
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
+}
+.pj-affix-suffix {
+  font-size: 13px;
+  color: var(--qs-muted);
+  flex: none;
+}
+
+/* Owner well with the initial disc. */
+.pj-owner {
+  padding-left: 8px;
+  gap: 10px;
+}
+.pj-owner-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--qs-active);
+  color: var(--qs-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  flex: none;
+  text-transform: uppercase;
+}
+
+/* Open-days hint + "Use N days" action. */
+.pj-hint {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pj-link {
+  border: 0;
+  background: transparent;
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color var(--qs-dur-2) var(--qs-ease);
+}
+.pj-link:hover {
+  color: var(--qs-lime);
+}
+
+/* ── Schedule track — muted fill up to today, lime today marker. */
+.pj-track {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+.pj-track-bar {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--qs-active);
+}
+.pj-track-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--qs-ink) 28%, transparent);
+}
+.pj-track-today {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--qs-lime);
+  transform: translateX(-1px);
+}
+.pj-track-labels {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pj-track-labels span:nth-child(2) {
+  color: var(--qs-fg-2);
+}
+
+/* ── Pricing — segmented model switch + TJM profile table. */
+.pj-seg {
+  height: 40px;
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  box-sizing: border-box;
+}
+.pj-seg button {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qs-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.pj-seg button.on {
+  background: var(--qs-fg-1);
+  color: var(--qs-bg-0);
+}
+
+/* Sunken table: muted header row, dashed name input, per-row subtotal. */
+.pj-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--qs-line);
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  overflow: hidden;
+}
+.pj-table-head,
+.pj-table-row {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.6fr) minmax(130px, 1fr) minmax(84px, 0.6fr)
+    minmax(110px, 0.8fr) 32px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+}
+.pj-table-head {
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pj-table-row {
+  border-top: 1px solid var(--qs-line);
+}
+.pj-table-row > input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  border: 1px dashed var(--qs-border-strong);
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+.pj-table-row > input:focus-visible {
+  outline: none;
+  border-style: solid;
+  border-color: var(--qs-accent);
+}
+.pj-table-row .pj-affix {
+  background: var(--qs-bg-2);
+}
+.pj-table-row .pj-affix:focus-within {
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
+}
+.pj-table-row input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.pj-table-row input[type="number"]::-webkit-inner-spin-button,
+.pj-table-row input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pj-right {
+  text-align: right;
+}
+.pj-subtotal {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--qs-ink);
+  text-align: right;
+  white-space: nowrap;
+}
+.pj-profile-remove {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qs-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease);
+}
+.pj-profile-remove:hover:not(:disabled) {
+  color: #ef4444;
+  background: var(--qs-active);
+}
+.pj-profile-remove:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pj-table-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--qs-line);
+}
+.pj-add-profile {
+  border: 0;
+  background: transparent;
+  color: var(--qs-fg-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pj-add-profile:hover {
+  color: var(--qs-ink);
+}
+.pj-foot-plain {
+  border: 1px solid var(--qs-line);
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+}
+
+/* Estimated value — label + display figure on one baseline. */
+.pj-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.pj-value-label {
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pj-value-amount {
+  font-family: var(--qs-font-display);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--qs-ink);
+  white-space: nowrap;
+}
+
+/* ── Sidebar — Consumption (CRA) figures + lime bar. */
+.pj-side-link {
+  flex: none;
+  font-size: 13px;
+  color: var(--qs-fg-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+.pj-side-link:hover {
+  color: var(--qs-ink);
+}
+.pj-side-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pj-side-figures {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.pj-side-figures strong {
+  font-family: var(--qs-font-display);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--qs-ink);
+}
+.pj-side-figures span {
+  font-size: 14px;
+  color: var(--qs-muted);
+}
+.pj-side-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--qs-active);
+  overflow: hidden;
+}
+.pj-side-bar > div {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--qs-lime);
+  transition: width var(--qs-dur-3) var(--qs-ease);
+}
+.pj-side-bar > div.over {
+  background: var(--qs-danger);
+}
+.pj-side-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--qs-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pj-side-meta span {
+  white-space: nowrap;
+}
+
+/* ── Buttons — shared by the header actions. */
+.pj-btn {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: var(--qs-radius-md, 10px);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition:
+    background var(--qs-dur-2) var(--qs-ease),
+    border-color var(--qs-dur-2) var(--qs-ease);
+}
+.pj-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--qs-border-strong);
+  color: var(--qs-ink);
+}
+.pj-btn-ghost:hover {
+  background: var(--qs-active);
+}
+.pj-btn-primary {
+  background: var(--qs-lime);
+  border: 0;
+  color: var(--qs-rich-black, #000710);
+}
+.pj-btn-primary:hover {
+  background: color-mix(
+    in srgb,
+    var(--qs-lime),
+    var(--qs-rich-black, #000710) 12%
+  );
+}
+.pj-btn:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+@media (max-width: 1100px) {
+  .pj-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pj-side {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .pj-side > .pj-card {
+    flex: 1 1 280px;
+  }
+}
+@media (max-width: 720px) {
+  .pj-title {
+    font-size: 26px;
+  }
+  .pj-grid-3,
+  .pj-grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pj-card {
+    padding: 18px;
+  }
+  .pj-table-head,
+  .pj-table-row {
+    grid-template-columns: minmax(0, 1.4fr) minmax(110px, 1fr) 72px 96px 28px;
+    padding: 10px;
+  }
+  .pj-actions {
+    width: 100%;
+  }
+  .pj-actions .pj-btn {
+    flex: 1;
+  }
+}

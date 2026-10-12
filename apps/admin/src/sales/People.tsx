@@ -12,8 +12,9 @@ import {
   money,
   stageLabel,
   useSales,
-  type SalesPerson,
+  type SalesContact,
 } from "./data";
+import { ClientPicker } from "./ClientPicker";
 import "./sales.css";
 
 /**
@@ -33,6 +34,17 @@ export function People({ actorEmail }: { actorEmail: string }) {
   const [onlyStale, setOnlyStale] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [focusId, setFocusId] = useState("");
+  const [newClientId, setNewClientId] = useState("");
+
+  // Close the create dialog with Escape, like every other sheet.
+  useEffect(() => {
+    if (!showNew) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowNew(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showNew]);
 
   const readFocus = () =>
     new URLSearchParams(window.location.search).get("focus") || "";
@@ -84,7 +96,7 @@ export function People({ actorEmail }: { actorEmail: string }) {
     if (!name || !clientId) return;
     void sales.action(async () => {
       const result = await db()
-        .from("sales_people")
+        .from("sales_contacts")
         .insert({
           name,
           role: String(f.get("role")).trim(),
@@ -99,6 +111,7 @@ export function People({ actorEmail }: { actorEmail: string }) {
         .single();
       if (result.error) throw result.error;
       setShowNew(false);
+      setNewClientId("");
     }, `${name} added.`);
   }
 
@@ -107,7 +120,7 @@ export function People({ actorEmail }: { actorEmail: string }) {
   return (
     <>
       <div className="sales-actions">
-        <button className="btn" onClick={() => setShowNew((v) => !v)}>
+        <button className="btn" onClick={() => setShowNew(true)}>
           <Plus size={16} />
           New person
         </button>
@@ -116,62 +129,78 @@ export function People({ actorEmail }: { actorEmail: string }) {
       <Notice>{message}</Notice>
 
       {showNew && (
-        <section className="panel">
-          <h2>Create a person</h2>
-          <form className="form" onSubmit={addPerson}>
-            <div className="form-columns">
-              <label>
-                Name
-                <input name="name" required maxLength={200} />
-              </label>
-              <label>
-                Client
-                <select name="client_id" required defaultValue="">
-                  <option value="" disabled>
-                    Select a client…
-                  </option>
-                  {data.clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Role
-                <input name="role" maxLength={200} placeholder="e.g. Head of Data" />
-              </label>
-              <label>
-                Email
-                <input name="email" type="email" maxLength={200} />
-              </label>
-              <label>
-                Phone
-                <input name="phone" maxLength={40} />
-              </label>
-              <label>
-                LinkedIn
-                <input name="linkedin" type="url" maxLength={300} placeholder="https://linkedin.com/in/…" />
-              </label>
-            </div>
-            <label>
-              Notes
-              <textarea name="notes" rows={3} maxLength={5000} />
-            </label>
-            <label className="check">
-              <input type="checkbox" name="is_decision_maker" />
-              Decision-maker
-            </label>
-            <div className="actions">
-              <button className="btn" disabled={busy}>
-                Save person
-              </button>
-              <button type="button" className="btn secondary" onClick={() => setShowNew(false)}>
-                Cancel
+        <div className="intake-overlay" onClick={() => setShowNew(false)}>
+          <div
+            className="intake-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create a person"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="intake-sheet-head">
+              <div>
+                <div className="intake-sheet-eyebrow">Contacts</div>
+                <h2>Create a person</h2>
+              </div>
+              <button
+                className="intake-sheet-close"
+                aria-label="Close"
+                onClick={() => setShowNew(false)}
+              >
+                <X size={18} />
               </button>
             </div>
-          </form>
-        </section>
+            <form className="form" onSubmit={addPerson}>
+              <div className="form-columns">
+                <label>
+                  Name
+                  <input name="name" required maxLength={200} />
+                </label>
+                <label>
+                  Client
+                  <ClientPicker
+                    clients={data.clients}
+                    value={newClientId}
+                    onChange={setNewClientId}
+                    required
+                  />
+                </label>
+                <label>
+                  Role
+                  <input name="role" maxLength={200} placeholder="e.g. Head of Data" />
+                </label>
+                <label>
+                  Email
+                  <input name="email" type="email" maxLength={200} />
+                </label>
+                <label>
+                  Phone
+                  <input name="phone" maxLength={40} />
+                </label>
+                <label>
+                  LinkedIn
+                  <input name="linkedin" type="url" maxLength={300} placeholder="https://linkedin.com/in/…" />
+                </label>
+              </div>
+              <label>
+                Notes
+                <textarea name="notes" rows={3} maxLength={5000} />
+              </label>
+              <label className="check">
+                <input type="checkbox" name="is_decision_maker" />
+                Decision-maker
+              </label>
+              <div className="actions">
+                <button className="btn" disabled={busy}>
+                  Save person
+                </button>
+                <button type="button" className="btn secondary" onClick={() => setShowNew(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       <section className="panel">
@@ -303,7 +332,7 @@ function PersonDrawer({
   clientName,
   onClose,
 }: {
-  person: SalesPerson;
+  person: SalesContact;
   sales: ReturnType<typeof useSales>;
   actorEmail: string;
   clientName: string;

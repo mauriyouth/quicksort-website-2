@@ -1,23 +1,17 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Plus, RefreshCw, Search, UserPlus, X } from "lucide-react";
-import { db, errorMessage, type Job, type Row } from "@quicksort/hr-db";
+import { db, errorMessage, type Job } from "@quicksort/hr-db";
 import { Notice, Empty, Pill, formatDate } from "@quicksort/hr-ui";
+import { loadWorkspace, executeCommand } from "../hr/data";
+import type { Person, Application, Opportunity } from "../hr/domain";
 
-/**
- * Opportunities — prd-hr.md FR-4.1, now owned by Sales (§3 commercial
- * funnel). Two origins (client need / speculative profile), mandatory
- * hiring-mode tag (§3.3) and an approval workflow with a logged rationale
- * (FR-4.1.2). Sur profil offers stay blocked until the
- * pipeline-justification gate is passed. Candidates and employees (the
- * canonical pipeline record, any person_status) can be linked to an
- * opportunity for staffing or follow-up.
- */
 export function Opportunities({ actorEmail }: { actorEmail: string }) {
   const [opportunities, setOpportunities] = useState<
     RowOpportunity[]
   >([]);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [people, setPeople] = useState<RowPerson[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -25,21 +19,27 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<RowOpportunity | null | undefined>(undefined);
 
+  /** Close the opportunity modal with Escape, like the backdrop click. */
+  useEffect(() => {
+    if (editing === undefined) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setEditing(undefined);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [editing]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const results = await Promise.all([
-        db().from("opportunities").select("*").order("created_at", { ascending: false }),
-        db().from("jobs").select("*").order("created_at", { ascending: false }),
-        db()
-          .from("pipeline_candidates")
-          .select("*")
-          .order("created_at", { ascending: false }),
+      const [workspace, jobResult] = await Promise.all([
+        loadWorkspace(), db().from("jobs").select("*").order("created_at", { ascending: false }),
       ]);
-      for (const r of results) if (r.error) throw r.error;
-      setOpportunities(results[0].data || []);
-      setJobs(results[1].data || []);
-      setPeople(results[2].data || []);
+      if (jobResult.error) throw jobResult.error;
+      setOpportunities(workspace.opportunities);
+      setJobs(jobResult.data || []);
+      setPeople(workspace.people);
+      setApplications(workspace.applications);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -80,90 +80,22 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
       owner_email: String(f.get("owner_email")).trim() || actorEmail,
       target_tjm: f.get("target_tjm") ? Number(f.get("target_tjm")) : null,
       justification: String(f.get("justification")).trim(),
-      updated_at: new Date().toISOString(),
     };
     void action(async () => {
-      const result = editing
-        ? await db().from("opportunities").update(values).eq("id", editing.id).select("id").single()
-        : await db().from("opportunities").insert(values).select("id").single();
-      if (result.error) throw result.error;
+      await executeCommand(editing
+        ? { kind: "update_requisition", opportunity_id: editing.id, expected_version: editing.version, ...values }
+        : { kind: "create_requisition", ...values });
     }, "Opportunity saved.");
-  }
-
-  function decide(r: RowOpportunity, decision: "approved" | "rejected") {
-    const rationale = window.prompt(
-      `${decision === "approved" ? "Approve" : "Reject"} “${r.title}” — rationale (required):`,
-      "",
-    );
-    if (rationale === null) return;
-    if (!rationale.trim()) {
-      setError("A decision rationale is required for the audit log.");
-      return;
-    }
-    void action(async () => {
-      const result = await db()
-        .from("opportunities")
-        .update({
-          status: decision,
-          decided_by: actorEmail,
-          decided_at: new Date().toISOString(),
-          decision_rationale: rationale.trim(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", r.id)
-        .select("id")
-        .single();
-      if (result.error) throw result.error;
-    }, `Opportunity ${decision}. Logged with rationale.`);
-  }
-
-  function submitForApproval(r: RowOpportunity) {
-    if (r.hiring_mode === "sur_profil" && !r.justification.trim()) {
-      setError(
-        "Pipeline-justification gate: a sur profil opportunity needs a written justification before approval (prd-hr.md §3.3).",
-      );
-      return;
-    }
-    void action(async () => {
-      const result = await db()
-        .from("opportunities")
-        .update({ status: "pending_approval", updated_at: new Date().toISOString() })
-        .eq("id", r.id)
-        .select("id")
-        .single();
-      if (result.error) throw result.error;
-    }, "Opportunity submitted for approval.");
   }
 
   function linkPerson(e: FormEvent<HTMLFormElement>, r: RowOpportunity) {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const personId = String(f.get("person_id"));
+    const personId = String(new FormData(e.currentTarget).get("person_id") || "");
     if (!personId) return;
     void action(async () => {
-      const result = await db()
-        .from("pipeline_candidates")
-        .update({ opportunity_id: r.id, updated_at: new Date().toISOString() })
-        .eq("id", personId)
-        .select("id")
-        .single();
-      if (result.error) throw result.error;
-    }, "Person linked to the opportunity.");
+      await executeCommand({ kind: "create_application", person_id: personId, opportunity_id: r.id });
+    }, "Application created. Existing applications remain linked to their own opportunities.");
   }
-
-  function unlinkPerson(p: RowPerson) {
-    void action(async () => {
-      const result = await db()
-        .from("pipeline_candidates")
-        .update({ opportunity_id: null, updated_at: new Date().toISOString() })
-        .eq("id", p.id)
-        .select("id")
-        .single();
-      if (result.error) throw result.error;
-    }, `${p.full_name} unlinked from the opportunity.`);
-  }
-
-  const linkable = people.filter((p) => !p.opportunity_id && p.person_status !== "alumni");
 
   const query = search.toLowerCase();
   const visible = opportunities.filter(
@@ -184,9 +116,25 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
       {editing !== undefined && (
-        <section className="panel">
-          <h2>{editing ? "Edit opportunity" : "Create an opportunity"}</h2>
-          <form className="form" key={editing?.id || "new"} onSubmit={save}>
+        <div
+          className="modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditing(undefined);
+          }}
+        >
+          <section className="modal" role="dialog" aria-modal="true">
+            <div className="modal-head">
+              <h2>{editing ? "Edit opportunity" : "Create an opportunity"}</h2>
+              <button
+                type="button"
+                className="btn secondary small"
+                aria-label="Close"
+                onClick={() => setEditing(undefined)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form className="form" key={editing?.id || "new"} onSubmit={save}>
             <div className="form-columns">
               <label>
                 Role title
@@ -252,8 +200,9 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
                 Cancel
               </button>
             </div>
-          </form>
-        </section>
+            </form>
+          </section>
+        </div>
       )}
       <section className="panel">
         <div className="toolbar">
@@ -276,7 +225,8 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
         )}
         {visible.map((r) => {
           const job = jobs.find((j) => j.id === r.job_id);
-          const linked = people.filter((p) => p.opportunity_id === r.id);
+          const linked = applications.filter(a => a.opportunity_id === r.id);
+          const linkable = people.filter(p => !linked.some(a => a.person_id === p.id && a.status === "active"));
           return (
             <div className="list-row" key={r.id}>
               <div>
@@ -290,45 +240,35 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
                 <Pill status={r.status} />
                 {!!linked.length && (
                   <div className="people-chips" style={{ marginTop: 8 }}>
-                    {linked.map((p) => (
-                      <span className={`pill ${p.person_status}`} key={p.id}>
-                        {p.full_name}
-                        <button
-                          type="button"
-                          className="link-button"
-                          aria-label={`Unlink ${p.full_name}`}
-                          title={`Unlink ${p.full_name}`}
-                          disabled={busy}
-                          onClick={() => unlinkPerson(p)}
-                        >
-                          <X size={12} />
-                        </button>
+                    {linked.map((a) => (
+                      <span className={`pill ${a.status}`} key={a.id}>
+                        {people.find(p => p.id === a.person_id)?.full_name || "Person"} · {a.status}
                       </span>
                     ))}
                   </div>
                 )}
                 <form className="inline-form" style={{ marginTop: 8, maxWidth: 420 }} onSubmit={(e) => linkPerson(e, r)}>
                   <label style={{ flex: 1 }}>
-                    <span className="muted small-text">Link a candidate or employee</span>
+                    <span className="muted small-text">Create an application</span>
                     <select name="person_id" defaultValue="" required>
                       <option value="" disabled>
                         Select a person…
                       </option>
                       {linkable.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.full_name} ({p.person_status})
+                          {p.full_name}
                         </option>
                       ))}
                     </select>
                   </label>
                   <button className="btn secondary small" disabled={busy || !linkable.length}>
                     <UserPlus size={14} />
-                    Link
+                    Apply
                   </button>
                 </form>
                 {!linkable.length && (
                   <p className="small-text muted">
-                    No unlinked candidates or employees — add people from the HR pipeline first.
+                    No available people — add a person in HR first.
                   </p>
                 )}
                 {r.decided_by && (
@@ -338,25 +278,8 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
                 )}
               </div>
               <div className="actions">
-                {(r.status === "draft" || r.status === "rejected") && (
-                  <>
-                    <button className="btn secondary small" disabled={busy} onClick={() => setEditing(r)}>
-                      Edit
-                    </button>
-                    <button className="btn small" disabled={busy} onClick={() => submitForApproval(r)}>
-                      Submit for approval
-                    </button>
-                  </>
-                )}
-                {r.status === "pending_approval" && (
-                  <>
-                    <button className="btn small" disabled={busy} onClick={() => decide(r, "approved")}>
-                      Approve
-                    </button>
-                    <button className="btn danger small" disabled={busy} onClick={() => decide(r, "rejected")}>
-                      Reject
-                    </button>
-                  </>
+                {r.status === "draft" && (
+                  <button className="btn secondary small" disabled={busy} onClick={() => setEditing(r)}>Edit</button>
                 )}
                 {r.status === "approved" && (
                   <button
@@ -364,13 +287,8 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
                     disabled={busy}
                     onClick={() =>
                       void action(async () => {
-                        const result = await db()
-                          .from("opportunities")
-                          .update({ status: "published", updated_at: new Date().toISOString() })
-                          .eq("id", r.id)
-                          .select("id")
-                          .single();
-                        if (result.error) throw result.error;
+                        if (!r.job_id) throw new Error("Link a career-site job post before publishing.");
+                        await executeCommand({ kind: "publish_requisition", opportunity_id: r.id, expected_version: r.version, job_id: r.job_id });
                       }, "Opportunity published — sourcing can start.")
                     }
                   >
@@ -388,5 +306,4 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
   );
 }
 
-type RowOpportunity = import("@quicksort/hr-db").Row<"opportunities">;
-type RowPerson = Row<"pipeline_candidates">;
+type RowOpportunity = Opportunity;

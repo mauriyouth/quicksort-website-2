@@ -184,12 +184,12 @@ export function PipelineBoard() {
           <div className="stat">
             <span className="stat-label">Régie</span>
             <strong className="stat-value">{money(summary.regie.total, "EUR")}</strong>
-            <span className="stat-detail">{summary.regie.count} deals · TJM × days</span>
+            <span className="stat-detail">{summary.regie.count} deals</span>
           </div>
           <div className="stat">
             <span className="stat-label">Forfait</span>
             <strong className="stat-value">{money(summary.forfait.total, "EUR")}</strong>
-            <span className="stat-detail">{summary.forfait.count} deals · fixed price</span>
+            <span className="stat-detail">{summary.forfait.count} deals</span>
           </div>
         </div>
       )}

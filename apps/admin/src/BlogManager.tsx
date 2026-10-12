@@ -6,6 +6,7 @@ import { slugify } from "@quicksort/hr-db/validation";
 import { Notice, Empty, Pill } from "@quicksort/hr-ui";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { DateField } from "./DateField";
 
 export function BlogManager() {
   const [posts, setPosts] = useState<BlogRecord[]>([]);
@@ -107,7 +108,7 @@ function BlogEditor({post,busy,onCancel,onSave}: {post:BlogRecord|null;busy:bool
         <label>URL slug<input required maxLength={160} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={slug} onChange={e => setSlug(e.target.value)}/></label>
         <label>Category<select aria-label="Category" name="category" defaultValue={post?.category || "Software Development"}>{blogCategories.map(c => <option key={c}>{c}</option>)}</select></label>
         <label>Author<input name="author" required maxLength={160} defaultValue={post?.author || "Quicksort"}/></label>
-        <label>Publication date<input name="date" type="date" required max={new Date().toISOString().slice(0,10)} defaultValue={(post?.published_at || new Date().toISOString()).slice(0,10)}/></label>
+        <label>Publication date<DateField name="date" required max={new Date().toISOString().slice(0,10)} defaultValue={(post?.published_at || new Date().toISOString()).slice(0,10)}/></label>
       </div>
       <label>Short description<textarea name="description" rows={2} maxLength={500} required defaultValue={post?.description} placeholder="A short introduction for the blog card."/></label>
       <label>Cover image<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => {const next=e.target.files?.[0];if(!next)return;try{validateBlogImage(next);setFile(next);setImageError("");}catch(err){setImageError(errorMessage(err));e.target.value="";}}}/><span className="muted small-text">JPG, PNG or WebP, up to 5 MB. Landscape images work best.</span></label>

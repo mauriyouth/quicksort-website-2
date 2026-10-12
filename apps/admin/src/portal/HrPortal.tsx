@@ -9,13 +9,13 @@ import {
   Check,
   Download,
   Images,
+  CalendarDays,
 } from "lucide-react";
 import {
   db,
   downloadFile,
   saveBlob,
   errorMessage,
-  isMissingRelationError,
   type Row,
 } from "@quicksort/hr-db";
 import { validateFile } from "@quicksort/hr-db/validation";
@@ -29,23 +29,21 @@ import {
   Pill,
   formatDate,
 } from "@quicksort/hr-ui";
+import { z } from "zod";
+import { executeCommand } from "../hr/data";
 import { TeamPhotos } from './TeamPhotos';
+import { CraScreen } from '../cra/CraScreen';
 
-type MyApplication = {
-  id: string;
-  full_name: string;
-  stage: string;
-  start_date: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type MyApplicationEvent = {
-  id: number;
-  candidate_id: string;
-  to_stage: string;
-  created_at: string;
-};
+const applicationSchema = z.object({ id: z.uuid(), person_id: z.uuid(), opportunity_id: z.uuid(), full_name: z.string(), title: z.string(), stage: z.string(), status: z.string(), created_at: z.string(), updated_at: z.string() });
+const applicationEventSchema = z.object({ id: z.number(), application_id: z.uuid(), to_stage: z.string(), kind: z.string(), created_at: z.string() });
+const employmentSchema = z.object({ id: z.uuid(), person_id: z.uuid(), role: z.string(), start_date: z.string(), end_date: z.string().nullable(), status: z.string(), onboarding_completed_at: z.string().nullable(), probation_status: z.string(), probation_end: z.string().nullable() });
+const taskSchema = z.object({ id: z.uuid(), employee_id: z.uuid(), phase: z.string(), title: z.string(), assignee: z.string(), due_date: z.string().nullable(), required: z.boolean(), dependency_id: z.uuid().nullable(), evidence: z.string(), completed_at: z.string().nullable(), version: z.number().int() });
+const offerSchema = z.object({ id: z.uuid(), application_id: z.uuid(), title: z.string(), contract_type: z.string(), salary_monthly: z.number(), status: z.string(), shared_at: z.string().nullable(), valid_until: z.string().nullable(), version: z.number().int() });
+type MyApplication = z.infer<typeof applicationSchema>;
+type MyApplicationEvent = z.infer<typeof applicationEventSchema>;
+type MyEmployment = z.infer<typeof employmentSchema>;
+type MyTask = z.infer<typeof taskSchema>;
+type MyOffer = z.infer<typeof offerSchema>;
 
 const STAGE_LABELS: Record<string, string> = {
   opportunity: "Job opportunity",
@@ -70,45 +68,34 @@ const nav = [
   { id: "application", href: "/application", label: "My application", icon: FileText },
   { id: "documents", href: "/documents", label: "My documents", icon: Upload },
   { id: "contracts", href: "/contracts", label: "My contracts", icon: FileText },
+  { id: "cra", href: "/cra", label: "My CRA", icon: CalendarDays },
   { id: "requests", href: "/tool-access", label: "Tool access", icon: KeyRound },
   { id: "photos", href: "/team-photos", label: "Team photos", icon: Images },
   { id: "account", href: "/account", label: "Account", icon: Settings },
 ];
 
-// Recruiting stages (prd-hr.md §3.1): onboarding sections stay hidden until the
-// offer is accepted (stage contract / pre-boarding onwards).
-const PRE_ONBOARDING_STAGES = [
-  "opportunity",
-  "published",
-  "application",
-  "matching",
-  "screening",
-  "hr_interview",
-  "technical_interview",
-  "client_presentation",
-  "decision",
-  "offer",
-];
-const GATED_TABS = ["overview", "contracts", "requests", "photos"];
+const GATED_TABS = ["overview", "requests", "photos"];
 
 /**
  * Candidate/employee self-service portal ("HR portal"). Rendered by the app
  * root for every signed-in user who is not staff — see App.tsx.
  */
 export function HrPortal({ userId, email }: { userId: string; email: string }) {
-  const [applicationStage, setApplicationStage] = useState<string | null>(null);
-  const onboardingOpen =
-    applicationStage !== null &&
-    !PRE_ONBOARDING_STAGES.includes(applicationStage);
-  // Pre-hire, "My application" is the landing tab; onboarding sections unlock
-  // once the offer is accepted.
+  const [applications, setApplications] = useState<MyApplication[]>([]);
+  const [applicationEvents, setApplicationEvents] = useState<MyApplicationEvent[]>([]);
+  const [employments, setEmployments] = useState<MyEmployment[]>([]);
+  const [tasks, setTasks] = useState<MyTask[]>([]);
+  const [offers, setOffers] = useState<MyOffer[]>([]);
+  const [journeyError, setJourneyError] = useState("");
+  const onboardingOpen = employments.some(e => e.status !== "ended");
+  // Employment unlocks the journey; agreements remain available before hiring.
   const routes = useMemo(
     () => (onboardingOpen ? nav : [nav[1], nav[0], ...nav.slice(2)]),
     [onboardingOpen],
   );
   const visibleNav = onboardingOpen
     ? nav
-    : routes.filter((n) => !GATED_TABS.includes(n.id));
+    : routes.filter((n) => !GATED_TABS.includes(n.id) && (n.id !== "cra" || employments.length > 0));
   const [tab, setTab] = usePortalRoute(routes);
   const
     [profile, setProfile] = useState<Row<"profiles"> | null>(null),
@@ -125,12 +112,24 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Stage-aware navigation: never let a stage lookup break the rest of the portal.
+      setJourneyError("");
       try {
-        const app = await db().from("my_application").select("*").maybeSingle();
-        setApplicationStage(app.error ? null : app.data?.stage ?? null);
-      } catch {
-        setApplicationStage(null);
+        const journeys = await Promise.all([
+          db().from("my_applications").select("*").order("created_at", { ascending: false }),
+          db().from("my_application_events").select("*").order("created_at"),
+          db().from("my_employment").select("*").order("start_date", { ascending: false }),
+          db().from("my_onboarding_items").select("*"),
+          db().from("my_offers").select("*"),
+        ]);
+        for (const result of journeys) if (result.error) throw result.error;
+        setApplications(applicationSchema.array().parse(journeys[0].data));
+        setApplicationEvents(applicationEventSchema.array().parse(journeys[1].data));
+        setEmployments(employmentSchema.array().parse(journeys[2].data));
+        setTasks(taskSchema.array().parse(journeys[3].data));
+        setOffers(offerSchema.array().parse(journeys[4].data));
+      } catch (e) {
+        setApplications([]); setApplicationEvents([]); setEmployments([]); setTasks([]); setOffers([]);
+        setJourneyError(errorMessage(e));
       }
       const results = await Promise.all([
         db().from("profiles").select("*").eq("id", userId).single(),
@@ -200,7 +199,8 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
     const form = e.currentTarget;
     const f = new FormData(form);
     await action(async () => {
-      const file = f.get("file") as File;
+      const file = f.get("file");
+      if (!(file instanceof File)) throw new Error("Choose a document to upload.");
       validateFile(file);
       const extension =
         file.name
@@ -278,7 +278,14 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
         </section>
       )}
       {tab === "photos" && onboardingOpen && <TeamPhotos />}
-      {tab === "application" && <MyApplicationTab email={email} busy={busy} action={action} />}
+      {tab === "cra" && <>
+        <header className="cra-portal-head">
+          <h1>Monthly CRA</h1>
+          <p className="muted">Fill your month day by day — or paint whole ranges — then save. Mornings and afternoons can be filled separately.</p>
+        </header>
+        <CraScreen audience="employee" draftOwner={email} />
+      </>}
+      {tab === "application" && <MyApplicationTab email={email} busy={busy} action={action} applications={applications} events={applicationEvents} offers={offers} employments={employments} journeyError={journeyError} loading={loading} />}
       {tab === "overview" && onboardingOpen && (
         <>
           <div className="hero">
@@ -316,50 +323,29 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           <div className="grid-two">
             <section className="panel">
               <h2>Your onboarding checklist</h2>
-              {[
-                {
-                  title: "Complete your profile",
-                  text: "Make sure we know your full name.",
-                  done: !!profile?.full_name,
-                  target: "account",
-                },
-                {
-                  title: "Share your documents",
-                  text: "Upload the documents requested by your team.",
-                  done: documents.length > 0,
-                  target: "documents",
-                },
-                {
-                  title: "Review your agreements",
-                  text: "Read and sign the contracts shared with you.",
-                  done: contracts.length > 0 && !unsigned.length,
-                  target: "contracts",
-                },
-                {
-                  title: "Get the right tools",
-                  text: "Request access to the tools you need.",
-                  done: requests.some((r) => r.status === "approved"),
-                  target: "requests",
-                },
-              ].map((s, i) => (
-                <div className="step" key={s.title}>
-                  <span className="step-num">
-                    {s.done ? <Check size={16} /> : i + 1}
-                  </span>
-                  <div>
-                    <h3>
-                      <button
-                        className="link-button"
-                        style={{ fontSize: 14, color: "var(--qs-ink)" }}
-                        onClick={() => navigate(s.target)}
-                      >
-                        {s.title}
-                      </button>
-                    </h3>
-                    <p>{s.text}</p>
-                  </div>
+              <Notice error>{journeyError}</Notice>
+              {employments.filter(e => e.status !== "ended").map(employment => (
+                <div key={employment.id}>
+                  <h3>{employment.role}</h3>
+                  <p className="muted">Starting {formatDate(employment.start_date)} · {employment.status}</p>
+                  {tasks.filter(t => t.employee_id === employment.id).map(task => {
+                    const dependency = task.dependency_id ? tasks.find(t => t.id === task.dependency_id) : null;
+                    const waiting = Boolean(dependency && !dependency.completed_at);
+                    return <div className="list-row" key={task.id}>
+                      <div><h3>{task.title}</h3><p className="muted">{task.phase} · {task.required ? "Required" : "Optional"}{task.due_date ? ` · Due ${formatDate(task.due_date)}` : ""}</p>
+                        {task.assignee && <p className="muted small-text">Owner: {task.assignee}</p>}
+                        {waiting && <p className="muted small-text">Waiting for {dependency?.title}</p>}
+                      </div>
+                      {task.completed_at ? <Check size={16} /> : <form onSubmit={e => {
+                        e.preventDefault(); const fields = new FormData(e.currentTarget);
+                        void action(async () => { await executeCommand({ kind: "complete_task", task_id: task.id, expected_version: task.version, evidence: String(fields.get("evidence") || "").trim() }); }, "Task completed.");
+                      }}><input name="evidence" placeholder="Completion evidence" required aria-label={`Evidence for ${task.title}`} /><button className="btn secondary small" disabled={busy || waiting || ![email.toLowerCase(), "employee", "candidate"].includes(task.assignee.toLowerCase())}>Complete</button></form>}
+                    </div>;
+                  })}
+                  {!tasks.some(t => t.employee_id === employment.id) && <p className="muted">Your team is preparing your onboarding plan.</p>}
                 </div>
               ))}
+
             </section>
             <section className="panel">
               <h2>Waiting for your signature</h2>
@@ -491,7 +477,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           </section>
         </>
       )}
-      {tab === "contracts" && onboardingOpen && (
+      {tab === "contracts" && (
         <>
           {review && (
             <section className="panel">
@@ -771,115 +757,49 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
   );
 }
 
-/**
- * My application — prd-hr.md §2.2 (Candidate row) and §8.2. The candidate sees
- * their own stage and timeline only: never a score, ranking or comparison.
- * AI assistance is disclosed, and a human re-review path plus GDPR rights are
- * one click away (AI Act Art. 86, GDPR Art. 22(3)).
- */
 function MyApplicationTab({
-  email,
-  busy,
-  action,
+  email, busy, action, applications, events, offers, employments, journeyError, loading,
 }: {
   email: string;
   busy: boolean;
   action: (work: () => Promise<void>, success?: string) => Promise<void>;
+  applications: MyApplication[];
+  events: MyApplicationEvent[];
+  offers: MyOffer[];
+  employments: MyEmployment[];
+  journeyError: string;
+  loading: boolean;
 }) {
-  const [application, setApplication] = useState<MyApplication | null>(null);
-  const [events, setEvents] = useState<MyApplicationEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [requestError, setRequestError] = useState("");
-  const [setupPending, setSetupPending] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setRequestError("");
-    setSetupPending(false);
-    try {
-      const appResult = await db().from("my_application").select("*").maybeSingle();
-      if (appResult.error) throw appResult.error;
-      setApplication(appResult.data);
-      if (appResult.data) {
-        const eventResult = await db()
-          .from("my_application_events")
-          .select("*")
-          .eq("candidate_id", appResult.data.id)
-          .order("created_at");
-        if (eventResult.error) throw eventResult.error;
-        setEvents(eventResult.data || []);
-      } else {
-        setEvents([]);
-      }
-    } catch (e) {
-      if (isMissingRelationError(e)) setSetupPending(true);
-      else setRequestError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
+  const [selectedId, setSelectedId] = useState("");
+  const application = applications.find(a => a.id === selectedId) || applications.find(a => a.status === "active") || applications[0];
   return (
     <>
-      <Notice error>{requestError}</Notice>
-      {loading ? (
-        <p className="muted" role="status">Loading your application…</p>
-      ) : setupPending ? (
+      <Notice error>{journeyError}</Notice>
+      {loading && <p className="muted" role="status">Loading your applications…</p>}
+      {!loading && !journeyError && !application && <section className="panel"><Empty title="No application linked yet">Your HR team can link your account to your person record. Your documents and contracts are already available.</Empty></section>}
+      {application && <>
         <section className="panel">
-          <Empty title="Application tracking is being set up">
-            This part of your HR workspace is not live yet. The rest of your
-            portal — documents, contracts, tool access — works as usual.
-          </Empty>
+          <label>Application<select value={application.id} onChange={e => setSelectedId(e.target.value)}>{applications.map(a => <option value={a.id} key={a.id}>{a.title} · {a.status}</option>)}</select></label>
+          <h2 style={{ marginTop: 20 }}>{application.title}</h2>
+          <p><Pill status={application.status === "active" ? application.stage : application.status} /></p>
+          <h3 className="subsection-title" style={{ marginTop: 18 }}>Your journey so far</h3>
+          <div className="timeline">
+            <div className="timeline-item"><span className="timeline-dot" /><div><p><strong>Application received</strong></p><p className="muted small-text">{formatDate(application.created_at)}</p></div></div>
+            {events.filter(e => e.application_id === application.id).map(event => <div className="timeline-item" key={event.id}><span className="timeline-dot" /><div><p><strong>{STAGE_LABELS[event.to_stage] || event.to_stage || event.kind.replaceAll("_", " ")}</strong></p><p className="muted small-text">{formatDate(event.created_at)}</p></div></div>)}
+          </div>
         </section>
-      ) : !application ? (
-        <section className="panel">
-          <Empty title="No application on file yet">
-            Once your application enters our pipeline, your status will appear
-            here. You can already exercise your GDPR rights below.
-          </Empty>
-        </section>
-      ) : (
-        <>
-          <section className="panel">
-            <h2>Current status</h2>
-            <p>
-              <Pill status={application.stage} />
-            </p>
-            <h3 className="subsection-title" style={{ marginTop: 18 }}>
-              Your journey so far
-            </h3>
-            <div className="timeline">
-              {[{ id: 0, to_stage: application.stage, created_at: application.created_at } as MyApplicationEvent, ...events]
-                .filter((e, i, arr) => arr.findIndex((x) => x.to_stage === e.to_stage) === i)
-                .map((e) => (
-                  <div className="timeline-item" key={e.id}>
-                    <span className="timeline-dot" />
-                    <div>
-                      <p>
-                        <strong>{STAGE_LABELS[e.to_stage] || e.to_stage}</strong>
-                      </p>
-                      <p className="muted small-text">{formatDate(e.created_at)}</p>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </section>
-          <section className="panel">
-            <h2>About AI in our process</h2>
-            <p className="muted">
-              Quicksort uses AI assistance to parse CVs and prepare advisory
-              summaries during recruitment. AI never makes the final decision —
-              a named human reviews and decides every step, and your data is
-              never scored on protected characteristics. You can always ask for
-              a human to re-review any AI-assisted step.
-            </p>
-          </section>
-        </>
-      )}
+        {offers.filter(o => o.application_id === application.id).map(offer => <section className="panel" key={offer.id}>
+          <h2>{offer.title}</h2><p>{offer.contract_type} · {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(offer.salary_monthly)} gross per month</p><Pill status={offer.status} />
+          {offer.valid_until && <p className="muted">Valid until {formatDate(offer.valid_until)}</p>}
+          {offer.status === "shared" && <form className="form" onSubmit={e => {
+            e.preventDefault(); const fields = new FormData(e.currentTarget); const response = fields.get("response");
+            if (response !== "accepted" && response !== "declined") return;
+            void action(async () => { await executeCommand({ kind: "respond_offer", offer_id: offer.id, expected_version: offer.version, response, rationale: String(fields.get("rationale") || "Offer response recorded by recipient.").trim() }); }, "Your offer response has been recorded.");
+          }}><label>Your response<select name="response" required defaultValue=""><option value="" disabled>Choose a response</option><option value="accepted">Accept offer</option><option value="declined">Decline offer</option></select></label><label>Message to HR<textarea name="rationale" maxLength={2000} /></label><button className="btn" disabled={busy}>Confirm response</button></form>}
+        </section>)}
+        <section className="panel"><h2>About AI in our process</h2><p className="muted">AI helps prepare profile summaries and interview questions. HR reviews suggestions and makes recruitment decisions. You can request human review below.</p></section>
+      </>}
+      {employments.length > 0 && <section className="panel"><h2>Your employment history</h2>{employments.map(period => <div className="list-row" key={period.id}><div><h3>{period.role}</h3><p className="muted">{formatDate(period.start_date)}{period.end_date ? ` to ${formatDate(period.end_date)}` : " onwards"}</p></div><Pill status={period.status} /></div>)}</section>}
       <section className="panel">
         <h2>Your rights</h2>
         <p className="muted">
@@ -904,7 +824,7 @@ function MyApplicationTab({
                 });
               if (error) throw error;
               form.reset();
-            }, "Request sent. Our HR team will come back to you within one business day.");
+            }, "Request sent. Our HR team will review it.");
           }}
         >
           <div className="form-columns">

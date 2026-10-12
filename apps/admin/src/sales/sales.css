@@ -178,6 +178,36 @@
   flex: 1;
 }
 
+/* Opportunity modal: create/edit opens as a centered popup */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5vh 16px 16px;
+  overflow-y: auto;
+}
+.modal {
+  background: var(--card, #1a1a1a);
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  border-radius: 12px;
+  width: min(680px, 100%);
+  padding: 18px;
+}
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.modal-head h2 {
+  margin: 2px 0;
+}
+
 /* Person drawer (sales.md §8.5): /sales/people?focus=<personId> */
 .drawer-backdrop {
   position: fixed;
@@ -458,6 +488,116 @@ tr.clients-row:focus-visible {
   }
 }
 
+/* Searchable client picker (src/sales/Projects.tsx) — the project dialog
+   swaps the long client <select> for this filter-as-you-type combobox. */
+.client-picker {
+  position: relative;
+}
+.client-picker-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--qs-bg);
+  border: 1px solid var(--qs-line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.client-picker-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--qs-ink);
+  cursor: pointer;
+  font-size: inherit;
+}
+.client-picker-list button:hover,
+.client-picker-list button.on {
+  background: var(--qs-hover);
+}
+.client-picker-empty {
+  padding: 8px 10px;
+  color: var(--qs-muted);
+  font-size: 12.5px;
+}
+/* Selected client chip + search input share one well (visual source:
+   "Edit Project.html" — the chip sits inside the field, not below it). */
+.client-picker-well {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 6px;
+  border: 1px solid var(--qs-line);
+  border-radius: var(--qs-radius-md);
+  background: var(--qs-bg);
+  box-sizing: border-box;
+  transition:
+    border-color var(--qs-dur-2) var(--qs-ease),
+    box-shadow var(--qs-dur-2) var(--qs-ease);
+}
+.client-picker .client-picker-well input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.client-picker .client-picker-well input:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+.client-picker-well:focus-within {
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
+}
+.client-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px 0 10px;
+  border-radius: 8px;
+  background: var(--qs-active);
+  font-size: 13px;
+  font-weight: 500;
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.client-picker-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--qs-muted);
+  cursor: pointer;
+  padding: 0;
+}
+.client-picker-chip button:hover {
+  color: var(--qs-ink);
+}
+
 @media (max-width: 700px) {
   .clients-head-actions {
     align-items: flex-start;
@@ -465,4 +605,555 @@ tr.clients-row:focus-visible {
   .clients-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Projects list redesign (src/sales/Projects.tsx).
+   Visual source: "Projects — redesign.html" — display title + lede + lime
+   pill action, four stat cards (the last one inverted), then a single
+   raised card holding semantic filter tabs, an icon search well, refresh,
+   and a five-column table: avatar + who/title/meta, timeline progress,
+   CRA consumption (bar = days used, tick = time elapsed), status pill and
+   a row-level overflow menu, with an attention flag strip under flagged
+   rows. Tokens come from the portal theme so the screen flips with
+   data-theme; in dark mode they resolve to the reference palette
+   (#151515 ground, #1E1E1E cards, #CCFF00 accent). */
+
+/* Header — display title + lede left, lime pill action bottom-right. */
+.projects-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+.projects-head h1 {
+  font-size: 44px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0;
+}
+.projects-lede {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: var(--qs-muted);
+}
+.projects-cta {
+  height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--qs-accent);
+  color: var(--qs-accent-fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.projects-cta:hover {
+  filter: brightness(1.05);
+}
+
+/* Summary — four raised cards, auto-fit, 12px gap. */
+.projects-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.projects-stat {
+  background: var(--qs-paper);
+  border: 1px solid var(--qs-border);
+  border-radius: var(--qs-radius-lg);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.projects-stat-label {
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.projects-stat-value {
+  font-family: var(--qs-font-display);
+  font-size: 34px;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.projects-stat-sub {
+  font-size: 13px;
+  color: var(--qs-fg-2);
+}
+/* Inverted accent card — needs attention. */
+.projects-stat-inv {
+  background: var(--qs-fg-1);
+  border-color: transparent;
+  color: var(--qs-bg-0);
+}
+.projects-stat-inv .projects-stat-label,
+.projects-stat-inv .projects-stat-sub {
+  color: inherit;
+  opacity: 0.65;
+}
+
+/* The list itself — toolbar, table and footer share one card. */
+.projects-card {
+  background: var(--qs-paper);
+  border: 1px solid var(--qs-border);
+  border-radius: var(--qs-radius-xl);
+  overflow: hidden;
+}
+.projects-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--qs-line);
+}
+
+/* Segmented filter tabs on a sunken well. */
+.projects-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--qs-bg-2);
+  flex-wrap: wrap;
+}
+.projects-tab {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--qs-fg-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.projects-tab:hover {
+  color: var(--qs-ink);
+}
+.projects-tab.on {
+  background: var(--qs-lift);
+  color: var(--qs-ink);
+}
+.projects-tab .count {
+  font-size: 12px;
+  color: var(--qs-muted);
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+}
+
+.projects-toolbar-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 280px;
+  justify-content: flex-end;
+}
+
+/* Search well — icon inside, 44px tall. */
+.projects-search {
+  position: relative;
+  flex: 0 1 340px;
+  display: flex;
+  align-items: center;
+  color: var(--qs-muted);
+}
+.projects-search > svg {
+  position: absolute;
+  left: 14px;
+  pointer-events: none;
+}
+.projects-search-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.projects-search input {
+  width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 14px 0 42px;
+  border-radius: 12px;
+  background: var(--qs-bg-0);
+  border: 1px solid var(--qs-border);
+  color: var(--qs-ink);
+  font-size: 14px;
+}
+.projects-search input:focus-visible {
+  outline: none;
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
+}
+.projects-search input::placeholder {
+  color: var(--qs-muted);
+}
+
+/* Ghost refresh icon button. */
+.projects-refresh {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 12px;
+  background: transparent;
+  border: 1px solid var(--qs-border);
+  color: var(--qs-ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.projects-refresh:hover:not(:disabled) {
+  background: var(--qs-hover);
+}
+
+/* Five-column table — grid rows, generous padding, hover wash. */
+.projects-table-scroll {
+  overflow-x: auto;
+}
+.projects-table {
+  min-width: 1120px;
+}
+.projects-head-row,
+.projects-row {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.35fr) minmax(200px, 1fr) minmax(
+      300px,
+      1.6fr
+    ) 140px 40px;
+  gap: 24px;
+  align-items: center;
+  padding: 20px 24px;
+}
+.projects-head-row {
+  padding: 12px 24px;
+  font-size: 12px;
+  color: var(--qs-muted);
+  border-bottom: 1px solid var(--qs-line);
+}
+.projects-head-hint {
+  color: var(--qs-fg-4);
+}
+.projects-row {
+  border-bottom: 1px solid var(--qs-line);
+  transition: background var(--qs-dur-2) var(--qs-ease);
+}
+.projects-row:hover {
+  background: var(--qs-hover);
+}
+.projects-row:last-of-type {
+  border-bottom: 0;
+}
+
+/* Project cell — avatar + who / title / meta stack. */
+.projects-cell {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.projects-avatar {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--qs-lift);
+  color: var(--qs-ink);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 500;
+}
+.projects-avatar.unassigned {
+  background: transparent;
+  border: 1px dashed var(--qs-border-strong);
+  color: var(--qs-muted);
+}
+.projects-cell-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.projects-who {
+  font-size: 15px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projects-title {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--qs-muted);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projects-title:hover {
+  color: var(--qs-ink);
+  text-decoration: underline;
+}
+.projects-sub {
+  font-size: 13px;
+  color: var(--qs-fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Timeline — date range, days-left label, 4px progress bar. */
+.projects-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.projects-range {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--qs-fg-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.projects-range .left {
+  color: var(--qs-muted);
+}
+.projects-range .left.ended {
+  color: var(--qs-ink);
+  font-weight: 500;
+}
+.projects-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--qs-active);
+  overflow: hidden;
+}
+.projects-bar.tall {
+  height: 8px;
+  position: relative;
+  overflow: visible;
+}
+.projects-bar.dashed {
+  background: transparent;
+  border: 1px dashed var(--qs-border-strong);
+  box-sizing: border-box;
+}
+.projects-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--qs-fg-1) 45%, transparent);
+}
+.projects-bar.tall .projects-bar-fill {
+  background: var(--qs-fg-1);
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+/* Time-elapsed marker inside the consumption bar. */
+.projects-bar-tick {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--qs-fg-3);
+  border-radius: 2px;
+}
+
+/* CRA consumption — days used against the régie budget. */
+.projects-consume {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.projects-consume-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.projects-consume-label strong {
+  font-weight: 600;
+}
+.projects-consume-dim {
+  color: var(--qs-muted);
+}
+
+/* Signed renewals: chip on the timeline range. */
+.projects-ext-tag {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.12);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+/* Status pill — outlined capsule with a coloured dot; flagged rows
+   invert to a solid pill. */
+.projects-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--qs-border-strong);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.projects-status.alert {
+  background: var(--qs-fg-1);
+  border-color: transparent;
+  color: var(--qs-bg-0);
+}
+.projects-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: 0 0 6px;
+  background: var(--qs-bg-0);
+}
+.projects-status:not(.alert) .projects-status-dot {
+  background: var(--qs-muted);
+}
+
+/* Attention flag strip — full-width row under a flagged project. */
+.projects-flag {
+  grid-column: 1 / -1;
+  margin-left: 54px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 14px;
+  background: var(--qs-bg-0);
+  border: 1px solid var(--qs-border);
+  border-radius: 12px;
+  font-size: 13px;
+}
+.projects-flag svg {
+  flex: none;
+}
+.projects-flag span {
+  color: var(--qs-fg-2);
+  flex: 1 1 320px;
+}
+
+/* Row actions — overflow menu. */
+.projects-col-actions {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+.projects-row-btn {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--qs-border);
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.projects-row-btn:hover:not(:disabled) {
+  background: var(--qs-hover);
+}
+.projects-row-btn.icon {
+  width: 40px;
+  padding: 0;
+  justify-content: center;
+}
+.projects-menu {
+  position: absolute;
+  top: 46px;
+  right: 0;
+  z-index: 5;
+  width: 168px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--qs-bg-0);
+  border: 1px solid var(--qs-border);
+  box-shadow: var(--qs-shadow-3);
+  display: flex;
+  flex-direction: column;
+}
+.projects-menu.up {
+  top: auto;
+  bottom: 46px;
+}
+.projects-menu button {
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.projects-menu button:hover:not(:disabled) {
+  background: var(--qs-hover);
+}
+.projects-menu button.danger {
+  color: var(--qs-danger);
+}
+
+.projects-empty {
+  padding: 48px 24px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--qs-muted);
+}
+
+/* Card footer — result count + account owner. */
+.projects-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 24px;
+  color: var(--qs-muted);
+  font-size: 12px;
 }

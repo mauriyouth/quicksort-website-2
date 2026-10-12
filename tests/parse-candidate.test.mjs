@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+// `ai` is not linked at the repo root (pnpm strict layout) — resolve it through the admin app.
+import { APICallError } from "../apps/admin/node_modules/ai/dist/index.js";
 import { createParser } from "../apps/admin/api/parse-candidate.ts";
 
 process.env.SUPABASE_URL = "https://example.supabase.co";
@@ -158,4 +160,61 @@ test("surfaces provider failures without leaking internals", async () => {
   );
   assert.equal(r.code, 502);
   assert.match(r.body.error, /could not be parsed/i);
+});
+
+function failingParser(error, model = "gpt-4.1-mini") {
+  return createParser({
+    createClient: async () => clientWith(),
+    loadAiSettings: async () => ({ apiKey: "sk-test-key", model }),
+    generateText: async () => { throw error; },
+  });
+}
+
+const textBody = { profile: { kind: "text", text: "A".repeat(200) } };
+const providerArgs = { url: "https://api.openai.com/v1/responses", requestBodyValues: {} };
+
+test("reports when OpenAI rejects the saved API key", async () => {
+  const r = res();
+  await failingParser(new APICallError({ ...providerArgs, message: "Incorrect API key provided", statusCode: 401 }))(
+    { method: "POST", headers: { authorization: "Bearer token" }, body: textBody },
+    r,
+  );
+  assert.equal(r.code, 502);
+  assert.match(r.body.error, /API key/i);
+});
+
+test("reports quota and rate-limit failures", async () => {
+  const quota = res();
+  await failingParser(new APICallError({ ...providerArgs, message: "You exceeded your current quota", statusCode: 429 }))(
+    { method: "POST", headers: { authorization: "Bearer token" }, body: textBody },
+    quota,
+  );
+  assert.equal(quota.code, 502);
+  assert.match(quota.body.error, /rate-limited|quota|credits/i);
+});
+
+test("points to the model setting when it cannot read PDFs", async () => {
+  const r = res();
+  await failingParser(
+    new APICallError({ ...providerArgs, message: "The model `o1-mini` does not support input_file", statusCode: 400 }),
+    "o1-mini",
+  )(
+    { method: "POST", headers: { authorization: "Bearer token" }, body: textBody },
+    r,
+  );
+  assert.equal(r.code, 502);
+  assert.match(r.body.error, /cannot read PDF files/i);
+  assert.match(r.body.error, /o1-mini/);
+  assert.match(r.body.error, /gpt-4\.1|gpt-4o/);
+});
+
+test("reports extraction timeouts", async () => {
+  const timeout = new DOMException("The operation timed out.", "TimeoutError");
+  const r = res();
+  await failingParser(timeout)(
+    { method: "POST", headers: { authorization: "Bearer token" }, body: textBody },
+    r,
+  );
+  assert.equal(r.code, 502);
+  assert.match(r.body.error, /timed out/i);
 });

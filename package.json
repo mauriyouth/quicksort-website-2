@@ -10,7 +10,8 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:seo": "pnpm --filter @quicksort/web test:seo",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:hr-db": "node scripts/verify-hr-database.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.3",

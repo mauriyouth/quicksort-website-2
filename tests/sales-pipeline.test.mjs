@@ -19,7 +19,7 @@ function fakeClient({ role = 'admin', opportunities = [], clients = [], people =
   const listResults = {
     sales_opportunities: { data: opportunities, error: null },
     sales_clients: { data: clients, error: null },
-    sales_people: { data: people, error: null },
+    sales_contacts: { data: people, error: null },
     sales_sponsors: { data: sponsors, error: null },
   };
   return {

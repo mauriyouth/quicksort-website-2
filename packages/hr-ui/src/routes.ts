@@ -26,10 +26,14 @@ export function usePortalRoute(routes: readonly PortalRoute[]) {
     window.addEventListener('popstate', update);
     return () => window.removeEventListener('popstate', update);
   }, [routes]);
-  const navigate = useCallback((id: string) => {
+  const navigate = useCallback((id: string, href?: string) => {
     const route = routes.find(item => item.id === id);
     if (!route) return;
-    if (window.location.pathname !== route.href) window.history.pushState(null, '', route.href);
+    // Deep links pass their full path (e.g. "/hr/people/<id>/cra"); plain
+    // navigation falls back to the section href.
+    const target = href ?? route.href;
+    if (window.location.pathname + window.location.search + window.location.hash !== target)
+      window.history.pushState(null, '', target);
     setCurrent(id);
     window.scrollTo(0, 0);
   }, [routes]);

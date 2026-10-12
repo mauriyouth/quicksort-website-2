@@ -1,0 +1,159 @@
+/* Contract section inside the project popup (src/sales/ProjectContract.tsx) —
+ * Google Drive storage for the contract and its annexes, one folder per
+ * contract. */
+.pc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Card heading — "Main contract" + the Open-in-Drive link flush right,
+   like the source design's sidebar card. */
+.pc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pc-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--qs-ink);
+}
+.pc-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+.pc-folder-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pc-folder-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: inherit;
+  opacity: 0.8;
+}
+.pc-folder-open:hover {
+  opacity: 1;
+}
+.pc-muted {
+  opacity: 0.65;
+  font-size: 0.85rem;
+  margin: 0;
+}
+.pc-drop {
+  border: 1.5px dashed var(--border, rgba(148, 163, 184, 0.35));
+  border-radius: 12px;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--surface, rgba(148, 163, 184, 0.08));
+  font-size: 0.9rem;
+}
+.pc-drop:hover,
+.pc-drop:focus-visible {
+  border-color: var(--accent, #3b82f6);
+  outline: none;
+}
+.pc-drop-main {
+  font-weight: 600;
+}
+.pc-drop.is-busy {
+  opacity: 0.6;
+  cursor: wait;
+}
+.pc-drop-sub {
+  font-size: 0.76rem;
+  opacity: 0.6;
+}
+.pc-pending {
+  margin: 0;
+  padding: 0 0 0 18px;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+.pc-files-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.pc-files-head h3 {
+  margin: 0;
+  font-size: 0.88rem;
+}
+.pc-refresh {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.pc-refresh:hover {
+  opacity: 1;
+  background: var(--surface, rgba(148, 163, 184, 0.12));
+}
+.pc-file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pc-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border-top: 1px solid var(--border, rgba(148, 163, 184, 0.15));
+  font-size: 0.86rem;
+}
+.pc-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-file-name a {
+  color: inherit;
+}
+.pc-file-meta {
+  opacity: 0.6;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+.pc-file-delete {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+}
+.pc-file-delete:hover {
+  opacity: 1;
+  color: #ef4444;
+  background: var(--surface, rgba(148, 163, 184, 0.12));
+}
+.pc-file-delete:disabled {
+  opacity: 0.3;
+  cursor: wait;
+}

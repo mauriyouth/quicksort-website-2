@@ -16,7 +16,7 @@ export function createHistoryHandler(deps = { createClient }) {
       const identity = await client.rpc("sync_clerk_profile");
       if (identity.error || !identity.data) return res.status(401).json({ error: "Sign in again." });
       const role = await client.from("user_roles").select("role").eq("user_id", identity.data).single();
-      if (role.error || role.data?.role !== "admin") return res.status(403).json({ error: "Admin access is required." });
+      if (role.error || !["admin", "hr"].includes(role.data?.role || "")) return res.status(403).json({ error: "HR access is required." });
       const id = req.query?.id;
       if (id !== undefined) {
         if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: "Invalid report ID." });

@@ -1,18 +1,20 @@
 import { BlogManager } from "./BlogManager";
-import { AiSettings } from "./AiSettings";
 import { AccessManager } from "./AccessManager";
-import { Pipeline } from "./hr/Pipeline";
-import "./hr/hr.css";
+import { AdminSettings } from "./AdminSettings";
+import { SpotlightSearch, type SpotlightSalesContact } from "./SpotlightSearch";
+import { HrWorkspace } from "./hr/HrWorkspace";
+import { loadWorkspace, executeCommand } from "./hr/data";
+import type { Workspace } from "./hr/domain";
 import { Opportunities } from "./sales/Opportunities";
+import { Projects } from "./sales/Projects";
 import { OpsBoard } from "./ops/OpsBoard";
 import { PipelineBoard } from "./sales/PipelineBoard";
 import { SalesDashboard } from "./sales/SalesDashboard";
-import { SectionHeader, SALES_TABS, HR_TABS, OPS_TABS } from "./SectionHeader";
+import { SectionHeader, SALES_TABS, HR_TABS, OPS_TABS, type SectionTab } from "./SectionHeader";
+import { SettingsPage, type SettingsSection } from "./SettingsPage";
 import { Clients } from "./sales/Clients";
 import { People } from "./sales/People";
-import { Analyzer } from "./hr/Analyzer";
-import { Employees } from "./hr/Employees";
-import { dwellDays, slaState, stageLabel } from "./hr/stages";
+
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   Users,
@@ -25,6 +27,7 @@ import {
   Settings,
   RefreshCw,
   UsersRound,
+  SlidersHorizontal,
   Target,
   BadgeEuro,
   DoorOpen,
@@ -68,8 +71,9 @@ const nav = [
       { id: "sales-dashboard", href: "/sales", label: "Dashboard" },
       { id: "sales-pipeline", href: "/sales/pipeline", label: "Pipeline" },
       { id: "sales-clients", href: "/sales/clients", label: "Clients" },
-      { id: "sales-people", href: "/sales/people", label: "People" },
+      { id: "sales-people", href: "/sales/people", label: "Contacts" },
       { id: "opportunities", href: "/sales/opportunities", label: "Opportunities" },
+      { id: "sales-projects", href: "/sales/projects", label: "Projects" },
     ],
   },
   {
@@ -84,32 +88,37 @@ const nav = [
     label: "HR",
     icon: UsersRound,
     children: [
-      // Offers, Onboarding and Offboarding are no longer standalone tabs —
-      // they live as views inside the Pipeline, which owns the full lifecycle.
-      { id: "pipeline", href: "/hr/pipeline", label: "Pipeline" },
+      { id: "hr-overview", href: "/hr", label: "Overview" },
+      { id: "recruiting", href: "/hr/recruiting", label: "Recruiting" },
+      { id: "hr-people", href: "/hr/people", label: "People" },
+      { id: "journeys", href: "/hr/journeys", label: "Journeys" },
       { id: "jobs", href: "/hr/jobs", label: "Job posts" },
-      { id: "employees", href: "/hr/employees", label: "Employees" },
-      { id: "analyzer", href: "/hr/cv-analyzer", label: "CV analyzer" },
       { id: "contracts", href: "/hr/contracts", label: "Contracts" },
     ],
   },
   { id: "blogs", href: "/blog-posts", label: "Blog posts", icon: FileText },
+  { id: "administration", href: "/administration", label: "Administration", icon: SlidersHorizontal },
   { id: "people", href: "/accounts", label: "Accounts", icon: Users },
   { id: "requests", href: "/tool-requests", label: "Tool requests", icon: KeyRound },
   { id: "account", href: "/settings", label: "Settings", icon: Settings },
 ];
 const ownerNav = [...nav, {id:"access",href:"/admin-access",label:"Admin access",icon:KeyRound}];
+/* Settings sub-screens, shown as the top-menu tabs when /settings is
+ * active (same label + divider + tabs pattern as Sales / HR / Ops). */
+const SETTINGS_TABS: SectionTab[] = [
+  { id: "account", href: "/settings", label: "Account" },
+  { id: "ai", href: "/settings/ai", label: "AI configuration" },
+  { id: "drive", href: "/settings/drive", label: "Google Drive contracts" },
+];
 export default function App() {
   const auth = useAuth();
-  // One deployment, two workspaces: staff (role "admin") get the back-office
-  // (HR, Sales, Ops); every other signed-in user gets the candidate portal.
-  // Access to data is still enforced by Supabase RLS — this fork only picks
-  // the shell. While auth loads, `staff` is false and AuthGate shows its
-  // loading state.
-  const staff = !auth.loading && !!auth.session && auth.role === "admin";
+  const staff = !auth.loading && !!auth.session && (auth.role === "admin" || auth.role === "hr");
+  if (!auth.loading && auth.session && auth.role === "sales") {
+    return <AuthGate auth={auth}><StaffingWorkspace email={auth.session.user.email || ""} /></AuthGate>;
+  }
   return staff ? (
-    <AuthGate auth={auth} admin>
-      {auth.session && <Admin email={auth.session.user.email || ""} isOwner={auth.isOwner} />}
+    <AuthGate auth={auth}>
+      {auth.session && <Admin email={auth.session.user.email || ""} isOwner={auth.isOwner} role={auth.role === "hr" ? "hr" : "admin"} />}
     </AuthGate>
   ) : (
     <AuthGate auth={auth}>
@@ -126,71 +135,70 @@ export default function App() {
     </AuthGate>
   );
 }
-function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
+function StaffingWorkspace({ email }: { email: string }) {
+  const staffingNav = [{ id: "people", href: "/hr/people", label: "People", icon: Users }, { id: "account", href: "/settings", label: "Settings", icon: Settings }];
+  const [tab, setTab] = usePortalRoute(staffingNav);
+  function navigate(id: string) {
+    const item = staffingNav.find(n => n.id === id);
+    if (item) { window.history.pushState(null, "", item.href); setTab(id); }
+  }
+  return <Shell portal="Staffing" email={email} nav={staffingNav} current={tab} onNavigate={navigate} hideSubmenu hideTopbar>
+    <SectionHeader label={tab === "account" ? "Settings" : "People"} current={tab} onNavigate={navigate} />
+    {tab === "account" ? <AccountSecurity /> : <HrWorkspace view="people" actorEmail={email} role="sales" />}
+  </Shell>;
+}
+function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role: "hr" | "admin" }) {
+  const workspaceNav = role === "hr" ? nav.filter(item => item.id === "hr" || item.id === "account") : isOwner ? ownerNav : nav;
   const [tab, setTab] = usePortalRoute(
-    (isOwner ? ownerNav : nav).flatMap((item) =>
+    workspaceNav.flatMap((item) =>
       item.children ? [item, ...item.children] : [item],
     ),
   );
-  // The section landing route ("/hr") replaces itself with the first page.
   useEffect(() => {
-    if (tab === "hr") {
-      window.history.replaceState(
-        null,
-        "",
-        "/hr/pipeline" + window.location.search + window.location.hash,
-      );
-      setTab("pipeline");
-    }
-  }, [tab, setTab]);
-  // Tabs that merged into the Pipeline or the CV analyzer keep their old
-  // bookmarks working.
-  useEffect(() => {
-    if (tab !== "not-found") return;
     const path = window.location.pathname;
-    if (
-      [
-        "/hr/candidates",
-        "/hr/interviews",
-        "/hr/onboarding",
-        "/hr/offboarding",
-        "/hr/offers",
-      ].some((p) => path.startsWith(p))
-    ) {
-      window.history.replaceState(
-        null,
-        "",
-        "/hr/pipeline" + window.location.search + window.location.hash,
-      );
-      setTab("pipeline");
-    } else if (path.startsWith("/hr/analysis-history")) {
-      window.history.replaceState(
-        null,
-        "",
-        "/hr/cv-analyzer" + window.location.search + window.location.hash,
-      );
-      setTab("analyzer");
+    // Staffing and CRA merged into People: keep old links and bookmarks working.
+    if (path.startsWith("/hr/staffing") || path.startsWith("/hr/cra")) {
+      window.history.replaceState(null, "", "/hr/people");
+      setTab("hr-people");
+      return;
+    }
+    if (tab === "hr") setTab("hr-overview");
+    if (tab !== "not-found") return;
+    const oldRecruiting = ["/hr/pipeline", "/hr/candidates", "/hr/interviews", "/hr/offers", "/hr/cv-analyzer", "/hr/analysis-history"];
+    const destination = oldRecruiting.some(p => path.startsWith(p)) ? "recruiting"
+      : path.startsWith("/hr/employees") ? "hr-people"
+      : ["/hr/onboarding", "/hr/offboarding"].some(p => path.startsWith(p)) ? "journeys" : null;
+    if (destination) {
+      const route = HR_TABS.find(t => t.id === destination);
+      if (route) window.history.replaceState(null, "", route.href + window.location.search);
+      setTab(destination);
     }
   }, [tab, setTab]);
   const
     [jobs, setJobs] = useState<Job[]>([]),
     [people, setPeople] = useState<Row<"profiles">[]>([]),
+    [salesPeople, setSalesPeople] = useState<SpotlightSalesContact[]>([]),
+    [userRoles, setUserRoles] = useState<Row<"user_roles">[]>([]),
     [contracts, setContracts] = useState<Row<"contracts">[]>([]),
     [documents, setDocuments] = useState<Row<"candidate_documents">[]>([]),
     [requests, setRequests] = useState<Row<"tool_requests">[]>([]),
     [signatures, setSignatures] = useState<Row<"contract_signatures">[]>([]),
     [opportunities, setOpportunities] = useState<Row<"opportunities">[]>([]),
-    [pipeline, setPipeline] = useState<Row<"pipeline_candidates">[]>([]),
-    [pipelineOffers, setPipelineOffers] = useState<Row<"offers">[]>([]),
-    [exits, setExits] = useState<Row<"offboarding_records">[]>([]),
-    [candidateRequests, setCandidateRequests] = useState<Row<"candidate_requests">[]>([]);
+    [hr, setHr] = useState<Workspace | null>(null),
+    [candidateRequests, setCandidateRequests] = useState<Row<"candidate_requests">[]>([]),
+    [projects, setProjects] = useState<
+      { id: string; title: string; status: string; clientName: string }[]
+    >([]);
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [editing, setEditing] = useState<Job | null | undefined>(undefined),
     [search, setSearch] = useState(""),
-    [person, setPerson] = useState("");
+    [person, setPerson] = useState(""),
+    [accountQuery, setAccountQuery] = useState(""),
+    [rightsFilter, setRightsFilter] = useState(""),
+    [spotlightOpen, setSpotlightOpen] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -214,12 +222,11 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
           .order("created_at", { ascending: false }),
         db().from("contract_signatures").select("*"),
         db().from("opportunities").select("*").order("created_at", { ascending: false }),
-        db().from("pipeline_candidates").select("*").is("disposition", null),
-        db().from("offers").select("*"),
-        db().from("offboarding_records").select("*").eq("status", "open"),
+        loadWorkspace(),
         db().from("candidate_requests").select("*").order("created_at", { ascending: false }),
+        db().from("user_roles").select("*"),
       ]);
-      for (const r of results) if (r.error) throw r.error;
+      for (const r of results) if ("error" in r && r.error) throw r.error;
       setJobs(results[0].data || []);
       setPeople(results[1].data || []);
       setContracts(results[2].data || []);
@@ -227,10 +234,52 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       setRequests(results[4].data || []);
       setSignatures(results[5].data || []);
       setOpportunities(results[6].data || []);
-      setPipeline(results[7].data || []);
-      setPipelineOffers(results[8].data || []);
-      setExits(results[9].data || []);
-      setCandidateRequests(results[10].data || []);
+      setHr(results[7]);
+      setCandidateRequests(results[8].data || []);
+      setUserRoles(results[9].data || []);
+      // Delivery projects back the Spotlight "Projects" group. The table
+      // arrives with its own migration, so a missing table must never block
+      // the whole workspace — degrade to an empty list instead.
+      try {
+        const r = await db()
+          .from("sales_projects")
+          .select("id, title, status, client_id")
+          .order("updated_at", { ascending: false });
+        if (r.error) throw r.error;
+        const clients = await db().from("sales_clients").select("id, name");
+        const names = new Map((clients.data || []).map((c) => [c.id, c.name]));
+        setProjects(
+          (r.data || []).map((p) => ({
+            id: p.id,
+            title: p.title,
+            status: p.status,
+            clientName: names.get(p.client_id) || "",
+          })),
+        );
+      } catch {
+        setProjects([]);
+      }
+      // Client contacts back the Spotlight "Contacts" group (sales_contacts is
+      // a different table than accounts/profiles). Degrade to empty if the
+      // table is unavailable, same as projects above.
+      try {
+        const r = await db().from("sales_contacts").select("*").order("name");
+        if (r.error) throw r.error;
+        const clients = await db().from("sales_clients").select("id, name");
+        const names = new Map(
+          (clients.data || []).map((c) => [c.id, c.name]),
+        );
+        setSalesPeople(
+          (r.data || []).map((p) => ({
+            id: p.id,
+            name: p.name,
+            email: p.email,
+            clientName: names.get(p.client_id || "") || "",
+          })),
+        );
+      } catch {
+        setSalesPeople([]);
+      }
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -259,19 +308,133 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
     people.find((p) => p.id === id)?.full_name ||
     people.find((p) => p.id === id)?.email ||
     "Candidate";
-  const pipelineBreaches = pipeline.filter(
-    (c) => slaState(c.stage, dwellDays(c.updated_at, [])) === "breach",
-  );
-  const offersToMove = pipelineOffers.filter((o) =>
-    ["pending_approval", "pending_direction", "sent"].includes(o.status),
-  );
-  useEffect(() => { setEditing(undefined); setError(""); setMessage(""); setSearch(""); }, [tab]);
+  // Accounts page helpers: rights come from user_roles (managed in the
+  // Access manager) and only render here — assignment stays fine-grained.
+  const roleOf = (id: string) =>
+    userRoles.find((r) => r.user_id === id)?.role || "candidate";
+  const visibleAccounts = people.filter((p) => {
+    const q = accountQuery.trim().toLowerCase();
+    return (
+      (!person || p.id === person) &&
+      (!q ||
+        (p.full_name || "").toLowerCase().includes(q) ||
+        (p.email || "").toLowerCase().includes(q)) &&
+      (!rightsFilter || roleOf(p.id) === rightsFilter)
+    );
+  });
+  const accountsScoped =
+    !!person || !!accountQuery.trim() || !!rightsFilter;
+  const visibleAccountIds = new Set(visibleAccounts.map((p) => p.id));
+  const docVisible = (candidateId: string) =>
+    !accountsScoped || visibleAccountIds.has(candidateId);
+  const pipeline = hr?.applications.filter(a => a.status === "active") || [];
+  const hrPeople = hr?.people || [];
+  const pipelineBreaches = pipeline.filter(a => (Date.now() - Date.parse(a.stage_entered_at)) / 86400000 > 14);
+  const offersToMove = hr?.offers.filter(o => ["draft", "pending_approval", "pending_direction", "shared"].includes(o.status)) || [];
+  const exits = hr?.exits.filter(e => e.status === "open") || [];
+  useEffect(() => {
+    setEditing(undefined);
+    setError("");
+    setMessage("");
+    setSearch("");
+    setAccountQuery("");
+    setRightsFilter("");
+    // The accounts page can be deep-linked: /accounts?account=<id>.
+    setPerson(new URLSearchParams(window.location.search).get("account") || "");
+  }, [tab]);
+  useEffect(() => {
+    const sync = () => {
+      if (window.location.pathname.startsWith("/accounts")) {
+        setPerson(
+          new URLSearchParams(window.location.search).get("account") || "",
+        );
+        setAccountQuery("");
+        setRightsFilter("");
+      }
+    };
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
   function navigate(id: string) {
     setTab(id);
     setEditing(undefined);
     setError("");
     setMessage("");
     setSearch("");
+  }
+  // Settings sub-screens live under /settings/*; the sidebar "Settings"
+  // entry owns the /settings prefix (usePortalRoute resolves it), so the
+  // sub-tab is tracked separately and synced from the path.
+  const resolveSettingsTab = (): SettingsSection =>
+    window.location.pathname.startsWith("/settings/ai")
+      ? "ai"
+      : window.location.pathname.startsWith("/settings/drive")
+        ? "drive"
+        : "account";
+  const [settingsTab, setSettingsTab] = useState<SettingsSection>(resolveSettingsTab);
+  useEffect(() => {
+    const sync = () => setSettingsTab(resolveSettingsTab());
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+  // Sidebar navigation pushes /settings before the tab flips — re-resolve.
+  useEffect(() => {
+    if (tab === "account") setSettingsTab(resolveSettingsTab());
+  }, [tab]);
+  function settingsNavigate(id: string) {
+    const route = SETTINGS_TABS.find(t => t.id === id);
+    if (!route) return navigate(id);
+    if (window.location.pathname !== route.href)
+      window.history.pushState(null, "", route.href);
+    setSettingsTab(id as SettingsSection);
+  }
+  // Spotlight deep-links: open a page pointed at an exact record
+  // (?candidate=, ?account=, or a person record under /hr/people/<id>/<tab>).
+  // Pages read those params on mount and re-sync on popstate, so pushing the
+  // URL suffices when switching pages; when already on the page, a synthetic
+  // popstate makes it re-sync.
+  function spotlightNavigate(id: string, params?: Record<string, string>) {
+    if (!params) return navigate(id);
+    const route = workspaceNav
+      .flatMap((item) => (item.children ? item.children : [item]))
+      .find((item) => item.id === id);
+    if (!route) return navigate(id);
+    const url = new URL(route.href, window.location.origin);
+    const { person, application, employment, ...rest } = params;
+    if (person) {
+      // Person records route as paths, not query params: /hr/people/<id>[/tab].
+      const tab = application ? 'applications' : employment ? 'employments' : '';
+      url.pathname = `${route.href}/${person}${tab ? `/${tab}` : ''}`;
+      if (application) url.searchParams.set('application', application);
+      if (employment) url.searchParams.set('employment', employment);
+    }
+    for (const [key, value] of Object.entries(rest))
+      url.searchParams.set(key, value);
+    const target = url.pathname + url.search + url.hash;
+    if (tab === id) {
+      window.history.pushState(null, '', target);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    } else {
+      // Pass the full deep link so the section-href push doesn't clobber it.
+      setTab(id, target);
+    }
+    setEditing(undefined);
+    setError("");
+    setMessage("");
+    setSearch("");
+    window.scrollTo(0, 0);
+  }
+  // HR person records link to the Sales project behind an assignment.
+  function openProject(projectId: string) {
+    const url = new URL("/sales/projects", window.location.origin);
+    url.searchParams.set("project", projectId);
+    window.history.pushState(null, "", url.pathname + url.search);
+    if (tab === "sales-projects") window.dispatchEvent(new PopStateEvent("popstate"));
+    else setTab("sales-projects");
+    setEditing(undefined);
+    setError("");
+    setMessage("");
+    window.scrollTo(0, 0);
   }
   async function saveJob(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -313,6 +476,11 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       const file = f.get("file") as File;
       validateFile(file, true);
       const candidate = String(f.get("candidate"));
+      const application = hr?.applications.find(a => a.id === String(f.get("application")));
+      if (!application) throw new Error("Choose the application this contract belongs to.");
+      if (!hr?.accounts.some(a => a.profile_id === candidate && a.person_id === application.person_id)) {
+        throw new Error("Link this portal account to the selected person in HR before sharing their contract.");
+      }
       const path = `${candidate}/${crypto.randomUUID()}.pdf`;
       const hash = await sha256(file);
       const upload = await db()
@@ -323,6 +491,8 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
         .from("contracts")
         .insert({
           candidate_id: candidate,
+          person_id: application.person_id,
+          application_id: application.id,
           title: String(f.get("title")).trim(),
           storage_path: path,
           document_sha256: hash,
@@ -341,14 +511,13 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
     "sales-clients",
     "sales-people",
     "opportunities",
+    "sales-projects",
   ];
   const isSales = salesTabIds.includes(tab);
   const hrTabIds = [
     "hr",
-    "pipeline",
+    "hr-overview", "recruiting", "hr-people", "journeys",
     "jobs",
-    "employees",
-    "analyzer",
     "contracts",
   ];
   const isHr = hrTabIds.includes(tab);
@@ -358,14 +527,14 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
   // ("/sales" → Dashboard, "/hr" → Pipeline); single-screen pages show the
   // page name without tabs.
   const headerCurrent =
-    tab === "sales" ? "sales-dashboard" : tab === "hr" ? "pipeline" : tab;
+    tab === "sales" ? "sales-dashboard" : tab === "hr" ? "hr-overview" : tab;
   const headerLabel = isSales
     ? "Sales"
     : isHr
       ? "HR"
       : isOps
         ? "Operations"
-        : ((isOwner ? ownerNav : nav).find((item) => item.id === tab)?.label ??
+        : (workspaceNav.find((item) => item.id === tab)?.label ??
           "Page");
   const headerTabs = isSales
     ? SALES_TABS
@@ -373,27 +542,57 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       ? HR_TABS
       : isOps
         ? OPS_TABS
-        : [];
+        : tab === "account"
+          ? SETTINGS_TABS
+          : [];
   return (
     <Shell
       portal="Admin"
       email={email}
-      nav={isOwner ? ownerNav : nav}
+      nav={workspaceNav}
       current={tab}
       onNavigate={navigate}
       hideSubmenu
       hideTopbar
+      sidebarAction={
+        <button
+          type="button"
+          className="spotlight-trigger"
+          onClick={() => setSpotlightOpen(true)}
+          title="Search the workspace (⌘P)"
+        >
+          <Search size={16} />
+          <span>Search</span>
+          <kbd>⌘P</kbd>
+        </button>
+      }
     >
+      <SpotlightSearch
+        open={spotlightOpen}
+        onOpenChange={setSpotlightOpen}
+        onNavigate={spotlightNavigate}
+        nav={workspaceNav}
+        salesPeople={salesPeople}
+        candidates={pipeline.map(a => ({ id: a.id, person_id: a.person_id, full_name: hrPeople.find(p => p.id === a.person_id)?.full_name || "Person", email: hrPeople.find(p => p.id === a.person_id)?.email || "", stage: a.stage }))}
+        employees={(hr?.employees || []).map(e => ({ id: e.id, person_id: e.person_id, full_name: hrPeople.find(p => p.id === e.person_id)?.full_name || "Person", email: hrPeople.find(p => p.id === e.person_id)?.email || "", stage: e.status, status: e.status }))}
+        opportunities={opportunities}
+        jobs={jobs}
+        contracts={contracts}
+        requests={requests}
+        projects={projects}
+      />
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
       <SectionHeader
         label={headerLabel}
         tabs={headerTabs}
-        current={headerCurrent}
-        onNavigate={navigate}
+        current={tab === "account" ? settingsTab : headerCurrent}
+        onNavigate={tab === "account" ? settingsNavigate : navigate}
       />
       {tab === "access" && isOwner && <AccessManager />}
-      {tab === "pipeline" && <Pipeline actorEmail={email} />}
+      {["hr", "hr-overview", "recruiting", "hr-people", "journeys"].includes(tab) && (
+        <HrWorkspace view={tab === "recruiting" ? "recruiting" : tab === "hr-people" ? "people" : tab === "journeys" ? "journeys" : "overview"} actorEmail={email} role={role} openProject={openProject} />
+      )}
       {(tab === "sales" || tab === "sales-dashboard") && (
         <SalesDashboard
           actorEmail={email}
@@ -407,12 +606,10 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       {tab === "sales-clients" && <Clients actorEmail={email} />}
       {tab === "sales-people" && <People actorEmail={email} />}
       {tab === "opportunities" && <Opportunities actorEmail={email} />}
+      {tab === "sales-projects" && <Projects actorEmail={email} />}
+      {tab === "administration" && <AdminSettings />}
       {tab === "operations" && <OpsBoard actorEmail={email} />}
-      {tab === "employees" && <Employees />}
       {tab === "blogs" && <BlogManager />}
-      {tab === "analyzer" && (
-        <Analyzer jobs={jobs} documents={documents} people={people} />
-      )}
       {tab === "overview" && (
         <>
           <div className="heading">
@@ -434,8 +631,8 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
               value={pipeline.length}
               detail={
                 pipelineBreaches.length
-                  ? `${pipelineBreaches.length} over stage SLA — act now`
-                  : "Everyone inside stage SLAs"
+                  ? `${pipelineBreaches.length} waiting over 14 days`
+                  : "No applications waiting over 14 days"
               }
               icon={Users}
             />
@@ -466,8 +663,8 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
               probation and offboarding — one record per person, every decision
               logged.
             </p>
-            <button className="btn lime" onClick={() => navigate("pipeline")}>
-              Open the pipeline
+            <button className="btn lime" onClick={() => navigate("recruiting")}>
+              Open recruiting
               <ArrowUpRight size={16} />
             </button>
           </div>
@@ -506,7 +703,7 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
                   <div className="step" key={stage}>
                     <span className="step-num">{count}</span>
                     <div style={{ flex: 1 }}>
-                      <h3>{stageLabel(stage)}</h3>
+                      <h3>{stage.replaceAll("_", " ")}</h3>
                       <div className="meter" aria-hidden="true">
                         <span style={{ width: `${Math.min(100, (count / total) * 100)}%` }} />
                       </div>
@@ -520,12 +717,6 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       )}
       {tab === "jobs" && (
         <>
-          <div className="hr-actions">
-            <button className="btn" onClick={() => setEditing(null)}>
-              <Plus size={16} />
-              Create a job
-            </button>
-          </div>
           {editing !== undefined && (
             <section className="panel">
               <h2>{editing ? "Edit job post" : "Create a job post"}</h2>
@@ -649,6 +840,12 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
                 <RefreshCw size={14} />
                 Refresh
               </button>
+              <div className="toolbar-right">
+                <button className="btn" onClick={() => setEditing(null)}>
+                  <Plus size={16} />
+                  Create a job
+                </button>
+              </div>
             </div>
             {!jobs.length && !loading && (
               <Empty title="No job posts yet">
@@ -738,40 +935,63 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
       {tab === "people" && (
         <>
           <section className="panel">
-            <label className="form">
-              Select a candidate
-              <select
-                value={person}
-                onChange={(e) => setPerson(e.target.value)}
-              >
-                <option value="">All accounts</option>
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name || p.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {people
-              .filter((p) => !person || p.id === person)
-              .map((p) => (
-                <div className="list-row" key={p.id}>
-                  <div>
-                    <h3>{p.full_name || "New account"}</h3>
-                    <p className="muted">{p.email}</p>
-                  </div>
+            <div className="panel-head">
+              <label className="form">
+                Search accounts
+                <input
+                  type="search"
+                  value={accountQuery}
+                  onChange={(e) => {
+                    setAccountQuery(e.target.value);
+                    setPerson("");
+                  }}
+                  placeholder="Name or email…"
+                />
+              </label>
+              <label className="form">
+                Rights
+                <select
+                  value={rightsFilter}
+                  onChange={(e) => setRightsFilter(e.target.value)}
+                >
+                  <option value="">All rights</option>
+                  <option value="employee">Employee</option>
+                  <option value="hr">HR</option>
+                  <option value="sales">Sales</option>
+                  <option value="admin">Admin</option>
+                  <option value="candidate">Candidate</option>
+                </select>
+              </label>
+            </div>
+            <p className="muted small-text">
+              Rights are assigned in the Access manager — this list is
+              read-only.
+            </p>
+            {visibleAccounts.map((p) => (
+              <div className="list-row" key={p.id}>
+                <div>
+                  <h3>{p.full_name || "New account"}</h3>
+                  <p className="muted">{p.email}</p>
+                </div>
+                <div className="actions">
+                  <Pill status={roleOf(p.id)} />
                   <span className="muted small-text">
                     Joined {formatDate(p.created_at)}
                   </span>
                 </div>
-              ))}
+              </div>
+            ))}
+            {visibleAccounts.length === 0 && (
+              <Empty title="No accounts match">
+                Try a different name, email, or rights type.
+              </Empty>
+            )}
           </section>
           <section className="panel">
             <h2>Onboarding documents</h2>
-            {documents.filter((d) => !person || d.candidate_id === person)
-              .length ? (
+            {documents.filter((d) => docVisible(d.candidate_id)).length ? (
               documents
-                .filter((d) => !person || d.candidate_id === person)
+                .filter((d) => docVisible(d.candidate_id))
                 .map((d) => (
                   <div className="list-row" key={d.id}>
                     <div>
@@ -866,8 +1086,8 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
             <form className="form" onSubmit={uploadContract}>
               <div className="form-columns">
                 <label>
-                  Candidate
-                  <select name="candidate" required defaultValue="">
+                  Portal account
+                  <select name="candidate" required defaultValue={hr?.accounts.find(a => a.person_id === new URLSearchParams(window.location.search).get("person"))?.profile_id || ""} key={hr?.accounts.length}>
                     <option value="" disabled>
                       Select an account
                     </option>
@@ -877,6 +1097,16 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
                       </option>
                     ))}
                   </select>
+                </label>
+                <label>
+                  Recruitment application
+                  <select name="application" required defaultValue={new URLSearchParams(window.location.search).get("application") || ""}>
+                    <option value="" disabled>Select an application</option>
+                    {(hr?.applications || []).filter(a => a.status === "active").map(a => (
+                      <option key={a.id} value={a.id}>{hrPeople.find(p => p.id === a.person_id)?.full_name} · {hr?.opportunities.find(r => r.id === a.opportunity_id)?.title}</option>
+                    ))}
+                  </select>
+                  <span className="muted">The portal account must be explicitly linked to this person.</span>
                 </label>
                 <label>
                   Contract title
@@ -917,6 +1147,7 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
             )}
             {contracts.map((c) => {
               const signed = signatures.find((s) => s.contract_id === c.id);
+              const countersigned = hr?.countersignatures.find(s => s.contract_id === c.id);
               return (
                 <div className="list-row" key={c.id}>
                   <div>
@@ -924,7 +1155,8 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
                     <p className="muted">
                       {name(c.candidate_id)} · {formatDate(c.created_at)}
                     </p>
-                    <Pill status={signed ? "signed" : "pending"} />
+                    <Pill status={signed && countersigned ? "signed" : "pending"} />
+                    <p className="small-text muted">Employee: {signed ? "signed" : "awaiting signature"} · Employer: {countersigned ? "signed" : "awaiting signature"}</p>
                     {signed && (
                       <p className="small-text muted">
                         Signed by {signed.signer_name} on{" "}
@@ -932,6 +1164,13 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
                       </p>
                     )}
                   </div>
+                  {!countersigned && c.application_id && (
+                    <button className="btn small" disabled={busy} onClick={() => {
+                      const signer = window.prompt("Employer signatory name. Confirming records your signature on this exact document.");
+                      if (!signer) return;
+                      void action(async () => { await executeCommand({ kind: "countersign_contract", contract_id: c.id, signer_name: signer }); }, "Employer signature recorded.");
+                    }}>Countersign</button>
+                  )}
                   <button
                     className="btn secondary small"
                     disabled={busy}
@@ -1022,13 +1261,7 @@ function Admin({ email, isOwner }: { email: string; isOwner: boolean }) {
         </>
       )}
       {tab === "account" && (
-        <>
-          <section className="panel" style={{ maxWidth: 550 }}>
-            <p className="muted">Signed in as {email}</p>
-            <AccountSecurity />
-          </section>
-          <AiSettings isOwner={isOwner} />
-        </>
+        <SettingsPage section={settingsTab} isOwner={isOwner} email={email} />
       )}
       {loading && (
         <p className="muted" role="status">

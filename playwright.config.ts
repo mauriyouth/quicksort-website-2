@@ -18,9 +18,13 @@ export default defineConfig({
       reuseExistingServer: true,
     },
     {
-      command: "pnpm --filter @quicksort/web dev --host 127.0.0.1 --port 5173",
-      url: "http://127.0.0.1:5173",
-      reuseExistingServer: true,
+      command: "pnpm --filter @quicksort/web dev --host 127.0.0.1 --port 5183 --strictPort",
+      url: "http://127.0.0.1:5183",
+      env: {
+        VITE_SUPABASE_URL: "https://hr-fixture.supabase.test",
+        VITE_SUPABASE_PUBLISHABLE_KEY: "public-test-key",
+      },
+      reuseExistingServer: false,
     },
   ],
 });

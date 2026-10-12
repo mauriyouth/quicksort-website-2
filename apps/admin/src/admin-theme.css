@@ -1,0 +1,56 @@
+/* Admin workspace theme overrides.
+   The shell ships from @quicksort/hr-ui with an always-dark sidebar
+   (--qs-deep + fixed inverse text). The Admin Workspace template renders
+   the left pane on the raised surface instead — mode-aware like the rest
+   of the page: seasalt on light, #1E1E1E on dark, hairline border, muted
+   nav items, and lime reserved for the active item. Loaded after
+   hr-ui/styles.css (see main.tsx), so these equal-specificity rules win. */
+
+.sidebar {
+  background: var(--qs-bg-1);
+  color: var(--qs-fg-1);
+  border-right-color: var(--qs-border);
+}
+.sidebar .brand {
+  color: var(--qs-fg-1);
+}
+/* The cutout shows the sidebar ground through the brand disc. */
+.sidebar .brand-cut {
+  background: var(--qs-bg-1);
+}
+.sidebar .portal-label {
+  color: var(--qs-fg-3);
+  opacity: 1;
+}
+.sidebar .sidebar-toggle {
+  color: var(--qs-fg-3);
+}
+.sidebar .sidebar-toggle:hover {
+  background: var(--qs-hover);
+  color: var(--qs-fg-1);
+}
+.sidebar .nav a {
+  color: var(--qs-fg-2);
+}
+.sidebar .nav a:hover:not(.active) {
+  background: var(--qs-bg-0);
+  color: var(--qs-fg-1);
+}
+.sidebar .nav a.active {
+  color: var(--qs-rich-black);
+}
+.sidebar .sidebar-bottom {
+  border-top-color: var(--qs-border);
+}
+.sidebar .sidebar-bottom p {
+  color: var(--qs-fg-3);
+}
+.sidebar .sidebar-bottom button {
+  color: var(--qs-fg-1);
+}
+/* Push the primary action to the far right of a toolbar
+   (e.g. “Create a job” inside the Job posts panel). */
+.toolbar .toolbar-right {
+  margin-left: auto;
+  flex-shrink: 0;
+}

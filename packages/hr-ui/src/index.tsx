@@ -118,6 +118,7 @@ export function Shell({
   children,
   hideSubmenu = false,
   hideTopbar = false,
+  sidebarAction,
 }: {
   portal: string;
   email: string;
@@ -129,6 +130,8 @@ export function Shell({
   hideSubmenu?: boolean;
   /** Suppress the breadcrumb top bar (screens styled without one). */
   hideTopbar?: boolean;
+  /** Optional control rendered in the sidebar under the portal label. */
+  sidebarAction?: ReactNode;
 }) {
   const [error, setError] = useState("");
   const clerk = useClerk();
@@ -172,6 +175,7 @@ export function Shell({
           </button>
         </div>
         <div className="portal-label">{portal} workspace</div>
+        {sidebarAction}
         <nav className="nav" aria-label="Main navigation">
           {nav.map((item) => {
             const sectionActive = !!item.children?.some(

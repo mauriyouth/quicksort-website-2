@@ -7,14 +7,14 @@ import { db, errorMessage, type Row } from "@quicksort/hr-db";
  * admin policies as the rest of the operations app.
  */
 export type SalesClient = Row<"sales_clients">;
-export type SalesPerson = Row<"sales_people">;
+export type SalesContact = Row<"sales_contacts">;
 export type SalesOpportunity = Row<"sales_opportunities">;
 export type SalesSponsor = Row<"sales_sponsors">;
 export type SalesActivity = Row<"sales_activities">;
 
 export type SalesData = {
   clients: SalesClient[];
-  people: SalesPerson[];
+  people: SalesContact[];
   opportunities: SalesOpportunity[];
   sponsors: SalesSponsor[];
   activities: SalesActivity[];
@@ -76,7 +76,7 @@ const STALE_DAYS = 21;
 export const isStaleDeal = (o: SalesOpportunity) =>
   isOpen(o) && (daysSince(o.updated_at) ?? 0) >= STALE_DAYS;
 
-export const isStaleContact = (p: SalesPerson) =>
+export const isStaleContact = (p: SalesContact) =>
   (daysSince(p.last_contact_at) ?? 9999) >= 90;
 
 /** Régie shows the TJM × days build-up; forfait the fixed price. */
@@ -89,7 +89,7 @@ export function amountDetail(o: SalesOpportunity): string {
 export async function loadSalesData(): Promise<SalesData> {
   const results = await Promise.all([
     db().from("sales_clients").select("*").order("name"),
-    db().from("sales_people").select("*").order("name"),
+    db().from("sales_contacts").select("*").order("name"),
     db().from("sales_opportunities").select("*").order("updated_at", { ascending: false }),
     db().from("sales_sponsors").select("*"),
     db().from("sales_activities").select("*").order("created_at", { ascending: false }),
@@ -169,7 +169,7 @@ export function useSales(actorEmail: string) {
       if (client.error) throw client.error;
       if (entry.person_id) {
         const person = await db()
-          .from("sales_people")
+          .from("sales_contacts")
           .update({ last_contact_at: stamp })
           .eq("id", entry.person_id);
         if (person.error) throw person.error;

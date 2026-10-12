@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { ClerkProvider } from "@clerk/react";
 import App from "./App";
 import "@quicksort/hr-ui/styles.css";
+import "./admin-theme.css";
+import "./date-field.css";
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

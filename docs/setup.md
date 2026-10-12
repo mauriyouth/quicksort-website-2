@@ -2,12 +2,15 @@
 
 ## Connected database
 
-Project: `kupbvrnjppcwqxmzxasi` (Quicksort), URL `https://kupbvrnjppcwqxmzxasi.supabase.co`.
-The versioned migrations have already been applied to this project. Do not replay them manually on the same database. Generated TypeScript definitions in `packages/db/src/database.types.ts` came from this project's schema.
+The active admin checkout and linked CLI project use `ctgtowqjswbxwiapcvfj`, URL `https://ctgtowqjswbxwiapcvfj.supabase.co`. Check each application's environment before applying changes; the marketing deployment may use a different project.
 
-Tables: `profiles`, `user_roles`, `jobs`, `candidate_documents`, `contracts`, `contract_signatures`, `tool_requests`, plus the HR pipeline from `prd-hr.md`: `opportunities`, `pipeline_candidates`, `pipeline_events` (immutable — insert/select only), `interviews`, `offers`, `onboarding_items`, `reviews`, `offboarding_records`, `offboarding_items`, `candidate_requests`.
-Candidate-facing views: `my_application`, `my_application_events` — a candidate sees only their own stage and timeline, never scores, rankings or other candidates.
-Private storage buckets: `candidate-documents` and `contracts`, both limited to 10 MB per file. Onboarding files support PDF, JPG, PNG and DOCX; contracts support PDF.
+The HR lifecycle migration `20261014090000_hr_lifecycle.sql` was applied on October 4, 2026. Deployed migration files remain in the repository. Apply pending changes with `pnpm exec supabase db push --linked`; do not replay already-applied files or reset the linked database.
+
+The HR workspace uses `hr_people`, `hr_applications`, employment periods in `employees`, transactional `hr_command` writes, and the scoped `hr_workspace_snapshot` read. Candidate-facing views are `my_applications`, `my_application_events`, `my_employment`, `my_onboarding_items`, and `my_offers`. Portal account links are explicit.
+
+The prior directory tables and views are retained in the restricted `hr_legacy_20261014` schema. All 24 people were preserved. The 23 original employee rows remain archived; 22 dated employment periods are available in the new workspace. One employee needs their actual start date recorded before an employment period can be created. Their person record contains a review note. No hiring, signature, account-link, or date evidence was invented during conversion.
+
+Private storage buckets `candidate-documents` and `contracts` remain in place, both limited to 10 MB per file. Onboarding files support PDF, JPG, PNG and DOCX; contracts support PDF.
 
 All exposed tables use row-level security. Candidates are restricted to their own records. Admin roles are stored in `user_roles`, which clients can read but cannot change. Every new user starts as a candidate, irrespective of user-supplied metadata. No service-role/secret key is used in an application bundle.
 

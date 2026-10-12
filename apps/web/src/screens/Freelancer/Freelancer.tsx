@@ -1,0 +1,23 @@
+import { FreelancerIntroSection } from "./sections/FreelancerIntroSection";
+import { FreelancerBenefitsSection } from "./sections/FreelancerBenefitsSection";
+import { FreelancerCtaSection } from "./sections/FreelancerCtaSection";
+import { MainNavigationSection } from "@components/MainNavigationSection";
+import { SiteFooter } from "@components/SiteFooter";
+
+export const Freelancer = (): JSX.Element => {
+  return (
+    <main className="flex flex-col w-full items-center relative bg-surface overflow-x-hidden">
+      <img
+        className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1440px] h-[722px] pointer-events-none"
+        alt=""
+        src="/background-pattern.svg"
+      />
+
+      <MainNavigationSection />
+      <FreelancerIntroSection />
+      <FreelancerBenefitsSection />
+      <FreelancerCtaSection />
+      <SiteFooter />
+    </main>
+  );
+};

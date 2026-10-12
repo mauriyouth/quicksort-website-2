@@ -1,34 +1,38 @@
-/* Operations board (src/ops/OpsBoard.tsx). Clean kanban: board tabs with
-   count chips, owner filter in a toolbar well, raised columns with count
-   badges, lift cards with priority chips, counter pills and lime progress
-   bars. Every surface resolves to portal tokens so the board flips with
-   data-theme — columns sit on --qs-paper, cards one step above on
-   --qs-lift (the token reserved for kanban cards). */
+/* Operations board (src/ops/OpsBoard.tsx). Clean kanban: pill board chips
+   with initial discs and counts, a search well that matches ticket title or
+   owner, raised column wells with count badges, ground-colored cards with
+   priority chips, counter pills and lime progress bars. Every surface
+   resolves to portal tokens so the board flips with data-theme — columns
+   sit on --qs-paper, cards one step below on the page ground (--qs-bg-0),
+   per the reference Operations Board template. */
 .ops {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-/* Board tabs */
+/* Board pills (reference: Operations Board mock) — rounded chips with an
+   initial disc and card count; the active board fills, "New board" is a
+   dashed chip and the search well sits at the end of the row. */
 .ops-boards {
   display: flex;
   align-items: center;
-  gap: 4px;
-  border-bottom: 1px solid var(--qs-line);
+  gap: 8px;
   overflow-x: auto;
+  padding-bottom: 2px;
 }
 .ops-board {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
-  margin-bottom: -1px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
+  height: 34px;
+  padding: 0 12px 0 6px;
+  border: 1px solid var(--qs-line);
+  border-radius: 999px;
+  background: transparent;
   font: inherit;
-  font-size: 14.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--qs-muted);
   cursor: pointer;
@@ -40,30 +44,102 @@
 }
 .ops-board:hover {
   color: var(--qs-ink);
-  background: var(--qs-hover);
+  border-color: var(--qs-border-strong);
 }
 .ops-board.active {
+  background: var(--qs-paper);
+  border-color: var(--qs-border-strong);
   color: var(--qs-ink);
-  font-weight: 650;
-  border-bottom-color: var(--qs-lime);
+  font-weight: 600;
+}
+.ops-board-initial {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--qs-deep);
+  color: var(--qs-lime);
+}
+.ops-board.active .ops-board-initial {
+  background: var(--qs-lime);
+  color: var(--qs-rich-black);
+}
+.ops-board-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ops-board-rename {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--qs-ink);
+  background: var(--qs-paper);
+  border: 1px solid var(--qs-lime);
+  border-radius: 999px;
+}
+.ops-board-rename:focus {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--qs-lime);
 }
 .ops-board-count {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--qs-muted);
-  background: var(--qs-active);
-  border-radius: 999px;
-  padding: 1px 8px;
 }
 .ops-board.active .ops-board-count {
-  color: var(--qs-rich-black);
-  background: var(--qs-lime);
+  color: var(--qs-muted);
 }
 .ops-board-new {
+  border-style: dashed;
+  padding: 0 14px;
   color: var(--qs-muted);
   font-weight: 500;
+}
+.ops-board-new:hover {
+  border-color: var(--qs-border-strong);
+}
+.ops-search {
   margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  width: 240px;
+  padding: 0 12px;
+  border: 1px solid var(--qs-line);
+  border-radius: 10px;
+  background: var(--qs-paper);
+  color: var(--qs-muted);
+  transition:
+    border-color var(--qs-dur-2) var(--qs-ease),
+    box-shadow var(--qs-dur-2) var(--qs-ease);
+}
+.ops-search:focus-within {
+  border-color: var(--qs-lime);
+  box-shadow: 0 0 0 1px var(--qs-lime);
+}
+.ops-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--qs-ink);
 }
 
 /* Toolbar */
@@ -76,9 +152,6 @@
   border: 1px solid var(--qs-line);
   border-radius: 12px;
   padding: 10px 12px;
-}
-.ops-toolbar select {
-  min-width: 180px;
 }
 
 /* Kanban */
@@ -95,20 +168,125 @@
   flex-direction: column;
   gap: 10px;
   background: var(--qs-paper);
-  border: 1px solid var(--qs-line);
+  border: 1px solid transparent;
   border-radius: var(--qs-radius, 14px);
   padding: 12px;
   min-height: 140px;
+  box-shadow: inset 0 0 0 1px transparent;
   transition:
-    border-color var(--qs-dur-2) var(--qs-ease),
-    background var(--qs-dur-2) var(--qs-ease),
-    box-shadow var(--qs-dur-2) var(--qs-ease);
+    box-shadow var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease);
 }
 /* Lime drop target, same tint language as the sales pipeline filter chip. */
+.ops-kbd-hint {
+  white-space: nowrap;
+}
+/* Minimal Markdown field: toolbar + Write/Preview toggle. */
+.ops-md {
+  display: grid;
+  gap: 7px;
+}
+.ops-md-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ops-md-label {
+  font-weight: 600;
+  font-size: 12px;
+}
+.ops-md-bar .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--qs-muted);
+}
+.ops-md-bar .icon-button:hover {
+  background: var(--qs-bg-1);
+  color: var(--qs-ink);
+}
+.ops-md-preview {
+  border: 1px solid var(--qs-line);
+  border-radius: var(--qs-radius-md);
+  background: var(--qs-paper);
+  padding: 11px 12px;
+  min-height: 115px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.ops-md-preview > :first-child {
+  margin-top: 0;
+}
+.ops-md-preview > :last-child {
+  margin-bottom: 0;
+}
+.ops-md-preview h1,
+.ops-md-preview h2,
+.ops-md-preview h3 {
+  margin: 14px 0 6px;
+  line-height: 1.3;
+}
+.ops-md-preview h1 {
+  font-size: 18px;
+}
+.ops-md-preview h2 {
+  font-size: 16px;
+}
+.ops-md-preview h3 {
+  font-size: 14px;
+}
+.ops-md-preview p,
+.ops-md-preview ul,
+.ops-md-preview ol {
+  margin: 6px 0;
+}
+.ops-md-preview ul,
+.ops-md-preview ol {
+  padding-left: 20px;
+}
+.ops-md-preview a {
+  color: var(--qs-lime);
+}
+.ops-md-preview code {
+  font-size: 12px;
+  background: var(--qs-bg-1);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.ops-md-preview pre {
+  background: var(--qs-bg-1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+.ops-md-preview pre code {
+  background: none;
+  padding: 0;
+}
+.ops-md-preview blockquote {
+  margin: 6px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--qs-lime);
+  color: var(--qs-muted);
+}
+.ops-md-preview table {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+.ops-md-preview th,
+.ops-md-preview td {
+  border: 1px solid var(--qs-line);
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+/* Drop target: neutral inset ring, same language as the reference board
+   (column keeps its color; the well lights up around the cards). */
 .ops-column.drop {
-  border-color: color-mix(in srgb, var(--qs-lime) 55%, transparent);
-  background: color-mix(in srgb, var(--qs-lime) 8%, var(--qs-paper));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--qs-lime) 35%, transparent);
+  box-shadow: inset 0 0 0 1px var(--qs-fg-3);
 }
 .ops-column-head {
   display: flex;
@@ -124,6 +302,34 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--qs-fg-2);
+  cursor: default;
+  user-select: none;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: -4px;
+}
+.ops-column-head h2:hover {
+  background: var(--qs-bg-1);
+}
+.ops-column-rename {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--qs-fg-2);
+  background: var(--qs-paper);
+  border: 1px solid var(--qs-line);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.ops-column-rename:focus {
+  outline: none;
+  border-color: var(--qs-lime);
+  box-shadow: 0 0 0 1px var(--qs-lime);
 }
 .ops-column-count {
   font-size: 11.5px;
@@ -154,16 +360,20 @@
   font-weight: 500;
   cursor: pointer;
   background: transparent;
+  border: 1px dashed var(--qs-border-strong);
+  box-shadow: none;
 }
 .ops-column-new:hover {
   color: var(--qs-ink);
-  border-color: var(--qs-border-strong);
+  border-color: var(--qs-fg-3);
   background: var(--qs-hover);
 }
 
-/* Cards */
+/* Cards sit one step *below* the column — page ground on raised surface,
+   per the reference board (white on seasalt in light, #151515 on #1E1E1E
+   in dark). */
 .ops-card {
-  background: var(--qs-lift);
+  background: var(--qs-bg-0);
   border: 1px solid var(--qs-line);
   border-radius: 12px;
   padding: 12px;
@@ -176,6 +386,12 @@
     border-color var(--qs-dur-2) var(--qs-ease),
     box-shadow var(--qs-dur-2) var(--qs-ease),
     transform var(--qs-dur-2) var(--qs-ease);
+}
+.ops-card.selected {
+  border-color: var(--qs-lime);
+  box-shadow:
+    0 0 0 1px var(--qs-lime),
+    0 1px 2px rgba(0, 7, 14, 0.06);
 }
 .ops-card:hover {
   border-color: var(--qs-border-strong);
@@ -198,8 +414,21 @@
   margin: 0;
   font-size: 14px;
   line-height: 1.4;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.01em;
+  text-wrap: pretty;
+}
+.ops-card-content {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--qs-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .ops-priority {
   flex: 0 0 auto;
@@ -225,41 +454,6 @@
 }
 .ops-priority--p3 {
   color: var(--qs-muted);
-}
-.ops-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.ops-pill {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--qs-fg-2);
-  background: var(--qs-active);
-  border-radius: 999px;
-  padding: 2px 9px;
-  font-variant-numeric: tabular-nums;
-}
-.ops-pct {
-  margin-left: auto;
-  font-size: 11.5px;
-  font-weight: 650;
-  color: var(--qs-ink);
-  font-variant-numeric: tabular-nums;
-}
-.ops-progress {
-  height: 5px;
-  border-radius: 999px;
-  background: var(--qs-active);
-  overflow: hidden;
-}
-.ops-progress span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--qs-lime);
-  transition: width var(--qs-dur-2) var(--qs-ease);
 }
 .ops-card-owner {
   margin: 0;
@@ -292,6 +486,25 @@
 }
 
 /* Add card / column */
+/* Inline quick-add: type a ticket title, Enter to add; stays open for the
+   next card (reference: Operations Board mock). */
+.ops-quick-add input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid var(--qs-border-strong);
+  border-radius: 10px;
+  background: var(--qs-bg-0);
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ops-quick-add input:focus {
+  outline: none;
+  border-color: var(--qs-lime);
+  box-shadow: 0 0 0 1px var(--qs-lime);
+}
 .ops-add {
   display: flex;
   align-items: center;
@@ -321,24 +534,31 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  border: 1px dashed var(--qs-border-strong);
+  box-shadow: none;
 }
 .ops-add-form .actions {
   display: flex;
   gap: 8px;
 }
 
-/* Modal */
+/* Modal backdrop — dimmed, slightly blurred board behind the card.
+   Shared by the create-board creator and the card editor. */
 .ops-modal {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(15, 15, 20, 0.45);
-  backdrop-filter: blur(3px);
+  background: rgba(12, 12, 12, 0.6);
+  backdrop-filter: blur(6px);
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 8vh 16px 16px;
+  padding: 40px 16px;
   overflow-y: auto;
+}
+/* margin:auto keeps a tall card scrollable instead of clipping it at the
+   top, which plain flex centering would do. */
+.ops-modal > * {
+  margin: auto;
+  position: relative;
 }
 .ops-modal-card {
   background: var(--qs-paper);
@@ -362,25 +582,350 @@
   margin: 0;
   font-size: 18px;
 }
-.ops-counters {
-  border: 1px solid var(--qs-line);
+/* Create-a-board creator (design: Quicksort brand "Create Board").
+   Wide rounded card with a header, a scrollable body and a footer that
+   carries a contextual hint plus Cancel / lime Create board. In dark
+   mode every surface resolves to the exact reference tokens
+   (bg-1 card on a bg-0 ground, border-strong outlines). */
+.ops-modal-veil {
+  position: absolute;
+  inset: 0;
+}
+.ops-creator {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  background: var(--qs-bg-1);
+  color: var(--qs-fg-1);
+  border: 1px solid var(--qs-border);
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  animation: ops-modal-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes ops-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Header — display title + one-line lede, quiet square close button. */
+.ops-creator-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 28px 28px 20px;
+}
+.ops-creator-head h2 {
+  margin: 0;
+  font-family: var(--qs-font-display);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.ops-creator-head p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--qs-fg-3);
+}
+.ops-creator-close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
   border-radius: 10px;
-  padding: 12px;
+  background: transparent;
+  color: var(--qs-fg-2);
+  cursor: pointer;
+  transition:
+    background var(--qs-dur-2) var(--qs-ease),
+    color var(--qs-dur-2) var(--qs-ease);
+}
+.ops-creator-close:hover {
+  background: var(--qs-bg-0);
+  color: var(--qs-fg-1);
+}
+
+/* Scrollable body */
+.ops-creator-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.ops-creator-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--qs-fg-1);
 }
-.ops-counters legend {
-  font-size: 12px;
-  color: var(--qs-muted);
-  padding: 0 4px;
+.ops-creator-field-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
 }
-.ops-counter-row {
-  display: grid;
-  grid-template-columns: 1fr 64px auto 64px auto;
+.ops-creator-field-label em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--qs-fg-3);
+}
+.ops-creator-field input,
+.ops-creator-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--qs-border-strong);
+  border-radius: 10px;
+  background: var(--qs-bg-0);
+  color: var(--qs-fg-1);
+  font: 400 15px var(--qs-font-sans);
+}
+.ops-creator-field input {
+  height: 44px;
+  padding: 0 14px;
+}
+.ops-creator-field textarea {
+  padding: 12px 14px;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 68px;
+}
+.ops-creator-field input::placeholder,
+.ops-creator-field textarea::placeholder {
+  color: var(--qs-fg-3);
+}
+.ops-creator-field input:focus-visible,
+.ops-creator-field textarea:focus-visible {
+  outline: none;
+  border-color: var(--qs-lime);
+  box-shadow: 0 0 0 1px var(--qs-lime);
+}
+
+/* Columns — bordered list of draggable rows on the ground surface. */
+.ops-creator-cols {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ops-creator-cols-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ops-creator-cols-hint {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--qs-fg-3);
+}
+.ops-col-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--qs-border-strong);
+  border-radius: 12px;
+  background: var(--qs-bg-0);
+  overflow: hidden;
+}
+.ops-col-row {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  height: 44px;
+  padding: 0 6px 0 4px;
+  border-top: 1px solid var(--qs-border);
+  transition:
+    background var(--qs-dur-2) var(--qs-ease),
+    opacity var(--qs-dur-2) var(--qs-ease);
 }
+.ops-col-row:first-child {
+  border-top-color: transparent;
+}
+.ops-col-grip {
+  width: 24px;
+  text-align: center;
+  color: var(--qs-fg-3);
+  cursor: grab;
+  font-size: 14px;
+  letter-spacing: -2px;
+  user-select: none;
+}
+.ops-col-row:active .ops-col-grip {
+  cursor: grabbing;
+}
+.ops-col-num {
+  width: 20px;
+  font: 400 12px var(--qs-font-mono);
+  color: var(--qs-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.ops-col-row input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qs-fg-1);
+  font: 400 15px var(--qs-font-sans);
+}
+.ops-col-row input:focus-visible {
+  outline: none;
+  background: var(--qs-bg-1);
+  /* Borderless inline edit — the fill carries focus; keep the
+     design-system field ring off this input. */
+  border-color: transparent;
+  box-shadow: none;
+}
+.ops-col-remove {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qs-fg-3);
+  cursor: pointer;
+  transition:
+    background var(--qs-dur-2) var(--qs-ease),
+    color var(--qs-dur-2) var(--qs-ease);
+}
+.ops-col-remove:hover {
+  background: var(--qs-bg-1);
+  color: var(--qs-fg-1);
+}
+.ops-col-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-top: 1px solid var(--qs-border);
+  background: transparent;
+  color: var(--qs-fg-2);
+  font: 500 14px var(--qs-font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--qs-dur-2) var(--qs-ease),
+    color var(--qs-dur-2) var(--qs-ease);
+}
+.ops-col-add:hover {
+  color: var(--qs-fg-1);
+  background: var(--qs-bg-1);
+}
+
+/* Preview — mini columns on the sunken surface. */
+.ops-creator-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ops-creator-preview-label {
+  font-size: 13px;
+  color: var(--qs-fg-3);
+}
+.ops-preview-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--qs-bg-2);
+}
+.ops-preview-col {
+  flex: none;
+  width: 112px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--qs-bg-1);
+}
+.ops-preview-name {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ops-preview-card {
+  height: 22px;
+  border-radius: 6px;
+  background: var(--qs-bg-0);
+}
+.ops-preview-empty {
+  font-size: 13px;
+  color: var(--qs-fg-3);
+  padding: 8px 4px;
+}
+
+/* Footer — hint on the left, Cancel + lime Create board on the right. */
+.ops-creator-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 28px;
+  border-top: 1px solid var(--qs-border);
+}
+.ops-creator-hint {
+  font-size: 13px;
+  color: var(--qs-fg-3);
+}
+.ops-creator-foot .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .ops-creator-head,
+  .ops-creator-body {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .ops-creator-foot {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    padding: 14px 18px;
+  }
+  .ops-creator-hint {
+    text-align: center;
+  }
+  .ops-creator-cols-hint {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ops-creator {
+    animation: none;
+  }
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;

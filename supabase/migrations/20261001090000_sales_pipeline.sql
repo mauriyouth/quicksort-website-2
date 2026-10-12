@@ -23,7 +23,7 @@ create table public.sales_clients (
 alter table public.sales_clients enable row level security;
 create index sales_clients_name_idx on public.sales_clients(name);
 
-create table public.sales_people (
+create table public.sales_contacts (
   id uuid primary key default gen_random_uuid(),
   name text not null check (length(trim(name)) between 1 and 200),
   role text not null default '' check (length(role) <= 200),
@@ -37,9 +37,9 @@ create table public.sales_people (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-alter table public.sales_people enable row level security;
-create index sales_people_client_idx on public.sales_people(client_id);
-create index sales_people_email_idx on public.sales_people(email);
+alter table public.sales_contacts enable row level security;
+create index sales_contacts_client_idx on public.sales_contacts(client_id);
+create index sales_contacts_email_idx on public.sales_contacts(email);
 
 -- Opportunities with the two pricing models from sales.md §8.7:
 -- régie = TJM × estimated days; forfait = fixed price. The amount column is
@@ -81,7 +81,7 @@ create index sales_opportunities_expected_close_idx on public.sales_opportunitie
 -- influence level; at most one primary champion per opportunity.
 create table public.sales_sponsors (
   opportunity_id uuid not null references public.sales_opportunities(id) on delete cascade,
-  person_id uuid not null references public.sales_people(id) on delete cascade,
+  person_id uuid not null references public.sales_contacts(id) on delete cascade,
   influence text not null default 'neutral'
     check (influence in ('champion', 'supporter', 'neutral', 'blocker')),
   is_primary boolean not null default false,
@@ -99,7 +99,7 @@ create table public.sales_activities (
   id uuid primary key default gen_random_uuid(),
   opportunity_id uuid references public.sales_opportunities(id) on delete cascade,
   client_id uuid references public.sales_clients(id) on delete cascade,
-  person_id uuid references public.sales_people(id) on delete set null,
+  person_id uuid references public.sales_contacts(id) on delete set null,
   type text not null check (type in ('call', 'email', 'meeting', 'note', 'stage_change')),
   text text not null check (length(trim(text)) between 1 and 5000),
   author_email text not null check (length(author_email) <= 200),
@@ -111,7 +111,7 @@ create index sales_activities_client_idx on public.sales_activities(client_id, c
 
 create policy sales_clients_admin on public.sales_clients for all to authenticated
   using ((select private.is_admin())) with check ((select private.is_admin()));
-create policy sales_people_admin on public.sales_people for all to authenticated
+create policy sales_contacts_admin on public.sales_contacts for all to authenticated
   using ((select private.is_admin())) with check ((select private.is_admin()));
 create policy sales_opportunities_admin on public.sales_opportunities for all to authenticated
   using ((select private.is_admin())) with check ((select private.is_admin()));

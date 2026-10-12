@@ -106,6 +106,8 @@ Because this module lives inside the existing Quicksort operations application:
 | `/sales/clients/:id` | Client 360 detail page |
 | `/sales/people` | People directory across all clients |
 | `/sales/opportunities` | Opportunities list, forecast, and detail drawer |
+| `/sales/projects` | Delivery projects (won deals in delivery) |
+| `/administration` | Global settings — configurable statuses and types (BoondManager-style) |
 
 ### Shared UI patterns
 
@@ -348,6 +350,46 @@ Acceptance criteria:
 
 ---
 
+### 8.11 Projects (delivery)
+
+**Priority:** P1 — Phase 2 operational handoff, delivered.
+
+The projects page continues a won deal into delivery.
+
+Requirements:
+
+- List projects with client, type, pricing model (régie TJM × days / forfait fixed price), status, dates, owner, and assigned team.
+- Régie contracts carry **named pricing lines** (any number): each line has a free-text name (e.g. “Data Engineer”), its own daily rate (TJM) and its own **end date** — the line window runs from the contract start to that date (a consultant can end before the contract does). Project value = Σ (tjm × open days to the line end date). The flat `tjm`/`estimated_days` columns stay in sync (blended rate / total days) for the table, extensions and dashboards. On the project page the initial contract is presented exactly like an extension — row 1 with its window and pricing lines inline — so the contract and its renewals read as one numbered sequence.
+- Contract **extensions** renew the contract: each one carries its own end date (a signed one moves the project end date forward automatically) and, for régie, its own set of pricing lines — prefilled from the contract lines — so a renewal can adjust per-line rates and end dates, or add/remove lines, line by line. The flat `tjm`/`estimated_days` columns stay in sync per extension so the generated `amount` column and dashboards keep working.
+- Stats cards: active count (staffed / unassigned split), active contract value, CRA consumption to date (blended value, tracked régie projects), and an inverted **needs attention** card (over budget, under-consumed).
+- The list card filters by semantic tabs — All / Needs attention / Ending in 30 days / Archived — plus text search (title, client, type, owner, team). Each row shows the lead consultant (or “Unassigned”), title, client · type · rate, timeline progress, CRA consumption (days used with a time-elapsed tick) and a status pill that inverts on flagged rows, with a flag strip explaining the alert. Row actions (edit, archive/restore, delete) live in the overflow menu.
+- Create manually or convert a won opportunity (client, pricing and amounts copied; one project per deal).
+- Statuses and types come from the configurable referentials (§8.12), not hard-coded lists.
+- Archive/restore via the terminal status; full delete for mistakes.
+- Staff projects from the HR side: an employee record links to one or more projects via `employee_project_assignments` (position, allocation %, assignment window; one assignment per employee/project pair). Project rows show the assigned team; the employee record assigns and removes.
+
+Acceptance criteria:
+
+- A won deal can be converted exactly once; the picker only lists unconverted won deals.
+- A régie project cannot be saved without at least one line with a rate and an end date; the estimated value updates as line rates or end dates change.
+- Reordering or renaming a status in Global settings is reflected on the projects screen without a reload.
+- Assigning an employee to a project from their record shows the team on the project row without a reload.
+
+---
+
+### 8.12 Global settings (configurable referentials)
+
+**Priority:** P1. Route `/administration` (BoondManager “paramètres globaux” inspiration).
+
+Requirements:
+
+- Edit status lists for projects, opportunities, and resources inline: drag handle, color dot, default marker (⚡), label, terminal flag, visibility eye, delete.
+- Project statuses are free-form (add/reorder/delete); opportunity and resource statuses mirror DB-enforced keys, so add/delete is locked and only label/color/order/visibility change.
+- Edit opportunity & project types: label, mode (régie / forfait / recrutement / produit), “maps to” grouping, visibility.
+- Screens fall back to built-in defaults when the referential tables are empty or the migration is missing.
+
+---
+
 ### 8.10 Sales search
 
 **Priority:** P0
@@ -367,6 +409,7 @@ Acceptance criteria:
 - Search returns clients, people, and opportunities in grouped results.
 - Search can find régie and forfait opportunities by pricing model.
 - Search results respect existing operations app permissions.
+- Delivery projects are searchable as their own group (title, client, status).
 
 ---
 

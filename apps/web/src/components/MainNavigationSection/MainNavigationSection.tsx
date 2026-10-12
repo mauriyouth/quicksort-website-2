@@ -99,7 +99,8 @@ const DataForAiIcon = ({ className }: { className?: string }) => (
 
 const navigationItems = [
     { label: "Home", href: "/" },
-    { label: "Blog", href: "/blog" },
+    { label: "Resources", href: "/blog" },
+    { label: "Freelancer", href: "/freelancer" },
 ];
 
 const servicesData = [

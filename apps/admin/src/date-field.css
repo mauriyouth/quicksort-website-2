@@ -1,0 +1,198 @@
+/* ── Date picker (DateField.tsx) ──────────────────────────────
+   Shared across the admin app. Field chrome matches .qs-input;
+   popover is styled with design-system tokens from
+   @quicksort/hr-ui / @quicksort/design-system. */
+.date-field-root {
+  position: relative;
+}
+.date-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.date-field-trigger {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid var(--qs-border-strong);
+  border-radius: var(--qs-radius-md);
+  background: var(--qs-bg-1);
+  color: var(--qs-fg-1);
+  font-family: var(--qs-font-sans);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease);
+}
+.date-field-trigger:hover {
+  border-color: var(--qs-fg-3);
+}
+.date-field-trigger:focus-visible {
+  outline: none;
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
+}
+.date-field.is-empty .date-field-value {
+  color: var(--qs-fg-3);
+}
+.date-field-trigger svg {
+  color: var(--qs-fg-3);
+  flex-shrink: 0;
+}
+.date-field-clear {
+  position: absolute;
+  right: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--qs-radius-pill);
+  background: transparent;
+  color: var(--qs-fg-3);
+  cursor: pointer;
+  transition:
+    background var(--qs-dur-2) var(--qs-ease),
+    color var(--qs-dur-2) var(--qs-ease);
+}
+.date-field-clear:hover {
+  background: color-mix(in srgb, var(--qs-fg-3) 18%, transparent);
+  color: var(--qs-fg-1);
+}
+
+.date-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 264px;
+  padding: 12px;
+  background: var(--qs-bg-1);
+  border: 1px solid var(--qs-border-strong);
+  border-radius: var(--qs-radius-lg);
+  box-shadow: var(--qs-shadow-3);
+  animation: date-pop-in var(--qs-dur-2) var(--qs-ease-out);
+}
+@keyframes date-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.date-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.date-month {
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+.date-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--qs-radius-md);
+  background: transparent;
+  color: var(--qs-fg-2);
+  cursor: pointer;
+  transition:
+    background var(--qs-dur-2) var(--qs-ease),
+    color var(--qs-dur-2) var(--qs-ease);
+}
+.date-nav:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--qs-fg-3) 14%, transparent);
+  color: var(--qs-fg-1);
+}
+.date-nav:focus-visible {
+  outline: 2px solid var(--qs-accent);
+  outline-offset: 2px;
+}
+.date-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.date-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.date-weekdays span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--qs-fg-3);
+  padding: 4px 0;
+}
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.date-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--qs-radius-md);
+  background: transparent;
+  color: var(--qs-fg-1);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background var(--qs-dur-1) var(--qs-ease),
+    color var(--qs-dur-1) var(--qs-ease);
+}
+.date-day:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--qs-fg-3) 14%, transparent);
+}
+.date-day:focus-visible {
+  outline: 2px solid var(--qs-accent);
+  outline-offset: -1px;
+}
+.date-day.is-out {
+  color: var(--qs-fg-3);
+  opacity: 0.55;
+}
+.date-day.is-today {
+  border-color: var(--qs-accent);
+  font-weight: 600;
+}
+.date-day.is-selected {
+  background: var(--qs-accent);
+  border-color: var(--qs-accent);
+  color: var(--qs-accent-fg);
+  font-weight: 600;
+}
+.date-day.is-selected:hover:not(:disabled) {
+  background: var(--qs-accent);
+}
+.date-day:disabled {
+  opacity: 0.3;
+  cursor: default;
+  text-decoration: line-through;
+}

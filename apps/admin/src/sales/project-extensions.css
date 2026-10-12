@@ -1,0 +1,529 @@
+/* Extensions (renewals) section inside the project edit page
+ * (src/sales/ProjectExtensions.tsx). Visual source: "Edit Project.html" —
+ * the section header carries the "+ Add extension" trigger on the right,
+ * each renewal is a sunken card (index disc · name · status badge ·
+ * actions, then the inline field grid), and the valuation breakdown stays
+ * a sunken panel. Tokens are the portal semantic aliases so the section
+ * flips with data-theme. */
+
+.pe-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Section header: title + description left, add trigger right. */
+.pe-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pe-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pe-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--qs-ink);
+}
+.pe-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+
+.pe-muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+
+/* Numbered extension card — sunken surface inside the section card. */
+.pe-ext {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  border: 1px solid var(--qs-line);
+}
+.pe-ext.is-cancelled {
+  opacity: 0.55;
+}
+.pe-ext-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pe-ext-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  min-width: 0;
+}
+.pe-ext-index {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--qs-active);
+  color: var(--qs-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.pe-ext-name {
+  font-weight: 600;
+  color: var(--qs-ink);
+}
+.pe-ext-label {
+  color: var(--qs-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pe-ext-from {
+  color: var(--qs-muted);
+}
+/* Status badge — tinted pill driven by --ext-color (extension status). */
+.pe-ext-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: var(--qs-radius-pill, 999px);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ext-color, var(--qs-muted));
+  border: 1px solid
+    color-mix(in srgb, var(--ext-color, var(--qs-muted)) 45%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--ext-color, var(--qs-muted)) 12%,
+    transparent
+  );
+}
+.pe-ext-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+.pe-ext-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pe-ext-notes {
+  font-size: 0.8rem;
+  color: var(--qs-muted);
+  white-space: pre-wrap;
+}
+
+/* Row grid: end date / added days (or amount) / daily rate / status. */
+.pe-ext-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+/* Fields — quiet 13px labels over sunken 40px wells, like the form. */
+.pe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.pe-label {
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pe-field input,
+.pe-field select,
+.pe-field textarea {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg);
+  border: 1px solid var(--qs-line);
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.pe-field textarea {
+  height: auto;
+  min-height: 64px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.pe-field input:focus-visible,
+.pe-field select:focus-visible,
+.pe-field textarea:focus-visible {
+  outline: none;
+  border-color: var(--qs-lime);
+  box-shadow: 0 0 0 1px var(--qs-lime);
+}
+.pe-field input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.pe-field input[type="number"]::-webkit-inner-spin-button,
+.pe-field input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pe-field input:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+/* Date picker (shared DateField) matches the sunken wells of the grid. */
+.pe-field .date-field-trigger {
+  height: 40px;
+  padding: 0 12px;
+  background: var(--qs-bg);
+  border-color: var(--qs-line);
+}
+
+/* Daily-rate well with the currency suffix inside. */
+.pe-affix {
+  height: 40px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg);
+  border: 1px solid var(--qs-line);
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 12px;
+  gap: 6px;
+}
+.pe-affix input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  padding: 0;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+.pe-affix input:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+.pe-affix:focus-within {
+  border-color: var(--qs-lime);
+  box-shadow: 0 0 0 1px var(--qs-lime);
+}
+.pe-affix-suffix {
+  font-size: 13px;
+  color: var(--qs-muted);
+  flex: none;
+}
+
+/* Signed / Proposed segmented control — padded well, raised active pill. */
+.pe-seg {
+  height: 40px;
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-active);
+  box-sizing: border-box;
+}
+.pe-seg button {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qs-muted);
+  font: 500 13px inherit;
+  cursor: pointer;
+}
+.pe-seg button.on {
+  background: var(--qs-paper);
+  color: var(--qs-ink);
+}
+.pe-seg button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Row header actions. */
+.pe-icon-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qs-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease);
+}
+.pe-icon-btn:hover:not(:disabled) {
+  color: #ef4444;
+  background: var(--qs-active);
+}
+.pe-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.pe-adopt,
+.pe-restore {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--qs-border-strong);
+  background: transparent;
+  color: var(--qs-ink);
+  font: 500 12px inherit;
+  cursor: pointer;
+}
+.pe-adopt:hover,
+.pe-restore:hover {
+  background: var(--qs-active);
+}
+.pe-adopt:disabled,
+.pe-restore:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Header trigger — outlined "+ Add extension", like the source design. */
+.pe-add {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--qs-radius-md, 10px);
+  border: 1px solid var(--qs-border-strong);
+  background: transparent;
+  color: var(--qs-ink);
+  font: 500 13px inherit;
+  cursor: pointer;
+}
+.pe-add:hover {
+  background: var(--qs-active);
+}
+.pe-add:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Add-extension form appears as another sunken card in the chain. */
+.pe-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  border: 1px solid var(--qs-line);
+}
+.pe-hint {
+  margin: -4px 0 0;
+  font-size: 13px;
+  color: var(--qs-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pe-link {
+  border: 0;
+  background: transparent;
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pe-link:hover {
+  color: var(--qs-lime);
+}
+.pe-value {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--qs-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pe-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+.pe-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--qs-radius-md, 10px);
+  font: 500 13px inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.pe-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.pe-btn-ghost {
+  background: transparent;
+  border-color: var(--qs-border-strong);
+  color: var(--qs-ink);
+}
+.pe-btn-ghost:hover {
+  background: var(--qs-active);
+}
+.pe-btn-primary {
+  background: var(--qs-lime);
+  border: 0;
+  color: var(--qs-rich-black, #000710);
+  font-weight: 600;
+}
+.pe-btn-primary:hover {
+  background: color-mix(
+    in srgb,
+    var(--qs-lime),
+    var(--qs-rich-black, #000710) 12%
+  );
+}
+
+/* Valuation breakdown — sunken panel, one line per segment, big total. */
+.pe-panel {
+  border-radius: 12px;
+  background: var(--qs-bg-2);
+  border: 1px solid var(--qs-line);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pe-panel-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pe-panel-line span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+.pe-panel-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding-top: 4px;
+}
+.pe-panel-total-label {
+  font-size: 14px;
+  color: var(--qs-muted);
+}
+.pe-panel-total-amount {
+  font-family: var(--qs-font-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--qs-ink);
+  white-space: nowrap;
+}
+
+/* Per-line pricing editor (régie): one row per profile — name, daily rate,
+   end date, computed subtotal. Sits inside the field grid as a full-width
+   block. */
+.pe-field-wide {
+  grid-column: 1 / -1;
+}
+.pe-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pe-lines-head,
+.pe-lines-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) minmax(120px, 1fr) minmax(130px, 1fr) minmax(90px, 0.8fr) 32px;
+  gap: 8px;
+  align-items: center;
+}
+.pe-lines-head {
+  font-size: 12px;
+  color: var(--qs-muted);
+  padding: 0 2px;
+}
+.pe-lines-subtotal {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--qs-ink);
+  text-align: right;
+  white-space: nowrap;
+}
+.pe-lines-row .pe-icon-btn {
+  justify-self: end;
+}
+.pe-lines-add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--qs-radius-md, 10px);
+  border: 1px dashed var(--qs-line);
+  background: transparent;
+  color: var(--qs-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pe-lines-add:hover:not(:disabled) {
+  color: var(--qs-ink);
+  border-color: var(--qs-lime);
+}
+.pe-lines-add:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}

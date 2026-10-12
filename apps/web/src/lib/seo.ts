@@ -14,6 +14,7 @@ const englishPages: PageSeo[] = [
   { path: '/voice-ai', name: 'Voice AI', title: 'Enterprise Voice AI Agents | Quicksort', description: 'Build real-time voice agents with Quicksort. Connect conversations to enterprise workflows with contextual responses and seamless human handoffs.', type: 'Service' },
   { path: '/blog', name: 'Blog', title: 'Enterprise AI Insights | Quicksort', description: 'Read Quicksort insights on human and AI collaboration, agentic systems and enterprise engineering. Explore ideas behind our approach to AI delivery.' },
   { path: '/career', name: 'Careers', title: 'AI Engineering Careers | Quicksort', description: 'Explore careers at Quicksort and help build enterprise AI systems. Discover our open roles, engineering approach and opportunities to join the team.' },
+  { path: '/freelancer', name: 'Freelancer', title: 'Freelance AI Engineering Missions | Quicksort', description: 'Join Quicksort as a freelance AI engineer, data specialist or voice AI expert. Long-term enterprise missions with contracts and client relationships handled for you.' },
   ...blogPosts.map(post => ({ path: `/blog/${post.slug}`, name: post.title, title: `${post.title} | Quicksort`, description: post.description, type: 'BlogPosting' })),
   { path: '/email-signature', name: 'Email signature', title: 'Email Signature Generator | Quicksort', description: 'Create a Quicksort email signature.', noindex: true },
 ];

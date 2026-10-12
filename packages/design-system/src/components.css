@@ -7,6 +7,10 @@
    - Hover   : brighten ~8% (no scale)
    - Press   : darken ~12% (no shrink)
    - Focus   : 2px Signal Lime outline, offset 2px, always visible
+               (buttons, cards, links). Text fields instead get a 2px
+               Signal Lime ring that hugs the field's own border
+               (border-color + 1px ring shadow) — an offset outline
+               floats free of the visible border and reads as a glitch.
    - Disabled: 40% opacity, not-allowed cursor
    ───────────────────────────────────────────────────────────────── */
 
@@ -226,7 +230,9 @@
   color: var(--qs-fg-1);
   font-family: var(--qs-font-sans);
   font-size: 14px;
-  transition: border-color var(--qs-dur-2) var(--qs-ease);
+  transition:
+    border-color var(--qs-dur-2) var(--qs-ease),
+    box-shadow var(--qs-dur-2) var(--qs-ease);
 }
 .qs-field textarea {
   resize: vertical;
@@ -241,9 +247,9 @@
 .qs-field input:focus-visible,
 .qs-field select:focus-visible,
 .qs-field textarea:focus-visible {
-  outline: 2px solid var(--qs-accent);
-  outline-offset: 2px;
-  border-color: var(--qs-border-strong);
+  outline: none;
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
 }
 .qs-field {
   display: grid;

@@ -86,7 +86,7 @@ export function createSalesPipelineHandler(deps = { createClient }) {
     const results = await Promise.all([
       client.from("sales_opportunities").select("*").order("updated_at", { ascending: false }),
       client.from("sales_clients").select("id,name,health"),
-      client.from("sales_people").select("id,name,role,client_id"),
+      client.from("sales_contacts").select("id,name,role,client_id"),
       client.from("sales_sponsors").select("opportunity_id,person_id,influence,is_primary"),
     ]);
     for (const r of results) {

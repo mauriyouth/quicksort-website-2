@@ -10,6 +10,7 @@ import { DateField } from '../DateField';
 import { Intake } from './Intake';
 import { CraScreen } from '../cra/CraScreen';
 import { loadMonth } from '../cra/data';
+import { balanceFor, fmtDays, useLeaveBalances } from '../cra/balances';
 import { monthDays } from '../cra/domain';
 import './workspace.css';
 export type HrView = 'overview' | 'recruiting' | 'people' | 'journeys';
@@ -317,6 +318,11 @@ function PersonPage({
   const availability = live ? available(context.workspace, live, today()) : null;
   const employees = context.workspace.employees.filter(employee => employee.person_id === person.id);
   const lastCra = useLastCra(employees);
+  // Remaining leave across every employment period of this person, net of
+  // CRA consumption (CP and RTT accrue per calendar month from each start).
+  const balances = useLeaveBalances(employees.map(employee => employee.id));
+  const cpLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'cp'), 0);
+  const rttLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'rtt'), 0);
   const day = today();
   // The staffing commitment that currently books this person, highest
   // allocation first — shown as “Client — Project”, like the CRA default.
@@ -357,6 +363,14 @@ function PersonPage({
             <div>
               <dt>Last CRA</dt>
               <dd>{craLabel}</dd>
+            </div>
+            <div>
+              <dt>CP balance</dt>
+              <dd>{employees.length ? `${fmtDays(cpLeft)} days` : '—'}</dd>
+            </div>
+            <div>
+              <dt>RTT balance</dt>
+              <dd>{employees.length ? `${fmtDays(rttLeft)} days` : '—'}</dd>
             </div>
           </dl>
         </section>

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -23,6 +23,7 @@ import {
   type AdminType,
   type StatusKind,
 } from "./referentials";
+import { useLeaveRates, type LeaveKind } from "./cra/balances";
 import "./admin-settings.css";
 
 /**
@@ -61,6 +62,7 @@ const SECTIONS = [
   { id: "actions", label: "Actions / statuses" },
   { id: "needs", label: "Needs / projects" },
   { id: "hr", label: "HR data" },
+  { id: "leave", label: "Leave accrual" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -358,6 +360,12 @@ export function AdminSettings() {
             onRemove={(s) => void removeStatus(s)}
             onMove={(i, dir) => moveStatus("resource", i, dir)}
           />
+        </div>
+      )}
+
+      {section === "leave" && (
+        <div className="settings-columns">
+          <LeaveAccrualPanel />
         </div>
       )}
     </div>
@@ -714,6 +722,105 @@ function TypeRow({
           <Trash2 size={15} />
         </button>
       </span>
+    </div>
+  );
+}
+
+/** Accrual rates for paid vacation (CP) and reduced working time (RTT).
+ *  Employees accrue these days per calendar month from their start date; a
+ *  rate edit reprices every past and future month, so the copy next to the
+ *  inputs says exactly that. */
+const LEAVE_KIND_LABELS: Record<LeaveKind, { label: string; sub: string }> = {
+  cp: { label: "CP (paid vacation)", sub: "Congés payés" },
+  rtt: { label: "RTT (reduced working time)", sub: "Jours de réduction du temps de travail" },
+};
+
+function LeaveAccrualPanel() {
+  const { rates, missing, saving, save } = useLeaveRates();
+  return (
+    <ReferentialCard title="Leave accrual" count={rates.length}>
+      <p className="muted small-text settings-card-hint">
+        Days accrued per calendar month from each employee's start date, net of
+        the leave already consumed on their CRA. Editing a rate reprices all
+        past and future months — every balance updates immediately.
+      </p>
+      {missing && (
+        <Notice error>
+          The leave_accrual_settings table is missing — apply
+          supabase/migrations/20261104090000_leave_accrual_balances.sql. The
+          rates below show built-in defaults until then.
+        </Notice>
+      )}
+      <div className="settings-grid settings-grid-type" aria-hidden="true">
+        <span />
+        <span>ID</span>
+        <span className="settings-label-col">Kind</span>
+        <span>Days / month</span>
+        <span />
+        <span />
+      </div>
+      {rates.map((rate, index) => (
+        <LeaveRateRow
+          key={rate.kind}
+          kind={rate.kind}
+          index={index}
+          rate={rate.rate}
+          busy={saving}
+          onSave={(next) => save(rate.kind, next)}
+        />
+      ))}
+    </ReferentialCard>
+  );
+}
+
+function LeaveRateRow({
+  kind,
+  index,
+  rate,
+  busy,
+  onSave,
+}: {
+  kind: LeaveKind;
+  index: number;
+  rate: number;
+  busy: boolean;
+  onSave: (rate: number) => Promise<void>;
+}) {
+  const meta = LEAVE_KIND_LABELS[kind];
+  const [value, setValue] = useState(String(rate));
+  useEffect(() => {
+    setValue(String(rate));
+  }, [rate]);
+  const commit = () => {
+    const next = Number(value);
+    if (!value.trim() || !Number.isFinite(next) || next <= 0) {
+      setValue(String(rate));
+      return;
+    }
+    if (next !== rate) void onSave(next);
+  };
+  return (
+    <div className="settings-grid settings-grid-type settings-row">
+      <span />
+      <span className="settings-id">{index}</span>
+      <span title={meta.sub}>{meta.label}</span>
+      <input
+        className="qs-input"
+        type="number"
+        min={0}
+        step="0.01"
+        value={value}
+        disabled={busy}
+        aria-label={`${meta.label} days per month`}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") setValue(String(rate));
+        }}
+      />
+      <span className="muted small-text">days / month</span>
+      <span />
     </div>
   );
 }

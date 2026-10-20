@@ -4,6 +4,7 @@ import { Empty, Notice } from '@quicksort/hr-ui';
 import { errorMessage } from '@quicksort/hr-db';
 import { z } from 'zod';
 import { loadContext, loadMonth, saveMonth } from './data';
+import { balanceFor, fmtDays, useLeaveBalances } from './balances';
 import { assignedProjects, currentMonth, dayHalves, entrySchema, entryValue, listMonths, setDayPart, shiftMonth, monthDays, monthSchema, sortEntries, statusLabels, withinEmployment, type ActivityValue, type Assignment, type Context, type Employee, type Entry, type Part, type Snapshot } from './domain';
 import './cra.css';
 
@@ -64,9 +65,6 @@ function activityName(value: ActivityValue, projects: Assignment[]): string {
   if (value === 'unpaid_leave') return statusLabels.unpaid_leave;
   const project = projects.find(item => `project:${item.project_id}` === value);
   return project ? `Client Project ${project.title} (${project.client_name})` : 'Client Project';
-}
-function fmtDays(amount: number) {
-  return amount % 1 ? amount.toFixed(1) : String(amount);
 }
 
 export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, basePath }: { audience: 'admin' | 'employee'; draftOwner: string; linkBase?: string; fixedEmployeeId?: string; basePath?: string }) {
@@ -274,6 +272,11 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   const [weekends, setWeekends] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [draftStored, setDraftStored] = useState(true);
+  // Same strip for HR and the employee portal: everyone sees the same
+  // remaining CP/RTT days, net of everything consumed so far.
+  const balances = useLeaveBalances([employee.id]);
+  const cpLeft = balanceFor(balances, employee.id, 'cp');
+  const rttLeft = balanceFor(balances, employee.id, 'rtt');
   const dragRef = useRef<{ add: boolean } | null>(null);
   const anchorRef = useRef<string | null>(null);
   const draftKey = `quicksort:cra:${draftOwner}:${employee.id}:${month}`;
@@ -529,7 +532,9 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
             <span className="cra-summary-filled">{fmtDays(filled)}</span>
             <span className="muted"> / {workdays.length} days filled{remaining ? '' : ' · Complete'}</span>
           </div>
-          <div className="muted cra-breakdown">{breakdown || 'Nothing filled yet'}</div>
+          <div className="muted cra-breakdown">
+            Solde CP {fmtDays(cpLeft)} j · RTT {fmtDays(rttLeft)} j{breakdown ? ` · ${breakdown}` : ''}
+          </div>
         </div>
         <div role="progressbar" aria-label="Days filled" aria-valuemin={0} aria-valuemax={workdays.length} aria-valuenow={filled} className="cra-progress">
           <div className="cra-progress-fill" style={{ width: `${workdays.length ? Math.round((filled / workdays.length) * 100) : 0}%` }} />

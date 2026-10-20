@@ -191,6 +191,24 @@ export type Database = {
           },
         ]
       }
+      leave_accrual_settings: {
+        Row: {
+          kind: string
+          rate: number
+          updated_at: string
+        }
+        Insert: {
+          kind: string
+          rate: number
+          updated_at?: string
+        }
+        Update: {
+          kind?: string
+          rate?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       candidate_requests: {
         Row: {
           id: string
@@ -957,6 +975,10 @@ export type Database = {
       cra_context: { Args: Record<PropertyKey, never>; Returns: Json };
       cra_month_snapshot: { Args: { target_employee: string; target_month: string }; Returns: Json };
       cra_save_month: { Args: { target_employee: string; target_month: string; expected_version: number; entries: Json }; Returns: Json };
+      employee_leave_balances: {
+        Args: Record<PropertyKey, never>
+        Returns: { employee_id: string; kind: string; accrued: number; consumed: number; available: number }[]
+      };
       hr_command: { Args: { command: Json }; Returns: Json };
       hr_workspace_snapshot: { Args: Record<PropertyKey, never>; Returns: Json };
       hr_application_requirements: { Args: { application_id: string; to_stage: string }; Returns: Json };

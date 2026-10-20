@@ -119,8 +119,10 @@ type EventAnalysis = {
   seniorRoles: number;
   customFields: { label: string; populated: number; examples: string[] }[];
 };
+type EventKind = "Hosted" | "Attend";
 type EventRecord = {
   id: string; title: string; date: string; location: string; lumaUrl: string; attendees: number; qualified: number;
+  kind?: EventKind;
   status: "Awaiting upload" | "Ready to analyze" | "Analyzed"; fileName?: string; attendeeData?: ImportedAttendee[];
   headers?: string[]; columnMapping?: ColumnMapping; analysisFields?: string[]; analysis?: EventAnalysis; aiIntelligence?: EventAiIntelligence;
 };
@@ -128,9 +130,11 @@ type EventRecord = {
 const initialLeads: LeadRecord[] = [];
 
 const initialEvents: EventRecord[] = [
-  { id: "quicksort-multimodal-ai", title: "Multimodal AI in Production (w/ The AI Collective)", date: "01 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/quicksort-multimodal-ai", attendees: 0, qualified: 0, status: "Awaiting upload" },
-  { id: "ccparis", title: "Cafe Compute Meetup: Paris", date: "02 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/ccparis", attendees: 0, qualified: 0, status: "Awaiting upload" },
+  { id: "quicksort-multimodal-ai", title: "Multimodal AI in Production (w/ The AI Collective)", date: "01 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/quicksort-multimodal-ai", kind: "Hosted", attendees: 0, qualified: 0, status: "Awaiting upload" },
+  { id: "ccparis", title: "Cafe Compute Meetup: Paris", date: "02 Oct 2026", location: "Paris", lumaUrl: "https://luma.com/ccparis", kind: "Hosted", attendees: 0, qualified: 0, status: "Awaiting upload" },
 ];
+
+const eventKindOf = (event: EventRecord): EventKind => event.kind === "Attend" ? "Attend" : "Hosted";
 
 const mappedFieldOptions: { id: MappedField; label: string; hint: string }[] = [
   { id: "name", label: "Full name", hint: "A single full-name column" },
@@ -580,7 +584,7 @@ export default function App({ email = "" }: { email?: string }) {
           ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount] ?? { leads: [], events: [], contacts: [] }} linkedStudies={businessCaseStudies.filter((study) => study.accountId === selectedAccount)} ownerOptions={ownerOptions} actorEmail={email} kanbanCards={kanbanCards.filter(card => kanbanBoardAccounts.some(link => link.board_id === card.board_id && link.account_id === accountRecords.find(account => account.id === selectedAccount)?.databaseId)).map(card => ({ ...card, boardName: kanbanBoards.find(board => board.id === card.board_id)?.name || "Board", columnName: kanbanColumns.find(column => column.id === card.column_id)?.name || "Status" }))} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
           : <Accounts query={query} setQuery={setQuery} accounts={filteredAccounts} allAccounts={accountRecords} openAccount={(id) => navigate("accounts", id)} onAdd={addManualAccount} createIntent={createIntent}/>)}
         {view === "events" && <Events events={eventRecords} selectedEventId={selectedEvent} onOpenEvent={openEvent} onBack={() => navigate("events")} onChange={saveEvents} onAddLead={addEventLead} onAddAccount={addEventAccount} notify={notify}/>}
-        {view === "leads" && <Leads leads={leadRecords} onChange={saveLeads} notify={notify} createIntent={createIntent}/>}
+        {view === "leads" && <Leads leads={leadRecords} events={eventRecords} onChange={saveLeads} notify={notify} createIntent={createIntent}/>}
         {view === "opportunities" && <PublicOpportunities notify={notify}/>}
         {view === "pipeline" && <Pipeline notify={notify}/>} 
         {view === "kanban" && <BusinessKanban projects={kanbanProjects} boards={kanbanBoards} columns={kanbanColumns} cards={kanbanCards} boardAccounts={kanbanBoardAccounts} accounts={accountRecords} onRefresh={loadKanban} notify={notify}/>}
@@ -1661,13 +1665,17 @@ function Events({ events, selectedEventId, onOpenEvent, onBack, onChange, onAddL
   notify: (message: string) => void;
 }) {
   const { session } = useSession();
-  const [lumaUrl, setLumaUrl] = useState("");
+  const [eventKind, setEventKind] = useState<EventKind>("Attend");
+  const [eventDraft, setEventDraft] = useState({ title: "", date: "", location: "", url: "" });
+  const [eventFilter, setEventFilter] = useState<"All" | EventKind>("All");
   const [error, setError] = useState("");
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [analyzingEvent, setAnalyzingEvent] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState("");
   const selectedEvent = selectedEventId ? events.find((event) => event.id === selectedEventId) ?? null : null;
-  const uploadedEvents = events.filter((event) => event.attendeeData?.length);
+  const hostedEvents = events.filter((event) => eventKindOf(event) === "Hosted");
+  const attendingEvents = events.filter((event) => eventKindOf(event) === "Attend");
+  const visibleEvents = events.filter((event) => eventFilter === "All" || eventKindOf(event) === eventFilter);
   const attendeeRows = events.reduce((total, event) => total + event.attendees, 0);
   const linkedinProfiles = events.reduce((total, event) => {
     const mapping = eventMapping(event);
@@ -1675,13 +1683,20 @@ function Events({ events, selectedEventId, onOpenEvent, onBack, onChange, onAddL
   }, 0);
   const addEvent = (event: React.FormEvent) => {
     event.preventDefault();
-    const value = lumaUrl.trim();
-    if (!/^https?:\/\/(?:www\.)?(?:lu\.ma|luma\.com)\//i.test(value)) { setError("Paste a valid lu.ma or luma.com event link."); return; }
-    const rawSlug = value.split("/").filter(Boolean).pop()?.split("?")[0] || "new-event";
-    const title = decodeURIComponent(rawSlug).replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-    const nextEvent: EventRecord = { id: `${rawSlug}-${Date.now()}`, title, date: "Date to confirm", location: "From Luma", lumaUrl: value, attendees: 0, qualified: 0, status: "Awaiting upload" };
+    const title = eventDraft.title.trim();
+    const url = eventDraft.url.trim();
+    if (!title) { setError("Add the event name."); return; }
+    if (url && !/^https?:\/\/[^\s]+$/i.test(url)) { setError("Add a complete event link beginning with http:// or https://."); return; }
+    const rawSlug = accountSlug(title) || "new-event";
+    const nextEvent: EventRecord = {
+      id: `${rawSlug}-${Date.now()}`, title, kind: eventKind,
+      date: eventDraft.date ? new Date(`${eventDraft.date}T12:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Date to confirm",
+      location: eventDraft.location.trim() || "Location to confirm", lumaUrl: url,
+      attendees: 0, qualified: 0, status: "Awaiting upload",
+    };
     onChange([nextEvent, ...events]);
-    setLumaUrl(""); setError(""); onOpenEvent(nextEvent.id); notify("Event added · upload its attendee spreadsheet next");
+    setEventDraft({ title: "", date: "", location: "", url: "" }); setError(""); onOpenEvent(nextEvent.id);
+    notify(eventKind === "Attend" ? "Event added · upload the prospect list when it is available" : "Hosted event added · upload the guest list next");
   };
   const uploadAttendees = async (eventId: string, file?: File) => {
     if (!file) return;
@@ -1774,11 +1789,13 @@ function Events({ events, selectedEventId, onOpenEvent, onBack, onChange, onAddL
     const headers = eventHeaders(selectedEvent);
     const mapping = eventMapping(selectedEvent);
     const selectedFields = selectedEvent.analysisFields ?? Array.from(new Set(Object.values(mapping).filter(Boolean) as string[]));
+    const kind = eventKindOf(selectedEvent);
     return <div className="page event-detail-page">
       <button className="back-link" onClick={onBack}><ArrowLeft size={15}/> All events</button>
-      <PageIntro title={selectedEvent.title} text={`${selectedEvent.date} · ${selectedEvent.location}`} action={<a className="secondary" href={selectedEvent.lumaUrl} target="_blank" rel="noreferrer">Open Luma <ArrowUpRight size={14}/></a>}/>
-      <div className="event-flow" aria-label="Event intelligence workflow"><span className={rows.length ? "done" : ""}><b>1</b> Upload</span><i/><span className={rows.length ? "done" : ""}><b>2</b> Map columns</span><i/><span className={selectedEvent.aiIntelligence ? "done" : ""}><b>3</b> AI intelligence</span><i/><span><b>4</b> Human approval</span></div>
-      <section className="event-detail-source"><div><FileText size={20}/><span><strong>{selectedEvent.fileName ?? "No attendee file uploaded"}</strong><small>{rows.length ? `${rows.length} attendee rows · ${headers.length} columns` : "Upload CSV, TSV, XLS or XLSX"}</small></span></div><label className="secondary file-action">{selectedEvent.fileName ? "Replace file" : "Upload attendee file"}<input type="file" accept=".xlsx,.xls,.csv,.tsv" onChange={(input) => void uploadAttendees(selectedEvent.id, input.target.files?.[0])}/></label>{uploadErrors[selectedEvent.id] && <small className="event-upload-error">{uploadErrors[selectedEvent.id]}</small>}</section>
+      <PageIntro title={selectedEvent.title} text={`${selectedEvent.date} · ${selectedEvent.location}`} action={selectedEvent.lumaUrl ? <a className="secondary" href={selectedEvent.lumaUrl} target="_blank" rel="noreferrer">Open event page <ArrowUpRight size={14}/></a> : undefined}/>
+      <div className={`event-context-banner ${kind === "Attend" ? "attend" : "hosted"}`}><span>{kind === "Attend" ? "Event to attend" : "Hosted by QuickSort"}</span><p>{kind === "Attend" ? "Use this workspace to prepare target companies, capture people you meet, and turn approved prospects into leads." : "Use this workspace to review registrations and guests, then approve the strongest people and companies for follow-up."}</p></div>
+      <div className="event-flow" aria-label="Event prospect workflow"><span><b>1</b> {kind === "Attend" ? "Plan targets" : "Collect guests"}</span><i/><span className={rows.length ? "done" : ""}><b>2</b> Upload people</span><i/><span className={rows.length ? "done" : ""}><b>3</b> Map data</span><i/><span className={selectedEvent.aiIntelligence ? "done" : ""}><b>4</b> Approve leads</span></div>
+      <section className="event-detail-source"><div><FileText size={20}/><span><strong>{selectedEvent.fileName ?? (kind === "Attend" ? "No prospect list uploaded" : "No guest list uploaded")}</strong><small>{rows.length ? `${rows.length} people · ${headers.length} columns` : "Upload CSV, TSV, XLS or XLSX from registration, badge scans, notes, or research"}</small></span></div><label className="secondary file-action">{selectedEvent.fileName ? "Replace file" : kind === "Attend" ? "Upload prospects" : "Upload guest list"}<input type="file" accept=".xlsx,.xls,.csv,.tsv" onChange={(input) => void uploadAttendees(selectedEvent.id, input.target.files?.[0])}/></label>{uploadErrors[selectedEvent.id] && <small className="event-upload-error">{uploadErrors[selectedEvent.id]}</small>}</section>
       {rows.length > 0 && <section className="surface event-detail-mapper"><div className="mapping-head"><div><span>Data preparation</span><h3>{headers.length} headers detected</h3><p>Confirm the core fields and choose any event questions the AI should use.</p></div><button className="primary" disabled={analyzingEvent === selectedEvent.id} onClick={() => void analyzeEvent(selectedEvent)}><Sparkles size={15}/>{analyzingEvent === selectedEvent.id ? "Researching…" : "Run AI analysis"}</button></div>
         {analysisError && <div className="analysis-error" role="alert">{analysisError}</div>}
         <div className="mapping-layout"><section className="mapping-fields"><h4>Map core fields</h4>{mappedFieldOptions.map((field) => <label key={field.id}><span><strong>{field.label}</strong><small>{field.hint}</small></span><select value={mapping[field.id] ?? ""} onChange={(input) => updateMapping(selectedEvent, field.id, input.target.value)}><option value="">Not mapped</option>{headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>)}</section><section className="detected-columns"><div className="columns-head"><div><h4>Fields to analyze</h4><p>Include interests and custom event questions.</p></div><span>{selectedFields.length} selected</span></div><div className="column-list">{headers.map((header) => { const values = rows.map((row) => row[header]?.trim()).filter(Boolean); const mappedAs = mappedFieldOptions.find((field) => mapping[field.id] === header)?.label; return <label key={header} className={selectedFields.includes(header) ? "selected" : ""}><input type="checkbox" checked={selectedFields.includes(header)} onChange={() => toggleAnalysisField(selectedEvent, header)}/><span><strong>{header}</strong><small>{mappedAs ? `Mapped as ${mappedAs} · ${values.length} populated` : `${values.length} populated`}</small><em>{Array.from(new Set(values)).slice(0, 2).join(" · ") || "No sample value"}</em></span></label>; })}</div></section></div>
@@ -1787,11 +1804,21 @@ function Events({ events, selectedEventId, onOpenEvent, onBack, onChange, onAddL
       {selectedEvent.aiIntelligence && <EventIntelligenceResult event={selectedEvent} intelligence={selectedEvent.aiIntelligence} onAddLead={onAddLead} onAddAccount={onAddAccount}/>}
     </div>;
   }
-  return <div className="page events-page"><PageIntro title="Events intelligence" text="Add a Luma event, then open its dedicated workspace for mapping, research, and human-approved GTM actions."/>
-    <section className="event-importer"><div className="event-import-copy"><span className="import-icon"><CalendarDays size={22}/></span><div><h2>Bring in a Luma event</h2><p>Add the event first. Upload and intelligence happen inside its dedicated page.</p></div></div><form onSubmit={addEvent}><label htmlFor="luma-link">Luma event link</label><div><input id="luma-link" value={lumaUrl} onChange={(event) => { setLumaUrl(event.target.value); setError(""); }} placeholder="https://lu.ma/your-event"/><button className="primary" type="submit"><Plus size={16}/> Add event</button></div>{error && <p className="form-error" role="alert">{error}</p>}</form></section>
-    <section className="event-metrics"><div><span>Events added</span><strong>{events.length}</strong></div><div><span>Files uploaded</span><strong>{uploadedEvents.length}</strong></div><div><span>Attendee rows</span><strong>{attendeeRows}</strong></div><div><span>LinkedIn profiles</span><strong>{linkedinProfiles}</strong></div></section>
-    <section className="surface event-workspace"><div className="section-head"><div><h2>Event queue</h2><p>Open an event to upload, map, analyze, and approve prospects</p></div><span className="case-count">{events.length} events</span></div><div className="event-table-head"><span>Event</span><span>Attendees</span><span>Qualified</span><span>Status</span><span>Workspace</span></div><div className="event-work-list">{events.map((event) => <article className="event-work-row" key={event.id}><button className="event-identity event-open" onClick={() => onOpenEvent(event.id)}><span><CalendarDays size={18}/></span><div><strong>{event.title}</strong><small>{event.date} · {event.location}</small><em>{event.lumaUrl}</em></div></button><strong className="event-number">{eventRows(event).length || "—"}</strong><strong className="event-number event-qualified">{event.aiIntelligence?.priorityPeople.length ?? "—"}</strong><span className={`analysis-status ${event.aiIntelligence ? "complete" : "ready"}`}><i/>{event.aiIntelligence ? "AI ready" : event.status}</span><button className="primary" onClick={() => onOpenEvent(event.id)}>Open intelligence <ArrowUpRight size={14}/></button></article>)}</div></section>
+  return <div className="page events-page"><PageIntro title="Event acquisition" text="Run the events we host and the events we attend as two distinct prospecting workflows."/>
+    <section className="event-lanes" aria-label="Event types">
+      <button className={eventKind === "Hosted" ? "active hosted" : "hosted"} onClick={() => setEventKind("Hosted")}><span><CalendarDays size={19}/></span><div><strong>Events we host</strong><small>Manage registrations, guests, speakers, and post-event follow-up.</small></div><b>{hostedEvents.length}</b></button>
+      <button className={eventKind === "Attend" ? "active attend" : "attend"} onClick={() => setEventKind("Attend")}><span><Users size={19}/></span><div><strong>Events to attend</strong><small>Plan target accounts, capture people, and create qualified prospects.</small></div><b>{attendingEvents.length}</b></button>
+    </section>
+    <section className={`event-importer ${eventKind === "Attend" ? "attend" : "hosted"}`}><div className="event-import-copy"><span className="import-icon">{eventKind === "Attend" ? <Target size={22}/> : <CalendarDays size={22}/>}</span><div><h2>{eventKind === "Attend" ? "Add an event to attend" : "Add a hosted event"}</h2><p>{eventKind === "Attend" ? "Create the workspace now. Add the people list before or after the event." : "Create the workspace, then upload registrations or the final guest list."}</p></div></div><form onSubmit={addEvent}><div className="event-create-fields"><label>Event name<input value={eventDraft.title} onChange={(input) => { setEventDraft({ ...eventDraft, title: input.target.value }); setError(""); }} placeholder="Event name"/></label><label>Date<input type="date" value={eventDraft.date} onChange={(input) => setEventDraft({ ...eventDraft, date: input.target.value })}/></label><label>Location<input value={eventDraft.location} onChange={(input) => setEventDraft({ ...eventDraft, location: input.target.value })} placeholder="Paris or online"/></label><label>Event page <small>optional</small><input value={eventDraft.url} onChange={(input) => { setEventDraft({ ...eventDraft, url: input.target.value }); setError(""); }} placeholder="https://…"/></label></div><button className="primary" type="submit"><Plus size={16}/> Add {eventKind === "Attend" ? "to attend" : "hosted event"}</button>{error && <p className="form-error" role="alert">{error}</p>}</form></section>
+    <section className="event-metrics"><div><span>Hosted events</span><strong>{hostedEvents.length}</strong></div><div><span>Events to attend</span><strong>{attendingEvents.length}</strong></div><div><span>People uploaded</span><strong>{attendeeRows}</strong></div><div><span>LinkedIn profiles</span><strong>{linkedinProfiles}</strong></div></section>
+    <section className="surface event-workspace"><div className="section-head"><div><h2>Event pipeline</h2><p>Open an event to upload, map, analyze, and approve prospects</p></div><div className="event-queue-filters">{(["All", "Attend", "Hosted"] as const).map((filter) => <button key={filter} className={eventFilter === filter ? "active" : ""} onClick={() => setEventFilter(filter)}>{filter === "Attend" ? "To attend" : filter} <span>{filter === "All" ? events.length : filter === "Attend" ? attendingEvents.length : hostedEvents.length}</span></button>)}</div></div><div className="event-table-head"><span>Event</span><span>People</span><span>Prospects</span><span>Status</span><span>Workspace</span></div><div className="event-work-list">{visibleEvents.map((event) => { const kind = eventKindOf(event); return <article className={`event-work-row ${kind === "Attend" ? "attend" : "hosted"}`} key={event.id}><button className="event-identity event-open" onClick={() => onOpenEvent(event.id)}><span><CalendarDays size={18}/></span><div><b className={`event-kind ${kind.toLowerCase()}`}>{kind === "Attend" ? "To attend" : "Hosted"}</b><strong>{event.title}</strong><small>{event.date} · {event.location}</small>{event.lumaUrl && <em>{event.lumaUrl}</em>}</div></button><strong className="event-number">{eventRows(event).length || "—"}</strong><strong className="event-number event-qualified">{event.aiIntelligence?.priorityPeople.length ?? "—"}</strong><span className={`analysis-status ${event.aiIntelligence ? "complete" : "ready"}`}><i/>{event.aiIntelligence ? "Prospects ready" : event.status}</span><button className="primary" onClick={() => onOpenEvent(event.id)}>{rowsForAction(event)} <ArrowUpRight size={14}/></button></article>; })}</div>{visibleEvents.length === 0 && <div className="data-empty">No events in this view yet. Add one above to start the prospect workflow.</div>}</section>
   </div>;
+}
+
+function rowsForAction(event: EventRecord) {
+  if (event.aiIntelligence) return "Review prospects";
+  if (eventRows(event).length) return "Map people";
+  return eventKindOf(event) === "Attend" ? "Plan prospects" : "Add guests";
 }
 
 function LocalEventAnalysis({ analysis }: { analysis: EventAnalysis }) {
@@ -1808,12 +1835,15 @@ function OrganisationGraph({ intelligence }: { intelligence: EventAiIntelligence
   return <section className="organisation-graph"><div className="section-head"><div><h2>People and organisation map</h2><p>Nodes show reviewed prospects, represented companies, and decision-maker paths.</p></div><span className="case-count">{people.length + organisations.length} nodes</span></div>{organisations.length ? <><div className="graph-canvas"><svg viewBox="0 0 1000 420" preserveAspectRatio="none" aria-hidden="true">{people.map((person, index) => { const matchedIndex = organisations.findIndex((org) => person.company && org.name.toLowerCase() === person.company.toLowerCase()); if (matchedIndex < 0) return null; const px = 90 + (index % 5) * 190; const py = index < 5 ? 70 : 350; const ox = 120 + matchedIndex * 190; return <line key={`${person.name}-${index}`} x1={px} y1={py} x2={ox} y2={210}/>; })}</svg>{organisations.map((org, index) => <div className="graph-org" style={{ left: `${12 + index * 19}%`, top: "50%" }} key={org.name}><strong>{org.name}</strong><small>{org.attendeeCount} attendees</small></div>)}{people.map((person, index) => <div className={`graph-person ${person.category.toLowerCase()}`} style={{ left: `${9 + (index % 5) * 19}%`, top: index < 5 ? "12%" : "82%" }} key={`${person.name}-${index}`}><strong>{person.name}</strong><small>{person.category}</small></div>)}</div><div className="graph-legend"><span><i className="professional"/>Professional</span><span><i className="founder"/>Founder</span><span><i className="student"/>Student</span><span><i className="unknown"/>Needs verification</span></div></> : <div className="data-empty">No verified organisation relationships were found.</div>}</section>;
 }
 
-function Leads({ leads, onChange, notify, createIntent }: { leads: LeadRecord[]; onChange: (leads: LeadRecord[]) => void; notify: (message: string) => void; createIntent: number }) {
+function Leads({ leads, events, onChange, notify, createIntent }: { leads: LeadRecord[]; events: EventRecord[]; onChange: (leads: LeadRecord[]) => void; notify: (message: string) => void; createIntent: number }) {
   const [source, setSource] = useState<"All" | LeadSource>("All");
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
   useEffect(() => { if (createIntent) setAdding(true); }, [createIntent]);
   const stages: LeadStage[] = ["New", "Qualified", "Contacted", "Converted"];
+  const eventLeads = leads.filter((lead) => lead.source === "Event");
+  const attendedEventLeads = eventLeads.filter((lead) => events.some((event) => event.title === lead.origin && eventKindOf(event) === "Attend"));
+  const hostedEventLeads = eventLeads.length - attendedEventLeads.length;
   const visible = leads.filter((lead) => (source === "All" || lead.source === source) && `${lead.name} ${lead.company} ${lead.role}`.toLowerCase().includes(search.toLowerCase()));
   const advance = (lead: LeadRecord) => {
     const next = stages[Math.min(stages.indexOf(lead.stage) + 1, stages.length - 1)];
@@ -1835,8 +1865,9 @@ function Leads({ leads, onChange, notify, createIntent }: { leads: LeadRecord[];
       <div><span><Lightbulb size={18}/></span><div><h2>Lead intelligence</h2><p>Build an ICP, identify buyers, enrich profiles, verify emails, and score real leads.</p></div></div>
       <div className="lead-intelligence-actions">{["ICP lists", "Buyer discovery", "Profile enrichment", "Email verification", "Fit scoring", "Why-now signals"].map((item) => <button key={item} onClick={() => notify(`${item} ready to configure`)}>{item}<Plus size={12}/></button>)}</div>
     </section>
+    {eventLeads.length > 0 && <section className="event-lead-summary"><div><CalendarDays size={18}/><span><strong>Event-sourced prospects</strong><small>Every lead keeps the event name as provenance.</small></span></div><dl><div><dt>Events attended</dt><dd>{attendedEventLeads.length}</dd></div><div><dt>Events hosted</dt><dd>{hostedEventLeads}</dd></div><div><dt>Converted</dt><dd>{eventLeads.filter((lead) => lead.stage === "Converted").length}</dd></div></dl></section>}
     <section className="lead-source-strip">
-      {(["All", "Event", "Tool", "Network"] as const).map((item) => <button key={item} className={source === item ? "active" : ""} onClick={() => setSource(item)}><span className={`source-mark ${item.toLowerCase()}`}/><div><strong>{item === "All" ? "All leads" : `${item} leads`}</strong><small>{item === "Network" ? "From Open doors" : item === "Event" ? "From Luma events" : item === "Tool" ? "From prospecting tools" : "Across every source"}</small></div><b>{item === "All" ? leads.length : leads.filter((lead) => lead.source === item).length}</b></button>)}
+      {(["All", "Event", "Tool", "Network"] as const).map((item) => <button key={item} className={source === item ? "active" : ""} onClick={() => setSource(item)}><span className={`source-mark ${item.toLowerCase()}`}/><div><strong>{item === "All" ? "All leads" : `${item} leads`}</strong><small>{item === "Network" ? "From Open doors" : item === "Event" ? "From hosted and attended events" : item === "Tool" ? "From prospecting tools" : "Across every source"}</small></div><b>{item === "All" ? leads.length : leads.filter((lead) => lead.source === item).length}</b></button>)}
     </section>
     <div className="toolbar lead-toolbar"><label><Search size={17}/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search people, roles or companies"/></label><button className="secondary"><Filter size={16}/> Filters</button><span>{visible.length} leads</span></div>
     <div className="lead-pipeline">{stages.map((stage) => {
@@ -1845,7 +1876,7 @@ function Leads({ leads, onChange, notify, createIntent }: { leads: LeadRecord[];
         <div className="lead-card-top"><span className="lead-avatar">{lead.name.split(" ").map((part) => part[0]).join("").slice(0,2)}</span><span className={`lead-source ${lead.source.toLowerCase()}`}>{lead.source}</span><strong className="lead-score">{lead.score}</strong></div>
         <h3>{lead.name}</h3><p>{lead.role}</p><b>{lead.company}</b>
         <div className="lead-reason"><Sparkles size={14}/><span>{lead.reason}</span></div>
-        <div className="lead-origin"><small>Source</small><strong>{lead.origin}</strong></div>
+        <div className="lead-origin"><small>{lead.source === "Event" ? events.some((event) => event.title === lead.origin && eventKindOf(event) === "Attend") ? "Event attended" : "Event hosted" : "Source"}</small><strong>{lead.origin}</strong></div>
         <footer><span>{lead.owner}</span><button onClick={() => advance(lead)}>{stage === "Converted" ? "Complete" : "Advance"} <ArrowUpRight size={13}/></button></footer>
       </article>)}</div>{stageLeads.length === 0 && <p className="empty-stage">No {source === "All" ? "" : source.toLowerCase() + " "}leads here.</p>}</section>;
     })}</div>
@@ -2106,9 +2137,10 @@ function WorkspaceGuide({ go }: { go: (view: View) => void }) {
       { title: "Map the organisation", detail: "Record relevant contacts, decision makers, colleagues, and introduction paths." },
       { title: "Attach proof", detail: "Select relevant case studies and capability evidence." },
     ], result: "One reliable company record connected to Leads and Pipeline.", icon: Building2 },
-    { view: "events", title: "Events", purpose: "Turn an event attendee export into reviewed people and company opportunities.", when: "Use this only after you have the real event link and attendee CSV or Excel file.", steps: [
-      { title: "Add the event", detail: "Paste the event link so it has its own workspace." },
-      { title: "Upload the attendee file", detail: "Use the original export. No attendee data appears before upload." },
+    { view: "events", title: "Events", purpose: "Turn hosted events and events we attend into reviewed people and company opportunities.", when: "Use this while planning an event, then return with registrations, target lists, badge scans, or follow-up notes.", steps: [
+      { title: "Choose the event type", detail: "Separate events hosted by QuickSort from external events the team plans to attend." },
+      { title: "Add the event", detail: "Record its name, date, location, and optional event page." },
+      { title: "Upload the people file", detail: "Use registrations for hosted events or a researched and captured prospect list for attended events." },
       { title: "Map the columns", detail: "Confirm name, LinkedIn, email, phone, company, role, and useful custom answers." },
       { title: "Run AI analysis", detail: "Review professional context, company mapping, priority people, and decision-maker paths." },
       { title: "Approve the output", detail: "A person becomes a Lead or a company becomes an Account only after human approval." },

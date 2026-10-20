@@ -923,6 +923,29 @@ tr.clients-row:focus-visible {
   white-space: nowrap;
 }
 
+/* Per-profile rate chips — one pill per TJM profile so multi-profile
+   régie contracts show every named rate on the list row. */
+.projects-rates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.projects-rate-chip {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--qs-muted);
+  background: var(--qs-lift);
+  border: 1px solid var(--qs-line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.projects-rate-name {
+  color: var(--qs-ink);
+  font-weight: 600;
+}
+
 /* Timeline — date range, days-left label, 4px progress bar. */
 .projects-timeline {
   display: flex;
@@ -1005,6 +1028,18 @@ tr.clients-row:focus-visible {
 }
 .projects-consume-dim {
   color: var(--qs-muted);
+}
+/* Annual billable cap — yearly allowance line under the consumption
+   figures; "over" turns it into the attention red. */
+.projects-consume-cap {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--qs-muted);
+}
+.projects-consume-cap.over {
+  color: var(--qs-danger);
+  font-weight: 600;
 }
 
 /* Signed renewals: chip on the timeline range. */

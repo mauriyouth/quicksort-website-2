@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, Clock3, Plus, RefreshCw, Search, Users, X, ArrowUpRight, MapPin } from 'lucide-react';
-import { errorMessage } from '@quicksort/hr-db';
+import { db, errorMessage } from '@quicksort/hr-db';
 import { executeCommand, loadWorkspace } from './data';
 import type { Employee, Opportunity, Person, Workspace } from './domain';
 import { AssignForm, PersonWorkspace, available, personName, stages, type PersonTab, type RecordContext } from './PersonWorkspace';
@@ -9,6 +9,8 @@ import type { Application, ApplicationStage } from './domain';
 import { DateField } from '../DateField';
 import { Intake } from './Intake';
 import { CraScreen } from '../cra/CraScreen';
+import { loadMonth } from '../cra/data';
+import { monthDays } from '../cra/domain';
 import './workspace.css';
 export type HrView = 'overview' | 'recruiting' | 'people' | 'journeys';
 const viewCopy: Record<HrView, {
@@ -56,7 +58,10 @@ const SEGMENT_TABS: Record<string, PersonTab> = {
   activity: 'history'
 };
 const personRoute = (): { personId: string; tab: PersonTab } => {
-  const match = window.location.pathname.match(/^\/hr\/people\/([^/]+?)(?:\/([^/]+))?\/?$/);
+  // The CRA tab pins the viewed month as extra segments:
+  // /hr/people/<id>/cra/2026/10 (the CRA screen owns them; the record
+  // router keeps resolving the tab and ignores the tail).
+  const match = window.location.pathname.match(/^\/hr\/people\/([^/]+?)(?:\/([^/]+?)(?:\/(\d{4})\/(0[1-9]|1[0-2]))?)?\/?$/);
   if (!match) return { personId: '', tab: 'profile' };
   return { personId: match[1], tab: SEGMENT_TABS[match[2] ?? ''] ?? 'profile' };
 };
@@ -160,15 +165,6 @@ export function HrWorkspace({
     setApplicationId('');
     setEmployeeId('');
   };
-  const close = () => {
-    const url = new URL('/hr/people', window.location.origin);
-    url.search = listFilters().toString();
-    window.history.pushState(null, '', url);
-    setPersonId('');
-    setPersonTab('profile');
-    setApplicationId('');
-    setEmployeeId('');
-  };
   const run: RunCommand = async (input, success = 'Saved.') => {
     setBusy(true);
     setError('');
@@ -246,9 +242,55 @@ export function HrWorkspace({
       {myCra && <Dialog title="My CRA" close={() => setMyCra(false)}>
         <CraScreen audience="employee" draftOwner={actorEmail} />
       </Dialog>}
-      {selectedPerson && canRecruit && <PersonPage person={selectedPerson} context={context} live={selectedLive} alumni={selectedAlumni} applicationCount={selectedApplicationCount} tab={personTab} onNavigate={navigatePersonTab} initialApplication={applicationId} initialEmployment={employeeId} close={close} />}
+      {selectedPerson && canRecruit && <PersonPage person={selectedPerson} context={context} live={selectedLive} alumni={selectedAlumni} applicationCount={selectedApplicationCount} tab={personTab} onNavigate={navigatePersonTab} initialApplication={applicationId} initialEmployment={employeeId} />}
     </> : !loading && !error && <Empty>This workspace is available to HR and authorized staffing managers.</Empty>}
   </div>;
+}
+function useLastCra(employees: Employee[]) {
+  const ids = employees.map(employee => employee.id).join(',');
+  const [last, setLast] = useState<{ month: string; filled: number; workdays: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setLast(null);
+    const list = ids ? ids.split(',') : [];
+    if (!list.length) return;
+    void (async () => {
+      try {
+        // The latest month with at least one stored entry, across every
+        // employment period of this person.
+        const found = await db().from('cra_entries').select('employee_id,month').in('employee_id', list).order('month', {
+          ascending: false
+        }).limit(1);
+        if (found.error) throw found.error;
+        const row = found.data?.[0];
+        if (!row) return;
+        const month = row.month.slice(0, 7);
+        const snapshot = await loadMonth(row.employee_id, month);
+        if (cancelled) return;
+        // Same tally rule as the CRA month pills: full day = 1, half = 0.5,
+        // weekends and public holidays never count towards the month total.
+        const days = monthDays(month);
+        let filled = 0;
+        for (const entry of snapshot.entries) {
+          const info = days.find(day => day.day === entry.day);
+          if (!info || info.weekend || info.holiday) continue;
+          filled += entry.part === 'full' ? 1 : 0.5;
+        }
+        const workdays = days.filter(day => !day.weekend && !day.holiday).length;
+        setLast({
+          month,
+          filled,
+          workdays
+        });
+      } catch {
+        /* Unknown months stay neutral. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ids]);
+  return last;
 }
 function PersonPage({
   person,
@@ -259,8 +301,7 @@ function PersonPage({
   tab,
   onNavigate,
   initialApplication,
-  initialEmployment,
-  close
+  initialEmployment
 }: {
   person: Person;
   context: PageContext;
@@ -271,33 +312,54 @@ function PersonPage({
   onNavigate: (tab: PersonTab) => void;
   initialApplication?: string | null;
   initialEmployment?: string | null;
-  close: () => void;
 }) {
   const status = live ? label(live.status) : alumni ? 'Alumni' : applicationCount ? 'Candidate' : 'Talent pool';
   const availability = live ? available(context.workspace, live, today()) : null;
+  const employees = context.workspace.employees.filter(employee => employee.person_id === person.id);
+  const lastCra = useLastCra(employees);
+  const day = today();
+  // The staffing commitment that currently books this person, highest
+  // allocation first — shown as “Client — Project”, like the CRA default.
+  const currentAssignment = context.workspace.assignments.filter(assignment => employees.some(employee => employee.id === assignment.employee_id) && ['reserved', 'confirmed', 'active'].includes(assignment.status) && assignment.start_date <= day && (!assignment.end_date || assignment.end_date >= day)).sort((a, b) => b.allocation_pct - a.allocation_pct)[0];
+  const assignmentProject = currentAssignment ? context.workspace.projects.find(project => project.id === currentAssignment.project_id) : undefined;
+  const assignmentClient = assignmentProject?.client_id ? context.workspace.clients.find(client => client.id === assignmentProject.client_id) : undefined;
+  const defaultAssignment = assignmentProject ? `${assignmentClient ? `${assignmentClient.name} — ` : ''}${assignmentProject.title}` : 'None';
+  const craTally = lastCra && lastCra.filled > 0 && lastCra.workdays > 0 && lastCra.filled < lastCra.workdays ? `${lastCra.filled % 1 ? lastCra.filled.toFixed(1) : lastCra.filled} / ${lastCra.workdays} days` : '';
+  const craLabel = !lastCra ? '—' : `${new Date(`${lastCra.month}-01T12:00:00`).toLocaleDateString('en-GB', {
+    month: 'short',
+    year: 'numeric'
+  })}${craTally ? ` · ${craTally}` : lastCra.filled > 0 && lastCra.workdays > 0 ? ' · Complete' : ''}`;
   return <div className="hr-person-page">
     <header className="hr-person-hero">
       <div className="hr-person-sheet">
-        <nav className="hr-person-crumb" aria-label="Breadcrumb">
-          <button type="button" className="hr-person-back" onClick={close}>← People</button>
-          <span className="hr-person-crumb-sep" aria-hidden="true">/</span>
-          <span className="hr-person-crumb-name">{person.full_name}</span>
-        </nav>
-        <div className="hr-person-head">
-          <span className="hr-person-avatar" aria-hidden="true">{initials(person.full_name)}</span>
-          <div className="hr-person-id">
-            <h1>{person.full_name}</h1>
-            <div className="hr-person-meta">
-              {person.headline && <span className="hr-person-headline">{person.headline}</span>}
-              <span className="hr-person-chip">
-                <span className="hr-person-dot" aria-hidden="true" />
-                {status}
-              </span>
-              {availability !== null && <span className="hr-person-chip">{availability}% available today</span>}
-              {person.location && <span className="hr-person-chip"><MapPin size={12} aria-hidden="true" />{person.location}</span>}
+        {/* Person header: breadcrumb and title merged, name shown once */}
+        <section className="hr-person-head">
+          <div className="hr-person-lead">
+            <span className="hr-person-avatar" aria-hidden="true">{initials(person.full_name)}</span>
+            <div className="hr-person-id">
+              <h1>{person.full_name}</h1>
+              <div className="hr-person-meta">
+                {person.headline && <span>{person.headline}</span>}
+                <span className="hr-person-status">
+                  <span className="hr-person-dot" aria-hidden="true" />
+                  {status}
+                </span>
+                {availability !== null && <span>{availability}% available today</span>}
+                {person.location && <span className="hr-person-place"><MapPin size={14} aria-hidden="true" />{person.location}</span>}
+              </div>
             </div>
           </div>
-        </div>
+          <dl className="hr-person-stats">
+            <div>
+              <dt>Default assignment</dt>
+              <dd>{defaultAssignment}</dd>
+            </div>
+            <div>
+              <dt>Last CRA</dt>
+              <dd>{craLabel}</dd>
+            </div>
+          </dl>
+        </section>
       </div>
     </header>
     <div className="hr-person-sheet">

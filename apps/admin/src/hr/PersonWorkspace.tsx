@@ -6,6 +6,7 @@ import type { Application, ApplicationStage, Assignment, Employee, Person, Requi
 import { loadRequirements } from './data';
 import { assistancePayloadSchema, assistanceSourceSchema, generateSuggestion, type AssistanceRequest } from './assist';
 import { z } from 'zod';
+import { storedPricingLines } from '../sales/pricing-lines';
 import { CraScreen } from '../cra/CraScreen';
 import { Action, Empty, Field, Form, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
 export const stages: ApplicationStage[] = ['application', 'screening', 'hr_interview', 'technical_interview', 'client_presentation', 'decision', 'offer', 'contract'];
@@ -18,6 +19,8 @@ const options = (values: string[]) => values.map(value => ({
   value,
   label: label(value)
 }));
+/** Compact daily-rate suffix for pricing-line labels, e.g. "700 EUR/j". */
+const lineRateLabel = (tjm: number, currency: string) => `${Number.isInteger(tjm) ? tjm : tjm.toFixed(2)} ${currency}/j`;
 export type RecordContext = {
   workspace: Workspace;
   run: RunCommand;
@@ -265,6 +268,17 @@ function Profile({
           </button>)}
         </div>
       </section>
+      {employees.length > 0 && <section className="hr-card hr-profile-card">
+        <div className="hr-profile-card-head">
+          <h2>Employment</h2>
+          <p>Matricule and entry date per period</p>
+        </div>
+        <div className="hr-portal-linked">
+          {employees.map(employee => <p key={employee.id}>
+            <strong>{employee.matricule}</strong>{' — '}{employee.role} · entered {date(employee.start_date)}{employee.end_date ? ` to ${date(employee.end_date)}` : ''} · {label(employee.status)}
+          </p>)}
+        </div>
+      </section>}
       <AiPanel person={person} workspace={workspace} run={run} reload={reload} kind="alumni_reconnect" />
     </aside>
   </div>;
@@ -710,6 +724,14 @@ export function EmploymentDetail({
       </div>
       <div className="hr-stat-line">
         <div>
+          <small>Matricule</small>
+          {employee.matricule}
+        </div>
+        <div>
+          <small>Entry date</small>
+          {date(employee.start_date)}
+        </div>
+        <div>
           <small>Manager</small>
           {employee.manager_email || 'Not set'}
         </div>
@@ -993,6 +1015,11 @@ export function AssignForm({
   const projects = workspace.projects.filter(project => !['closed', 'cancelled', 'completed'].includes(project.status));
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
   const project = projects.find(item => item.id === projectId);
+  // Régie projects staff people on a named TJM profile (pricing line), not
+  // on the project as a whole — offer the contract's lines as targets.
+  const profiles = project?.pricing_model === 'regie'
+    ? storedPricingLines(project.tjm_profiles).filter(line => line.tjm > 0)
+    : [];
   // hr_command rejects dates outside the project window ('Assignment dates
   // must fit the project window.'); mirror the rule in the pickers so only
   // valid days can be chosen, and re-check in submit as a last line of defence.
@@ -1015,7 +1042,9 @@ export function AssignForm({
       kind: 'assign_project',
       employee_id: employee.id,
       project_id: text(data, 'project_id'),
-      position: text(data, 'position'),
+      // The pricing line names the role — no separate position field.
+      position: text(data, 'pricing_line'),
+      pricing_line: text(data, 'pricing_line'),
       allocation_pct: number(data, 'allocation_pct'),
       start_date: startDay,
       end_date: endDay,
@@ -1026,7 +1055,18 @@ export function AssignForm({
       value: project.id,
       label: project.title
     }))} onChange={setProjectId} hint={windowHint ? `Project window: ${windowHint}. Assignment dates must fit inside it.` : 'This project has no delivery dates yet.'} required />
-    <Field name="position" label="Project role" value={employee.role} required />
+    {profiles.length > 0 && <Field
+      key={`pricing-line-${projectId}`}
+      name="pricing_line"
+      label="Pricing line"
+      value={profiles[0].name}
+      options={profiles.map(line => ({
+        value: line.name,
+        label: `${line.name} · ${lineRateLabel(line.tjm, project?.currency ?? 'EUR')}`
+      }))}
+      hint="The TJM profile this person is staffed on."
+      required
+    />}
     <Field name="allocation_pct" label="Allocation (%)" type="number" min={1} max={100} value={100} required />
     <Field name="status" label="Commitment" value="confirmed" options={options(['proposed', 'reserved', 'confirmed', 'active'])} required />
     <Field name="start_date" label="Starts" type="date" min={startMin} max={windowEnd ?? undefined} value={startDefault} required />
@@ -1136,7 +1176,9 @@ function Assignments({
               {openProject ? <button type="button" className="hr-project-link" onClick={() => openProject(assignment.project_id)} title="Open project in Sales">{workspace.projects.find(project => project.id === assignment.project_id)?.title ?? 'Project'}</button> : workspace.projects.find(project => project.id === assignment.project_id)?.title ?? 'Project'}
             </h3>
             <div className="hr-assign-meta">
-              <span>{assignment.position}</span>
+              {assignment.pricing_line
+                ? <span className="hr-assign-line">{assignment.pricing_line}</span>
+                : <span>{assignment.position}</span>}
               <span>{assignment.allocation_pct}% allocation</span>
               <span>{date(assignment.start_date)} → {assignment.end_date ? date(assignment.end_date) : 'open-ended'}</span>
             </div>
@@ -1220,7 +1262,9 @@ function AssignmentCard({
           {overdue && <span className="hr-assign-pill is-urgent">End overdue</span>}
         </div>
         <div className="hr-assign-meta">
-          <span>{assignment.position}</span>
+          {assignment.pricing_line
+            ? <span className="hr-assign-line">{assignment.pricing_line}</span>
+            : <span>{assignment.position}</span>}
           <span aria-hidden="true">·</span>
           <span>{assignment.allocation_pct}%</span>
           <span aria-hidden="true">·</span>
@@ -1272,7 +1316,10 @@ function AssignmentEdit({
 }) {
   const employee = workspace.employees.find(item => item.id === assignment.employee_id);
   const project = workspace.projects.find(item => item.id === assignment.project_id);
-  const [position, setPosition] = useState(assignment.position);
+  const profiles = project?.pricing_model === 'regie'
+    ? storedPricingLines(project.tjm_profiles).filter(line => line.tjm > 0)
+    : [];
+  const [pricingLine, setPricingLine] = useState(assignment.pricing_line);
   const [allocation, setAllocation] = useState(String(assignment.allocation_pct));
   const [status, setStatus] = useState<'proposed' | 'reserved' | 'confirmed' | 'active'>(assignment.status as 'proposed' | 'reserved' | 'confirmed' | 'active');
   const [startDate, setStartDate] = useState(assignment.start_date);
@@ -1295,7 +1342,7 @@ function AssignmentEdit({
     ? !!endDate && endDate >= startDate && (!!endMax && endDate <= endMax)
     : !endDate || (endDate >= startDate && (!endMax || endDate <= endMax));
   const activeFuture = status === 'active' && startDate > day;
-  const changed = position.trim() !== assignment.position
+  const changed = pricingLine !== assignment.pricing_line
     || allocationNum !== assignment.allocation_pct
     || status !== assignment.status
     || startDate !== assignment.start_date
@@ -1309,7 +1356,7 @@ function AssignmentEdit({
         ? 'A change rationale is required.'
         : !startValid || !endValid
           ? 'Dates must fit the project window and employment period.'
-          : `Saves ${position.trim() || 'role'} · ${allocationNum}% · ${label(status)} · ${date(startDate)} → ${endDate ? date(endDate) : 'open-ended'}`;
+          : `Saves ${assignment.position || 'role'} · ${allocationNum}% · ${label(status)} · ${date(startDate)} → ${endDate ? date(endDate) : 'open-ended'}`;
   async function submit() {
     if (!ready || saving) return;
     setSaving(true);
@@ -1319,7 +1366,8 @@ function AssignmentEdit({
         kind: 'update_assignment',
         assignment_id: assignment.id,
         expected_version: assignment.version,
-        position: position.trim(),
+        position: assignment.position,
+        pricing_line: pricingLine,
         allocation_pct: allocationNum,
         start_date: startDate,
         end_date: endDate || null,
@@ -1339,10 +1387,15 @@ function AssignmentEdit({
       {project && <small className="hr-assign-summary">{project.title}{windowEnd ? ` · ends ${date(windowEnd)}` : ''}</small>}
     </div>
     <div className="hr-assign-grid">
-      <div className="hr-assign-field">
-        <span>Project role</span>
-        <input className="hr-assign-input" value={position} maxLength={200} onChange={event => setPosition(event.target.value)} />
-      </div>
+      {profiles.length > 0 && <div className="hr-assign-field">
+        <span>Pricing line</span>
+        <select className="hr-assign-input" value={pricingLine} onChange={event => setPricingLine(event.target.value)}>
+          <option value="">Whole project</option>
+          {assignment.pricing_line && !profiles.some(line => line.name === assignment.pricing_line) && <option value={assignment.pricing_line}>{assignment.pricing_line} (removed line)</option>}
+          {profiles.map(line => <option key={line.name} value={line.name}>{`${line.name} · ${lineRateLabel(line.tjm, project?.currency ?? 'EUR')}`}</option>)}
+        </select>
+        <small>The TJM profile this assignment bills against.</small>
+      </div>}
       <div className="hr-assign-field">
         <span>Allocation (%)</span>
         <input type="number" className="hr-assign-input" min={1} max={100} value={allocation} onChange={event => setAllocation(event.target.value)} />
@@ -1502,7 +1555,7 @@ function PersonCra({
         {employees.map(employee => <option value={employee.id} key={employee.id}>{employee.role} · {date(employee.start_date)}{employee.end_date && ` to ${date(employee.end_date)}`} · {label(employee.status)}</option>)}
       </select>
     </label>}
-    <CraScreen audience="admin" draftOwner={context.actorEmail} fixedEmployeeId={current.id} />
+    <CraScreen audience="admin" draftOwner={context.actorEmail} fixedEmployeeId={current.id} basePath={`/hr/people/${person.id}/cra`} />
   </>;
 }
 function History({

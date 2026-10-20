@@ -486,7 +486,7 @@
 .pe-lines-head,
 .pe-lines-row {
   display: grid;
-  grid-template-columns: minmax(140px, 1.4fr) minmax(120px, 1fr) minmax(130px, 1fr) minmax(90px, 0.8fr) 32px;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(110px, 0.9fr) minmax(110px, 0.9fr) minmax(90px, 0.7fr) minmax(80px, 0.7fr) 32px;
   gap: 8px;
   align-items: center;
 }

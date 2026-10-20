@@ -17,6 +17,14 @@ import { People } from "./sales/People";
 
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
 import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import {
   Users,
   FileText,
   KeyRound,
@@ -50,7 +58,7 @@ import {
 import { isLinkedInUrl, slugify, validateFile } from "@quicksort/hr-db/validation";
 import { useAuth } from "@quicksort/hr-db/auth";
 import {
-  usePortalRoute,
+  resolvePortalRoute,
   AuthGate,
   Shell,
   Stat,
@@ -110,70 +118,88 @@ const SETTINGS_TABS: SectionTab[] = [
   { id: "ai", href: "/settings/ai", label: "AI configuration" },
   { id: "drive", href: "/settings/drive", label: "Google Drive contracts" },
 ];
+// Pre-merge HR screens, kept as redirects so old links and bookmarks work.
+const LEGACY_RECRUITING_PATHS = [
+  "/hr/pipeline",
+  "/hr/candidates",
+  "/hr/interviews",
+  "/hr/offers",
+  "/hr/cv-analyzer",
+  "/hr/analysis-history",
+];
+
+/** Redirect that keeps the query string — legacy list links carry filters. */
+function PreserveSearchRedirect({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={to + location.search} replace />;
+}
 export default function App() {
   const auth = useAuth();
   const staff = !auth.loading && !!auth.session && (auth.role === "admin" || auth.role === "hr");
-  if (!auth.loading && auth.session && auth.role === "sales") {
-    return <AuthGate auth={auth}><StaffingWorkspace email={auth.session.user.email || ""} /></AuthGate>;
-  }
-  return staff ? (
-    <AuthGate auth={auth}>
-      {auth.session && <Admin email={auth.session.user.email || ""} isOwner={auth.isOwner} role={auth.role === "hr" ? "hr" : "admin"} />}
-    </AuthGate>
-  ) : (
-    <AuthGate auth={auth}>
-      {auth.session && (
-        <Suspense
-          fallback={<p className="muted" role="status">Opening your workspace…</p>}
-        >
-          <HrPortal
-            userId={auth.session.user.id}
-            email={auth.session.user.email || ""}
-          />
-        </Suspense>
+  return (
+    <BrowserRouter>
+      {!auth.loading && auth.session && auth.role === "sales" ? (
+        <AuthGate auth={auth}>
+          <StaffingWorkspace email={auth.session.user.email || ""} />
+        </AuthGate>
+      ) : staff ? (
+        <AuthGate auth={auth}>
+          {auth.session && <Admin email={auth.session.user.email || ""} isOwner={auth.isOwner} role={auth.role === "hr" ? "hr" : "admin"} />}
+        </AuthGate>
+      ) : (
+        <AuthGate auth={auth}>
+          {auth.session && (
+            <Suspense
+              fallback={<p className="muted" role="status">Opening your workspace…</p>}
+            >
+              <HrPortal
+                userId={auth.session.user.id}
+                email={auth.session.user.email || ""}
+              />
+            </Suspense>
+          )}
+        </AuthGate>
       )}
-    </AuthGate>
+    </BrowserRouter>
   );
 }
 function StaffingWorkspace({ email }: { email: string }) {
   const staffingNav = [{ id: "people", href: "/hr/people", label: "People", icon: Users }, { id: "account", href: "/settings", label: "Settings", icon: Settings }];
-  const [tab, setTab] = usePortalRoute(staffingNav);
+  const location = useLocation();
+  const routerNavigate = useNavigate();
+  const tab = resolvePortalRoute(staffingNav, location.pathname);
   function navigate(id: string) {
     const item = staffingNav.find(n => n.id === id);
-    if (item) { window.history.pushState(null, "", item.href); setTab(id); }
+    if (item) routerNavigate(item.href);
   }
   return <Shell portal="Staffing" email={email} nav={staffingNav} current={tab} onNavigate={navigate} hideSubmenu hideTopbar>
     <SectionHeader label={tab === "account" ? "Settings" : "People"} current={tab} onNavigate={navigate} />
-    {tab === "account" ? <AccountSecurity /> : <HrWorkspace view="people" actorEmail={email} role="sales" />}
+    <Routes>
+      <Route path="/" element={<Navigate to="/hr/people" replace />} />
+      <Route path="/settings" element={<AccountSecurity />} />
+      <Route path="/hr/people/*" element={<HrWorkspace view="people" actorEmail={email} role="sales" />} />
+    </Routes>
   </Shell>;
 }
 function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role: "hr" | "admin" }) {
   const workspaceNav = role === "hr" ? nav.filter(item => item.id === "hr" || item.id === "account") : isOwner ? ownerNav : nav;
-  const [tab, setTab] = usePortalRoute(
-    workspaceNav.flatMap((item) =>
+  // Legacy (pre-merge) paths resolve to their new section, so the redirect
+  // routes below render instead of falling into the not-found state.
+  const allRoutes = [
+    ...workspaceNav.flatMap((item) =>
       item.children ? [item, ...item.children] : [item],
     ),
-  );
-  useEffect(() => {
-    const path = window.location.pathname;
-    // Staffing and CRA merged into People: keep old links and bookmarks working.
-    if (path.startsWith("/hr/staffing") || path.startsWith("/hr/cra")) {
-      window.history.replaceState(null, "", "/hr/people");
-      setTab("hr-people");
-      return;
-    }
-    if (tab === "hr") setTab("hr-overview");
-    if (tab !== "not-found") return;
-    const oldRecruiting = ["/hr/pipeline", "/hr/candidates", "/hr/interviews", "/hr/offers", "/hr/cv-analyzer", "/hr/analysis-history"];
-    const destination = oldRecruiting.some(p => path.startsWith(p)) ? "recruiting"
-      : path.startsWith("/hr/employees") ? "hr-people"
-      : ["/hr/onboarding", "/hr/offboarding"].some(p => path.startsWith(p)) ? "journeys" : null;
-    if (destination) {
-      const route = HR_TABS.find(t => t.id === destination);
-      if (route) window.history.replaceState(null, "", route.href + window.location.search);
-      setTab(destination);
-    }
-  }, [tab, setTab]);
+    { id: "hr-people", href: "/hr/staffing" },
+    { id: "hr-people", href: "/hr/cra" },
+    { id: "hr-people", href: "/hr/employees" },
+    ...LEGACY_RECRUITING_PATHS.map((href) => ({ id: "recruiting", href })),
+    { id: "journeys", href: "/hr/onboarding" },
+    { id: "journeys", href: "/hr/offboarding" },
+  ];
+  const location = useLocation();
+  const routerNavigate = useNavigate();
+  // The active section is derived from the URL — react-router owns history.
+  const tab = resolvePortalRoute(allRoutes, location.pathname);
   const
     [jobs, setJobs] = useState<Job[]>([]),
     [people, setPeople] = useState<Row<"profiles">[]>([]),
@@ -340,8 +366,8 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     setAccountQuery("");
     setRightsFilter("");
     // The accounts page can be deep-linked: /accounts?account=<id>.
-    setPerson(new URLSearchParams(window.location.search).get("account") || "");
-  }, [tab]);
+    setPerson(new URLSearchParams(location.search).get("account") || "");
+  }, [location.pathname]);
   useEffect(() => {
     const sync = () => {
       if (window.location.pathname.startsWith("/accounts")) {
@@ -356,38 +382,24 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     return () => window.removeEventListener("popstate", sync);
   }, []);
   function navigate(id: string) {
-    setTab(id);
+    const route =
+      allRoutes.find((item) => item.id === id) ??
+      SETTINGS_TABS.find((t) => t.id === id);
+    if (!route) return;
+    routerNavigate(route.href);
     setEditing(undefined);
     setError("");
     setMessage("");
     setSearch("");
+    window.scrollTo(0, 0);
   }
-  // Settings sub-screens live under /settings/*; the sidebar "Settings"
-  // entry owns the /settings prefix (usePortalRoute resolves it), so the
-  // sub-tab is tracked separately and synced from the path.
-  const resolveSettingsTab = (): SettingsSection =>
-    window.location.pathname.startsWith("/settings/ai")
-      ? "ai"
-      : window.location.pathname.startsWith("/settings/drive")
-        ? "drive"
-        : "account";
-  const [settingsTab, setSettingsTab] = useState<SettingsSection>(resolveSettingsTab);
-  useEffect(() => {
-    const sync = () => setSettingsTab(resolveSettingsTab());
-    window.addEventListener("popstate", sync);
-    return () => window.removeEventListener("popstate", sync);
-  }, []);
-  // Sidebar navigation pushes /settings before the tab flips — re-resolve.
-  useEffect(() => {
-    if (tab === "account") setSettingsTab(resolveSettingsTab());
-  }, [tab]);
-  function settingsNavigate(id: string) {
-    const route = SETTINGS_TABS.find(t => t.id === id);
-    if (!route) return navigate(id);
-    if (window.location.pathname !== route.href)
-      window.history.pushState(null, "", route.href);
-    setSettingsTab(id as SettingsSection);
-  }
+  // Settings sub-screens live under /settings/*; the active section is
+  // derived from the route, so /settings/ai and /settings/drive deep-link.
+  const settingsSection: SettingsSection = location.pathname.startsWith("/settings/ai")
+    ? "ai"
+    : location.pathname.startsWith("/settings/drive")
+      ? "drive"
+      : "account";
   // Spotlight deep-links: open a page pointed at an exact record
   // (?candidate=, ?account=, or a person record under /hr/people/<id>/<tab>).
   // Pages read those params on mount and re-sync on popstate, so pushing the
@@ -395,9 +407,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
   // popstate makes it re-sync.
   function spotlightNavigate(id: string, params?: Record<string, string>) {
     if (!params) return navigate(id);
-    const route = workspaceNav
-      .flatMap((item) => (item.children ? item.children : [item]))
-      .find((item) => item.id === id);
+    const route = allRoutes.find((item) => item.id === id);
     if (!route) return navigate(id);
     const url = new URL(route.href, window.location.origin);
     const { person, application, employment, ...rest } = params;
@@ -411,13 +421,11 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     for (const [key, value] of Object.entries(rest))
       url.searchParams.set(key, value);
     const target = url.pathname + url.search + url.hash;
-    if (tab === id) {
-      window.history.pushState(null, '', target);
+    routerNavigate(target);
+    // A deep link within the same page keeps the route element mounted, so
+    // the page re-syncs from the URL the way it always has (popstate).
+    if (resolvePortalRoute(allRoutes, url.pathname) === tab)
       window.dispatchEvent(new PopStateEvent("popstate"));
-    } else {
-      // Pass the full deep link so the section-href push doesn't clobber it.
-      setTab(id, target);
-    }
     setEditing(undefined);
     setError("");
     setMessage("");
@@ -426,14 +434,12 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
   }
   // HR person records link to the Sales project behind an assignment.
   function openProject(projectId: string) {
-    const url = new URL("/sales/projects", window.location.origin);
-    url.searchParams.set("project", projectId);
-    window.history.pushState(null, "", url.pathname + url.search);
+    routerNavigate(`/sales/projects/${encodeURIComponent(projectId)}`);
     if (tab === "sales-projects") window.dispatchEvent(new PopStateEvent("popstate"));
-    else setTab("sales-projects");
     setEditing(undefined);
     setError("");
     setMessage("");
+    setSearch("");
     window.scrollTo(0, 0);
   }
   async function saveJob(e: FormEvent<HTMLFormElement>) {
@@ -586,38 +592,46 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
       <SectionHeader
         label={headerLabel}
         tabs={headerTabs}
-        current={tab === "account" ? settingsTab : headerCurrent}
-        onNavigate={tab === "account" ? settingsNavigate : navigate}
+        current={tab === "account" ? settingsSection : headerCurrent}
+        onNavigate={navigate}
       />
-      {tab === "access" && isOwner && <AccessManager />}
-      {["hr", "hr-overview", "recruiting", "hr-people", "journeys"].includes(tab) && (
-        <HrWorkspace view={tab === "recruiting" ? "recruiting" : tab === "hr-people" ? "people" : tab === "journeys" ? "journeys" : "overview"} actorEmail={email} role={role} openProject={openProject} />
-      )}
-      {(tab === "sales" || tab === "sales-dashboard") && (
-        <SalesDashboard
-          actorEmail={email}
-          onOpenClient={(id) => {
-            window.history.pushState(null, "", `/sales/clients/${id}`);
-            setTab("sales-clients");
-          }}
-        />
-      )}
-      {tab === "sales-pipeline" && <PipelineBoard />}
-      {tab === "sales-clients" && <Clients actorEmail={email} />}
-      {tab === "sales-people" && <People actorEmail={email} />}
-      {tab === "opportunities" && <Opportunities actorEmail={email} />}
-      {tab === "sales-projects" && <Projects actorEmail={email} />}
-      {tab === "administration" && <AdminSettings />}
-      {tab === "operations" && <OpsBoard actorEmail={email} />}
-      {tab === "blogs" && <BlogManager />}
-      {tab === "overview" && (
-        <>
+      {/* Pages render only for routes the current role can see; unknown
+          paths fall through to the shell's not-found state (tab resolution). */}
+      {tab !== "not-found" && (
+      <Routes>
+        <Route path="/" element={<Navigate to={workspaceNav[0].href} replace />} />
+        {/* Legacy links and bookmarks keep working after the HR merge. */}
+        <Route path="/hr/staffing/*" element={<Navigate to="/hr/people" replace />} />
+        <Route path="/hr/cra/*" element={<Navigate to="/hr/people" replace />} />
+        <Route path="/hr/employees/*" element={<Navigate to="/hr/people" replace />} />
+        {LEGACY_RECRUITING_PATHS.map((p) => (
+          <Route key={p} path={`${p}/*`} element={<PreserveSearchRedirect to="/hr/recruiting" />} />
+        ))}
+        <Route path="/hr/onboarding/*" element={<PreserveSearchRedirect to="/hr/journeys" />} />
+        <Route path="/hr/offboarding/*" element={<PreserveSearchRedirect to="/hr/journeys" />} />
+        {isOwner && <Route path="/admin-access" element={<AccessManager />} />}
+        <Route path="/hr" element={<HrWorkspace view="overview" actorEmail={email} role={role} openProject={openProject} />} />
+        <Route path="/hr/recruiting" element={<HrWorkspace view="recruiting" actorEmail={email} role={role} openProject={openProject} />} />
+        <Route path="/hr/people/*" element={<HrWorkspace view="people" actorEmail={email} role={role} openProject={openProject} />} />
+        <Route path="/hr/journeys" element={<HrWorkspace view="journeys" actorEmail={email} role={role} openProject={openProject} />} />
+        <Route path="/sales" element={<SalesDashboard actorEmail={email} onOpenClient={(id) => routerNavigate(`/sales/clients/${id}`)} />} />
+        <Route path="/sales/pipeline" element={<PipelineBoard />} />
+        <Route path="/sales/clients/*" element={<Clients actorEmail={email} />} />
+        <Route path="/sales/people" element={<People actorEmail={email} />} />
+        <Route path="/sales/opportunities" element={<Opportunities actorEmail={email} />} />
+        <Route path="/sales/projects" element={<Projects actorEmail={email} />} />
+        <Route path="/sales/projects/:projectId" element={<Projects actorEmail={email} />} />
+        <Route path="/operations" element={<OpsBoard actorEmail={email} />} />
+        <Route path="/blog-posts" element={<BlogManager />} />
+        <Route path="/administration" element={<AdminSettings />} />
+        <Route path="/overview" element={(
+          <>
           <div className="heading">
             <div />
             <button
               className="btn"
               onClick={() => {
-                setTab("jobs");
+                navigate("jobs");
                 setEditing(null);
               }}
             >
@@ -714,9 +728,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
             </section>
           </div>
         </>
-      )}
-      {tab === "jobs" && (
-        <>
+        )} />
+        <Route path="/hr/jobs" element={(
+          <>
           {editing !== undefined && (
             <section className="panel">
               <h2>{editing ? "Edit job post" : "Create a job post"}</h2>
@@ -931,9 +945,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
               ))}
           </section>
         </>
-      )}
-      {tab === "people" && (
-        <>
+        )} />
+        <Route path="/accounts" element={(
+          <>
           <section className="panel">
             <div className="panel-head">
               <label className="form">
@@ -1078,9 +1092,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
             )}
           </section>
         </>
-      )}
-      {tab === "contracts" && (
-        <>
+        )} />
+        <Route path="/hr/contracts" element={(
+          <>
           <section className="panel">
             <h2>Share a contract</h2>
             <form className="form" onSubmit={uploadContract}>
@@ -1193,9 +1207,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
             })}
           </section>
         </>
-      )}
-      {tab === "requests" && (
-        <>
+        )} />
+        <Route path="/tool-requests" element={(
+          <>
           <section className="panel">
             {!requests.length && (
               <Empty title="All clear">
@@ -1259,9 +1273,11 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
             ))}
           </section>
         </>
-      )}
-      {tab === "account" && (
-        <SettingsPage section={settingsTab} isOwner={isOwner} email={email} />
+        )} />
+        <Route path="/settings" element={<SettingsPage section="account" isOwner={isOwner} email={email} />} />
+        <Route path="/settings/ai" element={<SettingsPage section="ai" isOwner={isOwner} email={email} />} />
+        <Route path="/settings/drive" element={<SettingsPage section="drive" isOwner={isOwner} email={email} />} />
+      </Routes>
       )}
       {loading && (
         <p className="muted" role="status">

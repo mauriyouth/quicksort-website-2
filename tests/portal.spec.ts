@@ -57,7 +57,7 @@ function portalFixture(): PortalFixture {
   };
 }
 function addEmployment(state: PortalFixture) {
-  state.my_employment.push({ id: employmentId, person_id: personId, role: 'Platform engineer', start_date: '2026-10-01', end_date: null, status: 'preboarding', onboarding_completed_at: null, probation_status: 'pending', probation_end: '2027-01-01' });
+  state.my_employment.push({ id: employmentId, person_id: personId, matricule: 'QS-0001', role: 'Platform engineer', start_date: '2026-10-01', end_date: null, status: 'preboarding', onboarding_completed_at: null, probation_status: 'pending', probation_end: '2027-01-01' });
   state.my_onboarding_items.push(
     { id: ownTaskId, employee_id: employmentId, phase: 'preboarding', title: 'Confirm your emergency contact', assignee: email, due_date: '2026-10-05', required: true, dependency_id: null, evidence: '', completed_at: null, version: 3 },
     { id: hrTaskId, employee_id: employmentId, phase: 'preboarding', title: 'Provision equipment', assignee: 'hr@example.test', due_date: '2026-10-05', required: true, dependency_id: null, evidence: '', completed_at: null, version: 1 },

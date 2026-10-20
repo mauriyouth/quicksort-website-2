@@ -521,8 +521,8 @@ textarea.pj-notes-area {
 .pj-table-row {
   display: grid;
   grid-template-columns:
-    minmax(0, 1.6fr) minmax(130px, 1fr) minmax(84px, 0.6fr)
-    minmax(110px, 0.8fr) 32px;
+    minmax(0, 1.5fr) minmax(120px, 0.9fr) minmax(84px, 0.55fr)
+    minmax(96px, 0.65fr) minmax(100px, 0.75fr) 32px;
   gap: 10px;
   align-items: center;
   padding: 10px 14px;
@@ -568,6 +568,41 @@ textarea.pj-notes-area {
 .pj-table-row input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+/* Yearly billable cap input + live prorata caption — shared by the
+   contract table (project-form) and the extension lines editor. */
+.pj-cap-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pj-cap-cell input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  border: 1px dashed var(--qs-border-strong);
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.pj-cap-cell input:focus-visible {
+  outline: none;
+  border-style: solid;
+  border-color: var(--qs-accent);
+}
+.pj-cap-prorata {
+  font-size: 11px;
+  color: var(--qs-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .pj-right {
   text-align: right;
@@ -700,6 +735,10 @@ textarea.pj-notes-area {
 }
 .pj-side-bar > div.over {
   background: var(--qs-danger);
+}
+/* Annual billable cap figure, when the year's CRA days pass it. */
+.pj-side-over {
+  color: var(--qs-danger);
 }
 .pj-side-meta {
   display: flex;

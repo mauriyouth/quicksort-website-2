@@ -42,6 +42,7 @@ const employeeSchema = z.object({
   person_id: z.string(),
   application_id: z.string().nullable(),
   offer_id: z.string().nullable(),
+  matricule: z.string(),
   role: z.string(),
   manager_email: z.string(),
   parrain: z.string(),
@@ -168,6 +169,9 @@ const assignmentSchema = z.object({
   employee_id: z.string(),
   project_id: z.string(),
   position: z.string(),
+  /** Named TJM profile ("Data Engineer") the person is staffed on; empty
+      when the assignment covers the whole project. */
+  pricing_line: z.string().default(''),
   allocation_pct: z.number(),
   start_date: z.string(),
   end_date: z.string().nullable(),
@@ -241,6 +245,10 @@ const staffingProjectSchema = z.object({
   status: z.string(),
   start_date: z.string().nullable(),
   end_date: z.string().nullable(),
+  /** Régie pricing lines — offered as staffing targets in the assign form. */
+  pricing_model: z.string().default(''),
+  currency: z.string().default('EUR'),
+  tjm_profiles: z.unknown().default(null),
 });
 const staffingClientSchema = z.object({
   id: z.string(),
@@ -318,8 +326,8 @@ const commandSchemas = {
  complete_exit:z.object({kind:z.literal('complete_exit'),exit_id:uuid,...version}),
  save_exit_item:z.object({kind:z.literal('save_exit_item'),exit_id:uuid,item_id:uuid.optional(),expected_version:z.number().int().positive().optional(),title:text.trim().min(1),required:z.boolean().optional(),evidence:text.optional()}),
  complete_exit_item:z.object({kind:z.literal('complete_exit_item'),item_id:uuid,...version,evidence:text.trim().min(1)}),
- assign_project:z.object({kind:z.literal('assign_project'),employee_id:uuid,project_id:uuid,position:text,allocation_pct:z.number().int().min(1).max(100),start_date:date,end_date:nullableDate,status:z.enum(['proposed','reserved','confirmed','active'])}),
- update_assignment:z.object({kind:z.literal('update_assignment'),assignment_id:uuid,...version,position:text,allocation_pct:z.number().int().min(1).max(100),start_date:date,end_date:nullableDate,status:z.enum(['proposed','reserved','confirmed','active']),rationale:text.trim().min(1)}),
+ assign_project:z.object({kind:z.literal('assign_project'),employee_id:uuid,project_id:uuid,position:text,pricing_line:text.optional(),allocation_pct:z.number().int().min(1).max(100),start_date:date,end_date:nullableDate,status:z.enum(['proposed','reserved','confirmed','active'])}),
+ update_assignment:z.object({kind:z.literal('update_assignment'),assignment_id:uuid,...version,position:text,pricing_line:text.optional(),allocation_pct:z.number().int().min(1).max(100),start_date:date,end_date:nullableDate,status:z.enum(['proposed','reserved','confirmed','active']),rationale:text.trim().min(1)}),
  end_assignment:z.object({kind:z.literal('end_assignment'),assignment_id:uuid,...version,end_date:date,rationale:text.trim().min(1),cancel:z.boolean().optional()}),
  create_requisition:z.object({kind:z.literal('create_requisition'),...requisitionFields}),
  update_requisition:z.object({kind:z.literal('update_requisition'),opportunity_id:uuid,...version,...requisitionFields}),

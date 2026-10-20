@@ -158,21 +158,22 @@
 .hr-person-hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--qs-line); margin: -40px -44px 8px; }
 .hr-person-hero::before { content: ''; position: absolute; inset: 0; background-image: linear-gradient(var(--qs-grid-line-current, var(--qs-line)) 1px, transparent 1px), linear-gradient(90deg, var(--qs-grid-line-current, var(--qs-line)) 1px, transparent 1px); background-size: 96px 96px; -webkit-mask-image: radial-gradient(ellipse 70% 100% at 50% 0%, #000 0%, transparent 75%); mask-image: radial-gradient(ellipse 70% 100% at 50% 0%, #000 0%, transparent 75%); pointer-events: none; }
 .hr-person-hero::after { content: ''; position: absolute; left: 20%; right: 20%; top: -160px; height: 220px; border-radius: 999px; background: var(--qs-halo-color, var(--qs-ink)); opacity: var(--qs-halo-opacity, 0.08); filter: blur(80px); pointer-events: none; }
-.hr-person-hero .hr-person-sheet { position: relative; padding: 24px 0 0; }
-.hr-person-crumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--qs-muted); padding: 4px 0 0; }
-.hr-person-back { border: 0; background: transparent; padding: 0; font: inherit; color: var(--qs-muted); cursor: pointer; }
-.hr-person-back:hover { color: var(--qs-ink); }
-.hr-person-crumb-sep { color: color-mix(in srgb, var(--qs-ink) 32%, transparent); }
-.hr-person-crumb-name { color: var(--qs-fg-2, var(--qs-ink)); }
+.hr-person-hero .hr-person-sheet { position: relative; padding: 20px 0 0; }
 .hr-person-sheet { width: 100%; max-width: 1120px; margin: 0 auto; padding: 16px 0 64px; display: grid; gap: 0; }
-.hr-person-head { display: flex; align-items: center; gap: 24px; padding: 32px 0 28px; flex-wrap: wrap; }
-.hr-person-avatar { width: 72px; height: 72px; border-radius: 20px; background: var(--qs-fg-1); color: var(--qs-bg-0); border: 0; display: flex; align-items: center; justify-content: center; font-family: var(--qs-font-display); font-size: 26px; font-weight: 500; letter-spacing: -0.04em; flex-shrink: 0; }
-.hr-person-id { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-.hr-person-id h1 { margin: 0; font-family: var(--qs-font-display); font-weight: 400; font-size: clamp(30px, 4vw, 40px); line-height: 1.1; letter-spacing: -0.03em; }
-.hr-person-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 15px; color: var(--qs-fg-2); }
-.hr-person-headline { color: var(--qs-fg-2); }
-.hr-person-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--qs-paper); border: 1px solid var(--qs-line); font-size: 12px; font-weight: 500; color: var(--qs-fg-2); white-space: nowrap; }
+.hr-person-head { display: flex; align-items: center; gap: 20px; padding: 20px 0 16px; flex-wrap: wrap; }
+.hr-person-lead { display: flex; align-items: center; gap: 14px; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
+.hr-person-avatar { width: 48px; height: 48px; border-radius: 12px; background: var(--qs-fg-1); color: var(--qs-bg-0); border: 0; display: flex; align-items: center; justify-content: center; font-family: var(--qs-font-display); font-size: 18px; font-weight: 600; letter-spacing: -0.02em; flex-shrink: 0; }
+.hr-person-id { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hr-person-id h1 { margin: 0; font-family: var(--qs-font-display); font-weight: 500; font-size: 28px; line-height: 1; letter-spacing: -0.02em; }
+.hr-person-meta { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 4px; font-size: 13px; color: var(--qs-fg-2); }
+.hr-person-meta > *:not(:first-child)::before { content: '·'; color: var(--qs-muted); margin-right: 8px; }
+.hr-person-status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.hr-person-place { display: inline-flex; align-items: center; gap: 4px; }
 .hr-person-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--qs-lime); }
+.hr-person-stats { display: flex; gap: 32px; margin: 0; flex-wrap: wrap; }
+.hr-person-stats > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hr-person-stats dt { font-size: 12px; color: var(--qs-muted); }
+.hr-person-stats dd { margin: 0; font-weight: 500; }
 .hr-person-tabs { gap: 4px; padding: 0; margin-bottom: 32px; }
 .hr-person-tabs button { display: flex; align-items: center; gap: 8px; margin: 0 4px; padding: 12px 10px 11px; font-size: 14px; }
 .hr-person-tabs button[aria-selected='true'] { border-bottom-color: var(--qs-ink); }
@@ -298,6 +299,8 @@ textarea.hr-assign-input { resize: vertical; line-height: 1.5; }
 .hr-assign-project { font-size: 16px; font-weight: 500; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
 .hr-assign-pill { font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--qs-border-strong); color: var(--qs-fg-2); white-space: nowrap; }
 .hr-assign-pill.is-urgent { color: var(--qs-danger); border-color: currentColor; }
+/* Named TJM profile (pricing line) the assignment bills against. */
+.hr-assign-line { align-self: center; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--qs-lift); border: 1px solid var(--qs-line); color: var(--qs-ink); white-space: nowrap; }
 .hr-assign-track { position: relative; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--qs-ink) 16%, transparent); }
 .hr-assign-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--qs-timberwolf); }
 .hr-assign-marker { position: absolute; top: -4px; width: 2px; height: 14px; margin-left: -1px; border-radius: 1px; background: var(--qs-lime); }

@@ -9,7 +9,8 @@ test.beforeAll(async () => {
   harness = await startComponentHarness(`
     import { CraScreen } from '@app/cra/CraScreen';
     const audience = new URLSearchParams(location.search).get('audience') || 'employee';
-    createRoot(document.getElementById('root')).render(<main style={{ padding: 16 }}><CraScreen audience={audience} draftOwner="employee@example.invalid" /></main>);
+    // The portal mounts CRA at /cra, so the employee harness owns that base path too.
+    createRoot(document.getElementById('root')).render(<main style={{ padding: 16 }}><CraScreen audience={audience} draftOwner="employee@example.invalid" basePath={audience === 'employee' ? '/cra' : undefined} /></main>);
   `);
 });
 test.afterAll(async () => { await harness?.close(); });
@@ -239,6 +240,32 @@ test('shift-click selects a range and clear empties it', async ({ page }) => {
   await expect(page.getByText('19 days selected', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Clear', exact: true }).click();
   await expect(page.getByText('Select days to fill', { exact: true })).toBeVisible();
+});
+
+test('the viewed month lives in the URL path and the back button restores it', async ({ page }) => {
+  await mock(page);
+  await page.goto(`${harness.url}?audience=employee`);
+  const strip = page.getByRole('region', { name: 'Months' });
+  // The current month folds into the path, so the address bar is already a shareable link.
+  await expect(page).toHaveURL(/\/cra\/\d{4}\/\d{2}$/);
+  const initialUrl = page.url();
+  const pressed = strip.getByRole('button', { pressed: true });
+  await expect(pressed).toBeVisible();
+  const label = await pressed.getAttribute('aria-label');
+  // Switching month pushes a new history entry with the month and year in the path.
+  const track = strip.locator('.cra-months-track');
+  const onIndex = await pressed.evaluate(element => Array.from(element.parentElement!.children).indexOf(element));
+  await track.locator('button').nth(onIndex + 1).click();
+  await expect(page).toHaveURL(/\/cra\/\d{4}\/\d{2}$/);
+  expect(page.url()).not.toBe(initialUrl);
+  await expect(strip.getByRole('button', { pressed: true })).not.toHaveAttribute('aria-label', label ?? '');
+  // Back returns to the previous month without reloading the app.
+  await page.goBack();
+  await expect(page).toHaveURL(initialUrl);
+  await expect(strip.getByRole('button', { pressed: true })).toHaveAttribute('aria-label', label ?? '');
+  // A shared month path deep-links straight into that month.
+  await page.goto(`${harness.url}cra/2026/03`);
+  await expect(strip.getByRole('button', { pressed: true })).toHaveAttribute('aria-label', 'March 2026');
 });
 
 test('CRA works at desktop and mobile widths in light and dark themes', async ({ page }, info) => {

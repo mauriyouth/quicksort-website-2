@@ -2,21 +2,23 @@ import { useCallback, useEffect, useState } from 'react';
 
 export type PortalRoute = { id: string; href: string };
 
+/** Map a pathname to its section id. Exact match first; then the longest
+ * section prefix owns its detail URLs (e.g. "/sales/clients/:id" resolves
+ * to the "/sales/clients" page, not the shorter "/sales" landing). */
+export function resolvePortalRoute(routes: readonly PortalRoute[], pathname: string) {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  if (path === '/') return routes[0].id;
+  const exact = routes.find(route => route.href === path);
+  if (exact) return exact.id;
+  const prefix = routes
+    .filter(route => path.startsWith(route.href + '/'))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+  return prefix?.id ?? 'not-found';
+}
+
 /** Keep section navigation in browser history without reloading the app. */
 export function usePortalRoute(routes: readonly PortalRoute[]) {
-  const resolve = () => {
-    const path = window.location.pathname.replace(/\/+$/, '') || '/';
-    if (path === '/') return routes[0].id;
-    // Exact match first; then the longest section prefix owns its detail
-    // URLs (e.g. "/sales/clients/:id" resolves to the "/sales/clients" page,
-    // not the shorter "/sales" landing).
-    const exact = routes.find(route => route.href === path);
-    if (exact) return exact.id;
-    const prefix = routes
-      .filter(route => path.startsWith(route.href + '/'))
-      .sort((a, b) => b.href.length - a.href.length)[0];
-    return prefix?.id ?? 'not-found';
-  };
+  const resolve = () => resolvePortalRoute(routes, window.location.pathname);
   const [current, setCurrent] = useState(resolve);
   useEffect(() => {
     if (window.location.pathname === '/') {

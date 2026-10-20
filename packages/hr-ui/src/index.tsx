@@ -1,4 +1,4 @@
-export { usePortalRoute } from './routes';
+export { usePortalRoute, resolvePortalRoute } from './routes';
 // Design-system library — re-exported so portal apps depend on one package.
 export {
   ThemeToggle,

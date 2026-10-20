@@ -18,6 +18,10 @@ export type PricingLine = {
   tjm: number;
   /** Per-line end date (YYYY-MM-DD) — caps the line's window. */
   end_date?: string | null;
+  /** Optional full-year billable-days allowance for this line (e.g. 210).
+      Prorated per calendar year over the line window — see billable-cap.ts.
+      Absent/null means the line is exempt from the yearly cap. */
+  max_billable_days_per_year?: number | null;
 };
 
 /** Defensive parse of the JSONB column (blank names, JSON numbers). */
@@ -32,6 +36,11 @@ export function storedPricingLines(value: unknown): PricingLine[] {
       tjm: l.tjm,
       end_date:
         typeof l.end_date === "string" && l.end_date ? l.end_date : null,
+      max_billable_days_per_year:
+        typeof l.max_billable_days_per_year === "number" &&
+        l.max_billable_days_per_year > 0
+          ? l.max_billable_days_per_year
+          : null,
     }));
 }
 

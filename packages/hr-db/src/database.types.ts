@@ -949,7 +949,7 @@ export type Database = {
     Views: {
       my_applications: HrTable<{ id: string; person_id: string; opportunity_id: string; full_name: string; title: string; stage: string; status: string; created_at: string; updated_at: string }>;
       my_application_events: HrTable<{ id: number; application_id: string; to_stage: string; kind: string; created_at: string }>;
-      my_employment: HrTable<Pick<HrEmployee, 'id' | 'person_id' | 'role' | 'start_date' | 'end_date' | 'status' | 'onboarding_completed_at' | 'probation_status' | 'probation_end'>>;
+      my_employment: HrTable<Pick<HrEmployee, 'id' | 'person_id' | 'matricule' | 'role' | 'start_date' | 'end_date' | 'status' | 'onboarding_completed_at' | 'probation_status' | 'probation_end'>>;
       my_onboarding_items: HrTable<Omit<HrJourneyTask,'completed_by'|'created_at'>>;
       my_offers: HrTable<Pick<HrOffer,'id'|'application_id'|'title'|'contract_type'|'salary_monthly'|'status'|'shared_at'|'valid_until'|'version'>>;
     }

@@ -17,6 +17,7 @@ import {
   storedPricingLines,
   type PricingLine,
 } from "./pricing-lines";
+import { proratedBillableDays } from "./billable-cap";
 import "./project-extensions.css";
 
 /**
@@ -144,7 +145,13 @@ function CommitNumber({
   );
 }
 
-type LineDraft = { name: string; tjm: string; end_date: string };
+type LineDraft = {
+  name: string;
+  tjm: string;
+  end_date: string;
+  /** Full-year billable-days allowance for this line — "" when exempt. */
+  cap: string;
+};
 
 /** Clean editor drafts into stored lines — rows without a rate are dropped. */
 function cleanLines(drafts: LineDraft[]): PricingLine[] {
@@ -153,6 +160,7 @@ function cleanLines(drafts: LineDraft[]): PricingLine[] {
       name: d.name.trim(),
       tjm: Number(d.tjm) || 0,
       end_date: d.end_date || null,
+      max_billable_days_per_year: Number(d.cap) > 0 ? Number(d.cap) : null,
     }))
     .filter((l) => l.tjm > 0);
 }
@@ -191,6 +199,7 @@ const toDrafts = (lines: PricingLine[]): LineDraft[] =>
     name: l.name,
     tjm: String(l.tjm),
     end_date: l.end_date || "",
+    cap: l.max_billable_days_per_year != null ? String(l.max_billable_days_per_year) : "",
   }));
 
 /**
@@ -241,6 +250,7 @@ function LinesEditor({
         <span>Profile</span>
         <span>Rate</span>
         <span>End date</span>
+        <span>Cap / year</span>
         <span className="pe-right">Subtotal</span>
         <span />
       </div>
@@ -251,6 +261,17 @@ function LinesEditor({
           end_date: null,
         };
         const value = cleaned.tjm * lineDays(cleaned, windowStart, windowEnd);
+        // Live prorata caption, same rule as the contract lines.
+        const capNumber = Number(line.cap) || 0;
+        const capThisYear =
+          capNumber > 0
+            ? proratedBillableDays(
+                capNumber,
+                windowStart,
+                cleaned.end_date ?? null,
+                new Date().getFullYear(),
+              )
+            : null;
         return (
           <div className="pe-lines-row" key={i}>
             <input
@@ -290,6 +311,24 @@ function LinesEditor({
                 )
               }
             />
+            <div className="pj-cap-cell">
+              <input
+                aria-label={`Profile ${i + 1} yearly billable cap`}
+                type="number"
+                min="0"
+                step="1"
+                value={line.cap}
+                placeholder="e.g. 210"
+                disabled={disabled}
+                onChange={(e) => set(i, { cap: e.target.value })}
+                onBlur={() => commit(drafts)}
+              />
+              {capThisYear !== null && (
+                <span className="pj-cap-prorata">
+                  ≈ {Number.isInteger(capThisYear) ? capThisYear : capThisYear.toFixed(1)} d
+                </span>
+              )}
+            </div>
             <span className="pe-lines-subtotal">{money(value, currency)}</span>
             <button
               type="button"
@@ -313,7 +352,10 @@ function LinesEditor({
         className="pe-lines-add"
         disabled={disabled}
         onClick={() =>
-          commit([...drafts, { name: "", tjm: "", end_date: windowEnd || "" }])
+          commit([
+            ...drafts,
+            { name: "", tjm: "", end_date: windowEnd || "", cap: "" },
+          ])
         }
       >
         <Plus size={13} />
@@ -522,12 +564,17 @@ export function ProjectExtensionsSection({
             name: p.name,
             tjm: String(p.tjm),
             end_date: suggested,
+            cap:
+              p.max_billable_days_per_year != null
+                ? String(p.max_billable_days_per_year)
+                : "",
           }))
         : [
             {
               name: "",
               tjm: tjm != null ? String(tjm) : "",
               end_date: suggested,
+              cap: "",
             },
           ],
     );

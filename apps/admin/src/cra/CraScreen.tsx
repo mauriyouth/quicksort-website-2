@@ -8,6 +8,7 @@ import { assignedProjects, currentMonth, dayHalves, entrySchema, entryValue, lis
 import './cra.css';
 
 function employeeIdFromPath() {
+  // A standalone admin link pins the employee: /hr/cra/<id>[/yyyy/mm].
   const match = window.location.pathname.match(/^\/hr\/cra\/([^/]+)/);
   return match?.[1] ?? '';
 }
@@ -68,25 +69,45 @@ function fmtDays(amount: number) {
   return amount % 1 ? amount.toFixed(1) : String(amount);
 }
 
-export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId }: { audience: 'admin' | 'employee'; draftOwner: string; linkBase?: string; fixedEmployeeId?: string }) {
+export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, basePath }: { audience: 'admin' | 'employee'; draftOwner: string; linkBase?: string; fixedEmployeeId?: string; basePath?: string }) {
   // Shareable selection links: standalone screens use the /hr/cra/<id> path,
   // embedded screens (People view) keep the current page and store the id in
   // the ?cra= query parameter. A record-level embedding pins one employee and
   // leaves the address bar alone.
   const manageUrl = audience === 'admin' && !fixedEmployeeId;
+  // The viewed month and year always travel in the URL so every month is its
+  // own shareable page: /cra/2026/10 on the employee portal, /hr/cra/<id>/2026/10
+  // on a standalone admin screen, <basePath>/2026/10 for embeds that opt in
+  // (the person record's CRA tab). Query-based embeds keep ?month=YYYY-MM;
+  // dialogs without a basePath leave the address bar untouched.
+  const syncUrl = !!basePath || manageUrl;
+  const pathMonth = !!basePath || (manageUrl && !linkBase);
   const readSharedId = () => {
     if (!manageUrl) return '';
     if (linkBase) return new URLSearchParams(window.location.search).get('cra') ?? '';
     return employeeIdFromPath();
   };
-  const shareLink = (id: string) => linkBase ? `${linkBase}&cra=${id}` : `/hr/cra/${id}`;
+  const monthPath = (value: string) => `/${value.slice(0, 4)}/${value.slice(5)}`;
+  const shareLink = (id: string, value: string) => linkBase
+    ? `${linkBase}&cra=${id}&month=${value}`
+    : `${basePath ?? `/hr/cra/${id}`}${monthPath(value)}`;
+  const readPathMonth = () => {
+    if (!pathMonth) return '';
+    const pattern = basePath
+      ? new RegExp(`^${basePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/(\\d{4})/(0[1-9]|1[0-2])/?$`)
+      : /^\/hr\/cra\/[^/]+\/(\d{4})\/(0[1-9]|1[0-2])\/?$/;
+    const match = window.location.pathname.match(pattern);
+    return match ? `${match[1]}-${match[2]}` : '';
+  };
+  const readQueryMonth = () => {
+    const value = new URLSearchParams(window.location.search).get('month');
+    return value && monthSchema.safeParse(value).success ? value : '';
+  };
   const [context, setContext] = useState<Context | null>(null);
   const [employeeId, setEmployeeId] = useState('');
-  const [month, setMonth] = useState(() => {
-    // A ?month=YYYY-MM deep link opens that month directly.
-    const fromLink = new URLSearchParams(window.location.search).get('month');
-    return fromLink && monthSchema.safeParse(fromLink).success ? fromLink : currentMonth();
-  });
+  // A month path (/cra/2026/10) or a legacy ?month=YYYY-MM deep link opens
+  // that month directly; otherwise the page opens on the current month.
+  const [month, setMonthState] = useState(() => readPathMonth() || readQueryMonth() || currentMonth());
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   useEffect(() => {
@@ -107,37 +128,42 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId }: {
     return () => { cancelled = true; };
   }, [retry, audience]);
   // Browser back/forward (or a colleague opening a shared link) moves the URL:
-  // follow it as long as the id matches a known employee record.
+  // follow it as long as the id matches a known employee record. A bare path
+  // without a month means the current month.
   useEffect(() => {
-    if (!manageUrl) return;
+    if (!syncUrl) return;
     const sync = () => {
       const fromLink = readSharedId();
-      if (!fromLink) return;
-      setEmployeeId(previous => context?.employees.some(employee => employee.id === fromLink) ? fromLink : previous);
+      if (fromLink) setEmployeeId(previous => context?.employees.some(employee => employee.id === fromLink) ? fromLink : previous);
+      const fromUrl = pathMonth ? readPathMonth() : readQueryMonth();
+      if (linkBase) { if (fromUrl) setMonthState(fromUrl); }
+      else setMonthState(fromUrl || currentMonth());
     };
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
-  }, [manageUrl, context]);
+  }, [syncUrl, pathMonth, linkBase, context]);
   function selectEmployee(id: string) {
     setEmployeeId(id);
     // Keep the URL shareable: picking someone turns the address bar into
-    // the link HR can send to open this exact CRA.
-    if (manageUrl && readSharedId() !== id) window.history.pushState(null, '', shareLink(id));
+    // the link HR can send to open this exact CRA month.
+    if (manageUrl && readSharedId() !== id) window.history.pushState(null, '', shareLink(id, month));
   }
-  // Reflect the resolved employee in the address bar (replace, no history
-  // entry) so copying the URL always yields a working shared link.
+  // Reflect the resolved employee and the viewed month in the address bar
+  // (replace: no extra history entry) so copying the URL always yields a
+  // working shared link; legacy ?month= deep links fold into the path here.
   useEffect(() => {
-    if (!manageUrl || !context || !employeeId) return;
-    if (readSharedId() !== employeeId) window.history.replaceState(null, '', shareLink(employeeId));
-  }, [manageUrl, context, employeeId]);
-  // Keep an existing ?month= deep link in sync while navigating (never add
-  // one spontaneously, so plain /cra URLs stay clean).
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    if (!url.searchParams.has('month') || url.searchParams.get('month') === month) return;
-    url.searchParams.set('month', month);
-    window.history.replaceState(null, '', url);
-  }, [month]);
+    if (!syncUrl || !context || !employeeId) return;
+    const target = shareLink(fixedEmployeeId || employeeId, month);
+    if (window.location.pathname + window.location.search !== target) window.history.replaceState(null, '', target);
+  }, [syncUrl, pathMonth, linkBase, basePath, context, employeeId, fixedEmployeeId, month]);
+  function changeMonth(next: string) {
+    setMonthState(next);
+    if (!syncUrl) return;
+    // One history entry per month: the address bar always holds a shareable
+    // link and the back button steps through the visited months.
+    const target = shareLink(fixedEmployeeId || employeeId, next);
+    if (window.location.pathname + window.location.search !== target) window.history.pushState(null, '', target);
+  }
   const employee = context?.employees.find(item => item.id === (fixedEmployeeId || employeeId));
   const monthChoices = useMemo(() => {
     const earliest = context?.employees.reduce<string | undefined>((min, item) => !min || item.start_date < min ? item.start_date : min, undefined);
@@ -150,7 +176,7 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId }: {
     {context && employee && <>
       {!fixedEmployeeId && <div className="cra-filters panel">
         <div className="cra-field"><label className="qs-label" htmlFor="cra-employee">Employee</label><EmployeePicker employees={context.employees} selectedId={employeeId} onSelect={selectEmployee} /></div>
-      </div>}      <MonthEditor key={`${employeeId}:${month}`} employee={employee} month={month} months={monthChoices} onMonth={setMonth} assignments={context.assignments} draftOwner={draftOwner} />
+      </div>}      <MonthEditor key={`${employeeId}:${month}`} employee={employee} month={month} months={monthChoices} onMonth={changeMonth} assignments={context.assignments} draftOwner={draftOwner} />
     </>}
   </section>;
 }

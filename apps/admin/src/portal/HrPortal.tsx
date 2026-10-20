@@ -36,7 +36,7 @@ import { CraScreen } from '../cra/CraScreen';
 
 const applicationSchema = z.object({ id: z.uuid(), person_id: z.uuid(), opportunity_id: z.uuid(), full_name: z.string(), title: z.string(), stage: z.string(), status: z.string(), created_at: z.string(), updated_at: z.string() });
 const applicationEventSchema = z.object({ id: z.number(), application_id: z.uuid(), to_stage: z.string(), kind: z.string(), created_at: z.string() });
-const employmentSchema = z.object({ id: z.uuid(), person_id: z.uuid(), role: z.string(), start_date: z.string(), end_date: z.string().nullable(), status: z.string(), onboarding_completed_at: z.string().nullable(), probation_status: z.string(), probation_end: z.string().nullable() });
+const employmentSchema = z.object({ id: z.uuid(), person_id: z.uuid(), matricule: z.string(), role: z.string(), start_date: z.string(), end_date: z.string().nullable(), status: z.string(), onboarding_completed_at: z.string().nullable(), probation_status: z.string(), probation_end: z.string().nullable() });
 const taskSchema = z.object({ id: z.uuid(), employee_id: z.uuid(), phase: z.string(), title: z.string(), assignee: z.string(), due_date: z.string().nullable(), required: z.boolean(), dependency_id: z.uuid().nullable(), evidence: z.string(), completed_at: z.string().nullable(), version: z.number().int() });
 const offerSchema = z.object({ id: z.uuid(), application_id: z.uuid(), title: z.string(), contract_type: z.string(), salary_monthly: z.number(), status: z.string(), shared_at: z.string().nullable(), valid_until: z.string().nullable(), version: z.number().int() });
 type MyApplication = z.infer<typeof applicationSchema>;
@@ -283,7 +283,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           <h1>Monthly CRA</h1>
           <p className="muted">Fill your month day by day — or paint whole ranges — then save. Mornings and afternoons can be filled separately.</p>
         </header>
-        <CraScreen audience="employee" draftOwner={email} />
+        <CraScreen audience="employee" draftOwner={email} basePath="/cra" />
       </>}
       {tab === "application" && <MyApplicationTab email={email} busy={busy} action={action} applications={applications} events={applicationEvents} offers={offers} employments={employments} journeyError={journeyError} loading={loading} />}
       {tab === "overview" && onboardingOpen && (
@@ -799,7 +799,7 @@ function MyApplicationTab({
         </section>)}
         <section className="panel"><h2>About AI in our process</h2><p className="muted">AI helps prepare profile summaries and interview questions. HR reviews suggestions and makes recruitment decisions. You can request human review below.</p></section>
       </>}
-      {employments.length > 0 && <section className="panel"><h2>Your employment history</h2>{employments.map(period => <div className="list-row" key={period.id}><div><h3>{period.role}</h3><p className="muted">{formatDate(period.start_date)}{period.end_date ? ` to ${formatDate(period.end_date)}` : " onwards"}</p></div><Pill status={period.status} /></div>)}</section>}
+      {employments.length > 0 && <section className="panel"><h2>Your employment history</h2>{employments.map(period => <div className="list-row" key={period.id}><div><h3>{period.role}</h3><p className="muted">{period.matricule} · {formatDate(period.start_date)}{period.end_date ? ` to ${formatDate(period.end_date)}` : " onwards"}</p></div><Pill status={period.status} /></div>)}</section>}
       <section className="panel">
         <h2>Your rights</h2>
         <p className="muted">

@@ -1,801 +1,805 @@
 {
-  "jobs": [
-    {
-      "id": "9f1c2f3e-7a4b-4c5d-9e6f-2a3b4c5d6e7f",
-      "title": "Platform Engineer",
-      "published": true
-    }
-  ],
-  "exits": [
-    {
-      "id": "e8cd5505-088b-4843-aef0-839b574c6dbf",
-      "kind": "resignation",
-      "status": "completed",
-      "version": 3,
-      "exit_date": "2026-10-04",
-      "successor": "Team lead",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "notice_end": null,
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "handover_plan": "Repository ownership transferred",
-      "exit_interview": "Discussion completed",
-      "rehire_eligible": true,
-      "rehire_rationale": "Eligible for future opportunities",
-      "legal_docs_evidence": "Final documents recorded"
-    }
-  ],
-  "tasks": [
-    {
-      "id": "0fd00b60-31f9-4d73-a1f0-88dca195d2b3",
-      "phase": "preboarding",
-      "title": "Verify employment documents",
-      "version": 2,
-      "assignee": "hr@example.invalid",
-      "due_date": "2026-10-01",
-      "evidence": "Verified preboarding",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "completed_by": "11000000-0000-4000-8000-000000000001",
-      "dependency_id": null
-    },
-    {
-      "id": "7500d84e-775c-454f-9d94-3701f39e5b90",
-      "phase": "preboarding",
-      "title": "Prepare equipment and access",
-      "version": 2,
-      "assignee": "hr@example.invalid",
-      "due_date": "2026-10-03",
-      "evidence": "Verified preboarding",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "completed_by": "11000000-0000-4000-8000-000000000001",
-      "dependency_id": null
-    },
-    {
-      "id": "921f70ba-0c79-4029-8efc-7502590b995b",
-      "phase": "onboarding",
-      "title": "Welcome and team introduction",
-      "version": 2,
-      "assignee": "hr@example.invalid",
-      "due_date": "2026-10-04",
-      "evidence": "Verified completion",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "completed_by": "11000000-0000-4000-8000-000000000001",
-      "dependency_id": null
-    },
-    {
-      "id": "ce56df8f-86dc-4c72-a6c3-5f6c182c5d1a",
-      "phase": "onboarding",
-      "title": "Confirm role and first project plan",
-      "version": 2,
-      "assignee": "hr@example.invalid",
-      "due_date": "2026-10-11",
-      "evidence": "Verified completion",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "completed_by": "11000000-0000-4000-8000-000000000001",
-      "dependency_id": null
-    },
-    {
-      "id": "a2151d26-c5c5-45a8-8263-84cfaf777c43",
-      "phase": "preboarding",
-      "title": "Verify employment documents",
-      "version": 1,
-      "assignee": "hr@example.invalid",
-      "due_date": "2026-12-01",
-      "evidence": "",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
-      "completed_at": null,
-      "completed_by": null,
-      "dependency_id": null
-    },
-    {
-      "id": "7da4321f-c9df-4174-b796-d85ccbdf80e3",
-      "phase": "preboarding",
-      "title": "Prepare equipment and access",
-      "version": 1,
-      "assignee": "hr@example.invalid",
-      "due_date": "2026-12-03",
-      "evidence": "",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
-      "completed_at": null,
-      "completed_by": null,
-      "dependency_id": null
-    },
-    {
-      "id": "eb634298-79d3-4864-8fbd-26f0b3bcae32",
-      "phase": "onboarding",
-      "title": "Welcome and team introduction",
-      "version": 1,
-      "assignee": "hr@example.invalid",
-      "due_date": "2026-12-04",
-      "evidence": "",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
-      "completed_at": null,
-      "completed_by": null,
-      "dependency_id": null
-    },
-    {
-      "id": "d871453b-67c2-49af-b9bc-3ce519240802",
-      "phase": "onboarding",
-      "title": "Confirm role and first project plan",
-      "version": 1,
-      "assignee": "hr@example.invalid",
-      "due_date": "2026-12-11",
-      "evidence": "",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
-      "completed_at": null,
-      "completed_by": null,
-      "dependency_id": null
-    },
-    {
-      "id": "f3c54caf-036f-47c6-aa5d-f236c2ebee20",
-      "phase": "onboarding",
-      "title": "Repository walkthrough",
-      "version": 2,
-      "assignee": "Sam",
-      "due_date": null,
-      "evidence": "Walkthrough completed after access",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "completed_by": "11000000-0000-4000-8000-000000000001",
-      "dependency_id": "3320d217-ac68-4067-8415-a8bb978c5690"
-    },
-    {
-      "id": "3320d217-ac68-4067-8415-a8bb978c5690",
-      "phase": "onboarding",
-      "title": "Access provisioned",
-      "version": 2,
-      "assignee": "HR",
-      "due_date": null,
-      "evidence": "Verified completion",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "completed_by": "11000000-0000-4000-8000-000000000001",
-      "dependency_id": null
-    }
-  ],
-  "events": [
-    {
-      "id": 1,
-      "kind": "create_person",
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "rationale": "",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "next_state": "",
-      "request_id": "3cbe297c-0e46-47ea-9f6d-634f5907bc8c",
-      "actor_email": "hr@example.invalid",
-      "employee_id": null,
-      "application_id": null,
-      "previous_state": ""
-    },
-    {
-      "id": 2,
-      "kind": "link_account",
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "rationale": "",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "next_state": "",
-      "request_id": "4b1e156f-90d9-46a6-81a8-f460ec62bd39",
-      "actor_email": "hr@example.invalid",
-      "employee_id": null,
-      "application_id": null,
-      "previous_state": ""
-    },
-    {
-      "id": 3,
-      "kind": "create_person",
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "person_id": "318930f1-e4e3-4068-b41f-f71679d7a920",
-      "rationale": "",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "next_state": "",
-      "request_id": "898f5bcf-9bf5-42ef-873b-2526a4fde09b",
-      "actor_email": "hr@example.invalid",
-      "employee_id": null,
-      "application_id": null,
-      "previous_state": ""
-    },
-    {
-      "id": 4,
-      "kind": "create_application",
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "rationale": "",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "next_state": "application",
-      "request_id": "d1e7a1ea-3768-414a-a722-01b28f459aa3",
-      "actor_email": "hr@example.invalid",
-      "employee_id": null,
-      "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "previous_state": ""
-    },
-    {
-      "id": 5,
-      "kind": "create_application",
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "rationale": "",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "next_state": "application",
-      "request_id": "4632910b-07c0-4d77-858d-a6704df305ff",
-      "actor_email": "hr@example.invalid",
-      "employee_id": null,
-      "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
-      "previous_state": ""
-    },
-    {
-      "id": 6,
-      "kind": "add_note",
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "rationale": "Follow up tomorrow",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "next_state": "",
-      "request_id": "aba0e3a5-84b6-4c8e-b5c3-2c56dc0db77a",
-      "actor_email": "hr@example.invalid",
-      "employee_id": null,
-      "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "previous_state": ""
-    },
-    {
-      "id": 7,
-      "kind": "move_application",
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "rationale": "Verified progression",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "next_state": "screening",
-      "request_id": "8085fa7d-cf2b-43da-9646-a893422cc345",
-      "actor_email": "hr@example.invalid",
-      "employee_id": null,
-      "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "previous_state": "application"
-    },
-    {
-      "id": 8,
-      "kind": "update_screening",
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "rationale": "",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "next_state": "",
-      "request_id": "e720b724-1283-4dd6-aafe-25653e15dcd2",
-      "actor_email": "hr@example.invalid",
-      "employee_id": null,
-      "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "previous_state": ""
-    }
-  ],
-  "offers": [
-    {
-      "id": "fc7686af-2a05-4938-9ab5-ad40c357b851",
-      "cjm": 300,
-      "title": "Platform Engineer",
-      "status": "accepted",
-      "version": 5,
-      "shared_at": "2026-10-04T10:07:43.083311+00:00",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "decided_by": "admin@example.invalid",
-      "margin_pct": 50,
-      "target_tjm": 600,
-      "response_at": "2026-10-04T10:07:43.083311+00:00",
-      "valid_until": "2026-11-03",
-      "approver_note": "Direction approval",
-      "contract_type": "CDI",
-      "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "salary_monthly": 4500,
-      "delivery_status": "manual"
-    },
-    {
-      "id": "1cf20822-4ede-40a2-aeb0-74c27e96c69f",
-      "cjm": 390,
-      "title": "Senior Data Engineer",
-      "status": "accepted",
-      "version": 4,
-      "shared_at": "2026-10-04T10:07:43.083311+00:00",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "decided_by": "hr@example.invalid",
-      "margin_pct": 35,
-      "target_tjm": 600,
-      "response_at": "2026-10-04T10:07:43.083311+00:00",
-      "valid_until": null,
-      "approver_note": "Approved renewed budget",
-      "contract_type": "CDI",
-      "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
-      "salary_monthly": 5000,
-      "delivery_status": "manual"
-    }
-  ],
-  "people": [
-    {
-      "id": "318930f1-e4e3-4068-b41f-f71679d7a920",
-      "email": "",
-      "notes": "",
-      "phone": "",
-      "skills": "",
-      "source": "other",
-      "version": 1,
-      "headline": "",
-      "location": "",
-      "full_name": "Idempotent Person",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "owner_email": "hr@example.invalid",
-      "contact_allowed": true
-    },
-    {
-      "id": "c22e75a8-609e-4dfb-804d-9cc0eda7d1e6",
-      "email": "",
-      "notes": "",
-      "phone": "",
-      "skills": "",
-      "source": "historical-test",
-      "version": 3,
-      "headline": "",
-      "location": "",
-      "full_name": "Imported Person renamed",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "owner_email": "admin@example.invalid",
-      "contact_allowed": true
-    },
-    {
-      "id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "email": "candidate@example.invalid",
-      "notes": "Confidential interview context",
-      "phone": "",
-      "skills": "TypeScript, PostgreSQL",
-      "source": "other",
-      "version": 1,
-      "headline": "",
-      "location": "",
-      "full_name": "Sam Rivera",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "owner_email": "hr@example.invalid",
-      "contact_allowed": true
-    }
-  ],
-  "clients": [
-    {
-      "id": "52d39952-84d8-4b1d-82d4-10ac55a5df4c",
-      "name": "Test client"
-    }
-  ],
-  "reviews": [
-    {
-      "id": "e81b25a5-58f8-45af-aad4-8bfd645748c0",
-      "kind": "probation",
-      "status": "held",
-      "held_at": "2026-10-04T10:07:43.083311+00:00",
-      "outcome": "confirmed",
-      "version": 2,
-      "due_date": "2026-10-04",
-      "rationale": "Review held and objectives met",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2"
-    },
-    {
-      "id": "4f065981-8453-4280-bca4-f112a4b9683a",
-      "kind": "probation",
-      "status": "scheduled",
-      "held_at": null,
-      "outcome": "",
-      "version": 1,
-      "due_date": "2026-12-26",
-      "rationale": "",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2"
-    }
-  ],
-  "accounts": [
-    {
-      "linked_at": "2026-10-04T10:07:43.083311+00:00",
-      "linked_by": "11000000-0000-4000-8000-000000000001",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "profile_id": "11000000-0000-4000-8000-000000000002"
-    }
-  ],
-  "projects": [
-    {
-      "id": "5115f042-08ee-4627-8fb6-2e527108ff00",
-      "title": "Delivery",
-      "status": "en_cours",
-      "version": 1,
-      "end_date": "2027-07-31",
-      "client_id": "52d39952-84d8-4b1d-82d4-10ac55a5df4c",
-      "start_date": "2026-10-04"
-    }
-  ],
-  "contracts": [
-    {
-      "id": "4943ef40-ff34-4da9-b6ae-9850aac2322d",
-      "title": "Employment agreement",
-      "offer_id": "fc7686af-2a05-4938-9ab5-ad40c357b851",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "candidate_id": "11000000-0000-4000-8000-000000000002",
-      "storage_path": "11000000-0000-4000-8000-000000000002/agreement.pdf",
-      "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "document_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    },
-    {
-      "id": "0bee5fd7-692d-4198-8e05-43101ba2d901",
-      "title": "New employment agreement",
-      "offer_id": "1cf20822-4ede-40a2-aeb0-74c27e96c69f",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
-      "candidate_id": "11000000-0000-4000-8000-000000000002",
-      "storage_path": "11000000-0000-4000-8000-000000000002/rehire.pdf",
-      "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
-      "document_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    }
-  ],
-  "employees": [
-    {
-      "id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
-      "role": "Senior Data Engineer",
-      "status": "preboarding",
-      "parrain": "",
-      "version": 1,
-      "end_date": null,
-      "offer_id": "1cf20822-4ede-40a2-aeb0-74c27e96c69f",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "start_date": "2026-12-04",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "manager_email": "",
-      "probation_end": null,
-      "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
-      "probation_status": "pending",
-      "planned_exit_date": null,
-      "onboarding_completed_at": null
-    },
-    {
-      "id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "role": "Platform Engineer",
-      "status": "ended",
-      "parrain": "",
-      "version": 6,
-      "end_date": "2026-10-04",
-      "offer_id": "fc7686af-2a05-4938-9ab5-ad40c357b851",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "start_date": "2026-10-04",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "manager_email": "",
-      "probation_end": "2027-01-02",
-      "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "probation_status": "confirmed",
-      "planned_exit_date": "2026-10-04",
-      "onboarding_completed_at": "2026-10-04T10:07:43.083311+00:00"
-    },
-    {
-      "id": "5b97f75e-325e-4644-80d4-acf4ef14e1fe",
-      "role": "Senior Engineer",
-      "status": "active",
-      "parrain": "",
-      "version": 1,
-      "end_date": null,
-      "offer_id": null,
-      "person_id": "c22e75a8-609e-4dfb-804d-9cc0eda7d1e6",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "start_date": "2026-01-01",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "manager_email": "",
-      "probation_end": null,
-      "application_id": null,
-      "probation_status": "confirmed",
-      "planned_exit_date": null,
-      "onboarding_completed_at": "2026-10-04T10:07:43.083311+00:00"
-    },
-    {
-      "id": "0bdb1994-0833-4aae-905a-f734e1ed79d7",
-      "role": "Engineer",
-      "status": "ended",
-      "parrain": "",
-      "version": 1,
-      "end_date": "2025-12-01",
-      "offer_id": null,
-      "person_id": "c22e75a8-609e-4dfb-804d-9cc0eda7d1e6",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "start_date": "2025-01-01",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "manager_email": "",
-      "probation_end": null,
-      "application_id": null,
-      "probation_status": "ended",
-      "planned_exit_date": null,
-      "onboarding_completed_at": "2026-10-04T10:07:43.083311+00:00"
-    }
-  ],
-  "exitItems": [
-    {
-      "id": "65115836-0014-4fd6-b288-8ba1114d289f",
-      "title": "Project handover recorded",
-      "version": 2,
-      "evidence": "Verified completion",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "offboarding_id": "e8cd5505-088b-4843-aef0-839b574c6dbf"
-    },
-    {
-      "id": "58080dbe-c40c-423e-9cb5-9e592ba42d10",
-      "title": "Return equipment and close access",
-      "version": 2,
-      "evidence": "Verified completion",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "offboarding_id": "e8cd5505-088b-4843-aef0-839b574c6dbf"
-    },
-    {
-      "id": "34ef3a5d-7a4d-4334-8aa6-e99b08308ce0",
-      "title": "Deliver legal exit documents",
-      "version": 2,
-      "evidence": "Verified completion",
-      "required": true,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "completed_at": "2026-10-04T10:07:43.083311+00:00",
-      "offboarding_id": "e8cd5505-088b-4843-aef0-839b574c6dbf"
-    }
-  ],
-  "interviews": [
-    {
-      "id": "a1605908-ceb7-46d3-bfba-12cd75731684",
-      "kind": "hr",
-      "notes": "Structured interview completed",
-      "panel": "interviewer@example.invalid",
-      "status": "completed",
-      "version": 2,
-      "location": "",
-      "scorecard": [
-        {
-          "rating": 4,
-          "evidence": "Discussed a real project",
-          "competency": "Experience"
-        }
-      ],
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "scheduled_at": "2026-10-03T10:07:43.083311+00:00",
-      "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "invitation_status": "manual"
-    },
-    {
-      "id": "ab96d467-b886-4543-a862-136e8ebc59bc",
-      "kind": "technical",
-      "notes": "Structured interview completed",
-      "panel": "interviewer@example.invalid",
-      "status": "completed",
-      "version": 2,
-      "location": "",
-      "scorecard": [
-        {
-          "rating": 4,
-          "evidence": "Discussed a real project",
-          "competency": "Experience"
-        }
-      ],
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "scheduled_at": "2026-10-03T10:07:43.083311+00:00",
-      "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "invitation_status": "manual"
-    },
-    {
-      "id": "0c2fa1a5-a13d-4066-92e0-71ba87f3bc1b",
-      "kind": "hr",
-      "notes": "New interview completed",
-      "panel": "interviewer@example.invalid",
-      "status": "completed",
-      "version": 2,
-      "location": "",
-      "scorecard": [
-        {
-          "rating": 4,
-          "evidence": "New assessment",
-          "competency": "Experience"
-        }
-      ],
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "scheduled_at": "2026-10-04T10:07:43.083311+00:00",
-      "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
-      "invitation_status": "manual"
-    },
-    {
-      "id": "7c37ac13-5241-4049-9ef9-68733ad9804b",
-      "kind": "technical",
-      "notes": "New interview completed",
-      "panel": "interviewer@example.invalid",
-      "status": "completed",
-      "version": 2,
-      "location": "",
-      "scorecard": [
-        {
-          "rating": 4,
-          "evidence": "New assessment",
-          "competency": "Experience"
-        }
-      ],
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "scheduled_at": "2026-10-04T10:07:43.083311+00:00",
-      "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
-      "invitation_status": "manual"
-    }
-  ],
-  "signatures": [
-    {
-      "signed_at": "2026-10-04T10:07:43.083311+00:00",
-      "contract_id": "4943ef40-ff34-4da9-b6ae-9850aac2322d",
-      "signer_name": "Sam Rivera",
-      "candidate_id": "11000000-0000-4000-8000-000000000002",
-      "consent_text": "I have read this contract and agree to sign it electronically.",
-      "document_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    },
-    {
-      "signed_at": "2026-10-04T10:07:43.083311+00:00",
-      "contract_id": "0bee5fd7-692d-4198-8e05-43101ba2d901",
-      "signer_name": "Sam Rivera",
-      "candidate_id": "11000000-0000-4000-8000-000000000002",
-      "consent_text": "I have read this contract and agree to sign it electronically.",
-      "document_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    }
-  ],
-  "assignments": [
-    {
-      "id": "f419bff5-11d5-45a5-b714-4e0b54ada56a",
-      "status": "completed",
-      "version": 2,
-      "end_date": "2026-10-04",
-      "position": "Engineer",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "project_id": "5115f042-08ee-4627-8fb6-2e527108ff00",
-      "start_date": "2026-10-04",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "allocation_pct": 60
-    },
-    {
-      "id": "26dcac8e-cdb1-4938-b5d1-fae11cbf2079",
-      "status": "cancelled",
-      "version": 2,
-      "end_date": "2026-12-03",
-      "position": "Later period",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "project_id": "5115f042-08ee-4627-8fb6-2e527108ff00",
-      "start_date": "2026-11-04",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
-      "allocation_pct": 100
-    }
-  ],
-  "suggestions": [],
-  "applications": [
-    {
-      "id": "a3769a3a-3d87-437f-8a72-05b460f31887",
-      "stage": "contract",
-      "reason": "",
-      "source": "other",
-      "status": "hired",
-      "version": 10,
-      "referrer": "",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "opportunity_id": "f54c02f1-0533-4abb-9c89-a7154185484a",
-      "stage_entered_at": "2026-10-04T10:07:43.083311+00:00",
-      "screening_summary": "Relevant platform experience",
-      "screening_recommendation": "Proceed to structured interview"
-    },
-    {
-      "id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
-      "stage": "contract",
-      "reason": "",
-      "source": "other",
-      "status": "hired",
-      "version": 6,
-      "referrer": "",
-      "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "opportunity_id": "3c6fa228-5e0a-4b24-8ef4-0ce99f42dbf9",
-      "stage_entered_at": "2026-10-04T10:07:43.083311+00:00",
-      "screening_summary": "Returning colleague, renewed structured assessment",
-      "screening_recommendation": "Proceed"
-    }
-  ],
-  "capabilities": {
-    "admin": false,
-    "staff": true,
-    "recruit": true,
-    "approve_offer": true,
-    "approve_direction": false
+ "jobs": [
+  {
+   "id": "9f1c2f3e-7a4b-4c5d-9e6f-2a3b4c5d6e7f",
+   "title": "Platform Engineer",
+   "published": true
+  }
+ ],
+ "exits": [
+  {
+   "id": "e8cd5505-088b-4843-aef0-839b574c6dbf",
+   "kind": "resignation",
+   "status": "completed",
+   "version": 3,
+   "exit_date": "2026-10-04",
+   "successor": "Team lead",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "notice_end": null,
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "handover_plan": "Repository ownership transferred",
+   "exit_interview": "Discussion completed",
+   "rehire_eligible": true,
+   "rehire_rationale": "Eligible for future opportunities",
+   "legal_docs_evidence": "Final documents recorded"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "0fd00b60-31f9-4d73-a1f0-88dca195d2b3",
+   "phase": "preboarding",
+   "title": "Verify employment documents",
+   "version": 2,
+   "assignee": "hr@example.invalid",
+   "due_date": "2026-10-01",
+   "evidence": "Verified preboarding",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "completed_by": "11000000-0000-4000-8000-000000000001",
+   "dependency_id": null
   },
-  "opportunities": [
+  {
+   "id": "7500d84e-775c-454f-9d94-3701f39e5b90",
+   "phase": "preboarding",
+   "title": "Prepare equipment and access",
+   "version": 2,
+   "assignee": "hr@example.invalid",
+   "due_date": "2026-10-03",
+   "evidence": "Verified preboarding",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "completed_by": "11000000-0000-4000-8000-000000000001",
+   "dependency_id": null
+  },
+  {
+   "id": "921f70ba-0c79-4029-8efc-7502590b995b",
+   "phase": "onboarding",
+   "title": "Welcome and team introduction",
+   "version": 2,
+   "assignee": "hr@example.invalid",
+   "due_date": "2026-10-04",
+   "evidence": "Verified completion",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "completed_by": "11000000-0000-4000-8000-000000000001",
+   "dependency_id": null
+  },
+  {
+   "id": "ce56df8f-86dc-4c72-a6c3-5f6c182c5d1a",
+   "phase": "onboarding",
+   "title": "Confirm role and first project plan",
+   "version": 2,
+   "assignee": "hr@example.invalid",
+   "due_date": "2026-10-11",
+   "evidence": "Verified completion",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "completed_by": "11000000-0000-4000-8000-000000000001",
+   "dependency_id": null
+  },
+  {
+   "id": "a2151d26-c5c5-45a8-8263-84cfaf777c43",
+   "phase": "preboarding",
+   "title": "Verify employment documents",
+   "version": 1,
+   "assignee": "hr@example.invalid",
+   "due_date": "2026-12-01",
+   "evidence": "",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
+   "completed_at": null,
+   "completed_by": null,
+   "dependency_id": null
+  },
+  {
+   "id": "7da4321f-c9df-4174-b796-d85ccbdf80e3",
+   "phase": "preboarding",
+   "title": "Prepare equipment and access",
+   "version": 1,
+   "assignee": "hr@example.invalid",
+   "due_date": "2026-12-03",
+   "evidence": "",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
+   "completed_at": null,
+   "completed_by": null,
+   "dependency_id": null
+  },
+  {
+   "id": "eb634298-79d3-4864-8fbd-26f0b3bcae32",
+   "phase": "onboarding",
+   "title": "Welcome and team introduction",
+   "version": 1,
+   "assignee": "hr@example.invalid",
+   "due_date": "2026-12-04",
+   "evidence": "",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
+   "completed_at": null,
+   "completed_by": null,
+   "dependency_id": null
+  },
+  {
+   "id": "d871453b-67c2-49af-b9bc-3ce519240802",
+   "phase": "onboarding",
+   "title": "Confirm role and first project plan",
+   "version": 1,
+   "assignee": "hr@example.invalid",
+   "due_date": "2026-12-11",
+   "evidence": "",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
+   "completed_at": null,
+   "completed_by": null,
+   "dependency_id": null
+  },
+  {
+   "id": "f3c54caf-036f-47c6-aa5d-f236c2ebee20",
+   "phase": "onboarding",
+   "title": "Repository walkthrough",
+   "version": 2,
+   "assignee": "Sam",
+   "due_date": null,
+   "evidence": "Walkthrough completed after access",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "completed_by": "11000000-0000-4000-8000-000000000001",
+   "dependency_id": "3320d217-ac68-4067-8415-a8bb978c5690"
+  },
+  {
+   "id": "3320d217-ac68-4067-8415-a8bb978c5690",
+   "phase": "onboarding",
+   "title": "Access provisioned",
+   "version": 2,
+   "assignee": "HR",
+   "due_date": null,
+   "evidence": "Verified completion",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "completed_by": "11000000-0000-4000-8000-000000000001",
+   "dependency_id": null
+  }
+ ],
+ "events": [
+  {
+   "id": 1,
+   "kind": "create_person",
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "rationale": "",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "next_state": "",
+   "request_id": "3cbe297c-0e46-47ea-9f6d-634f5907bc8c",
+   "actor_email": "hr@example.invalid",
+   "employee_id": null,
+   "application_id": null,
+   "previous_state": ""
+  },
+  {
+   "id": 2,
+   "kind": "link_account",
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "rationale": "",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "next_state": "",
+   "request_id": "4b1e156f-90d9-46a6-81a8-f460ec62bd39",
+   "actor_email": "hr@example.invalid",
+   "employee_id": null,
+   "application_id": null,
+   "previous_state": ""
+  },
+  {
+   "id": 3,
+   "kind": "create_person",
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "person_id": "318930f1-e4e3-4068-b41f-f71679d7a920",
+   "rationale": "",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "next_state": "",
+   "request_id": "898f5bcf-9bf5-42ef-873b-2526a4fde09b",
+   "actor_email": "hr@example.invalid",
+   "employee_id": null,
+   "application_id": null,
+   "previous_state": ""
+  },
+  {
+   "id": 4,
+   "kind": "create_application",
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "rationale": "",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "next_state": "application",
+   "request_id": "d1e7a1ea-3768-414a-a722-01b28f459aa3",
+   "actor_email": "hr@example.invalid",
+   "employee_id": null,
+   "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "previous_state": ""
+  },
+  {
+   "id": 5,
+   "kind": "create_application",
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "rationale": "",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "next_state": "application",
+   "request_id": "4632910b-07c0-4d77-858d-a6704df305ff",
+   "actor_email": "hr@example.invalid",
+   "employee_id": null,
+   "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
+   "previous_state": ""
+  },
+  {
+   "id": 6,
+   "kind": "add_note",
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "rationale": "Follow up tomorrow",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "next_state": "",
+   "request_id": "aba0e3a5-84b6-4c8e-b5c3-2c56dc0db77a",
+   "actor_email": "hr@example.invalid",
+   "employee_id": null,
+   "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "previous_state": ""
+  },
+  {
+   "id": 7,
+   "kind": "move_application",
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "rationale": "Verified progression",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "next_state": "screening",
+   "request_id": "8085fa7d-cf2b-43da-9646-a893422cc345",
+   "actor_email": "hr@example.invalid",
+   "employee_id": null,
+   "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "previous_state": "application"
+  },
+  {
+   "id": 8,
+   "kind": "update_screening",
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "rationale": "",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "next_state": "",
+   "request_id": "e720b724-1283-4dd6-aafe-25653e15dcd2",
+   "actor_email": "hr@example.invalid",
+   "employee_id": null,
+   "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "previous_state": ""
+  }
+ ],
+ "offers": [
+  {
+   "id": "fc7686af-2a05-4938-9ab5-ad40c357b851",
+   "cjm": 300,
+   "title": "Platform Engineer",
+   "status": "accepted",
+   "version": 5,
+   "shared_at": "2026-10-04T10:07:43.083311+00:00",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "decided_by": "admin@example.invalid",
+   "margin_pct": 50,
+   "target_tjm": 600,
+   "response_at": "2026-10-04T10:07:43.083311+00:00",
+   "valid_until": "2026-11-03",
+   "approver_note": "Direction approval",
+   "contract_type": "CDI",
+   "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "salary_monthly": 4500,
+   "delivery_status": "manual"
+  },
+  {
+   "id": "1cf20822-4ede-40a2-aeb0-74c27e96c69f",
+   "cjm": 390,
+   "title": "Senior Data Engineer",
+   "status": "accepted",
+   "version": 4,
+   "shared_at": "2026-10-04T10:07:43.083311+00:00",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "decided_by": "hr@example.invalid",
+   "margin_pct": 35,
+   "target_tjm": 600,
+   "response_at": "2026-10-04T10:07:43.083311+00:00",
+   "valid_until": null,
+   "approver_note": "Approved renewed budget",
+   "contract_type": "CDI",
+   "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
+   "salary_monthly": 5000,
+   "delivery_status": "manual"
+  }
+ ],
+ "people": [
+  {
+   "id": "318930f1-e4e3-4068-b41f-f71679d7a920",
+   "email": "",
+   "notes": "",
+   "phone": "",
+   "skills": "",
+   "source": "other",
+   "version": 1,
+   "headline": "",
+   "location": "",
+   "full_name": "Idempotent Person",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "owner_email": "hr@example.invalid",
+   "contact_allowed": true
+  },
+  {
+   "id": "c22e75a8-609e-4dfb-804d-9cc0eda7d1e6",
+   "email": "",
+   "notes": "",
+   "phone": "",
+   "skills": "",
+   "source": "historical-test",
+   "version": 3,
+   "headline": "",
+   "location": "",
+   "full_name": "Imported Person renamed",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "owner_email": "admin@example.invalid",
+   "contact_allowed": true
+  },
+  {
+   "id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "email": "candidate@example.invalid",
+   "notes": "Confidential interview context",
+   "phone": "",
+   "skills": "TypeScript, PostgreSQL",
+   "source": "other",
+   "version": 1,
+   "headline": "",
+   "location": "",
+   "full_name": "Sam Rivera",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "owner_email": "hr@example.invalid",
+   "contact_allowed": true
+  }
+ ],
+ "clients": [
+  {
+   "id": "52d39952-84d8-4b1d-82d4-10ac55a5df4c",
+   "name": "Test client"
+  }
+ ],
+ "reviews": [
+  {
+   "id": "e81b25a5-58f8-45af-aad4-8bfd645748c0",
+   "kind": "probation",
+   "status": "held",
+   "held_at": "2026-10-04T10:07:43.083311+00:00",
+   "outcome": "confirmed",
+   "version": 2,
+   "due_date": "2026-10-04",
+   "rationale": "Review held and objectives met",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2"
+  },
+  {
+   "id": "4f065981-8453-4280-bca4-f112a4b9683a",
+   "kind": "probation",
+   "status": "scheduled",
+   "held_at": null,
+   "outcome": "",
+   "version": 1,
+   "due_date": "2026-12-26",
+   "rationale": "",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2"
+  }
+ ],
+ "accounts": [
+  {
+   "linked_at": "2026-10-04T10:07:43.083311+00:00",
+   "linked_by": "11000000-0000-4000-8000-000000000001",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "profile_id": "11000000-0000-4000-8000-000000000002"
+  }
+ ],
+ "projects": [
+  {
+   "id": "5115f042-08ee-4627-8fb6-2e527108ff00",
+   "title": "Delivery",
+   "status": "en_cours",
+   "version": 1,
+   "end_date": "2027-07-31",
+   "client_id": "52d39952-84d8-4b1d-82d4-10ac55a5df4c",
+   "start_date": "2026-10-04"
+  }
+ ],
+ "contracts": [
+  {
+   "id": "4943ef40-ff34-4da9-b6ae-9850aac2322d",
+   "title": "Employment agreement",
+   "offer_id": "fc7686af-2a05-4938-9ab5-ad40c357b851",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "candidate_id": "11000000-0000-4000-8000-000000000002",
+   "storage_path": "11000000-0000-4000-8000-000000000002/agreement.pdf",
+   "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "document_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+   "id": "0bee5fd7-692d-4198-8e05-43101ba2d901",
+   "title": "New employment agreement",
+   "offer_id": "1cf20822-4ede-40a2-aeb0-74c27e96c69f",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
+   "candidate_id": "11000000-0000-4000-8000-000000000002",
+   "storage_path": "11000000-0000-4000-8000-000000000002/rehire.pdf",
+   "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
+   "document_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+ ],
+ "employees": [
+  {
+   "id": "825b9051-882b-4e1e-9ae1-8dce434b0b05",
+   "role": "Senior Data Engineer",
+   "status": "preboarding",
+   "parrain": "",
+   "version": 1,
+   "end_date": null,
+   "offer_id": "1cf20822-4ede-40a2-aeb0-74c27e96c69f",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "start_date": "2026-12-04",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "manager_email": "",
+   "probation_end": null,
+   "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
+   "probation_status": "pending",
+   "planned_exit_date": null,
+   "onboarding_completed_at": null,
+   "matricule": "QS-0001"
+  },
+  {
+   "id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "role": "Platform Engineer",
+   "status": "ended",
+   "parrain": "",
+   "version": 6,
+   "end_date": "2026-10-04",
+   "offer_id": "fc7686af-2a05-4938-9ab5-ad40c357b851",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "start_date": "2026-10-04",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "manager_email": "",
+   "probation_end": "2027-01-02",
+   "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "probation_status": "confirmed",
+   "planned_exit_date": "2026-10-04",
+   "onboarding_completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "matricule": "QS-0002"
+  },
+  {
+   "id": "5b97f75e-325e-4644-80d4-acf4ef14e1fe",
+   "role": "Senior Engineer",
+   "status": "active",
+   "parrain": "",
+   "version": 1,
+   "end_date": null,
+   "offer_id": null,
+   "person_id": "c22e75a8-609e-4dfb-804d-9cc0eda7d1e6",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "start_date": "2026-01-01",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "manager_email": "",
+   "probation_end": null,
+   "application_id": null,
+   "probation_status": "confirmed",
+   "planned_exit_date": null,
+   "onboarding_completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "matricule": "QS-0003"
+  },
+  {
+   "id": "0bdb1994-0833-4aae-905a-f734e1ed79d7",
+   "role": "Engineer",
+   "status": "ended",
+   "parrain": "",
+   "version": 1,
+   "end_date": "2025-12-01",
+   "offer_id": null,
+   "person_id": "c22e75a8-609e-4dfb-804d-9cc0eda7d1e6",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "start_date": "2025-01-01",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "manager_email": "",
+   "probation_end": null,
+   "application_id": null,
+   "probation_status": "ended",
+   "planned_exit_date": null,
+   "onboarding_completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "matricule": "QS-0004"
+  }
+ ],
+ "exitItems": [
+  {
+   "id": "65115836-0014-4fd6-b288-8ba1114d289f",
+   "title": "Project handover recorded",
+   "version": 2,
+   "evidence": "Verified completion",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "offboarding_id": "e8cd5505-088b-4843-aef0-839b574c6dbf"
+  },
+  {
+   "id": "58080dbe-c40c-423e-9cb5-9e592ba42d10",
+   "title": "Return equipment and close access",
+   "version": 2,
+   "evidence": "Verified completion",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "offboarding_id": "e8cd5505-088b-4843-aef0-839b574c6dbf"
+  },
+  {
+   "id": "34ef3a5d-7a4d-4334-8aa6-e99b08308ce0",
+   "title": "Deliver legal exit documents",
+   "version": 2,
+   "evidence": "Verified completion",
+   "required": true,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "completed_at": "2026-10-04T10:07:43.083311+00:00",
+   "offboarding_id": "e8cd5505-088b-4843-aef0-839b574c6dbf"
+  }
+ ],
+ "interviews": [
+  {
+   "id": "a1605908-ceb7-46d3-bfba-12cd75731684",
+   "kind": "hr",
+   "notes": "Structured interview completed",
+   "panel": "interviewer@example.invalid",
+   "status": "completed",
+   "version": 2,
+   "location": "",
+   "scorecard": [
     {
-      "id": "f54c02f1-0533-4abb-9c89-a7154185484a",
-      "title": "Platform Engineer",
-      "job_id": "9f1c2f3e-7a4b-4c5d-9e6f-2a3b4c5d6e7f",
-      "status": "approved",
-      "version": 2,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "decided_at": "2026-10-04T10:07:43.083311+00:00",
-      "decided_by": "admin@example.invalid",
-      "project_id": null,
-      "target_tjm": null,
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "client_need": "Build reliable services",
-      "hiring_mode": "sur_mission",
-      "owner_email": "hr@example.invalid",
-      "skill_family": "",
-      "justification": "",
-      "decision_rationale": "Approved hiring demand",
-      "client_ids": [
-        "52d39952-84d8-4b1d-82d4-10ac55a5df4c"
-      ]
-    },
-    {
-      "id": "3c6fa228-5e0a-4b24-8ef4-0ce99f42dbf9",
-      "title": "Data Engineer",
-      "job_id": null,
-      "status": "approved",
-      "version": 2,
-      "created_at": "2026-10-04T10:07:43.083311+00:00",
-      "decided_at": "2026-10-04T10:07:43.083311+00:00",
-      "decided_by": "admin@example.invalid",
-      "project_id": null,
-      "target_tjm": null,
-      "updated_at": "2026-10-04T10:07:43.083311+00:00",
-      "client_need": "",
-      "hiring_mode": "sur_mission",
-      "owner_email": "hr@example.invalid",
-      "skill_family": "",
-      "justification": "",
-      "decision_rationale": "Second demand",
-      "client_ids": []
+     "rating": 4,
+     "evidence": "Discussed a real project",
+     "competency": "Experience"
     }
-  ],
-  "countersignatures": [
+   ],
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "scheduled_at": "2026-10-03T10:07:43.083311+00:00",
+   "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "invitation_status": "manual"
+  },
+  {
+   "id": "ab96d467-b886-4543-a862-136e8ebc59bc",
+   "kind": "technical",
+   "notes": "Structured interview completed",
+   "panel": "interviewer@example.invalid",
+   "status": "completed",
+   "version": 2,
+   "location": "",
+   "scorecard": [
     {
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "signed_at": "2026-10-04T10:07:43.083311+00:00",
-      "contract_id": "4943ef40-ff34-4da9-b6ae-9850aac2322d",
-      "signer_name": "HR Manager",
-      "document_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    },
-    {
-      "actor_id": "11000000-0000-4000-8000-000000000001",
-      "signed_at": "2026-10-04T10:07:43.083311+00:00",
-      "contract_id": "0bee5fd7-692d-4198-8e05-43101ba2d901",
-      "signer_name": "HR Manager",
-      "document_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+     "rating": 4,
+     "evidence": "Discussed a real project",
+     "competency": "Experience"
     }
-  ]
+   ],
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "scheduled_at": "2026-10-03T10:07:43.083311+00:00",
+   "application_id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "invitation_status": "manual"
+  },
+  {
+   "id": "0c2fa1a5-a13d-4066-92e0-71ba87f3bc1b",
+   "kind": "hr",
+   "notes": "New interview completed",
+   "panel": "interviewer@example.invalid",
+   "status": "completed",
+   "version": 2,
+   "location": "",
+   "scorecard": [
+    {
+     "rating": 4,
+     "evidence": "New assessment",
+     "competency": "Experience"
+    }
+   ],
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "scheduled_at": "2026-10-04T10:07:43.083311+00:00",
+   "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
+   "invitation_status": "manual"
+  },
+  {
+   "id": "7c37ac13-5241-4049-9ef9-68733ad9804b",
+   "kind": "technical",
+   "notes": "New interview completed",
+   "panel": "interviewer@example.invalid",
+   "status": "completed",
+   "version": 2,
+   "location": "",
+   "scorecard": [
+    {
+     "rating": 4,
+     "evidence": "New assessment",
+     "competency": "Experience"
+    }
+   ],
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "scheduled_at": "2026-10-04T10:07:43.083311+00:00",
+   "application_id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
+   "invitation_status": "manual"
+  }
+ ],
+ "signatures": [
+  {
+   "signed_at": "2026-10-04T10:07:43.083311+00:00",
+   "contract_id": "4943ef40-ff34-4da9-b6ae-9850aac2322d",
+   "signer_name": "Sam Rivera",
+   "candidate_id": "11000000-0000-4000-8000-000000000002",
+   "consent_text": "I have read this contract and agree to sign it electronically.",
+   "document_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+   "signed_at": "2026-10-04T10:07:43.083311+00:00",
+   "contract_id": "0bee5fd7-692d-4198-8e05-43101ba2d901",
+   "signer_name": "Sam Rivera",
+   "candidate_id": "11000000-0000-4000-8000-000000000002",
+   "consent_text": "I have read this contract and agree to sign it electronically.",
+   "document_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+ ],
+ "assignments": [
+  {
+   "id": "f419bff5-11d5-45a5-b714-4e0b54ada56a",
+   "status": "completed",
+   "version": 2,
+   "end_date": "2026-10-04",
+   "position": "Engineer",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "project_id": "5115f042-08ee-4627-8fb6-2e527108ff00",
+   "start_date": "2026-10-04",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "allocation_pct": 60
+  },
+  {
+   "id": "26dcac8e-cdb1-4938-b5d1-fae11cbf2079",
+   "status": "cancelled",
+   "version": 2,
+   "end_date": "2026-12-03",
+   "position": "Later period",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "project_id": "5115f042-08ee-4627-8fb6-2e527108ff00",
+   "start_date": "2026-11-04",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "employee_id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
+   "allocation_pct": 100
+  }
+ ],
+ "suggestions": [],
+ "applications": [
+  {
+   "id": "a3769a3a-3d87-437f-8a72-05b460f31887",
+   "stage": "contract",
+   "reason": "",
+   "source": "other",
+   "status": "hired",
+   "version": 10,
+   "referrer": "",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "opportunity_id": "f54c02f1-0533-4abb-9c89-a7154185484a",
+   "stage_entered_at": "2026-10-04T10:07:43.083311+00:00",
+   "screening_summary": "Relevant platform experience",
+   "screening_recommendation": "Proceed to structured interview"
+  },
+  {
+   "id": "19e456c6-bf95-4756-8bef-77bdc2661a13",
+   "stage": "contract",
+   "reason": "",
+   "source": "other",
+   "status": "hired",
+   "version": 6,
+   "referrer": "",
+   "person_id": "a51da95e-be9a-42b7-81c1-bb2043e41b56",
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "opportunity_id": "3c6fa228-5e0a-4b24-8ef4-0ce99f42dbf9",
+   "stage_entered_at": "2026-10-04T10:07:43.083311+00:00",
+   "screening_summary": "Returning colleague, renewed structured assessment",
+   "screening_recommendation": "Proceed"
+  }
+ ],
+ "capabilities": {
+  "admin": false,
+  "staff": true,
+  "recruit": true,
+  "approve_offer": true,
+  "approve_direction": false
+ },
+ "opportunities": [
+  {
+   "id": "f54c02f1-0533-4abb-9c89-a7154185484a",
+   "title": "Platform Engineer",
+   "job_id": "9f1c2f3e-7a4b-4c5d-9e6f-2a3b4c5d6e7f",
+   "status": "approved",
+   "version": 2,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "decided_at": "2026-10-04T10:07:43.083311+00:00",
+   "decided_by": "admin@example.invalid",
+   "project_id": null,
+   "target_tjm": null,
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "client_need": "Build reliable services",
+   "hiring_mode": "sur_mission",
+   "owner_email": "hr@example.invalid",
+   "skill_family": "",
+   "justification": "",
+   "decision_rationale": "Approved hiring demand",
+   "client_ids": [
+    "52d39952-84d8-4b1d-82d4-10ac55a5df4c"
+   ]
+  },
+  {
+   "id": "3c6fa228-5e0a-4b24-8ef4-0ce99f42dbf9",
+   "title": "Data Engineer",
+   "job_id": null,
+   "status": "approved",
+   "version": 2,
+   "created_at": "2026-10-04T10:07:43.083311+00:00",
+   "decided_at": "2026-10-04T10:07:43.083311+00:00",
+   "decided_by": "admin@example.invalid",
+   "project_id": null,
+   "target_tjm": null,
+   "updated_at": "2026-10-04T10:07:43.083311+00:00",
+   "client_need": "",
+   "hiring_mode": "sur_mission",
+   "owner_email": "hr@example.invalid",
+   "skill_family": "",
+   "justification": "",
+   "decision_rationale": "Second demand",
+   "client_ids": []
+  }
+ ],
+ "countersignatures": [
+  {
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "signed_at": "2026-10-04T10:07:43.083311+00:00",
+   "contract_id": "4943ef40-ff34-4da9-b6ae-9850aac2322d",
+   "signer_name": "HR Manager",
+   "document_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+   "actor_id": "11000000-0000-4000-8000-000000000001",
+   "signed_at": "2026-10-04T10:07:43.083311+00:00",
+   "contract_id": "0bee5fd7-692d-4198-8e05-43101ba2d901",
+   "signer_name": "HR Manager",
+   "document_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+ ]
 }

@@ -44,10 +44,12 @@ import {
   lineDays,
   linesAmount,
   linesDays,
+
   openDaysBetween,
   storedPricingLines,
   type PricingLine,
 } from "./pricing-lines";
+import { craMonthYear, proratedBillableDays } from "./billable-cap";
 import { DateField } from "../DateField";
 import "./sales.css";
 import "./project-form.css";
@@ -75,6 +77,8 @@ type TjmProfileDraft = {
   name: string;
   tjm: string;
   end_date: string;
+  /** Full-year billable-days allowance for this line — "" when exempt. */
+  cap: string;
 };
 
 /** Semantic list tabs (source design "Projects — redesign.html"). */
@@ -90,7 +94,11 @@ type ProjectRow = {
   who: string;
   initials: string;
   isRegie: boolean;
-  rate: string;
+  /** "Forfait", the blended €/j, or a short label for the meta line. */
+  rateLabel: string;
+  /** Distinct TJM profiles (project + signed extensions) — one chip per
+      named rate, shown on the list row when a contract has several. */
+  rateChips: { name: string; tjm: number }[];
   metaLine: string;
   effEnd: string | null;
   extended: boolean;
@@ -99,6 +107,10 @@ type ProjectRow = {
   consumedDays: number;
   usedPct: number;
   billed: number;
+  /** Per pricing line: the current-year prorated billable-days allowance
+      and the CRA days attributed to that line this year. Only lines
+      carrying a cap appear — exempt lines are absent. */
+  lineCaps: { name: string; cap: number; consumed: number }[];
   timePct: number | null;
   daysLeft: number | null;
   /** Non-empty when the row needs attention (drives the inverted pill,
@@ -106,15 +118,31 @@ type ProjectRow = {
   flag: string | null;
 };
 
-/** Page state from the address bar: ?project=<id> → edit that project,
-    ?new=1 → create form, otherwise the projects list. Unknown ids fall
-    back to the list. */
+/** Page state from the address bar: /sales/projects/<id> → edit that
+    project, /sales/projects/new → create form, otherwise the projects
+    list. Unknown ids fall back to the list. */
 function sheetFromUrl(list: Project[]): Project | null | undefined {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("new") === "1") return null;
-  const id = params.get("project");
-  if (!id) return undefined;
+  const path = window.location.pathname.replace(/\/+$/, "");
+  if (path === "/sales/projects/new") return null;
+  if (!path.startsWith("/sales/projects/")) return undefined;
+  const id = decodeURIComponent(path.slice("/sales/projects/".length));
   return list.find((p) => p.id === id) ?? undefined;
+}
+
+/** Legacy query-param deep links (?project=<id>, ?new=1) still arrive from
+    old bookmarks — rewrite the address bar to the path form. */
+function redirectLegacyProjectQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const legacyId = params.get("project");
+  if (params.get("new") !== "1" && !legacyId) return;
+  const url = new URL(window.location.href);
+  url.pathname =
+    params.get("new") === "1"
+      ? "/sales/projects/new"
+      : `/sales/projects/${encodeURIComponent(legacyId!)}`;
+  url.searchParams.delete("project");
+  url.searchParams.delete("new");
+  window.history.replaceState(null, "", url.pathname + url.search + url.hash);
 }
 
 /** Open working days between ISO dates lives in pricing-lines.ts. */
@@ -138,6 +166,21 @@ const longDate = (iso: string) =>
     year: "numeric",
   });
 
+/** Distinct TJM profiles (same name + rate deduped, zero rates dropped),
+    keeping contract order — feeds the per-rate chips on the list row. */
+function distinctRates(lines: PricingLine[]): { name: string; tjm: number }[] {
+  const seen = new Set<string>();
+  const out: { name: string; tjm: number }[] = [];
+  for (const l of lines) {
+    if (!(l.tjm > 0)) continue;
+    const key = `${l.name}\u0000${l.tjm}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name: l.name, tjm: l.tjm });
+  }
+  return out;
+}
+
 /** Elapsed percentage + days left between the project start and end. */
 function timelineProgress(p: Project) {
   if (!p.start_date || !p.end_date) return null;
@@ -159,7 +202,12 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
   const ref = useAdminReferentials();
   const [projects, setProjects] = useState<Project[]>([]);
   const [assignments, setAssignments] = useState<
-    { project_id: string; employee_id: string }[]
+    {
+      project_id: string;
+      employee_id: string;
+      /** Named TJM profile the person is staffed on, when set. */
+      pricing_line?: string;
+    }[]
   >([]);
   const [employees, setEmployees] = useState<
     { id: string; full_name: string }[]
@@ -172,15 +220,26 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
   const [craDaysByProject, setCraDaysByProject] = useState<Map<string, number>>(
     new Map(),
   );
+  /** Client-project CRA days per project and pricing line for the current
+      calendar year — the consumption compared against each line's
+      billable cap. */
+  const [craLineYearDaysByProject, setCraLineYearDaysByProject] = useState<
+    Map<string, Map<string, number>>
+  >(new Map());
   const [loadError, setLoadError] = useState("");
   const [reloadTick, setReloadTick] = useState(0);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<ProjectsTab>("all");
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  // The create/edit form is a page, addressed by the URL: ?project=<id>
-  // edits, ?new=1 creates. `undefined` = the projects list itself.
+  // The create/edit form is a page, addressed by the URL: /sales/projects/<id>
+  // edits, /sales/projects/new creates. `undefined` = the projects list itself.
   const [editing, setEditing] = useState<Project | null | undefined>(undefined);
   const projectsRef = useRef<Project[]>([]);
+
+  // Old ?project=/?new= bookmarks redirect to the path form on arrival.
+  useEffect(() => {
+    redirectLegacyProjectQuery();
+  }, []);
 
   useEffect(() => {
     document.title =
@@ -198,6 +257,10 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  /** The annual cap and its consumption are always evaluated against the
+      current calendar year. */
+  const currentYear = new Date().getFullYear();
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -209,38 +272,106 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         if (r.error) throw r.error;
         const ext = await db().from("sales_project_extensions").select("*");
         if (ext.error) throw ext.error;
+        // Loaded before the CRA pass: line attribution needs every
+        // assignment's pricing line and window.
+        const staffing = await loadWorkspace();
         // CRA consumption: a full 'client_project' entry = one day billed
         // to that project, a half-day entry (am/pm) = half a day. HR
         // operators read every employee's CRA through the cra_access
         // policy, so a single grouped count feeds the progress bars on
         // every project row.
-        const craWithParts = await db()
-          .from("cra_entries")
-          .select("project_id, part")
-          .eq("status", "client_project");
+        // PostgREST caps a response at 1000 rows, so page through until a
+        // short page arrives — summing a single capped response silently
+        // drops consumption days once client_project rows exceed the cap.
         // Databases without the half-day migration reject the part column —
         // fall back to counting every entry as a full day instead of losing
         // consumption entirely.
-        const cra = craWithParts.error
-          ? await db()
-              .from("cra_entries")
-              .select("project_id")
-              .eq("status", "client_project")
-          : craWithParts;
+        const PAGE = 1000;
+        let craSelect = "project_id, part, month, employee_id, day";
+        let halfDays = true;
+        const craRows: {
+          project_id: string | null;
+          month: string;
+          employee_id: string;
+          day: string;
+          part?: string;
+        }[] = [];
+        let craFailed = false;
+        for (let offset = 0; ; offset += PAGE) {
+          const page = await db()
+            .from("cra_entries")
+            .select(craSelect)
+            .eq("status", "client_project")
+            .range(offset, offset + PAGE - 1);
+          if (page.error) {
+            if (offset === 0 && halfDays) {
+              halfDays = false;
+              craSelect = "project_id, month, employee_id, day";
+              offset = -PAGE;
+              continue;
+            }
+            craFailed = true;
+            break;
+          }
+          craRows.push(...((page.data || []) as unknown as typeof craRows));
+          if ((page.data?.length ?? 0) < PAGE) break;
+        }
         const craDays = new Map<string, number>();
-        if (!cra.error) {
-          for (const row of cra.data || []) {
-            if (row.project_id)
-              craDays.set(
-                row.project_id,
-                (craDays.get(row.project_id) || 0) +
-                  ("part" in row && (row.part === "am" || row.part === "pm")
-                    ? 0.5
-                    : 1),
-              );
+        // The annual billable cap is per pricing line and prorated per
+        // calendar year, so consumption is split the same way: a CRA day
+        // attributes to the pricing line of the employee's assignment
+        // covering that day (same window/status rules as the CRA screen).
+        const craLineYearDays = new Map<string, Map<string, number>>();
+        if (!craFailed) {
+          // Assignments able to carry a CRA day onto a priced line — one
+          // assignment per employee/project pair, like assignedProjects().
+          const pricedByEmployee = new Map<
+            string,
+            {
+              project_id: string;
+              start_date: string;
+              end_date: string | null;
+              pricing_line: string;
+            }[]
+          >();
+          for (const a of staffing.assignments) {
+            if (
+              !["confirmed", "active", "completed"].includes(a.status) ||
+              !a.pricing_line
+            )
+              continue;
+            const list = pricedByEmployee.get(a.employee_id) || [];
+            list.push({
+              project_id: a.project_id,
+              start_date: a.start_date,
+              end_date: a.end_date,
+              pricing_line: a.pricing_line,
+            });
+            pricedByEmployee.set(a.employee_id, list);
+          }
+          for (const row of craRows) {
+            if (!row.project_id) continue;
+            const days =
+              row.part === "am" || row.part === "pm" ? 0.5 : 1;
+            // All-time consumption on the project; the cap check below only
+            // tallies the current calendar year.
+            craDays.set(row.project_id, (craDays.get(row.project_id) || 0) + days);
+            // Only the current calendar year feeds the cap check.
+            if (craMonthYear(row.month) !== currentYear) continue;
+            const line = pricedByEmployee
+              .get(row.employee_id)
+              ?.find(
+                (a) =>
+                  a.project_id === row.project_id &&
+                  a.start_date <= row.day &&
+                  (!a.end_date || a.end_date >= row.day),
+              )?.pricing_line;
+            if (!line) continue;
+            const byLine = craLineYearDays.get(row.project_id) || new Map<string, number>();
+            byLine.set(line, (byLine.get(line) || 0) + days);
+            craLineYearDays.set(row.project_id, byLine);
           }
         }
-        const staffing = await loadWorkspace();
         const today = new Date().toISOString().slice(0, 10);
         if (!cancelled) {
           const list = r.data || [];
@@ -264,6 +395,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             })),
           );
           setCraDaysByProject(craDays);
+          setCraLineYearDaysByProject(craLineYearDays);
           setLoadError("");
           // The URL is the source of truth: (re)open the create/edit page
           // after every reload so deep links and redirects land on it.
@@ -298,7 +430,10 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     for (const a of assignments) {
       const name = employeesById.get(a.employee_id);
       if (!name) continue;
-      map.set(a.project_id, [...(map.get(a.project_id) || []), name]);
+      // Staffing targets a named TJM profile when set — show the line so a
+      // person staffed on two profiles appears once per line.
+      const label = a.pricing_line ? `${name} (${a.pricing_line})` : name;
+      map.set(a.project_id, [...(map.get(a.project_id) || []), label]);
     }
     for (const [id, names] of map)
       map.set(
@@ -368,13 +503,73 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       const billed =
         budgetDays > 0 ? Math.round((consumedDays / budgetDays) * total) : 0;
       const progress = timelineProgress({ ...p, end_date: effEnd });
-      // Needs attention: budget exceeded.
+      // Per-line annual billable caps: every contract or signed-extension
+      // line carrying a cap contributes its allowance prorated over the
+      // line's own window for the current calendar year (a mid-year start
+      // or end shrinks it). Caps and CRA consumption group by line name,
+      // so a renewal line continues the same profile's tally.
+      const capsByLine = new Map<string, { cap: number; consumed: number }>();
+      const addCap = (line: PricingLine, start: string | null, windowEnd: string | null) => {
+        if (line.max_billable_days_per_year == null) return;
+        // The line window runs from the contract/extension start to the
+        // line end, capped by the overall window end — like lineDays().
+        const end =
+          windowEnd && line.end_date && line.end_date > windowEnd
+            ? windowEnd
+            : (line.end_date ?? null);
+        const entry = capsByLine.get(line.name) || { cap: 0, consumed: 0 };
+        entry.cap += proratedBillableDays(
+          Number(line.max_billable_days_per_year),
+          start,
+          end,
+          currentYear,
+        );
+        capsByLine.set(line.name, entry);
+      };
+      for (const line of storedTjmProfiles(p.tjm_profiles))
+        addCap(line, p.start_date, p.end_date);
+      for (const ext of signedExts)
+        for (const line of storedTjmProfiles(ext.tjm_profiles))
+          addCap(line, ext.start_date, ext.end_date);
+      const lineYearDays = craLineYearDaysByProject.get(p.id);
+      const lineCaps = [...capsByLine.entries()]
+        .map(([name, v]) => ({
+          name,
+          cap: v.cap,
+          consumed: lineYearDays?.get(name) || 0,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      // Needs attention: budget exceeded, then per-line cap exceeded.
       let flag: string | null = null;
       if (budgetDays > 0 && consumedDays > budgetDays)
         flag = `Budget exceeded by ${fmtDays(consumedDays - budgetDays)} days (${usedPct}% of ${fmtDays(budgetDays)} days)`;
-      const rate = isRegie
-        ? `${money(Number(p.tjm ?? 0), p.currency)}/j`
-        : "Forfait";
+      if (!flag) {
+        const over = lineCaps.filter((c) => c.consumed > c.cap);
+        if (over.length)
+          flag = over
+            .map(
+              (c) =>
+                `${c.name ? `${c.name} ` : ""}cap exceeded for ${currentYear}: ${fmtDays(c.consumed)} of ${fmtDays(c.cap)} days used`,
+            )
+            .join(" · ");
+      }
+      const rateChips = isRegie
+        ? distinctRates([
+            ...storedTjmProfiles(p.tjm_profiles),
+            ...signedExts.flatMap((ext) =>
+              storedTjmProfiles(ext.tjm_profiles),
+            ),
+          ])
+        : [];
+      const rateLabel = !isRegie
+        ? "Forfait"
+        : rateChips.length === 1
+          ? rateChips[0].name
+            ? `${rateChips[0].name} · ${money(rateChips[0].tjm, p.currency)}/j`
+            : `${money(rateChips[0].tjm, p.currency)}/j`
+          : rateChips.length > 1
+            ? "" // several profiles — the chips under the row carry the rates
+            : `${money(Number(p.tjm ?? 0), p.currency)}/j`;
       return {
         project: p,
         meta,
@@ -394,11 +589,12 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
               .join("")
           : "—",
         isRegie,
-        rate,
+        rateLabel,
+        rateChips,
         metaLine: [
           client?.name,
           p.type ? typeLabel(ref.types, p.type) : "",
-          rate,
+          rateLabel,
         ]
           .filter(Boolean)
           .join(" · "),
@@ -409,6 +605,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         consumedDays,
         usedPct,
         billed,
+        lineCaps,
         timePct: progress?.pct ?? null,
         daysLeft: progress?.left ?? null,
         flag,
@@ -422,6 +619,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     teamByProject,
     signedExtensionsByProject,
     craDaysByProject,
+    craLineYearDaysByProject,
   ]);
 
   const activeRows = rows.filter((r) => !r.meta.is_terminal);
@@ -443,13 +641,18 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
   }).length;
   const archivedCount = rows.length - activeCount;
   // Breakdown for the inverted "Needs attention" card subtitle.
-  const attentionParts = [
-    rows.filter((r) => r.budgetDays > 0 && r.consumedDays > r.budgetDays)
-      .length,
-  ];
-  const attentionSub = attentionParts[0]
-    ? `${attentionParts[0]} over budget`
-    : "";
+  const overBudgetCount = rows.filter(
+    (r) => r.budgetDays > 0 && r.consumedDays > r.budgetDays,
+  ).length;
+  const overCapCount = rows.filter((r) =>
+    r.lineCaps.some((c) => c.consumed > c.cap),
+  ).length;
+  const attentionSub = [
+    overBudgetCount ? `${overBudgetCount} over budget` : "",
+    overCapCount ? `${overCapCount} over annual cap` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const query = search.toLowerCase();
   const visible = rows.filter((r) => {
@@ -493,25 +696,23 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
   }, [editing]);
 
   // Opening a project page pushes a history entry so the browser back
-  // button returns to the list; ?new=1 addresses the create form.
+  // button returns to the list; /sales/projects/new addresses the create form.
   function openProjectPage(project: Project | null) {
     const url = new URL(window.location.href);
-    url.searchParams.delete("project");
-    url.searchParams.delete("new");
-    if (project) url.searchParams.set("project", project.id);
-    else url.searchParams.set("new", "1");
+    url.pathname = project
+      ? `/sales/projects/${encodeURIComponent(project.id)}`
+      : "/sales/projects/new";
     window.history.pushState(null, "", url.pathname + url.search + url.hash);
     setEditing(project);
   }
 
-  // Closing the page drops the ?project=/?new= deep link so refreshes
-  // land back on the list.
+  // Closing the page drops the project id segment so refreshes land back
+  // on the list.
   function closeProjectDialog() {
     setEditing(undefined);
     const url = new URL(window.location.href);
-    if (url.searchParams.has("project") || url.searchParams.has("new")) {
-      url.searchParams.delete("project");
-      url.searchParams.delete("new");
+    if (url.pathname.replace(/\/+$/, "") !== "/sales/projects") {
+      url.pathname = "/sales/projects";
       window.history.replaceState(
         null,
         "",
@@ -707,7 +908,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             defaultStatusKey={defaultStatus?.key}
             busy={busy}
             actorEmail={actorEmail}
+            currentYear={currentYear}
             craDaysByProject={craDaysByProject}
+            craLineYearDaysByProject={craLineYearDaysByProject}
             signedExtensions={
               editing ? signedExtensionsByProject.get(editing.id) || [] : []
             }
@@ -884,6 +1087,24 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                           <span className="projects-sub">
                             {r.metaLine || "—"}
                           </span>
+                          {r.rateChips.length > 1 && (
+                            <span className="projects-rates">
+                              {r.rateChips.map((c, i) => (
+                                <span
+                                  className="projects-rate-chip"
+                                  key={`${c.name}-${c.tjm}-${i}`}
+                                >
+                                  {c.name && (
+                                    <span className="projects-rate-name">
+                                      {c.name}
+                                    </span>
+                                  )}
+                                  {c.name ? " " : ""}
+                                  {`${money(c.tjm, p.currency)}/j`}
+                                </span>
+                              ))}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="projects-timeline">
@@ -994,6 +1215,18 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                             />
                           </>
                         )}
+                        {r.lineCaps.map((c) => (
+                          <div
+                            key={c.name}
+                            className={`projects-consume-cap${
+                              c.consumed > c.cap ? " over" : ""
+                            }`}
+                          >
+                            {currentYear}
+                            {c.name ? ` ${c.name}` : ""} cap:{" "}
+                            {fmtDays(c.consumed)} / {fmtDays(c.cap)} days
+                          </div>
+                        ))}
                       </div>
                       <div>
                         <span
@@ -1165,9 +1398,61 @@ function ProjectStatsStrip({
     0,
   );
   const total = Number(project.amount) + extAmount;
-  // Blended consumption value — the same approximation as the projects list.
-  const pct = budget > 0 ? Math.round((craDays / budget) * 100) : 0;
-  const consumedValue = budget > 0 ? Math.round((craDays / budget) * total) : 0;
+  // Per-line annual billable caps (sales.md §14): a capped line can bill at
+  // most its prorated allowance per calendar year, so line days beyond the
+  // cap never become value. Sum the lifetime excess over every year of
+  // every capped line's window (contract + signed extensions) and shrink
+  // the day budget — and with it value, consumption and remaining.
+  let cappedDaysLost = 0;
+  const addCapLoss = (
+    line: PricingLine,
+    windowStart: string | null,
+    windowEnd: string | null,
+  ) => {
+    if (line.max_billable_days_per_year == null || !windowStart) return;
+    const end =
+      windowEnd && line.end_date && line.end_date > windowEnd
+        ? windowEnd
+        : line.end_date;
+    // A line without its own end date prices 0 days (lineDays) — nothing
+    // to cap. An undated window can't be prorated either.
+    if (!end) return;
+    for (let year = Number(windowStart.slice(0, 4)); year <= Number(end.slice(0, 4)); year++) {
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+      const from = windowStart > yearStart ? windowStart : yearStart;
+      const to = end < yearEnd ? end : yearEnd;
+      if (to < from) continue;
+      const daysInYear = openDaysBetween(from, to);
+      const allowance = proratedBillableDays(
+        Number(line.max_billable_days_per_year),
+        windowStart,
+        end,
+        year,
+      );
+      cappedDaysLost += Math.max(0, daysInYear - allowance);
+    }
+  };
+  for (const line of storedTjmProfiles(project.tjm_profiles))
+    addCapLoss(line, project.start_date, project.end_date);
+  for (const ext of signedExts)
+    for (const line of storedTjmProfiles(ext.tjm_profiles))
+      addCapLoss(line, ext.start_date, ext.end_date);
+  const capped = budget > 0 && cappedDaysLost > 0;
+  const budgetCapped = capped ? Math.max(0, budget - cappedDaysLost) : budget;
+  // Blended consumption value — the same approximation as the projects
+  // list, scaled to the capped budget/value so consumption never exceeds
+  // what the caps allow to bill.
+  const cappedTotal = capped
+    ? Math.round((budgetCapped / budget) * total)
+    : total;
+  const effDays = capped ? Math.min(craDays, budgetCapped) : craDays;
+  const pct =
+    budgetCapped > 0 ? Math.round((effDays / budgetCapped) * 100) : 0;
+  const consumedValue =
+    budgetCapped > 0
+      ? Math.round((effDays / budgetCapped) * cappedTotal)
+      : 0;
   let effEnd = project.end_date;
   for (const ext of signedExts) {
     if (ext.end_date && (!effEnd || ext.end_date > effEnd))
@@ -1178,35 +1463,40 @@ function ProjectStatsStrip({
     <div className="pj-stats">
       <div className="pj-stat">
         <span className="pj-stat-label">Contract value</span>
-        <span className="pj-stat-value">{money(total, project.currency)}</span>
+        <span className="pj-stat-value">
+          {money(cappedTotal, project.currency)}
+        </span>
         <span className="pj-stat-sub">
           {isRegie
-            ? `${money(Number(project.tjm ?? 0), project.currency)} × ${fmtDays(budget)} days`
+            ? `${money(Number(project.tjm ?? 0), project.currency)} × ${fmtDays(budgetCapped)} days`
             : "Forfait"}
           {extAmount > 0 ? " · incl. extensions" : ""}
+          {capped ? " · capped by annual caps" : ""}
         </span>
       </div>
       <div className="pj-stat">
         <span className="pj-stat-label">Consumed (CRA)</span>
         <span className="pj-stat-value">
-          {budget > 0
+          {budgetCapped > 0
             ? money(consumedValue, project.currency)
             : `${fmtDays(craDays)} days`}
         </span>
         <span className="pj-stat-sub">
-          {budget > 0
-            ? `${fmtDays(craDays)} of ${fmtDays(budget)} days · ${pct}%`
+          {budgetCapped > 0
+            ? `${fmtDays(effDays)} of ${fmtDays(budgetCapped)} days · ${pct}%`
             : "from CRA timesheets"}
         </span>
       </div>
       <div className="pj-stat">
         <span className="pj-stat-label">Remaining</span>
         <span className="pj-stat-value">
-          {budget > 0 ? money(total - consumedValue, project.currency) : "—"}
+          {budgetCapped > 0
+            ? money(cappedTotal - consumedValue, project.currency)
+            : "—"}
         </span>
         <span className="pj-stat-sub">
-          {budget > 0
-            ? `${fmtDays(budget - craDays)} days left to deliver`
+          {budgetCapped > 0
+            ? `${fmtDays(budgetCapped - effDays)} days left to deliver`
             : "Fixed price"}
         </span>
       </div>
@@ -1236,7 +1526,9 @@ function ProjectForm({
   defaultStatusKey,
   busy,
   actorEmail,
+  currentYear,
   craDaysByProject,
+  craLineYearDaysByProject,
   signedExtensions,
   onCancel,
   onSubmit,
@@ -1252,7 +1544,9 @@ function ProjectForm({
   defaultStatusKey: string | undefined;
   busy: boolean;
   actorEmail: string;
+  currentYear: number;
   craDaysByProject: Map<string, number>;
+  craLineYearDaysByProject: Map<string, Map<string, number>>;
   signedExtensions: ProjectExtension[];
   onCancel: () => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
@@ -1279,12 +1573,16 @@ function ProjectForm({
         name: p.name,
         tjm: String(p.tjm),
         end_date: p.end_date || "",
+        cap:
+          p.max_billable_days_per_year != null
+            ? String(p.max_billable_days_per_year)
+            : "",
       }));
     if (editing?.pricing_model === "regie" && editing.tjm != null)
-      return [{ name: "", tjm: String(editing.tjm), end_date: "" }];
+      return [{ name: "", tjm: String(editing.tjm), end_date: "", cap: "" }];
     if (!editing && source?.pricing_model === "regie" && source.tjm != null)
-      return [{ name: "", tjm: String(source.tjm), end_date: "" }];
-    return [{ name: "", tjm: "", end_date: "" }];
+      return [{ name: "", tjm: String(source.tjm), end_date: "", cap: "" }];
+    return [{ name: "", tjm: "", end_date: "", cap: "" }];
   });
   const [currency, setCurrency] = useState(editing?.currency || "EUR");
   const [fixedPrice, setFixedPrice] = useState(
@@ -1303,6 +1601,7 @@ function ProjectForm({
     name: p.name.trim(),
     tjm: Number(p.tjm) || 0,
     end_date: p.end_date || null,
+    max_billable_days_per_year: Number(p.cap) > 0 ? Number(p.cap) : null,
   }));
   const totalDays = linesDays(cleanedProfiles, startDate, endDate);
   const regieTotal = linesAmount(cleanedProfiles, startDate, endDate);
@@ -1330,6 +1629,41 @@ function ProjectForm({
   // régie profiles (plus signed régie extensions), the amount the matching
   // contract value — the same figures as the projects list and stat strip.
   const consumedDays = editing ? craDaysByProject.get(editing.id) || 0 : 0;
+  // Per-line billable caps for the side card: every saved contract or
+  // signed-extension line carrying a cap, prorated over its own window for
+  // the current year, with this year's CRA days attributed by line name.
+  const savedLineCaps = useMemo(() => {
+    if (!editing) return [];
+    const byName = new Map<string, { cap: number; consumed: number }>();
+    const add = (line: PricingLine, start: string | null, windowEnd: string | null) => {
+      if (line.max_billable_days_per_year == null) return;
+      const end =
+        windowEnd && line.end_date && line.end_date > windowEnd
+          ? windowEnd
+          : (line.end_date ?? null);
+      const entry = byName.get(line.name) || { cap: 0, consumed: 0 };
+      entry.cap += proratedBillableDays(
+        Number(line.max_billable_days_per_year),
+        start,
+        end,
+        currentYear,
+      );
+      byName.set(line.name, entry);
+    };
+    for (const line of storedTjmProfiles(editing.tjm_profiles))
+      add(line, editing.start_date, editing.end_date);
+    for (const ext of signedExtensions)
+      for (const line of storedTjmProfiles(ext.tjm_profiles))
+        add(line, ext.start_date, ext.end_date);
+    const consumedByLine = craLineYearDaysByProject.get(editing.id);
+    return [...byName.entries()]
+      .map(([name, v]) => ({
+        name,
+        cap: v.cap,
+        consumed: consumedByLine?.get(name) || 0,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [editing, signedExtensions, craLineYearDaysByProject, currentYear]);
   const extBudgetDays = signedExtensions.reduce(
     (sum, ext) =>
       ext.pricing_model === "regie" && ext.estimated_days != null
@@ -1359,7 +1693,7 @@ function ProjectForm({
       list.map((p, j) => (j === i ? { ...p, ...patch } : p)),
     );
   const addProfile = () =>
-    setProfiles((list) => [...list, { name: "", tjm: "", end_date: "" }]);
+    setProfiles((list) => [...list, { name: "", tjm: "", end_date: "", cap: "" }]);
   const removeProfile = (i: number) =>
     setProfiles((list) =>
       list.length <= 1 ? list : list.filter((_, j) => j !== i),
@@ -1382,8 +1716,8 @@ function ProjectForm({
                     setClientId(o.client_id);
                     setProfiles(
                       o.pricing_model === "regie" && o.tjm != null
-                        ? [{ name: "", tjm: String(o.tjm), end_date: "" }]
-                        : [{ name: "", tjm: "", end_date: "" }],
+                        ? [{ name: "", tjm: String(o.tjm), end_date: "", cap: "" }]
+                        : [{ name: "", tjm: "", end_date: "", cap: "" }],
                     );
                   }
                 }}
@@ -1622,12 +1956,26 @@ function ProjectForm({
                       <span>Profile</span>
                       <span>Rate</span>
                       <span>End date</span>
+                      <span>Cap / year</span>
                       <span className="pj-right">Subtotal</span>
                       <span />
                     </div>
                     {profiles.map((profile, i) => {
                       const cleaned = cleanedProfiles[i];
                       const days = lineDays(cleaned, startDate, endDate);
+                      // Live prorata: the cap input is the full-year
+                      // allowance; the caption shows what this calendar
+                      // year actually allows over the line window.
+                      const capNumber = Number(profile.cap) || 0;
+                      const capThisYear =
+                        capNumber > 0
+                          ? proratedBillableDays(
+                              capNumber,
+                              startDate || null,
+                              cleaned.end_date ?? null,
+                              currentYear,
+                            )
+                          : null;
                       return (
                         <div className="pj-table-row" key={i}>
                           <input
@@ -1664,6 +2012,24 @@ function ProjectForm({
                               setProfile(i, { end_date: value })
                             }
                           />
+                          <div className="pj-cap-cell">
+                            <input
+                              aria-label={`Profile ${i + 1} yearly billable cap`}
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={profile.cap}
+                              placeholder="e.g. 210"
+                              onChange={(e) =>
+                                setProfile(i, { cap: e.target.value })
+                              }
+                            />
+                            {capThisYear !== null && (
+                              <span className="pj-cap-prorata">
+                                ≈ {fmtDays(capThisYear)} d in {currentYear}
+                              </span>
+                            )}
+                          </div>
                           <span
                             className="pj-subtotal"
                             title={`${days} working days`}
@@ -1832,6 +2198,32 @@ function ProjectForm({
                     No client-project days recorded on this project yet — the
                     bar fills as employees save their CRA.
                   </p>
+                )}
+                {savedLineCaps.length > 0 && (
+                  <>
+                    <p className="pj-side-label">
+                      {currentYear} billable caps (per profile)
+                    </p>
+                    {savedLineCaps.map((c) => (
+                      <p className="pj-side-figures" key={c.name}>
+                        <strong
+                          className={
+                            c.consumed > c.cap ? "pj-side-over" : ""
+                          }
+                        >
+                          {c.name || "Unnamed profile"}:{" "}
+                          {fmtDays(c.consumed)} days
+                        </strong>
+                        <span>/ {fmtDays(c.cap)} days</span>
+                      </p>
+                    ))}
+                    {savedLineCaps.some((c) => c.consumed > c.cap) && (
+                      <p className="pj-hint">
+                        A profile's annual cap is exceeded — the project is
+                        flagged in the list.
+                      </p>
+                    )}
+                  </>
                 )}
               </section>
               <section className="pj-card">

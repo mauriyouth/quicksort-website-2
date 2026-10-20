@@ -367,11 +367,14 @@ Requirements:
 - Statuses and types come from the configurable referentials (§8.12), not hard-coded lists.
 - Archive/restore via the terminal status; full delete for mistakes.
 - Staff projects from the HR side: an employee record links to one or more projects via `employee_project_assignments` (position, allocation %, assignment window; one assignment per employee/project pair). Project rows show the assigned team; the employee record assigns and removes.
+- Optional **annual billable-days cap per pricing line** (`tjm_profiles[].max_billable_days_per_year` — contract lines and extension lines alike, e.g. 210 for the "Data Engineer" profile): the operator inputs the full-year figure only; the app computes the effective cap per calendar year by prorating over the line's own window (contract/extension start → line end date) — max × open days in the window ∩ year ÷ open days in the year, rounded to a half day. Empty means the line is exempt. CRA consumption attributes to a line through the staffing assignment covering each logged day (`employee_project_assignments.pricing_line`, same window/status rules as the CRA screen); caps and consumption group by line name so a renewal line continues the same profile's tally. Rows show a per-line "year cap" line, over-cap projects get a needs-attention flag and count on the inverted stat card, and the edit page lists each capped profile in the consumption side card with a live prorated caption while typing.
 
 Acceptance criteria:
 
 - A won deal can be converted exactly once; the picker only lists unconverted won deals.
 - A régie project cannot be saved without at least one line with a rate and an end date; the estimated value updates as line rates or end dates change.
+- A 210-day cap on a line starting July 1 shows ≈ half-year allowance for that year and the full 210 the following year; leaving the cap empty exempts the line and shows no cap anywhere.
+- CRA days attributed to a capped profile past its prorated cap flag the row (needs-attention tab, inverted pill and stat breakdown) without a reload.
 - Reordering or renaming a status in Global settings is reflected on the projects screen without a reload.
 - Assigning an employee to a project from their record shows the team on the project row without a reload.
 

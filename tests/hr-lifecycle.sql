@@ -36,7 +36,7 @@ $$;
 
 create temporary table hr_test_ids(kind text primary key,id uuid);
 do $$
-declare person uuid; app uuid; app2 uuid; req uuid; offer uuid; emp uuid; emp2 uuid; task uuid; prerequisite uuid; review uuid; exit_id uuid; assignment uuid;
+declare person uuid; app uuid; app2 uuid; req uuid; offer uuid; emp uuid; emp2 uuid; task uuid; prerequisite uuid; review uuid; exit_id uuid; assignment uuid; pool_person uuid; pool_emp uuid; pool_person2 uuid;
  client uuid; project uuid; contract uuid; result jsonb; payload jsonb; previous_events bigint; v integer; stage_time timestamptz; interview_kind text; t record;
 begin
  result:=pg_temp.command('{"kind":"create_person","full_name":"Sam Rivera","email":"candidate@example.invalid","skills":"TypeScript, PostgreSQL","notes":"Confidential interview context"}'); person:=(result->>'person_id')::uuid;
@@ -102,6 +102,7 @@ begin
  perform pg_temp.command(jsonb_build_object('kind','countersign_contract','contract_id',contract,'signer_name','HR Manager'));
  result:=pg_temp.command(jsonb_build_object('kind','hire','application_id',app,'expected_version',(select version from public.hr_applications where id=app),'start_date',current_date,'role','Platform Engineer','probation_end',current_date+90)); emp:=(result->>'employee_id')::uuid;
  insert into hr_test_ids values('employment',emp);
+ perform pg_temp.assert_true((select contract_type from public.employees where id=emp)='CDI','Hire copies the accepted offer contract type');
  perform pg_temp.assert_true((select status from public.hr_applications where id=app)='hired','Hire closes application atomically');
  perform pg_temp.assert_true((select status from public.hr_applications where id=app2)='active','Other application remains separate');
  -- Manager and buddy stay editable after hiring (HR administrators only), with version checks.
@@ -113,6 +114,40 @@ begin
  perform pg_temp.assert_true((select parrain from public.employees where id=emp)='Jordan Lee','Buddy changed again');
  perform pg_temp.must_fail(jsonb_build_object('kind','update_employment','employee_id',emp,'expected_version',999,'manager_email','stale@example.invalid'),'changed');
  perform pg_temp.assert_true((select manager_email from public.employees where id=emp)='manager@example.invalid','Stale manager save is rejected');
+ -- Salary history: hiring seeds the first interval from the accepted offer; a change closes the previous interval the day before it starts.
+ perform pg_temp.assert_true((select count(*) from public.employee_salaries where employee_id=emp)=1,'Hire seeds one salary interval from the accepted offer');
+ perform pg_temp.assert_true((select salary_monthly from public.employee_salaries where employee_id=emp)=4500,'Seeded salary matches the accepted offer');
+ perform pg_temp.assert_true((select start_date from public.employee_salaries where employee_id=emp)=(select start_date from public.employees where id=emp),'Seeded salary starts at the employment start date');
+ perform pg_temp.must_fail(jsonb_build_object('kind','save_salary','employee_id',emp,'salary_monthly',5000,'start_date',current_date-10),'employment period');
+ perform pg_temp.must_fail(jsonb_build_object('kind','save_salary','employee_id',emp,'salary_monthly',-1,'start_date',current_date+60),'zero or positive');
+ result:=pg_temp.command(jsonb_build_object('kind','save_salary','employee_id',emp,'salary_monthly',5000,'start_date',current_date+30,'rationale','Annual raise'));
+ perform pg_temp.assert_true((select count(*) from public.employee_salaries where employee_id=emp)=2,'Salary change adds a new interval');
+ perform pg_temp.assert_true((select end_date from public.employee_salaries where employee_id=emp and end_date is not null)=current_date+29,'New change closes the previous interval the day before');
+ perform pg_temp.assert_true((select salary_monthly from public.employee_salaries where employee_id=emp and end_date is null)=5000,'Latest open interval carries the new salary');
+ perform pg_temp.assert_true(exists(select 1 from public.hr_events where employee_id=emp and kind='save_salary' and previous_state='4500' and next_state='5000'),'Salary change is audited with old and new amounts');
+ perform pg_temp.must_fail(jsonb_build_object('kind','save_salary','employee_id',emp,'salary_monthly',5100,'start_date',current_date+10,'end_date',current_date+20,'rationale','Try to overlap'),'overlap');
+ perform pg_temp.must_fail(jsonb_build_object('kind','save_salary','employee_id',emp,'salary_monthly',5100,'start_date',current_date+30),'already starts');
+ -- Corrections to a recorded interval require a rationale and a matching version.
+ perform pg_temp.must_fail(jsonb_build_object('kind','save_salary','employee_id',emp,'salary_id',(select id from public.employee_salaries where employee_id=emp and end_date is null),'expected_version',(select version from public.employee_salaries where employee_id=emp and end_date is null),'salary_monthly',5200,'start_date',current_date+30),'rationale');
+ perform pg_temp.must_fail(jsonb_build_object('kind','save_salary','employee_id',emp,'salary_id',(select id from public.employee_salaries where employee_id=emp and end_date is null),'expected_version',999,'salary_monthly',5200,'start_date',current_date+30,'rationale','Fix typo'),'changed');
+ perform pg_temp.command(jsonb_build_object('kind','save_salary','employee_id',emp,'salary_id',(select id from public.employee_salaries where employee_id=emp and end_date is null),'expected_version',(select version from public.employee_salaries where employee_id=emp and end_date is null),'salary_monthly',5200,'start_date',current_date+30,'rationale','Fix typo'));
+ perform pg_temp.assert_true((select salary_monthly from public.employee_salaries where employee_id=emp and end_date is null)=5200,'Salary correction applies with a rationale');
+ -- Direct engagement: a talent-pool person becomes staffable without an application, offer or contract.
+ result:=pg_temp.command('{"kind":"create_person","full_name":"Ravi Patel","skills":"React, Node"}'); pool_person:=(result->>'person_id')::uuid;
+
+ perform pg_temp.command(jsonb_build_object('kind','engage_person','person_id',pool_person,'role','Frontend Freelance','contract_type','Freelance','start_date',current_date,'rationale','Freelance already contracted by the client'));
+ pool_emp:=(select id from public.employees where person_id=pool_person);
+ perform pg_temp.assert_true((select status from public.employees where id=pool_emp)='active','Immediate engagement starts active');
+ perform pg_temp.assert_true((select contract_type from public.employees where id=pool_emp)='Freelance','Engagement stores its contract type');
+ perform pg_temp.assert_true(exists(select 1 from public.hr_events where person_id=pool_person and kind='engage_person' and next_state='engaged'),'Engagement lands in the audit log');
+ perform pg_temp.must_fail(jsonb_build_object('kind','engage_person','person_id',pool_person,'role','Again','contract_type','Freelance','start_date',current_date,'rationale','Duplicate engagement'),'open employment period');
+ -- Rationale is optional: a direct engagement without one still engages and lands in the audit log.
+ result:=pg_temp.command('{"kind":"create_person","full_name":"Tara Nair","skills":"Vue, Node"}'); pool_person2:=(result->>'person_id')::uuid;
+ perform pg_temp.command(jsonb_build_object('kind','engage_person','person_id',pool_person2,'role','Backend Freelance','contract_type','Freelance','start_date',current_date));
+ perform pg_temp.assert_true(exists(select 1 from public.hr_events where person_id=pool_person2 and kind='engage_person' and next_state='engaged'),'Engagement without rationale lands in the audit log');
+ perform set_config('request.jwt.claims','{"sub":"11000000-0000-4000-8000-000000000005","role":"authenticated"}',true);
+ perform pg_temp.must_fail(jsonb_build_object('kind','engage_person','person_id',pool_person,'role','Nope','contract_type','Freelance','start_date',current_date,'rationale','Sales role tries to engage'),'HR access');
+ perform set_config('request.jwt.claims','{"sub":"11000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
  perform set_config('request.jwt.claims','{"sub":"11000000-0000-4000-8000-000000000005","role":"authenticated"}',true);
  perform pg_temp.must_fail(jsonb_build_object('kind','update_employment','employee_id',emp,'expected_version',(select version from public.employees where id=emp),'manager_email','sales@example.invalid'),'HR access');
  perform set_config('request.jwt.claims','{"sub":"11000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
@@ -143,21 +178,26 @@ begin
  perform pg_temp.assert_true((select count(*) from public.employee_project_assignments where employee_id=emp)=2,'Same project supports non-overlapping periods');
  -- Pricing lines: a régie assignment targets one named TJM profile of the contract.
  insert into public.sales_projects(title,client_id,pricing_model,tjm,estimated_days,tjm_profiles,start_date,end_date) values('Régie squad',client,'regie',650,200,'[{"name":"Data Engineer","tjm":650},{"name":"Lead Dev","tjm":750}]'::jsonb,current_date,current_date+300) returning id into project;
- perform pg_temp.must_fail(jsonb_build_object('kind','assign_project','employee_id',emp,'project_id',project,'position','Architect','pricing_line','Architect','allocation_pct',10,'start_date',current_date+61,'status','proposed'),'pricing line');
- result:=pg_temp.command(jsonb_build_object('kind','assign_project','employee_id',emp,'project_id',project,'position','Data Engineer','pricing_line','Data Engineer','allocation_pct',10,'start_date',current_date+61,'status','proposed'));
+ perform pg_temp.must_fail(jsonb_build_object('kind','assign_project','employee_id',emp,'project_id',project,'position','Architect','pricing_line','Architect','allocation_pct',10,'start_date',current_date+61,'end_date',current_date+90,'status','proposed'),'pricing line');
+ result:=pg_temp.command(jsonb_build_object('kind','assign_project','employee_id',emp,'project_id',project,'position','Data Engineer','pricing_line','Data Engineer','allocation_pct',10,'start_date',current_date+61,'end_date',current_date+90,'status','proposed'));
  perform pg_temp.assert_true((select pricing_line from public.employee_project_assignments where id=(result->>'assignment_id')::uuid)='Data Engineer','Assignment stores its pricing line');
- perform pg_temp.must_fail(jsonb_build_object('kind','update_assignment','assignment_id',(result->>'assignment_id')::uuid,'expected_version',1,'position','Data Engineer','pricing_line','Unknown line','allocation_pct',10,'start_date',current_date+61,'status','proposed','rationale','Try an unknown line'),'pricing line');
- result:=pg_temp.command(jsonb_build_object('kind','update_assignment','assignment_id',(result->>'assignment_id')::uuid,'expected_version',1,'position','Lead Developer','pricing_line','Lead Dev','allocation_pct',10,'start_date',current_date+61,'status','proposed','rationale','Move to the lead line'));
+ perform pg_temp.must_fail(jsonb_build_object('kind','update_assignment','assignment_id',(result->>'assignment_id')::uuid,'expected_version',1,'position','Data Engineer','pricing_line','Unknown line','allocation_pct',10,'start_date',current_date+61,'end_date',current_date+90,'status','proposed','rationale','Try an unknown line'),'pricing line');
+ result:=pg_temp.command(jsonb_build_object('kind','update_assignment','assignment_id',(result->>'assignment_id')::uuid,'expected_version',1,'position','Lead Developer','pricing_line','Lead Dev','allocation_pct',10,'start_date',current_date+61,'end_date',current_date+90,'status','proposed','rationale','Move to the lead line'));
  perform pg_temp.assert_true((select pricing_line from public.employee_project_assignments where id=(result->>'assignment_id')::uuid)='Lead Dev','Assignment line can be re-pointed with a rationale');
  result:=pg_temp.command(jsonb_build_object('kind','open_exit','employee_id',emp,'expected_version',(select version from public.employees where id=emp),'exit_kind','resignation','exit_date',current_date,'rationale','Resignation received')); exit_id:=(result->>'exit_id')::uuid;
  perform pg_temp.assert_true((select status from public.employees where id=emp)='offboarding','Opening exit enters offboarding atomically');
  perform pg_temp.must_fail(jsonb_build_object('kind','complete_exit','exit_id',exit_id,'expected_version',1),'handover');
- perform pg_temp.command(jsonb_build_object('kind','save_exit','exit_id',exit_id,'expected_version',1,'handover_plan','Repository ownership transferred','successor','Team lead','exit_interview','Discussion completed','rehire_eligible',true,'rehire_rationale','Eligible for future opportunities','legal_docs_evidence','Final documents recorded'));
+ perform pg_temp.command(jsonb_build_object('kind','save_exit','exit_id',exit_id,'expected_version',1,'handover_plan','Repository ownership transferred','successor','Team lead','exit_interview','Discussion completed','rehire_eligible',true,'rehire_rationale','Eligible for future opportunities'));
  for t in select id,version from public.offboarding_items where offboarding_id=exit_id loop
-  perform pg_temp.command(jsonb_build_object('kind','complete_exit_item','item_id',t.id,'expected_version',t.version,'evidence','Verified completion'));
+  perform pg_temp.command(jsonb_build_object('kind','complete_exit_item','item_id',t.id,'expected_version',t.version));
  end loop;
  perform pg_temp.command(jsonb_build_object('kind','complete_exit','exit_id',exit_id,'expected_version',(select version from public.offboarding_records where id=exit_id)));
  perform pg_temp.assert_true((select status from public.employees where id=emp)='ended','Completed exit creates alumni employment');
+ -- Exit closes the salary history at the exit date and drops changes scheduled after it.
+ perform pg_temp.assert_true(not exists(select 1 from public.employee_salaries where employee_id=emp and end_date is null),'Exit closes the open salary interval');
+ perform pg_temp.assert_true((select end_date from public.employee_salaries where employee_id=emp and salary_monthly=4500)=current_date,'Exit closes salary history at the exit date');
+ perform pg_temp.assert_true((select count(*) from public.employee_salaries where employee_id=emp)=1,'Exit removes salary changes scheduled after the departure');
+ perform pg_temp.must_fail(jsonb_build_object('kind','save_salary','employee_id',emp,'salary_monthly',5200,'start_date',current_date),'closed with an end date');
  perform pg_temp.assert_true(not exists(select 1 from public.employee_project_assignments where employee_id=emp and status in ('reserved','confirmed','active')),'Exit closes all commitments');
  perform pg_temp.must_fail(jsonb_build_object('kind','assign_project','employee_id',emp,'project_id',project,'position','Invalid alumni staffing','allocation_pct',20,'start_date',current_date+61,'status','confirmed'),'employment');
 
@@ -274,7 +314,7 @@ begin
  perform pg_temp.assert_true((select count(*) from public.onboarding_items)=before_tasks,'Reviewing advice does not automatically apply facts');
  perform set_config('request.jwt.claims','{"sub":"11000000-0000-4000-8000-000000000005","role":"authenticated"}',true);
  result:=public.hr_workspace_snapshot();
- perform pg_temp.assert_true(jsonb_array_length(result->'offers')=0 and jsonb_array_length(result->'contracts')=0 and jsonb_array_length(result->'events')=0,'Sales staffing projection excludes compensation/contracts/history');
+ perform pg_temp.assert_true(jsonb_array_length(result->'offers')=0 and jsonb_array_length(result->'contracts')=0 and jsonb_array_length(result->'events')=0 and jsonb_array_length(result->'salaries')=0,'Sales staffing projection excludes compensation/contracts/history');
  perform pg_temp.assert_true(not exists(select 1 from jsonb_array_elements(result->'people') j where j->>'notes'<>'' or j->>'email'<>'' or j->>'phone'<>''),'Sales staffing projection excludes private notes and contacts');
  perform pg_temp.must_fail(jsonb_build_object('kind','update_person','person_id',p.id,'expected_version',p.version,'full_name','Sales edit'),'HR access');
 end;

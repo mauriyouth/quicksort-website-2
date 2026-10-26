@@ -146,11 +146,14 @@ export function SkillListField({
   name,
   label: title,
   value = '',
+  hideLabel = false,
   placeholder = 'Type a skill or certification, then press Enter'
 }: {
   name: string;
   label: string;
   value?: string;
+  /** Hide the visible caption when a card heading already names the list. */
+  hideLabel?: boolean;
   placeholder?: string;
 }) {
   const parse = (raw: string) => raw.split(/[\n,]/).map(item => item.trim()).filter(Boolean);
@@ -163,7 +166,7 @@ export function SkillListField({
   };
   const drop = (skill: string) => setSkills(current => current.filter(item => item !== skill));
   return <div className="hr-field hr-wide">
-    <span>
+    <span className={hideLabel ? 'hr-visually-hidden' : ''}>
       {title}
     </span>
     <div className="hr-skillbox" onClick={event => {

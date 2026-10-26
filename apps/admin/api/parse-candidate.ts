@@ -33,20 +33,28 @@ return async function handler(req: Request, res: Response) {
     const role = await client.from("user_roles").select("role").eq("user_id", identity.data).single();
     if (role.error || !["admin", "hr"].includes(role.data?.role || "")) return res.status(403).json({ error: "HR access is required." });
     const parsed = intakeRequest.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Provide a PDF up to 3 MB, or profile text between 50 and 60,000 characters (LinkedIn: profile URL plus pasted sections)." });
+    if (!parsed.success) return res.status(400).json({ error: "Provide a PDF up to 10 MB, or profile text between 50 and 60,000 characters (LinkedIn: profile URL plus pasted sections)." });
     const input = parsed.data.profile;
     const aiSettings = await deps.loadAiSettings(client);
     configuredModel = aiSettings.model;
     if (!aiSettings.apiKey) return res.status(503).json({ error: "Add an OpenAI API key in Settings → AI configuration." });
-    const pdf = input.kind === "pdf" ? Buffer.from(input.data, "base64") : null;
-    if (pdf && (pdf.length > MAX_INTAKE_PDF_BYTES || pdf.subarray(0, 5).toString() !== "%PDF-")) return res.status(400).json({ error: "Upload a valid PDF up to 3 MB." });
-    const sourceLabel = input.kind === "pdf" ? `resume PDF "${input.name}"` : input.kind === "linkedin" ? "LinkedIn profile" : "pasted CV text";
+    let pdf: Buffer | null = null;
+    if (input.kind === "pdf") {
+      pdf = Buffer.from(input.data, "base64");
+    } else if (input.kind === "storage") {
+      // RLS decides which bucket paths this user may read — same check as their own browser.
+      const download = await client.storage.from("candidate-documents").download(input.path);
+      if (download.error || !download.data) return res.status(404).json({ error: "Could not retrieve this resume. Upload it again." });
+      pdf = Buffer.from(await download.data.arrayBuffer());
+    }
+    if (pdf && (pdf.length > MAX_INTAKE_PDF_BYTES || pdf.subarray(0, 5).toString() !== "%PDF-")) return res.status(400).json({ error: "Upload a valid PDF up to 10 MB." });
+    const sourceLabel = input.kind !== "text" && input.kind !== "linkedin" ? `resume PDF "${input.name}"` : input.kind === "linkedin" ? "LinkedIn profile" : "pasted CV text";
     const { output } = await deps.generateText({
       model: createOpenAI({ apiKey: aiSettings.apiKey })(aiSettings.model),
       instructions: INTAKE_SYSTEM_INSTRUCTIONS,
       output: Output.object({ schema: parsedProfileSchema }),
       messages: [{ role: "user", content: [
-        { type: "text", text: `Extract the candidate profile from this ${sourceLabel}.${input.kind === "linkedin" && input.url ? ` Profile URL provided by the recruiter (verify it matches the source): ${input.url}.` : ""}${input.kind !== "pdf" ? "\n\n" + input.text : ""}` },
+        { type: "text", text: `Extract the candidate profile from this ${sourceLabel}.${input.kind === "linkedin" && input.url ? ` Profile URL provided by the recruiter (verify it matches the source): ${input.url}.` : ""}${input.kind === "text" || input.kind === "linkedin" ? "\n\n" + input.text : ""}` },
         ...(pdf ? [{ type: "file" as const, data: pdf, mediaType: "application/pdf" as const }] : []),
       ] }],
       maxOutputTokens: 1800, maxRetries: 1, abortSignal: AbortSignal.timeout(50000),

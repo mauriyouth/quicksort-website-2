@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "@clerk/react";
-import { type Job, type Row } from "@quicksort/hr-db";
+import { db, type Job, type Row } from "@quicksort/hr-db";
 import { Notice } from "@quicksort/hr-ui";
 import { ArrowLeft, ArrowUpRight, Check, FileText, Info, Upload, X } from "lucide-react";
 import { MAX_BATCH_FILES, MAX_CV_BYTES, evaluationSchema, matchMetrics, topProfiles, type AnalysisRequest, type CandidateResult } from "./analysis";
@@ -48,25 +48,36 @@ export function CvAnalyzer({ jobs, documents, people }: { jobs: Job[]; documents
     const unique = next.filter((f, i, all) => all.findIndex(other => other.name === f.name && other.size === f.size && other.lastModified === f.lastModified) === i);
     if (unique.length > MAX_BATCH_FILES) { setError(`Choose up to ${MAX_BATCH_FILES} PDFs per batch.`); return; }
     const invalid = unique.find(f => !f.name.toLowerCase().endsWith(".pdf") || !f.size || f.size > MAX_CV_BYTES);
-    if (invalid) { setError(`${invalid.name}: choose a non-empty PDF up to 3 MB. No files from this selection were added.`); return; }
+    if (invalid) { setError(`${invalid.name}: choose a non-empty PDF up to 10 MB. No files from this selection were added.`); return; }
     setFiles(unique); setError("");
   }
   function updateItem(id: string, change: Partial<Item>) { setItems(current => current.map(item => item.id === id ? { ...item, ...change } : item)); }
   async function analyze(item: Item, job: Job, signal: AbortSignal) {
     let cv = item.cv;
+    // Upload straight to Supabase Storage so the 10 MB PDF never passes through
+    // the API body (Vercel caps it at 4.5 MB). The API reads it back from the bucket.
+    let uploadedPath = "";
     if (item.file) {
-      const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1]); reader.onerror = () => reject(new Error("This PDF could not be read.")); reader.readAsDataURL(item.file!); });
-      cv = { kind: "pdf", data, name: item.name };
+      if (!session?.user.id) throw Object.assign(new Error("Sign in again before continuing."), { status: 401 });
+      uploadedPath = `${session.user.id}/${crypto.randomUUID()}.pdf`;
+      const uploaded = await db().storage.from("candidate-documents").upload(uploadedPath, item.file, { upsert: false, contentType: "application/pdf" });
+      if (uploaded.error) throw new Error("This PDF could not be uploaded. Please try again.");
+      cv = { kind: "storage", path: uploadedPath, name: item.name };
     }
-    const token = await session?.getToken({ template: "supabase" });
-    if (!token) throw Object.assign(new Error("Sign in again before continuing."), { status: 401 });
-    const response = await fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ jobId: job.id, requestId: item.requestId, expectedUpdatedAt: job.updated_at, cv }), signal: AbortSignal.any([signal, AbortSignal.timeout(115000)]) });
-    if (!response.headers.get("content-type")?.includes("application/json")) throw new Error("The analyzer is unavailable. Please retry.");
-    const result = await response.json();
-    if (!response.ok) throw Object.assign(new Error(result.error || "Analysis failed."), { status: response.status });
-    result.evaluation = evaluationSchema.parse(result.evaluation);
-    if (result.job.id !== job.id || result.job.updated_at !== job.updated_at) throw Object.assign(new Error("The job changed. Start a new batch."), { status: 409 });
-    return { id: item.id, fileName: item.name, report: result } as CandidateResult;
+    try {
+      const token = await session?.getToken({ template: "supabase" });
+      if (!token) throw Object.assign(new Error("Sign in again before continuing."), { status: 401 });
+      const response = await fetch("/api/analyze", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ jobId: job.id, requestId: item.requestId, expectedUpdatedAt: job.updated_at, cv }), signal: AbortSignal.any([signal, AbortSignal.timeout(115000)]) });
+      if (!response.headers.get("content-type")?.includes("application/json")) throw new Error("The analyzer is unavailable. Please retry.");
+      const result = await response.json();
+      if (!response.ok) throw Object.assign(new Error(result.error || "Analysis failed."), { status: response.status });
+      result.evaluation = evaluationSchema.parse(result.evaluation);
+      if (result.job.id !== job.id || result.job.updated_at !== job.updated_at) throw Object.assign(new Error("The job changed. Start a new batch."), { status: 409 });
+      return { id: item.id, fileName: item.name, report: result } as CandidateResult;
+    } finally {
+      // Throwaway transfer copy — the evaluation keeps its own source_cv snapshot.
+      if (uploadedPath) void db().storage.from("candidate-documents").remove([uploadedPath]).then(({ error }) => { if (error) console.error("Temporary CV upload was not removed:", error.message); });
+    }
   }
   async function run(retry = false) {
     if (controller.current) return;
@@ -124,7 +135,7 @@ export function CvAnalyzer({ jobs, documents, people }: { jobs: Job[]; documents
           {mode === "single" && <><label htmlFor="cv-source">Candidate CV</label><select id="cv-source" value={source} onChange={e => setSource(e.target.value)}><option value="upload">Upload PDF</option><option value="text">Paste CV text</option><option value="document">Existing candidate document</option></select></>}
           {(mode === "bulk" || source === "upload") && <>
             <div className="cv-dropzone" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!busy) addFiles(Array.from(e.dataTransfer.files)); }}>
-              <Upload size={24} /><strong>{mode === "bulk" ? "Drop your CVs here" : "Drop one CV here"}</strong><span className="cv-muted">PDF · up to 3 MB each{mode === "bulk" ? ` · ${MAX_BATCH_FILES} files per batch` : ""}</span>
+              <Upload size={24} /><strong>{mode === "bulk" ? "Drop your CVs here" : "Drop one CV here"}</strong><span className="cv-muted">PDF · up to 10 MB each{mode === "bulk" ? ` · ${MAX_BATCH_FILES} files per batch` : ""}</span>
               <label className="cv-file-button" htmlFor="cv-file">{mode === "bulk" ? "Choose PDFs" : "Choose PDF"}</label><input ref={inputRef} id="cv-file" aria-label={mode === "bulk" ? "Upload CV PDFs" : "Upload one CV PDF"} type="file" accept=".pdf,application/pdf" multiple={mode === "bulk"} onChange={e => { addFiles(Array.from(e.target.files || [])); e.target.value = ""; }} />
             </div>
             {files.length > 0 && <div className="cv-files"><div className="cv-inline"><strong>{files.length} {files.length === 1 ? "CV" : "CVs"} ready</strong><button type="button" className="cv-text-button" onClick={() => setFiles([])}>Clear</button></div><div className="cv-file-list">{files.map((file, i) => <div className="cv-file-row" key={`${file.name}-${i}`}><FileText size={15} /><span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => setFiles(current => current.filter((_, n) => n !== i))}><X size={14} /></button></div>)}</div></div>}

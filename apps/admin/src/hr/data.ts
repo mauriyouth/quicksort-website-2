@@ -44,6 +44,7 @@ const employeeSchema = z.object({
   offer_id: z.string().nullable(),
   matricule: z.string(),
   role: z.string(),
+  contract_type: z.string(),
   manager_email: z.string(),
   parrain: z.string(),
   start_date: z.string(),
@@ -53,6 +54,17 @@ const employeeSchema = z.object({
   onboarding_completed_at: z.string().nullable(),
   probation_status: z.enum(["pending","confirmed","extended","ended"]),
   probation_end: z.string().nullable(),
+  version: z.number(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+const salarySchema = z.object({
+  id: z.string(),
+  employee_id: z.string(),
+  salary_monthly: z.number(),
+  start_date: z.string(),
+  end_date: z.string().nullable(),
+  rationale: z.string(),
   version: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -149,7 +161,6 @@ const exitSchema = z.object({
   exit_interview: z.string(),
   rehire_eligible: z.boolean().nullable(),
   rehire_rationale: z.string(),
-  legal_docs_evidence: z.string(),
   completed_at: z.string().nullable(),
   version: z.number(),
   created_at: z.string(),
@@ -159,7 +170,6 @@ const exitItemSchema = z.object({
   offboarding_id: z.string(),
   title: z.string(),
   required: z.boolean(),
-  evidence: z.string(),
   completed_at: z.string().nullable(),
   version: z.number(),
   created_at: z.string(),
@@ -271,6 +281,7 @@ const workspaceSchema = z.object({
  people: z.array(personSchema),
  applications: z.array(applicationSchema),
  employees: z.array(employeeSchema),
+ salaries: z.array(salarySchema),
  opportunities: z.array(opportunitySchema),
  interviews: z.array(interviewSchema),
  offers: z.array(offerSchema),
@@ -313,19 +324,21 @@ const commandSchemas = {
  share_offer:z.object({kind:z.literal('share_offer'),offer_id:uuid,...version}),
  respond_offer:z.object({kind:z.literal('respond_offer'),offer_id:uuid,...version,response:z.enum(['accepted','declined']),rationale:text.trim().min(1)}),
  hire:z.object({kind:z.literal('hire'),application_id:uuid,...version,start_date:date,role:text.trim().min(1),manager_email:text.optional(),parrain:text.optional(),probation_end:nullableDate}),
+ engage_person:z.object({kind:z.literal('engage_person'),person_id:uuid,start_date:date,role:text.trim().min(1),contract_type:z.enum(['CDI','CDD','Freelance','Internship','Apprenticeship']),manager_email:text.optional(),rationale:text.trim().min(1)}),
  start_onboarding:z.object({kind:z.literal('start_onboarding'),employee_id:uuid,...version}),
  complete_onboarding:z.object({kind:z.literal('complete_onboarding'),employee_id:uuid,...version}),
  cancel_hire:z.object({kind:z.literal('cancel_hire'),employee_id:uuid,...version,rationale:text.trim().min(1)}),
  update_employment:z.object({kind:z.literal('update_employment'),employee_id:uuid,...version,manager_email:text.optional(),parrain:text.optional()}),
+ save_salary:z.object({kind:z.literal('save_salary'),employee_id:uuid,salary_id:uuid.optional(),expected_version:z.number().int().positive().optional(),salary_monthly:z.number().nonnegative(),start_date:date,end_date:nullableDate,rationale:text.optional()}),
  save_task:z.object({kind:z.literal('save_task'),employee_id:uuid,task_id:uuid.optional(),expected_version:z.number().int().positive().optional(),phase:journeyTaskSchema.shape.phase,title:text.trim().min(1),assignee:text,due_date:nullableDate,required:z.boolean().optional(),dependency_id:uuid.nullable().optional(),evidence:text.optional()}),
  complete_task:z.object({kind:z.literal('complete_task'),task_id:uuid,...version,evidence:text.trim().min(1)}),
  schedule_review:z.object({kind:z.literal('schedule_review'),employee_id:uuid,review_kind:reviewSchema.shape.kind,due_date:date}),
  record_review:z.object({kind:z.literal('record_review'),review_id:uuid,...version,outcome:text.trim().min(1),rationale:text.trim().min(1),probation_end:nullableDate}),
  open_exit:z.object({kind:z.literal('open_exit'),employee_id:uuid,...version,exit_kind:text.trim().min(1),exit_date:date,notice_end:nullableDate,rationale:text.trim().min(1)}),
- save_exit:z.object({kind:z.literal('save_exit'),exit_id:uuid,...version,handover_plan:text,successor:text,exit_interview:text,rehire_eligible:z.boolean().nullable(),rehire_rationale:text,legal_docs_evidence:text}),
+ save_exit:z.object({kind:z.literal('save_exit'),exit_id:uuid,...version,handover_plan:text,successor:text,exit_interview:text,rehire_eligible:z.boolean().nullable(),rehire_rationale:text}),
  complete_exit:z.object({kind:z.literal('complete_exit'),exit_id:uuid,...version}),
- save_exit_item:z.object({kind:z.literal('save_exit_item'),exit_id:uuid,item_id:uuid.optional(),expected_version:z.number().int().positive().optional(),title:text.trim().min(1),required:z.boolean().optional(),evidence:text.optional()}),
- complete_exit_item:z.object({kind:z.literal('complete_exit_item'),item_id:uuid,...version,evidence:text.trim().min(1)}),
+ save_exit_item:z.object({kind:z.literal('save_exit_item'),exit_id:uuid,item_id:uuid.optional(),expected_version:z.number().int().positive().optional(),title:text.trim().min(1),required:z.boolean().optional()}),
+ complete_exit_item:z.object({kind:z.literal('complete_exit_item'),item_id:uuid,...version}),
  assign_project:z.object({kind:z.literal('assign_project'),employee_id:uuid,project_id:uuid,position:text,pricing_line:text.optional(),allocation_pct:z.number().int().min(1).max(100),start_date:date,end_date:nullableDate,status:z.enum(['proposed','reserved','confirmed','active'])}),
  update_assignment:z.object({kind:z.literal('update_assignment'),assignment_id:uuid,...version,position:text,pricing_line:text.optional(),allocation_pct:z.number().int().min(1).max(100),start_date:date,end_date:nullableDate,status:z.enum(['proposed','reserved','confirmed','active']),rationale:text.trim().min(1)}),
  end_assignment:z.object({kind:z.literal('end_assignment'),assignment_id:uuid,...version,end_date:date,rationale:text.trim().min(1),cancel:z.boolean().optional()}),
@@ -338,7 +351,7 @@ const commandSchemas = {
  import_person:z.object({kind:z.literal('import_person'),...personFields,external_source:text.trim().min(1),external_id:text.trim().min(1),rationale:text.trim().min(1),employment:z.object({role:text,start_date:date,end_date:nullableDate}).optional()}),
 };
 const commandSchema = z.discriminatedUnion('kind',[commandSchemas.create_person.extend({request_id:uuid.optional()}),...Object.values(commandSchemas).filter(schema=>schema!==commandSchemas.create_person).map(schema=>schema.extend({request_id:uuid.optional()}))]);
-const resultSchema = z.object({request_id:uuid,created:z.boolean().optional(),person_id:uuid.optional(),application_id:uuid.optional(),employee_id:uuid.optional(),opportunity_id:uuid.optional(),interview_id:uuid.optional(),offer_id:uuid.optional(),task_id:uuid.optional(),review_id:uuid.optional(),exit_id:uuid.optional(),item_id:uuid.optional(),assignment_id:uuid.optional(),suggestion_id:uuid.optional(),version:z.number().int().positive().optional()});
+const resultSchema = z.object({request_id:uuid,created:z.boolean().optional(),person_id:uuid.optional(),application_id:uuid.optional(),employee_id:uuid.optional(),opportunity_id:uuid.optional(),interview_id:uuid.optional(),offer_id:uuid.optional(),task_id:uuid.optional(),salary_id:uuid.optional(),review_id:uuid.optional(),exit_id:uuid.optional(),item_id:uuid.optional(),assignment_id:uuid.optional(),suggestion_id:uuid.optional(),version:z.number().int().positive().optional()});
 const requirementsSchema = z.array(z.object({key:text,label:text,done:z.boolean()}));
 
 export async function loadWorkspace(): Promise<Workspace> {

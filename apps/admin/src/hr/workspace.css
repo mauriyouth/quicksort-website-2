@@ -180,19 +180,70 @@
 .hr-person-tabs button span { margin-left: 0; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: var(--qs-paper); border: 1px solid var(--qs-line); font-size: 11px; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
 .hr-person-tabs button[aria-selected='true'] span { background: color-mix(in srgb, var(--qs-ink) 15%, var(--qs-paper)); border-color: transparent; color: var(--qs-ink); }
 .hr-person-page .hr-record-panels { gap: 32px; }
-/* Person · Profile tab — section cards, save bar, at-a-glance tiles and
-   the portal-account linker (reference: Person profile — Aicha Bouzid). */
+/* Person · Profile tab — section cards, sticky save bar, completeness meter
+   and the portal-account linker (reference: Profile — Alexandra Beljakov). */
 .hr-profile-form { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .hr-profile-form .hr-card + .hr-card, .hr-profile-form .hr-card + .hr-profile-save { margin-top: 0; }
-.hr-profile-card { border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 24px; }
+.hr-profile-card { border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 20px; }
 .hr-profile-card-head { display: flex; flex-direction: column; gap: 4px; }
 .hr-profile-card-head h2 { margin: 0; font-family: var(--qs-font-display); font-weight: 500; font-size: 20px; letter-spacing: -0.02em; }
+.hr-profile-card-head h2 small { font-family: var(--qs-font-sans); font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--qs-muted); }
 .hr-profile-card-head p { margin: 0; color: var(--qs-muted); font-size: 13px; }
-.hr-profile-save { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* Fields reflow by their own measure rather than a fixed pair of columns. */
+.hr-profile-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+.hr-profile-fields .hr-field input { height: 44px; box-sizing: border-box; border-radius: 10px; font-size: 14px; }
+/* Record owner reads as one control: who owns it, then the address. */
+.hr-owner-control { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px 0 8px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--qs-line); background: var(--qs-bg-0, var(--qs-bg)); }
+.hr-owner-control:focus-within { border-color: var(--qs-accent); box-shadow: 0 0 0 1px var(--qs-accent); }
+.hr-owner-avatar { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 999px; background: var(--qs-bg-2); font-size: 11px; font-weight: 600; }
+.hr-profile-fields .hr-owner-control input { flex: 1; min-width: 0; height: auto; border: 0; padding: 0; background: transparent; box-shadow: none; }
+.hr-profile-fields .hr-owner-control input:focus-visible { outline: none; box-shadow: none; }
+/* Credentials: three parallel lists, each introduced by what clients see. */
+.hr-credentials { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 20px; }
+.hr-credential { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hr-credential h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.hr-credential p { margin: 0 0 6px; font-size: 12px; line-height: 1.5; color: var(--qs-muted); }
+.hr-credential > .hr-field { margin-top: auto; }
+.hr-credential .hr-skillbox { min-height: 84px; }
+/* One keyboard hint for all four chip editors; the Skills card carries it. */
+.hr-credential .hr-field > small { display: none; }
+/* Record facts: hairline cells carved out of the card, not nested boxes. */
+.hr-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 1px; margin: 0; background: var(--qs-line); border: 1px solid var(--qs-line); border-radius: 12px; overflow: hidden; }
+.hr-facts > div { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; background: var(--qs-paper); }
+.hr-facts dt { font-size: 12px; color: var(--qs-muted); }
+.hr-facts dd { margin: 0; font-size: 14px; }
+.hr-facts dd.is-mono, .hr-kv dd.is-mono { font-family: var(--qs-font-mono); font-size: 13px; }
+/* The save bar follows the form down the page so it is always one click away. */
+.hr-profile-save { position: sticky; bottom: 0; z-index: 2; display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 -4px -8px; padding: 14px 16px; border: 1px solid var(--qs-line); border-radius: 14px; background: color-mix(in srgb, var(--qs-paper) 88%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 .hr-profile-save > span { margin-right: auto; font-size: 13px; color: var(--qs-muted); }
+.hr-person-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--qs-border-strong); background: transparent; color: var(--qs-ink); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.hr-person-btn:hover:not(:disabled) { background: var(--qs-hover, var(--qs-bg-2)); }
+.hr-person-btn.is-primary { background: var(--qs-ink); border-color: var(--qs-ink); color: var(--qs-bg-0, var(--qs-bg)); }
+.hr-person-btn.is-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--qs-ink) 88%, var(--qs-bg)); }
+.hr-person-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .hr-profile-aside { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .hr-profile-aside > .hr-card { margin-top: 0; }
-.hr-portal-head { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 12px; }
+/* Completeness: a twelve-segment meter, then the gaps it is counting. */
+.hr-health { gap: 16px; }
+.hr-health-count { font-size: 13px; color: var(--qs-fg-2, var(--qs-muted)); white-space: nowrap; }
+.hr-health-bar { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; }
+.hr-health-bar span { height: 6px; border-radius: 2px; background: color-mix(in srgb, var(--qs-ink) 14%, transparent); }
+.hr-health-bar span.is-lit { background: var(--qs-ink); }
+.hr-health-note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--qs-muted); }
+.hr-health-gaps { display: flex; flex-direction: column; }
+.hr-health-gap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--qs-line); font-size: 14px; }
+.hr-health-gap button, .hr-health-gap-link { border: 0; padding: 0; background: none; font: inherit; font-size: 13px; font-weight: 500; color: var(--qs-ink); cursor: pointer; }
+.hr-health-gap button:hover, .hr-health-gap-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.hr-health-gap-link { color: var(--qs-muted); font-weight: 400; }
+/* Employment facts: label left, value right, separated by hairlines. */
+.hr-kvs { margin: 0; display: flex; flex-direction: column; }
+.hr-kv-group + .hr-kv-group { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--qs-line); }
+.hr-kv { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--qs-line); font-size: 14px; }
+.hr-kv-group > .hr-kv:last-child { border-bottom: 0; padding-bottom: 0; }
+.hr-kv dt { color: var(--qs-muted); }
+.hr-kv dd { margin: 0; text-align: right; }
+.hr-portal-head { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+.hr-portal-note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--qs-muted); }
 .hr-portal-state { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px dashed var(--qs-border-strong); font-size: 12px; font-weight: 500; color: var(--qs-fg-2, var(--qs-muted)); white-space: nowrap; }
 .hr-portal-state.is-linked { border-style: solid; border-color: color-mix(in srgb, var(--qs-lime) 45%, var(--qs-line)); background: color-mix(in srgb, var(--qs-lime) 18%, var(--qs-paper)); color: var(--qs-ink); }
 .hr-portal-linked p { margin: 4px 0; font-size: 13px; color: var(--qs-muted); }
@@ -225,7 +276,7 @@
 /* Skills list — dashed chip box (reference: Person profile — Aicha Bouzid). */
 .hr-skillbox { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 96px; padding: 12px; box-sizing: border-box; border-radius: 10px; border: 1px dashed var(--qs-border-strong); background: var(--qs-bg-0, var(--qs-bg)); align-content: flex-start; cursor: text; }
 .hr-skillbox:focus-within { border-color: var(--qs-accent); border-style: solid; }
-.hr-skillbox .hr-label { background: var(--qs-paper); }
+.hr-skillbox .hr-label { background: var(--qs-paper); border-color: var(--qs-border-strong); }
 .hr-skillbox input { flex: 1 1 220px; width: auto; min-width: 160px; border: 0; padding: 6px 4px; background: transparent; color: var(--qs-ink); font-size: 14px; box-shadow: none; border-radius: 0; }
 .hr-skillbox input::placeholder { color: var(--qs-muted); }
 .hr-skillbox input:focus-visible { outline: none; box-shadow: none; }
@@ -308,7 +359,7 @@ textarea.hr-assign-input { resize: vertical; line-height: 1.5; }
 .hr-assign-progress { color: var(--qs-fg-2); }
 /* Person · Projects overview — three-up metrics card (reference: Person
    page · Projects). Wide cell carries the “Booked today” meter. */
-.hr-person-metrics { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr)); border: 1px solid var(--qs-line); border-radius: 16px; background: var(--qs-paper); overflow: hidden; }
+.hr-person-metrics { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); border: 1px solid var(--qs-line); border-radius: 16px; background: var(--qs-paper); overflow: hidden; }
 .hr-person-metric { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 18px 20px; border-left: 1px solid var(--qs-line); }
 .hr-person-metric:first-child { border-left: 0; }
 .hr-person-metric-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px; color: var(--qs-muted); }
@@ -327,7 +378,157 @@ textarea.hr-assign-input { resize: vertical; line-height: 1.5; }
 .hr-assign-panel-cancel { border: 0; background: transparent; color: var(--qs-muted); font-size: 14px; cursor: pointer; }
 .hr-assign-panel-cancel:hover { color: var(--qs-ink); }
 .hr-assign-panel .hr-form { border: 0; border-radius: 0; background: transparent; padding: 20px; }
+.hr-assign-panel-head > div > p { margin: 3px 0 0; color: var(--qs-muted); font-size: 13px; line-height: 1.5; }
+.hr-person-metric-figure { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.hr-person-metric-delta { font-size: 13px; color: var(--qs-fg-2); font-variant-numeric: tabular-nums; }
+.hr-person-meter { position: relative; }
+.hr-person-meter span { position: absolute; left: 0; top: 0; }
+.hr-person-meter span.is-draft { background: color-mix(in srgb, var(--qs-timberwolf) 45%, transparent); }
+/* Person · Projects — staffing composer (reference: “Assign to project —
+   employee”, Main.dc.html). Five numbered steps in the main column, a
+   preview rail that prices the draft and carries the submit button. The rail
+   drops under the steps once the panel is narrower than ~900px, so the same
+   component also fits the staffing dialog. */
+.hr-builder { --hr-inset: color-mix(in srgb, var(--qs-bg-2) 35%, var(--qs-paper)); display: flex; flex-wrap: wrap; align-items: flex-start; margin: 0; }
+.hr-builder-steps { flex: 999 1 540px; min-width: 0; display: flex; flex-direction: column; padding: 4px 22px 22px; }
+.hr-builder-step { display: flex; flex-direction: column; gap: 13px; padding: 20px 0; border-bottom: 1px solid var(--qs-line); }
+.hr-builder-step:last-child { padding-bottom: 0; border-bottom: 0; }
+.hr-builder-step-head { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; }
+.hr-builder-step-head h4 { margin: 0; font-size: 15px; font-weight: 600; }
+.hr-builder-step-num { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; border-radius: 999px; border: 1px solid var(--qs-border-strong); color: var(--qs-fg-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.hr-builder-step-note { color: var(--qs-muted); font-size: 13px; }
+.hr-builder-quiet { color: var(--qs-muted); font-size: 13px; margin: 0; line-height: 1.5; }
+.hr-builder-label { font-size: 13px; color: var(--qs-fg-2); }
+.hr-builder-search { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; border-radius: 12px; background: var(--hr-inset); border: 1px solid var(--qs-line); color: var(--qs-muted); }
+.hr-builder-search input { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--qs-ink); font: inherit; font-size: 14px; box-shadow: none; }
+.hr-builder-search input:focus-visible { outline: none; }
+.hr-builder-projects { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+.hr-builder-project { display: flex; align-items: center; gap: 16px; width: 100%; padding: 13px 16px; text-align: left; border: 1px solid var(--qs-line); border-radius: 14px; background: var(--hr-inset); color: inherit; font: inherit; cursor: pointer; }
+.hr-builder-project:hover { border-color: var(--qs-border-strong); }
+.hr-builder-project[aria-pressed='true'] { border-color: var(--qs-ink); background: var(--qs-paper); box-shadow: inset 0 0 0 1px var(--qs-ink); }
+.hr-builder-radio { position: relative; flex: none; width: 18px; height: 18px; border-radius: 999px; border: 1.5px solid var(--qs-border-strong); }
+.hr-builder-project[aria-pressed='true'] .hr-builder-radio { border-color: var(--qs-ink); }
+.hr-builder-project[aria-pressed='true'] .hr-builder-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 999px; background: var(--qs-ink); }
+.hr-builder-project-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.hr-builder-project-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hr-builder-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 600; letter-spacing: .02em; overflow-wrap: anywhere; }
+.hr-builder-chip { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--qs-lift); border: 1px solid var(--qs-line); color: var(--qs-fg-2); white-space: nowrap; }
+.hr-builder-project-span { display: flex; align-items: center; gap: 10px; }
+.hr-builder-elapsed { flex: 1; max-width: 220px; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--qs-ink) 14%, transparent); overflow: hidden; }
+.hr-builder-elapsed span { display: block; height: 100%; border-radius: 999px; background: var(--qs-timberwolf); }
+.hr-builder-project-right { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.hr-builder-project-right strong { font-weight: 500; font-variant-numeric: tabular-nums; }
+.hr-builder-project-right span { font-size: 12px; color: var(--qs-muted); }
+.hr-builder-lines { display: flex; flex-wrap: wrap; gap: 8px; }
+.hr-builder-line { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 8px 16px; text-align: left; border: 1px solid var(--qs-line); border-radius: 12px; background: var(--hr-inset); color: inherit; font: inherit; cursor: pointer; }
+.hr-builder-line:hover { border-color: var(--qs-border-strong); }
+.hr-builder-line[aria-pressed='true'] { border-color: var(--qs-ink); background: var(--qs-paper); box-shadow: inset 0 0 0 1px var(--qs-ink); }
+.hr-builder-line-main { display: flex; flex-direction: column; gap: 1px; }
+.hr-builder-line-main strong { font-size: 14px; font-weight: 500; }
+.hr-builder-rate { padding-left: 14px; border-left: 1px solid var(--qs-line); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hr-builder-alloc { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hr-builder-presets { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px; border-radius: 14px; background: var(--hr-inset); border: 1px solid var(--qs-line); }
+.hr-builder-presets button { min-width: 56px; height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--qs-muted); font: inherit; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; cursor: pointer; }
+.hr-builder-presets button:hover { color: var(--qs-ink); }
+.hr-builder-presets button[aria-pressed='true'] { background: var(--qs-ink); color: var(--qs-bg); }
+.hr-builder-custom { display: flex; align-items: center; gap: 6px; height: 48px; padding: 0 14px; border-radius: 12px; background: var(--hr-inset); border: 1px solid var(--qs-line); color: var(--qs-muted); font-size: 13px; }
+.hr-builder-custom input { width: 56px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--qs-ink); font: inherit; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; box-shadow: none; }
+.hr-builder-custom input:focus-visible { outline: none; }
+.hr-builder-dates { display: flex; flex-wrap: wrap; gap: 16px; }
+.hr-builder-date { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.hr-builder-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hr-builder-chips button { height: 32px; padding: 0 12px; border: 1px solid var(--qs-line); border-radius: 999px; background: transparent; color: var(--qs-fg-2); font: inherit; font-size: 12px; cursor: pointer; }
+.hr-builder-chips button:hover:not(:disabled) { border-color: var(--qs-border-strong); color: var(--qs-ink); }
+.hr-builder-chips button[aria-pressed='true'] { border-color: var(--qs-ink); color: var(--qs-ink); }
+.hr-builder-chips button:disabled { opacity: .4; cursor: not-allowed; }
+.hr-builder-alert { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--hr-inset); border: 1px solid var(--qs-border-strong); font-size: 13px; line-height: 1.5; }
+.hr-builder-alert svg { flex: none; margin-top: 2px; }
+.hr-builder-commits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.hr-builder-commit { display: flex; flex-direction: column; gap: 3px; padding: 13px 16px; text-align: left; border: 1px solid var(--qs-line); border-radius: 14px; background: var(--hr-inset); color: inherit; font: inherit; cursor: pointer; }
+.hr-builder-commit:hover { border-color: var(--qs-border-strong); }
+.hr-builder-commit[aria-pressed='true'] { border-color: var(--qs-ink); background: var(--qs-paper); box-shadow: inset 0 0 0 1px var(--qs-ink); }
+.hr-builder-commit strong { font-size: 14px; font-weight: 600; }
+/* Preview rail — the only place the submit button lives. */
+.hr-builder-preview { flex: 1 1 320px; min-width: 0; align-self: stretch; display: flex; flex-direction: column; gap: 20px; padding: 22px; background: var(--qs-paper); border-left: 1px solid var(--qs-line); }
+.hr-builder-preview-head { display: flex; flex-direction: column; gap: 4px; }
+.hr-builder-preview-head strong { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.hr-builder-eyebrow { font-size: 12px; color: var(--qs-muted); text-transform: uppercase; letter-spacing: .08em; }
+.hr-builder-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.hr-builder-tile { display: flex; flex-direction: column; gap: 3px; padding: 14px; border-radius: 14px; background: var(--hr-inset); border: 1px solid var(--qs-line); }
+.hr-builder-tile strong { font-family: var(--qs-font-display); font-size: 24px; font-weight: 500; line-height: 1.15; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.hr-builder-tile .hr-builder-quiet { font-size: 12px; }
+.hr-builder-load { display: flex; flex-direction: column; gap: 10px; }
+.hr-builder-load-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px; color: var(--qs-fg-2); }
+.hr-builder-chart { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 96px; padding-top: 8px; border-top: 1px dashed var(--qs-border-strong); }
+.hr-builder-ceiling { position: absolute; top: -9px; right: 0; padding-left: 6px; background: var(--qs-paper); font-size: 11px; color: var(--qs-muted); }
+.hr-builder-column { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; height: 100%; }
+.hr-builder-column .hr-builder-quiet { font-size: 11px; }
+.hr-builder-bar { width: 100%; max-width: 40px; border-radius: 6px 6px 2px 2px; background: color-mix(in srgb, var(--qs-ink) 18%, transparent); overflow: hidden; }
+.hr-builder-bar-draft { display: block; width: 100%; border-radius: 6px 6px 0 0; background: var(--qs-lime); }
+.hr-builder-submit { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+.hr-builder-submit .btn { width: 100%; height: 48px; justify-content: center; border-radius: 12px; font-size: 15px; }
+.hr-builder-submit .hr-builder-quiet { text-align: center; font-size: 12px; }
+@media (max-width: 900px) { .hr-builder-preview { border-left: 0; border-top: 1px solid var(--qs-line); } .hr-builder-steps { padding: 4px 18px 18px; } }
+@media (max-width: 560px) { .hr-builder-commits, .hr-builder-tiles { grid-template-columns: 1fr; } .hr-builder-project { flex-wrap: wrap; } .hr-builder-project-right { align-items: flex-start; } }
 .hr-workspace :focus-visible, .hr-dialog :focus-visible { outline: 2px solid var(--qs-lime); outline-offset: 3px; }
+/* Person · Employment tab — minimal design (reference: Employee ·
+   Employment (minimal), Main.dc.html). A 240px rail carries each section
+   title and a one-line rationale, hairlines separate sections, facts are a
+   definition-list grid, assign actions are dashed chips and the journey
+   composer is a single rounded bar. Every value resolves through the
+   mode-aware tokens, so the layout works in light and dark. */
+.hr-emp-section { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 18px 48px; padding: 36px 0; border-bottom: 1px solid var(--qs-line); }
+.hr-emp-section:first-child { padding-top: 4px; }
+.hr-emp-section:last-child { border-bottom: 0; padding-bottom: 4px; }
+.hr-emp-side h2 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: -.01em; }
+.hr-emp-side > p { margin: 4px 0 0; color: var(--qs-muted); font-size: 13px; line-height: 1.5; }
+.hr-emp-period { margin-top: 16px; }
+.hr-emp-body { min-width: 0; display: grid; gap: 16px; align-content: start; }
+.hr-emp-body > .hr-form, .hr-emp-body > .hr-disclosure { border: 0; background: transparent; padding: 0; border-radius: 0; box-shadow: none; }
+.hr-emp-facts { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 24px; column-gap: 32px; }
+.hr-emp-facts dt { color: var(--qs-muted); font-size: 12px; }
+.hr-emp-facts dd { margin: 5px 0 0; font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.hr-emp-value { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hr-emp-assign { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px dashed var(--qs-border-strong); border-radius: 8px; background: transparent; color: var(--qs-fg-2, var(--qs-muted)); font: inherit; font-size: 13px; cursor: pointer; }
+.hr-emp-assign:hover { background: var(--qs-hover); color: var(--qs-ink); }
+.hr-emp-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hr-emp-ghost { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border: 1px solid var(--qs-border-strong); border-radius: 8px; background: transparent; color: var(--qs-ink); font: inherit; font-size: 13px; cursor: pointer; }
+.hr-emp-ghost:hover { background: var(--qs-hover); }
+.hr-emp-ghost.plain { border-color: transparent; color: var(--qs-muted); padding: 0 10px; }
+.hr-emp-ghost.plain:hover { color: var(--qs-ink); }
+.hr-emp-mini { border: 0; background: transparent; padding: 3px 7px; border-radius: 6px; color: var(--qs-muted); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.hr-emp-mini:hover { color: var(--qs-ink); background: var(--qs-hover); }
+.hr-emp-empty { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; color: var(--qs-muted); font-size: 14px; }
+.hr-emp-note { margin: 0; color: var(--qs-muted); font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+.hr-emp-tasks { list-style: none; margin: 0; padding: 0; display: grid; }
+.hr-emp-task { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 0; font-size: 14px; }
+.hr-emp-task + .hr-emp-task { border-top: 1px solid var(--qs-line); }
+.hr-emp-task-main { flex: 1; min-width: 220px; display: grid; gap: 3px; }
+.hr-emp-task-title { font-weight: 500; overflow-wrap: anywhere; }
+.hr-emp-task-meta { color: var(--qs-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.hr-emp-task.is-done .hr-emp-task-title { color: var(--qs-muted); text-decoration: line-through; text-decoration-color: var(--qs-border-strong); }
+.hr-emp-check { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; flex: none; border: 1px solid var(--qs-border-strong); border-radius: 999px; background: transparent; color: transparent; cursor: pointer; }
+.hr-emp-check:hover:not(:disabled) { border-color: var(--qs-lime); color: var(--qs-lime); }
+.hr-emp-check:disabled { cursor: default; }
+.hr-emp-task.is-done .hr-emp-check { background: var(--qs-lime); border-color: var(--qs-lime); color: var(--qs-rich-black); }
+.hr-emp-task-form { flex: 1 0 100%; min-width: 0; }
+.hr-emp-composer { display: flex; align-items: center; gap: 8px; padding: 6px; border: 1px solid var(--qs-border-strong); border-radius: 12px; }
+.hr-emp-composer:focus-within { border-color: var(--qs-accent); box-shadow: 0 0 0 1px var(--qs-accent); }
+.hr-emp-composer-input { flex: 1 1 0; width: auto; min-width: 0; height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--qs-ink); font: inherit; font-size: 14px; box-shadow: none; }
+.hr-emp-composer-input::placeholder { color: var(--qs-muted); }
+.hr-emp-composer-input:focus-visible { outline: none; box-shadow: none; }
+.hr-emp-composer-select, .hr-emp-composer-date { flex: none; width: auto; height: 34px; padding: 0 8px; border: 0; border-radius: 8px; background: var(--qs-bg-2); color: var(--qs-fg-2, var(--qs-ink)); font: inherit; font-size: 13px; }
+.hr-emp-add { height: 34px; padding: 0 14px; flex: none; border: 0; border-radius: 8px; background: var(--qs-ink); color: var(--qs-bg); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.hr-emp-add:hover:not(:disabled) { opacity: .88; }
+.hr-emp-add:disabled { opacity: .5; cursor: not-allowed; }
+/* Bare AI panel — same content as the suggestion card, restyled as a
+   borderless header row for the minimal Employment sections. */
+.hr-emp-ai { display: grid; gap: 16px; }
+.hr-emp-ai-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hr-emp-ai-head h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.hr-emp-ai-head .hr-inline { gap: 8px; }
+@media (max-width: 850px) { .hr-emp-section { grid-template-columns: 1fr; gap: 18px; padding: 28px 0; } }
+@media (max-width: 560px) { .hr-emp-facts { grid-template-columns: 1fr 1fr; row-gap: 18px; column-gap: 20px; } .hr-emp-composer { flex-wrap: wrap; } .hr-emp-composer-input { flex: 1 0 100%; } }
 @media (max-width: 1050px) { .hr-person-hero { margin: -30px -25px 8px; } }
 @media (max-width: 850px) { .hr-two-column { grid-template-columns: 1fr; } .hr-profile-columns { gap: 24px; } .hr-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hr-metric:nth-child(2) { border: 0; } .hr-metric:nth-child(-n+2) { border-bottom: 1px solid var(--qs-line); } .hr-person-metrics { grid-template-columns: 1fr; } .hr-person-metric { border-left: 0; border-top: 1px solid var(--qs-line); } .hr-person-metric:first-child { border-top: 0; } .hr-dialog { width: calc(100vw - 24px); height: min(880px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); } }
 @media (max-width: 520px) { .hr-workspace { --hr-gap: 20px; } .hr-workspace-head { align-items: start; flex-direction: column; } .hr-workspace-head .hr-inline { justify-content: flex-start; } .hr-metric { padding: 16px; } .hr-fields { grid-template-columns: 1fr; } .hr-toolbar, .hr-toolbar .hr-inline, .hr-search { width: 100%; } .hr-toolbar .hr-inline { justify-content: space-between; } .hr-dialog-heading, .hr-dialog-body { padding: 18px; } .hr-record-nav { margin: 0 -18px; padding: 0 18px; } .hr-card, .hr-form, .hr-disclosure { padding: 16px; } .hr-card-head { flex-wrap: wrap; } .hr-queue-row { align-items: start; } .hr-queue-row .btn { padding: 8px; } }

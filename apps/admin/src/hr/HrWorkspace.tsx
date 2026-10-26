@@ -320,7 +320,7 @@ function PersonPage({
   const lastCra = useLastCra(employees);
   // Remaining leave across every employment period of this person, net of
   // CRA consumption (CP and RTT accrue per calendar month from each start).
-  const balances = useLeaveBalances(employees.map(employee => employee.id));
+  const { balances, error: balanceError } = useLeaveBalances(employees.map(employee => employee.id));
   const cpLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'cp'), 0);
   const rttLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'rtt'), 0);
   const day = today();
@@ -366,11 +366,11 @@ function PersonPage({
             </div>
             <div>
               <dt>CP balance</dt>
-              <dd>{employees.length ? `${fmtDays(cpLeft)} days` : '—'}</dd>
+              <dd>{balanceError ? 'unavailable' : employees.length ? `${fmtDays(cpLeft)} days` : '—'}</dd>
             </div>
             <div>
               <dt>RTT balance</dt>
-              <dd>{employees.length ? `${fmtDays(rttLeft)} days` : '—'}</dd>
+              <dd>{balanceError ? 'unavailable' : employees.length ? `${fmtDays(rttLeft)} days` : '—'}</dd>
             </div>
           </dl>
         </section>

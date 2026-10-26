@@ -10,7 +10,7 @@ The HR workspace uses `hr_people`, `hr_applications`, employment periods in `emp
 
 The prior directory tables and views are retained in the restricted `hr_legacy_20261014` schema. All 24 people were preserved. The 23 original employee rows remain archived; 22 dated employment periods are available in the new workspace. One employee needs their actual start date recorded before an employment period can be created. Their person record contains a review note. No hiring, signature, account-link, or date evidence was invented during conversion.
 
-Private storage buckets `candidate-documents` and `contracts` remain in place, both limited to 10 MB per file. Onboarding files support PDF, JPG, PNG and DOCX; contracts support PDF.
+Private storage buckets `candidate-documents` and `contracts` remain in place, both limited to 10 MB per file. Onboarding files support PDF, JPG, PNG and DOCX; contracts support PDF. Self-folder policies on `candidate-documents` accept either identity key from the verified JWT — the workspace user uuid (`user_metadata.user_id` claim) or the raw `sub` (Clerk user id), which is what the browser apps use as the upload folder prefix.
 
 All exposed tables use row-level security. Candidates are restricted to their own records. Admin roles are stored in `user_roles`, which clients can read but cannot change. Every new user starts as a candidate, irrespective of user-supplied metadata. No service-role/secret key is used in an application bundle.
 

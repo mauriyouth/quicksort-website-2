@@ -43,6 +43,28 @@ export function proratedBillableDays(
   return Math.round((maxPerYear * Math.min(windowDays, yearDays) * 2) / yearDays) / 2;
 }
 
+/**
+ * Effective billable days of a capped line inside its own window:
+ * the window's open days shrunk to the summed per-year prorated
+ * allowance (see proratedBillableDays). Uncapped lines are exempt —
+ * callers pass their cap as null/undefined and get the window days back
+ * unchanged. `start` may be null (undated contract) — the allowance then
+ * can't be prorated and the window days stand.
+ */
+export function cappedBillableDays(
+  maxPerYear: number | null | undefined,
+  windowDays: number,
+  start: string | null,
+  end: string | null,
+): number {
+  if (!maxPerYear || !start || windowDays <= 0) return windowDays;
+  const lastYear = Number((end || start).slice(0, 4));
+  let allowance = 0;
+  for (let year = Number(start.slice(0, 4)); year <= lastYear; year++)
+    allowance += proratedBillableDays(maxPerYear, start, end, year);
+  return Math.min(windowDays, Math.round(allowance * 2) / 2);
+}
+
 /** Calendar year of a CRA month bucket ("YYYY-MM"). */
 export function craMonthYear(month: string): number | null {
   const year = Number(String(month || "").slice(0, 4));

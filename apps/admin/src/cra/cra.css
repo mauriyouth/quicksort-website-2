@@ -36,9 +36,16 @@
 .cra-toolbar-title h2 { margin: 0; font-family: var(--qs-font-display); font-weight: 400; font-size: 36px; letter-spacing: -0.02em; line-height: 1; }
 .cra-toolbar-meta { margin: 8px 0 0; font-size: 14px; color: var(--qs-fg-3); }
 .cra-toolbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.cra-toolbar-actions .btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 22px; border-radius: 999px; }
-.cra-toolbar-actions .btn.secondary { color: var(--qs-fg-1); }
+.cra-toolbar-actions .btn, .cra-savebar-actions .btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 22px; border-radius: 999px; }
+.cra-toolbar-actions .btn.secondary, .cra-savebar-actions .btn.secondary { color: var(--qs-fg-1); }
 .cra-save-state { font-size: 13px; color: var(--qs-fg-3); line-height: 1.5; max-width: 340px; overflow-wrap: anywhere; }
+
+/* Sticky save bar: Save/Discard stay reachable while scrolling the month,
+   and feedback lands next to the buttons instead of a top banner. */
+.cra-savebar { position: sticky; top: 8px; z-index: 20; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px 16px; margin-top: 16px; padding: 10px 16px; border: 1px solid var(--qs-border); border-radius: 14px; background: color-mix(in srgb, var(--qs-bg-0) 88%, transparent); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+.cra-savebar-message { flex: 1 1 220px; min-width: 0; margin-right: auto; font-size: 13px; line-height: 1.5; color: var(--qs-fg-2); overflow-wrap: anywhere; }
+.cra-savebar-message:empty { display: none; }
+.cra-savebar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 /* ── Month summary ───────────────────────────────────────────── */
 .cra-summary { display: flex; flex-direction: column; gap: 12px; margin-top: 32px; }

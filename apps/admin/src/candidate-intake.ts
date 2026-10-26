@@ -5,13 +5,19 @@ import { z } from "zod";
 // dropped resume (PDF), pasted CV text, or a LinkedIn profile (URL + pasted
 // sections). Advisory only: a human reviews the prefilled form before insert.
 
-export const MAX_INTAKE_PDF_BYTES = 3 * 1024 * 1024;
+// PDFs larger than this must come through Supabase Storage (browser uploads
+// directly to the bucket, so the Vercel 4.5 MB API body limit does not apply).
+export const MAX_INTAKE_PDF_BYTES = 10 * 1024 * 1024;
 export const MAX_INTAKE_TEXT_CHARS = 60000;
+
+// Inline base64 PDFs travel inside the JSON request body, which Vercel caps at
+// 4.5 MB — that path stays at 3 MB even though storage-backed PDFs go to 10 MB.
+const MAX_INLINE_INTAKE_PDF_BYTES = 3 * 1024 * 1024;
 
 const base64Pdf = z
   .string()
   .min(8)
-  .max(MAX_INTAKE_PDF_BYTES * 4 / 3)
+  .max(MAX_INLINE_INTAKE_PDF_BYTES * 4 / 3)
   .regex(/^[A-Za-z0-9+/]+={0,2}$/);
 
 const linkedInUrl = z
@@ -29,6 +35,7 @@ export const intakeRequest = z
   .object({
     profile: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("pdf"), data: base64Pdf, name: z.string().trim().min(1).max(250) }),
+      z.object({ kind: z.literal("storage"), path: z.string().trim().min(1).max(500), name: z.string().trim().min(1).max(250) }),
       z.object({ kind: z.literal("text"), text: z.string().trim().min(50).max(MAX_INTAKE_TEXT_CHARS) }),
       z.object({
         kind: z.literal("linkedin"),

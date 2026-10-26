@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { db, isMissingRelationError } from '@quicksort/hr-db';
+import { db, errorMessage, isMissingRelationError } from '@quicksort/hr-db';
 import { z } from 'zod';
 
 /**
@@ -84,18 +84,20 @@ export function fmtDays(amount: number): string {
   return amount % 1 ? amount.toFixed(1) : String(amount);
 }
 
-export function useLeaveBalances(employeeIds: string[]): LeaveBalance[] {
-  const [balances, setBalances] = useState<LeaveBalance[]>([]);
+export function useLeaveBalances(employeeIds: string[]): { balances: LeaveBalance[]; error: string } {
+  const [state, setState] = useState<{ balances: LeaveBalance[]; error: string }>({ balances: [], error: '' });
   const key = employeeIds.join(',');
   useEffect(() => {
     let cancelled = false;
-    if (!key) { setBalances([]); return; }
+    // A failure must be visible, not silent: an unapplied migration makes
+    // the RPC disappear and a quiet [] reads as "zero days left".
+    if (!key) { setState({ balances: [], error: '' }); return; }
     loadLeaveBalances(key.split(','))
-      .then((rows) => { if (!cancelled) setBalances(rows); })
-      .catch(() => { if (!cancelled) setBalances([]); });
+      .then((rows) => { if (!cancelled) setState({ balances: rows, error: '' }); })
+      .catch((error: unknown) => { if (!cancelled) setState({ balances: [], error: errorMessage(error) }); });
     return () => { cancelled = true; };
   }, [key]);
-  return balances;
+  return state;
 }
 
 export function useLeaveRates(): { rates: LeaveRate[]; missing: boolean; saving: boolean; save: (kind: LeaveKind, rate: number) => Promise<void> } {

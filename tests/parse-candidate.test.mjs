@@ -22,12 +22,13 @@ function res() {
   };
 }
 
-function clientWith(role = "admin") {
+function clientWith(role = "admin", storage) {
   return {
     rpc: async () => ({ data: "user-1", error: null }),
     from: () => ({
       select: () => ({ eq: () => ({ single: async () => ({ data: { role }, error: null }) }) }),
     }),
+    storage,
   };
 }
 
@@ -46,9 +47,9 @@ const profile = {
   confidence: "high",
 };
 
-function makeParser({ role = "admin", output = profile, fail = false, calls = [] } = {}) {
+function makeParser({ role = "admin", output = profile, fail = false, calls = [], storage } = {}) {
   return createParser({
-    createClient: async () => clientWith(role),
+    createClient: async () => clientWith(role, storage),
     loadAiSettings: async () => ({ apiKey: "sk-test-key", model: "gpt-4.1-mini" }),
     generateText: async (args) => {
       calls.push(args);
@@ -149,6 +150,53 @@ test("attaches resume PDFs as file content", async () => {
   const content = calls[0].messages[0].content;
   assert.equal(content[1].mediaType, "application/pdf");
   assert.equal(Buffer.from(content[1].data).toString(), pdf.toString());
+});
+
+test("downloads storage-backed resumes from the bucket", async () => {
+  const calls = [];
+  const pdf = Buffer.concat([Buffer.from("%PDF-"), Buffer.from("1.7 body")]);
+  const storage = {
+    from: (bucket) => {
+      assert.equal(bucket, "candidate-documents");
+      return {
+        download: async (path) => {
+          assert.equal(path, "user-1/upload.pdf");
+          return { data: new Blob([pdf]), error: null };
+        },
+      };
+    },
+  };
+  const parser = makeParser({ calls, storage });
+  const r = res();
+  await parser(
+    {
+      method: "POST",
+      headers: { authorization: "Bearer token" },
+      body: { profile: { kind: "storage", path: "user-1/upload.pdf", name: "ada-cv.pdf" } },
+    },
+    r,
+  );
+  assert.equal(r.code, 200);
+  const content = calls[0].messages[0].content;
+  assert.equal(content[1].mediaType, "application/pdf");
+  assert.equal(Buffer.from(content[1].data).toString(), pdf.toString());
+});
+
+test("rejects storage resumes the bucket cannot serve", async () => {
+  const storage = {
+    from: () => ({ download: async () => ({ data: null, error: { message: "not found" } }) }),
+  };
+  const parser = makeParser({ storage });
+  const r = res();
+  await parser(
+    {
+      method: "POST",
+      headers: { authorization: "Bearer token" },
+      body: { profile: { kind: "storage", path: "user-1/missing.pdf", name: "ada-cv.pdf" } },
+    },
+    r,
+  );
+  assert.equal(r.code, 404);
 });
 
 test("surfaces provider failures without leaking internals", async () => {

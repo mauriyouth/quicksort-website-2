@@ -481,6 +481,121 @@ textarea.pj-notes-area {
   color: var(--qs-fg-2);
 }
 
+/* ── Pricing lines — one card per TJM profile (design "Contract — staff
+     from the pricing line"): the editable fields on top, a read-out of
+     the line's billing window, then the staffing block. */
+.pj-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pj-line {
+  border: 1px solid var(--qs-line);
+  border-radius: var(--qs-radius-md, 12px);
+  background: var(--qs-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.pj-line-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1.6fr) minmax(150px, 1fr) minmax(152px, 0.95fr)
+    minmax(112px, 0.7fr) minmax(104px, 0.7fr) 32px;
+  gap: 12px;
+  align-items: end;
+  padding: 14px;
+}
+/* Only the profile name input is a direct child — the rate input lives
+   inside .pj-affix and the cap input inside .pj-cap-cell, each with its
+   own chrome (a blanket `input` rule here would double-outline them). */
+.pj-line-grid > .pj-field > input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  border: 1px dashed var(--qs-border-strong);
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+.pj-line-grid input:focus-visible {
+  outline: none;
+  border-style: solid;
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
+}
+.pj-line-grid .pj-affix {
+  background: var(--qs-bg-2);
+}
+.pj-line-grid .date-field-trigger {
+  height: 40px;
+  padding: 0 10px;
+  background: var(--qs-bg-2);
+  border-color: var(--qs-border-strong);
+  border-style: dashed;
+  font-variant-numeric: tabular-nums;
+}
+.pj-line-grid .date-field-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pj-line-subtotal {
+  align-items: end;
+}
+.pj-line-subtotal .pj-subtotal {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.pj-line-billed {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  padding: 0 14px 12px;
+  font-size: 13px;
+  color: var(--qs-fg-2);
+  font-variant-numeric: tabular-nums;
+}
+.pj-line-billed-label {
+  color: var(--qs-muted);
+}
+.pj-line-days {
+  color: var(--qs-muted);
+}
+.pj-line-same {
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: var(--qs-radius-pill, 999px);
+  background: var(--qs-active);
+  color: var(--qs-fg-2);
+  white-space: nowrap;
+}
+.pj-line-save-hint {
+  margin: 0;
+  padding: 12px 14px;
+  border-top: 1px solid var(--qs-line);
+  background: var(--qs-bg-2);
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+/* The staffing block sits sunken at the bottom of the line card. */
+.pj-line > .pjs {
+  padding: 14px;
+  border-top: 1px solid var(--qs-line);
+  background: var(--qs-bg-2);
+}
+.pj-lines-foot {
+  border: 1px dashed var(--qs-border-strong);
+  border-radius: var(--qs-radius-md, 12px);
+  background: transparent;
+}
+
 /* ── Pricing — segmented model switch + TJM profile table. */
 .pj-seg {
   height: 40px;
@@ -819,10 +934,12 @@ textarea.pj-notes-area {
   .pj-card {
     padding: 18px;
   }
-  .pj-table-head,
-  .pj-table-row {
-    grid-template-columns: minmax(0, 1.4fr) minmax(110px, 1fr) 72px 96px 28px;
-    padding: 10px;
+  .pj-line-grid {
+    grid-template-columns: minmax(0, 1.4fr) minmax(110px, 1fr);
+    padding: 12px;
+  }
+  .pj-line-billed {
+    padding: 0 12px 12px;
   }
   .pj-actions {
     width: 100%;

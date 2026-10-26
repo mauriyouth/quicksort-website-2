@@ -21,8 +21,7 @@
    "handover_plan": "Repository ownership transferred",
    "exit_interview": "Discussion completed",
    "rehire_eligible": true,
-   "rehire_rationale": "Eligible for future opportunities",
-   "legal_docs_evidence": "Final documents recorded"
+   "rehire_rationale": "Eligible for future opportunities"
   }
  ],
  "tasks": [
@@ -477,7 +476,8 @@
    "probation_status": "pending",
    "planned_exit_date": null,
    "onboarding_completed_at": null,
-   "matricule": "QS-0001"
+   "matricule": "QS-0001",
+   "contract_type": "CDI"
   },
   {
    "id": "38c2fab8-ed21-49e0-8102-959c0f6176a2",
@@ -497,7 +497,8 @@
    "probation_status": "confirmed",
    "planned_exit_date": "2026-10-04",
    "onboarding_completed_at": "2026-10-04T10:07:43.083311+00:00",
-   "matricule": "QS-0002"
+   "matricule": "QS-0002",
+   "contract_type": "CDI"
   },
   {
    "id": "5b97f75e-325e-4644-80d4-acf4ef14e1fe",
@@ -517,7 +518,8 @@
    "probation_status": "confirmed",
    "planned_exit_date": null,
    "onboarding_completed_at": "2026-10-04T10:07:43.083311+00:00",
-   "matricule": "QS-0003"
+   "matricule": "QS-0003",
+   "contract_type": ""
   },
   {
    "id": "0bdb1994-0833-4aae-905a-f734e1ed79d7",
@@ -537,7 +539,8 @@
    "probation_status": "ended",
    "planned_exit_date": null,
    "onboarding_completed_at": "2026-10-04T10:07:43.083311+00:00",
-   "matricule": "QS-0004"
+   "matricule": "QS-0004",
+   "contract_type": ""
   }
  ],
  "exitItems": [

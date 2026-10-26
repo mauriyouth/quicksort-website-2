@@ -1,0 +1,446 @@
+/* Staffing on the contract page (src/sales/ProjectStaffing.tsx).
+   Visual source: "Contract — staff from the pricing line" — each pricing
+   line carries a staffing block (coverage bar, staffed rows, assign
+   panel). Tokens are the portal semantic aliases so it flips with
+   data-theme; the source design is the dark variant. */
+
+/* ── Per-line staffing block, sunken under the line card. */
+.pjs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pjs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pjs-head-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.pjs-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--qs-ink);
+}
+.pjs-bar {
+  width: 140px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--qs-active);
+  overflow: hidden;
+  flex: none;
+}
+.pjs-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--qs-lime);
+  transition: width var(--qs-dur-3) var(--qs-ease);
+}
+.pjs-cover {
+  font-size: 13px;
+  color: var(--qs-fg-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pjs-toggle {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--qs-radius-md, 10px);
+  border: 1px solid var(--qs-border-strong);
+  background: transparent;
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition:
+    background var(--qs-dur-2) var(--qs-ease),
+    color var(--qs-dur-2) var(--qs-ease);
+}
+.pjs-toggle:hover {
+  background: var(--qs-active);
+}
+.pjs-toggle.on {
+  background: var(--qs-fg-1);
+  color: var(--qs-bg-0);
+  border-color: transparent;
+}
+
+.pjs-alert {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: color-mix(in srgb, var(--qs-danger) 12%, transparent);
+  color: var(--qs-danger);
+  font-size: 13px;
+}
+.pjs-notice {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: color-mix(in srgb, var(--qs-lime) 14%, transparent);
+  color: var(--qs-ink);
+  font-size: 13px;
+}
+.pjs-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+
+/* ── Staffed rows — avatar, name, allocation, period, days, tag. */
+.pjs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pjs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: var(--qs-radius-md, 10px);
+  border: 1px solid var(--qs-line);
+  background: var(--qs-bg);
+  min-width: 0;
+}
+.pjs-ava {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--qs-active);
+  color: var(--qs-ink);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  text-transform: uppercase;
+}
+.pjs-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--qs-ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pjs-meta {
+  font-size: 13px;
+  color: var(--qs-fg-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Only the flat staff row lets the name grow — team-card names sit
+   inside a two-line column. */
+.pjs-row > .pjs-name {
+  flex: 1 1 120px;
+}
+.pjs-tag {
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: var(--qs-radius-pill, 999px);
+  border: 1px solid var(--qs-border-strong);
+  color: var(--qs-fg-2);
+  white-space: nowrap;
+}
+.pjs-tag.soft {
+  border-style: dashed;
+  color: var(--qs-muted);
+}
+.pjs-remove {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qs-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  transition:
+    color var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease);
+}
+.pjs-remove:hover:not(:disabled) {
+  color: #ef4444;
+  background: var(--qs-active);
+}
+.pjs-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ── Assign panel — search, people grid, allocation, dates, summary. */
+.pjs-panel {
+  border: 1px solid var(--qs-border-strong);
+  border-radius: var(--qs-radius-md, 12px);
+  background: var(--qs-bg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pjs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.pjs-label {
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pjs-search {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--qs-radius-md, 10px);
+  background: var(--qs-bg-2);
+  border: 1px solid var(--qs-line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--qs-muted);
+}
+.pjs-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--qs-ink);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  height: 100%;
+}
+.pjs-search:focus-within {
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
+}
+.pjs-people {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.pjs-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--qs-radius-md, 10px);
+  border: 1px solid var(--qs-line);
+  background: var(--qs-bg-2);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  min-width: 0;
+  transition:
+    border-color var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease);
+}
+.pjs-person:hover {
+  border-color: var(--qs-border-strong);
+}
+.pjs-person.on {
+  border-color: var(--qs-ink);
+  background: var(--qs-active);
+}
+.pjs-person-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.pjs-person-sub {
+  font-size: 12px;
+  color: var(--qs-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pjs-free {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--qs-active);
+  overflow: hidden;
+  flex: none;
+}
+.pjs-free > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--qs-lime);
+}
+
+.pjs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.pjs-pool-label {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--qs-muted);
+}
+.pjs-engage {
+  margin-top: 12px;
+}
+.pjs-engage input,
+.pjs-engage select {
+  height: 38px;
+  width: 100%;
+  border-radius: var(--qs-radius-md, 10px);
+  border: 1px solid var(--qs-line);
+  background: var(--qs-bg-2);
+  padding: 0 10px;
+  font: inherit;
+}
+.pjs-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.pjs-dates .date-field-trigger {
+  height: 38px;
+  background: var(--qs-bg-2);
+  border-color: var(--qs-line);
+}
+.pjs-quick {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pjs-chip-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--qs-radius-pill, 999px);
+  border: 1px solid var(--qs-border-strong);
+  background: transparent;
+  color: var(--qs-fg-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pjs-chip-btn:hover {
+  color: var(--qs-ink);
+  background: var(--qs-active);
+}
+
+.pjs-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--qs-line);
+}
+.pjs-summary {
+  font-size: 13px;
+  color: var(--qs-fg-2);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+.pjs-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.pjs-cancel {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--qs-radius-md, 10px);
+  border: 0;
+  background: transparent;
+  color: var(--qs-fg-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pjs-cancel:hover {
+  color: var(--qs-ink);
+  background: var(--qs-active);
+}
+.pjs-assign {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--qs-radius-md, 10px);
+  border: 0;
+  background: var(--qs-fg-1);
+  color: var(--qs-bg-0);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pjs-assign:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--qs-fg-1), var(--qs-lime) 18%);
+}
+.pjs-assign:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Team card (sidebar). */
+.pj-team-count {
+  font-size: 13px;
+  color: var(--qs-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pj-team .pjs-ava {
+  width: 32px;
+  height: 32px;
+}
+.pj-team .pjs-row {
+  border-color: transparent;
+  background: var(--qs-bg-2);
+}
+.pj-team-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--qs-line);
+  font-size: 13px;
+  color: var(--qs-muted);
+}
+.pj-team-foot strong {
+  color: var(--qs-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .pjs-people,
+  .pjs-grid,
+  .pjs-dates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

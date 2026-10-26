@@ -53,7 +53,15 @@ import { craMonthYear, proratedBillableDays } from "./billable-cap";
 import { DateField } from "../DateField";
 import "./sales.css";
 import "./project-form.css";
-import { loadWorkspace } from "../hr/data";
+import { loadWorkspace, type Assignment } from "../hr/data";
+import {
+  isOpenAssignment,
+  lineStaffing,
+  LineStaffingPanel,
+  ProjectTeamCard,
+  type LineStaffing,
+  type StaffingPerson,
+} from "./ProjectStaffing";
 
 /**
  * Projects (sales.md §14 Phase 2) — the delivery continuation of won deals.
@@ -210,7 +218,23 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     }[]
   >([]);
   const [employees, setEmployees] = useState<
-    { id: string; full_name: string }[]
+    {
+      id: string;
+      full_name: string;
+      start_date: string;
+      status: string;
+    }[]
+  >([]);
+  /** People with no open employment — the assign panel can engage them
+      directly onto a line (HR operators only). */
+  const [talentPool, setTalentPool] = useState<
+    { personId: string; name: string }[]
+  >([]);
+  const [canEngage, setCanEngage] = useState(false);
+  /** Every open assignment across all projects — feeds the staffing
+      blocks and the team card on the project (contract) page. */
+  const [staffingAssignments, setStaffingAssignments] = useState<
+    Assignment[]
   >([]);
   const [extensions, setExtensions] = useState<ProjectExtension[]>([]);
   /** Days consumed per project, summed from employee CRA entries (status
@@ -392,7 +416,23 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
               full_name:
                 staffing.people.find((p) => p.id === e.person_id)?.full_name ||
                 "Person",
+              start_date: e.start_date,
+              status: e.status,
             })),
+          );
+          setTalentPool(
+            staffing.people
+              .filter(
+                (p) =>
+                  !staffing.employees.some(
+                    (e) => e.person_id === p.id && e.status !== "ended",
+                  ),
+              )
+              .map((p) => ({ personId: p.id, name: p.full_name })),
+          );
+          setCanEngage(staffing.capabilities.recruit);
+          setStaffingAssignments(
+            staffing.assignments.filter((a) => isOpenAssignment(a)),
           );
           setCraDaysByProject(craDays);
           setCraLineYearDaysByProject(craLineYearDays);
@@ -457,6 +497,48 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     }
     return map;
   }, [extensions]);
+  /** Open assignments per employee, every project — availability readout
+      and the capacity pre-check on the contract page's assign panel. */
+  const assignmentsByEmployee = useMemo(() => {
+    const map = new Map<string, Assignment[]>();
+    for (const a of staffingAssignments)
+      map.set(a.employee_id, [...(map.get(a.employee_id) || []), a]);
+    return map;
+  }, [staffingAssignments]);
+  /** Staffing overview of the project being edited: total billable line
+      days across the contract and its signed extensions, and how many of
+      them have someone assigned (allocation-weighted, per line). */
+  const editingStaffing = useMemo(() => {
+    if (!editing) return null;
+    const assigns = staffingAssignments.filter(
+      (a) => a.project_id === editing.id,
+    );
+    const parts = [
+      {
+        lines: storedTjmProfiles(editing.tjm_profiles),
+        start: editing.start_date,
+        end: editing.end_date,
+      },
+      ...(signedExtensionsByProject.get(editing.id) || []).map((ext) => ({
+        lines: storedTjmProfiles(ext.tjm_profiles),
+        start: ext.start_date,
+        end: ext.end_date,
+      })),
+    ];
+    let days = 0;
+    let staffedDays = 0;
+    for (const part of parts)
+      for (const s of lineStaffing(part.lines, part.start, part.end, assigns)) {
+        days += s.days;
+        staffedDays += Math.min(s.staffedDays, s.days);
+      }
+    return {
+      assignments: assigns,
+      days,
+      staffedDays,
+      pct: days > 0 ? Math.round((staffedDays / days) * 100) : 0,
+    };
+  }, [editing, staffingAssignments, signedExtensionsByProject]);
   /** Won deals that don't have a project yet — convertible. */
   const convertible = data.opportunities.filter(
     (o) =>
@@ -896,6 +978,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
               project={editing}
               signedExts={signedExtensionsByProject.get(editing.id) || []}
               craDays={craDaysByProject.get(editing.id) || 0}
+              staffed={editingStaffing}
             />
           )}
           <ProjectForm
@@ -930,6 +1013,12 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
               );
             }}
             onExtensionsChanged={() => setReloadTick((t) => t + 1)}
+            onStaffingChanged={() => setReloadTick((t) => t + 1)}
+            staffing={editingStaffing}
+            staffingPeople={employees}
+            talentPool={talentPool}
+            canEngage={canEngage}
+            assignmentsByEmployee={assignmentsByEmployee}
             onProjectPatched={(projectId, patch) => {
               setProjects((list) =>
                 list.map((x) => (x.id === projectId ? { ...x, ...patch } : x)),
@@ -1377,10 +1466,17 @@ function ProjectStatsStrip({
   project,
   signedExts,
   craDays,
+  staffed,
 }: {
   project: Project;
   signedExts: ProjectExtension[];
   craDays: number;
+  /** Open assignments vs billable line days (contract + extensions). */
+  staffed: {
+    days: number;
+    staffedDays: number;
+    pct: number;
+  } | null;
 }) {
   const isRegie = project.pricing_model === "regie";
   const days = Number(project.estimated_days ?? 0);
@@ -1474,6 +1570,16 @@ function ProjectStatsStrip({
           {capped ? " · capped by annual caps" : ""}
         </span>
       </div>
+      {staffed && (
+        <div className="pj-stat">
+          <span className="pj-stat-label">Staffed</span>
+          <span className="pj-stat-value">{staffed.pct}%</span>
+          <span className="pj-stat-sub">
+            {fmtDays(staffed.staffedDays)} of {fmtDays(staffed.days)} days
+            have someone on them
+          </span>
+        </div>
+      )}
       <div className="pj-stat">
         <span className="pj-stat-label">Consumed (CRA)</span>
         <span className="pj-stat-value">
@@ -1534,6 +1640,12 @@ function ProjectForm({
   onSubmit,
   onFolderLinked,
   onExtensionsChanged,
+  onStaffingChanged,
+  staffing,
+  staffingPeople,
+  talentPool,
+  canEngage,
+  assignmentsByEmployee,
   onProjectPatched,
 }: {
   editing: Project | null;
@@ -1552,6 +1664,28 @@ function ProjectForm({
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   onFolderLinked: (projectId: string, folder: ContractFolder) => void;
   onExtensionsChanged: () => void;
+  /** Reload after an assignment was created or ended from the contract page. */
+  onStaffingChanged: () => void;
+  /** Open assignments + coverage totals for the edited project. */
+  staffing: {
+    assignments: Assignment[];
+    days: number;
+    staffedDays: number;
+    pct: number;
+  } | null;
+  /** Every employment with its person's name — the assign panel's roster. */
+  staffingPeople: {
+    id: string;
+    full_name: string;
+    start_date: string;
+    status: string;
+  }[];
+  /** People with no open employment — offered in the assign panel for a
+      direct engagement (HR operators only). */
+  talentPool: { personId: string; name: string }[];
+  canEngage: boolean;
+  /** Open assignments per employee, all projects — availability readout. */
+  assignmentsByEmployee: Map<string, Assignment[]>;
   onProjectPatched: (
     projectId: string,
     patch: { end_date: string | null; updated_at: string },
@@ -1593,6 +1727,37 @@ function ProjectForm({
         : "",
   );
   const [owner, setOwner] = useState(editing?.owner_email || actorEmail);
+
+  // Staffing on the saved contract lines: assignments are keyed by line
+  // name in the database, so the panels follow the saved lines — a draft
+  // line that was renamed or just added can't be staffed until saved.
+  const personNameByEmployee = useMemo(
+    () => new Map(staffingPeople.map((e) => [e.id, e.full_name])),
+    [staffingPeople],
+  );
+  const people: StaffingPerson[] = useMemo(
+    () =>
+      staffingPeople
+        .filter((e) => ["preboarding", "active"].includes(e.status))
+        .map((e) => ({
+          employeeId: e.id,
+          name: e.full_name,
+          startDate: e.start_date,
+        })),
+    [staffingPeople],
+  );
+  const staffingByLine = useMemo(() => {
+    const map = new Map<string, LineStaffing>();
+    if (!editing || !staffing) return map;
+    for (const s of lineStaffing(
+      storedTjmProfiles(editing.tjm_profiles),
+      editing.start_date,
+      editing.end_date,
+      staffing.assignments,
+    ))
+      map.set(s.line.name, s);
+    return map;
+  }, [editing, staffing]);
 
   // Line volumes derive from each line's end date inside the contract
   // window (open days).
@@ -1951,15 +2116,7 @@ function ProjectForm({
                   </label>
                 )}
                 {pricingModel === "regie" && (
-                  <div className="pj-table">
-                    <div className="pj-table-head" aria-hidden="true">
-                      <span>Profile</span>
-                      <span>Rate</span>
-                      <span>End date</span>
-                      <span>Cap / year</span>
-                      <span className="pj-right">Subtotal</span>
-                      <span />
-                    </div>
+                  <div className="pj-lines">
                     {profiles.map((profile, i) => {
                       const cleaned = cleanedProfiles[i];
                       const days = lineDays(cleaned, startDate, endDate);
@@ -1976,80 +2133,147 @@ function ProjectForm({
                               currentYear,
                             )
                           : null;
+                      // Staffing follows the saved lines — assignments
+                      // are keyed by line name, so a renamed or brand-new
+                      // draft line can only be staffed after saving.
+                      const lineStaff =
+                        editing && cleaned.name
+                          ? staffingByLine.get(cleaned.name)
+                          : undefined;
                       return (
-                        <div className="pj-table-row" key={i}>
-                          <input
-                            aria-label={`Profile ${i + 1} name`}
-                            placeholder="Name this profile, e.g. Data Engineer"
-                            value={profile.name}
-                            maxLength={100}
-                            onChange={(e) =>
-                              setProfile(i, { name: e.target.value })
-                            }
-                          />
-                          <span className="pj-affix">
-                            <input
-                              aria-label={`Profile ${i + 1} daily rate`}
-                              type="number"
-                              min="0"
-                              step="10"
-                              required
-                              value={profile.tjm}
-                              onChange={(e) =>
-                                setProfile(i, { tjm: e.target.value })
-                              }
-                            />
-                            <span className="pj-affix-suffix">
-                              {currencySymbol} / day
-                            </span>
-                          </span>
-                          <DateField
-                            aria-label={`Profile ${i + 1} end date`}
-                            value={profile.end_date}
-                            min={startDate || undefined}
-                            max={endDate || undefined}
-                            onChange={(value) =>
-                              setProfile(i, { end_date: value })
-                            }
-                          />
-                          <div className="pj-cap-cell">
-                            <input
-                              aria-label={`Profile ${i + 1} yearly billable cap`}
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={profile.cap}
-                              placeholder="e.g. 210"
-                              onChange={(e) =>
-                                setProfile(i, { cap: e.target.value })
-                              }
-                            />
-                            {capThisYear !== null && (
-                              <span className="pj-cap-prorata">
-                                ≈ {fmtDays(capThisYear)} d in {currentYear}
+                        <div className="pj-line" key={i}>
+                          <div className="pj-line-grid">
+                            <label className="pj-field">
+                              <span className="pj-label">Profile</span>
+                              <input
+                                aria-label={`Profile ${i + 1} name`}
+                                placeholder="Name this profile, e.g. Data Engineer"
+                                value={profile.name}
+                                maxLength={100}
+                                onChange={(e) =>
+                                  setProfile(i, { name: e.target.value })
+                                }
+                              />
+                            </label>
+                            <label className="pj-field">
+                              <span className="pj-label">Daily rate</span>
+                              <span className="pj-affix">
+                                <input
+                                  aria-label={`Profile ${i + 1} daily rate`}
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  required
+                                  value={profile.tjm}
+                                  onChange={(e) =>
+                                    setProfile(i, { tjm: e.target.value })
+                                  }
+                                />
+                                <span className="pj-affix-suffix">
+                                  {currencySymbol} / day
+                                </span>
                               </span>
-                            )}
+                            </label>
+                            <div className="pj-field">
+                              <span className="pj-label">End date</span>
+                              <DateField
+                                aria-label={`Profile ${i + 1} end date`}
+                                value={profile.end_date}
+                                min={startDate || undefined}
+                                max={endDate || undefined}
+                                onChange={(value) =>
+                                  setProfile(i, { end_date: value })
+                                }
+                              />
+                            </div>
+                            <div className="pj-field">
+                              <span className="pj-label">Cap / year</span>
+                              <div className="pj-cap-cell">
+                                <input
+                                  aria-label={`Profile ${i + 1} yearly billable cap`}
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={profile.cap}
+                                  placeholder="e.g. 210"
+                                  onChange={(e) =>
+                                    setProfile(i, { cap: e.target.value })
+                                  }
+                                />
+                                {capThisYear !== null && (
+                                  <span className="pj-cap-prorata">
+                                    ≈ {fmtDays(capThisYear)} d in {currentYear}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="pj-field pj-line-subtotal">
+                              <span className="pj-label">Subtotal</span>
+                              <span
+                                className="pj-subtotal"
+                                title={`${days} working days`}
+                              >
+                                {money(cleaned.tjm * days, currency)}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              className="pj-profile-remove"
+                              aria-label={`Remove profile ${i + 1}`}
+                              title={
+                                profiles.length <= 1
+                                  ? "A régie project needs at least one profile"
+                                  : "Remove profile"
+                              }
+                              disabled={profiles.length <= 1}
+                              onClick={() => removeProfile(i)}
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
-                          <span
-                            className="pj-subtotal"
-                            title={`${days} working days`}
-                          >
-                            {money(cleaned.tjm * days, currency)}
-                          </span>
-                          <button
-                            type="button"
-                            className="pj-profile-remove"
-                            aria-label={`Remove profile ${i + 1}`}
-                            title={
-                              profiles.length <= 1
-                                ? "A régie project needs at least one profile"
-                                : "Remove profile"
-                            }
-                            disabled={profiles.length <= 1}
-                            onClick={() => removeProfile(i)}
-                          >
-                            <X size={14} />
-                          </button>
+
+                          {/* The line bills from the contract start to its
+                              own end date — a read-out of the window the
+                              fields above define. */}
+                          <div className="pj-line-billed">
+                            <span className="pj-line-billed-label">Billed</span>
+                            <span>
+                              {startDate ? shortDate(startDate) : "—"} →{" "}
+                              {cleaned.end_date ? shortDate(cleaned.end_date) : "—"}
+                            </span>
+                            <span className="pj-line-days">
+                              {fmtDays(days)} working days ×{" "}
+                              {money(cleaned.tjm, currency)}
+                            </span>
+                            {!!cleaned.end_date &&
+                              !!endDate &&
+                              cleaned.end_date === endDate && (
+                                <span className="pj-line-same">
+                                  Same as contract
+                                </span>
+                              )}
+                          </div>
+
+                          {editing &&
+                            (lineStaff ? (
+                              <LineStaffingPanel
+                                projectId={editing.id}
+                                staffing={lineStaff}
+                                people={people}
+                                talentPool={talentPool}
+                                canEngage={canEngage}
+                                assignmentsByEmployee={
+                                  assignmentsByEmployee
+                                }
+                                personNameByEmployee={personNameByEmployee}
+                                currency={currency}
+                                onChanged={onStaffingChanged}
+                              />
+                            ) : cleaned.name ? (
+                              <p className="pj-line-save-hint">
+                                Save changes to staff this line.
+                              </p>
+                            ) : null)}
                         </div>
                       );
                     })}
@@ -2058,7 +2282,7 @@ function ProjectForm({
                       name="tjm_profiles"
                       value={JSON.stringify(cleanedProfiles)}
                     />
-                    <div className="pj-table-foot">
+                    <div className="pj-table-foot pj-lines-foot">
                       <button
                         type="button"
                         className="pj-add-profile"
@@ -2145,6 +2369,27 @@ function ProjectForm({
 
           {editing && (
             <aside className="pj-side">
+              {staffing && (
+                <ProjectTeamCard
+                  team={staffing.assignments
+                    .map((a) => ({
+                      employeeId: a.employee_id,
+                      name:
+                        personNameByEmployee.get(a.employee_id) || "Person",
+                      line: a.pricing_line,
+                      alloc: a.allocation_pct,
+                      period: `${shortDate(a.start_date)} → ${
+                        a.end_date ? shortDate(a.end_date) : "open"
+                      }`,
+                      status: a.status,
+                    }))
+                    .sort((a, b) => a.name.localeCompare(b.name))}
+                  unstaffedDays={Math.max(
+                    0,
+                    staffing.days - staffing.staffedDays,
+                  )}
+                />
+              )}
               <section className="pj-card pj-consume-card">
                 <div className="pj-card-head">
                   <h2 className="pj-card-title">Consumption (CRA)</h2>

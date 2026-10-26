@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useSession } from '@clerk/react';
 import { Upload, Sparkles } from 'lucide-react';
 import { z } from 'zod';
-import { errorMessage } from '@quicksort/hr-db';
+import { db, errorMessage } from '@quicksort/hr-db';
 import { MAX_INTAKE_PDF_BYTES, parsedProfileSchema, type ParsedProfile } from '../candidate-intake';
 import { Field, Form, Tag, checked, text, type RunCommand } from './ui';
 export function Intake({
@@ -28,25 +28,25 @@ export function Intake({
   async function parse(file: File | undefined) {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.pdf') || !file.size || file.size > MAX_INTAKE_PDF_BYTES) {
-      setError('Choose a non-empty PDF up to 3 MB.');
+      setError('Choose a non-empty PDF up to 10 MB.');
       return;
     }
     setParsing(true);
     setError('');
+    // Upload straight to Supabase Storage so the 10 MB PDF never passes through
+    // the API body (Vercel caps it at 4.5 MB). The API reads it back from the bucket.
+    let uploadedPath = '';
     try {
       const token = await session?.getToken({
         template: 'supabase'
       });
-      if (!token) throw new Error('Your session expired. Sign in again.');
-      const data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const content = String(reader.result).split(',')[1];
-          if (content) resolve(content);else reject(new Error('The PDF could not be read.'));
-        };
-        reader.onerror = () => reject(new Error('The PDF could not be read.'));
-        reader.readAsDataURL(file);
+      if (!token || !session?.user.id) throw new Error('Your session expired. Sign in again.');
+      uploadedPath = `${session.user.id}/${crypto.randomUUID()}.pdf`;
+      const uploaded = await db().storage.from('candidate-documents').upload(uploadedPath, file, {
+        upsert: false,
+        contentType: 'application/pdf'
       });
+      if (uploaded.error) throw new Error('The PDF could not be uploaded. Please try again.');
       const response = await fetch('/api/parse-candidate', {
         method: 'POST',
         headers: {
@@ -55,8 +55,8 @@ export function Intake({
         },
         body: JSON.stringify({
           profile: {
-            kind: 'pdf',
-            data,
+            kind: 'storage',
+            path: uploadedPath,
             name: file.name
           }
         }),
@@ -78,6 +78,8 @@ export function Intake({
     } catch (failure) {
       setError(errorMessage(failure));
     } finally {
+      // Throwaway transfer copy — nothing references it after parsing.
+      if (uploadedPath) void db().storage.from('candidate-documents').remove([uploadedPath]).catch(() => {});
       setParsing(false);
       if (fileRef.current) fileRef.current.value = '';
     }

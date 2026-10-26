@@ -167,6 +167,22 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, bas
     const earliest = context?.employees.reduce<string | undefined>((min, item) => !min || item.start_date < min ? item.start_date : min, undefined);
     return listMonths(earliest ? earliest.slice(0, 7) : shiftMonth(currentMonth(), -11), shiftMonth(currentMonth(), 3));
   }, [context]);
+  // Arrow keys step through months the same way the month pills do — handy
+  // when reviewing a long history. Ignored while typing or holding a modifier
+  // (Shift+Arrows is text selection, Ctrl/Alt+Arrows is browser tab switching).
+  useEffect(() => {
+    const step = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const delta = event.key === 'ArrowRight' ? 1 : -1;
+      const next = shiftMonth(month, delta);
+      if (monthChoices.includes(next)) changeMonth(next);
+    };
+    window.addEventListener('keydown', step);
+    return () => window.removeEventListener('keydown', step);
+  });
   return <section className="cra-screen">
     {error && <><Notice error>{error}</Notice><button className="btn secondary" onClick={() => setRetry(value => value + 1)}>Retry loading CRA</button></>}
     {!context && !error && <p className="muted" role="status">Loading CRA…</p>}
@@ -274,7 +290,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   const [draftStored, setDraftStored] = useState(true);
   // Same strip for HR and the employee portal: everyone sees the same
   // remaining CP/RTT days, net of everything consumed so far.
-  const balances = useLeaveBalances([employee.id]);
+  const { balances, error: balanceError } = useLeaveBalances([employee.id]);
   const cpLeft = balanceFor(balances, employee.id, 'cp');
   const rttLeft = balanceFor(balances, employee.id, 'rtt');
   const dragRef = useRef<{ add: boolean } | null>(null);
@@ -345,7 +361,6 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
     try {
       const result = await saveMonth({ employeeId: employee.id, month, version, entries });
       setSnapshot(result); setEntries(result.entries); setVersion(result.version); storeDraft(draftKey, null);
-      setMessage('CRA saved.');
     } catch (error) { setError(errorMessage(error)); }
     finally { setBusy(false); }
   }
@@ -492,7 +507,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   const unit = duration === 'full' ? 'day' : 'half-day';
   const statusLabel = busy ? 'Saving…' : dirty ? draftStored ? 'Unsaved changes · draft kept in this browser' : 'Unsaved changes · save before leaving' : snapshot?.updated_at ? `Saved by ${snapshot.updated_by || 'your team'} on ${new Date(snapshot.updated_at).toLocaleString('en-GB')}` : 'No entries saved yet';
   return <>
-    <Notice error>{error}</Notice><Notice>{message}</Notice>
+    <Notice error>{error}</Notice>
     {!snapshot && !error && <p role="status" className="muted">Loading {monthLabel}…</p>}
     {!snapshot && error && <button className="btn secondary" onClick={discard}>Retry loading month</button>}
     {snapshot && <>
@@ -519,12 +534,18 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
           <p className="cra-toolbar-meta">{workdays.length} working days{holidayCount ? ` · ${holidayCount} public ${holidayCount === 1 ? 'holiday' : 'holidays'}` : ''}{defaultProject ? ` · Default ${defaultProject.client_name} — ${defaultProject.title}` : ''}</p>
         </div>
         <div className="cra-toolbar-actions">
-          <span className="cra-save-state" role="status">{statusLabel}</span>
-          {dirty && <button className="btn secondary" type="button" disabled={busy} onClick={discard}><RefreshCw size={16} aria-hidden="true" />Discard</button>}
           {defaultProject && remaining > 0 && <button className="btn secondary" type="button" disabled={busy} onClick={fillDefault}>Fill {fmtDays(remaining)} empty</button>}
-          <button className="btn" type="button" disabled={busy || !dirty} onClick={() => void save()}><Save size={16} aria-hidden="true" />{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </section>
+
+      <div className="cra-savebar">
+        <span className="cra-savebar-message" role="status">{message}</span>
+        <span className="cra-save-state" role="status">{statusLabel}</span>
+        <div className="cra-savebar-actions">
+          {dirty && <button className="btn secondary" type="button" disabled={busy} onClick={discard}><RefreshCw size={16} aria-hidden="true" />Discard</button>}
+          <button className="btn" type="button" disabled={busy || !dirty} onClick={() => void save()}><Save size={16} aria-hidden="true" />{busy ? 'Saving…' : 'Save'}</button>
+        </div>
+      </div>
 
       <section className="cra-summary" aria-label="Month summary">
         <div className="cra-summary-row">
@@ -533,7 +554,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
             <span className="muted"> / {workdays.length} days filled{remaining ? '' : ' · Complete'}</span>
           </div>
           <div className="muted cra-breakdown">
-            Solde CP {fmtDays(cpLeft)} j · RTT {fmtDays(rttLeft)} j{breakdown ? ` · ${breakdown}` : ''}
+            {balanceError ? `Solde indisponible · ${balanceError}` : `Solde CP ${fmtDays(cpLeft)} j · RTT ${fmtDays(rttLeft)} j`}{!balanceError && breakdown ? ` · ${breakdown}` : ''}
           </div>
         </div>
         <div role="progressbar" aria-label="Days filled" aria-valuemin={0} aria-valuemax={workdays.length} aria-valuenow={filled} className="cra-progress">

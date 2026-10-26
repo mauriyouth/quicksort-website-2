@@ -130,6 +130,7 @@ test('failed task completion keeps its evidence and uses the same retry key', as
   await page.goto(`${harness.url}?view=people`);
   await page.getByRole('button', { name: /Sam Rivera/ }).click();
   await page.getByRole('tab', { name: /Employment/ }).click();
+  await page.getByRole('button', { name: 'Complete Verify employment documents' }).click();
   const form = page.locator('form').filter({ has: page.getByRole('button', { name: 'Complete task', exact: true }) }).first();
   await form.getByLabel('Completion evidence').fill('Access verified with the employee.');
   await form.getByRole('button', { name: 'Complete task', exact: true }).click();

@@ -1,4 +1,4 @@
-import type { HrTable, HrPerson, HrApplication, HrEmployee, HrOpportunity, HrInterview, HrOffer, HrJourneyTask, HrReview, HrExit, HrExitItem, HrAssignment, HrEvent, HrContract, HrSignature, HrCountersignature, HrSuggestion, HrAccount } from "./hr.types";
+import type { HrTable, HrPerson, HrApplication, HrEmployee, HrEmployeeSalary, HrOpportunity, HrInterview, HrOffer, HrJourneyTask, HrReview, HrExit, HrExitItem, HrAssignment, HrEvent, HrContract, HrSignature, HrCountersignature, HrSuggestion, HrAccount } from "./hr.types";
 import type { BlogRecord, BlogInsert } from "./blog";
 export type Json =
   | string
@@ -404,6 +404,7 @@ export type Database = {
       onboarding_items: HrTable<HrJourneyTask>;
       employee_project_assignments: HrTable<HrAssignment>;
       employees: HrTable<HrEmployee>;
+      employee_salaries: HrTable<HrEmployeeSalary>;
 
 
       portal_owners: {

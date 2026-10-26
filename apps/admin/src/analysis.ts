@@ -1,12 +1,18 @@
 import { z } from "zod";
-export const MAX_CV_BYTES = 3 * 1024 * 1024;
+// PDFs larger than this must come through Supabase Storage (browser uploads
+// directly to the bucket, so the Vercel 4.5 MB API body limit does not apply).
+export const MAX_CV_BYTES = 10 * 1024 * 1024;
+// Inline base64 PDFs travel inside the JSON request body, which Vercel caps at
+// 4.5 MB — that path stays at 3 MB even though storage-backed PDFs go to 10 MB.
+export const MAX_INLINE_PDF_BYTES = 3 * 1024 * 1024;
 export const MAX_BATCH_FILES = 100;
 export const CRITERIA = ["Relevant skills", "Relevant experience", "Demonstrated outcomes", "Tools and methods", "Required qualifications", "Role-specific knowledge"] as const;
 export const analysisRequest = z.object({
   jobId: z.string().uuid(), expectedUpdatedAt: z.string().optional(), requestId: z.string().uuid().optional(),
   cv: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("text"), text: z.string().trim().min(50).max(60000) }),
-    z.object({ kind: z.literal("pdf"), data: z.string().min(8).max(MAX_CV_BYTES * 4 / 3).regex(/^[A-Za-z0-9+/]+={0,2}$/), name: z.string().max(250) }),
+    z.object({ kind: z.literal("pdf"), data: z.string().min(8).max(MAX_INLINE_PDF_BYTES * 4 / 3).regex(/^[A-Za-z0-9+/]+={0,2}$/), name: z.string().max(250) }),
+    z.object({ kind: z.literal("storage"), path: z.string().min(1).max(500), name: z.string().max(250) }),
     z.object({ kind: z.literal("document"), id: z.string().uuid() }),
   ]),
 }).strict();

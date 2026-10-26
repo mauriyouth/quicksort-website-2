@@ -17,7 +17,7 @@ The application already has recruitment, interviews, offers, contracts, onboardi
 | Contract and hire | Portal documents, typed candidate signature, candidate-to-employee conversion | Portal identities and pipeline identities differ. Hiring can bypass the accepted-offer and signed-contract checks. |
 | Onboarding and probation | Default checklists, assignees, due dates, buddy, reviews | Identifier mismatch hides tasks and reviews. There is no normal progression through preboarding, onboarding, and probation. |
 | Project assignment | Employee-to-project links with position, allocation, and dates | No capacity planning, overlap validation, repeat assignment periods, or assignment history after removal. |
-| Offboarding | Exit dates, checklist, handover text, legal-document flag, rehire flag | Opening an exit does not update employment state. Closing an exit does not close assignments or enforce a recorded handover. |
+| Offboarding | Exit dates, checklist, handover text, rehire flag | Opening an exit does not update employment state. Closing an exit does not close assignments or enforce a recorded handover. |
 | Alumni | Employee status, directory filter, talent-pool filter | No rehire journey, relationship management, or new employment period. Some views read frozen candidate details. |
 | AI assistance | Resume extraction and a separate CV evaluation workspace | Evaluations are not connected to the pipeline candidate or application. AI-labelled pipeline steps depend on manually recorded fields. |
 
@@ -61,7 +61,7 @@ Make one authoritative transition policy drive both the UI and database commands
 
 ### P1: employment progression and exit handoffs are incomplete
 
-The onboarding workflow can confirm probation directly, without requiring a held review or adding a lifecycle event. Normal actions do not progress employees into onboarding and probation. An exit opens a workflow without setting the employee's stage to offboarding. Exit completion checks task flags and legal-document delivery, but does not require the handover text or reconcile project assignments.
+The onboarding workflow can confirm probation directly, without requiring a held review or adding a lifecycle event. Normal actions do not progress employees into onboarding and probation. An exit opens a workflow without setting the employee's stage to offboarding. Exit completion checks task flags, but does not require the handover text or reconcile project assignments.
 
 Define explicit commands for starting onboarding, completing onboarding, recording a probation decision, opening an exit, and completing an exit. Onboarding completion and probation are separate facts because they can overlap. Every command records its actor and evidence.
 

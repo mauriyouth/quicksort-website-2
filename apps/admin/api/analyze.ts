@@ -33,7 +33,7 @@ return async function handler(req: Request, res: Response) {
     configuredModel = aiSettings.model;
     if (!aiSettings.apiKey) return res.status(503).json({ error: "Add an OpenAI API key in Settings → AI configuration." });
     const parsed = analysisRequest.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Choose a job and provide a PDF up to 3 MB or CV text between 50 and 60,000 characters." });
+    if (!parsed.success) return res.status(400).json({ error: "Choose a job and provide a PDF up to 10 MB or CV text between 50 and 60,000 characters." });
     const input = parsed.data;
     const evaluationId = input.requestId || randomUUID();
     const previous = await client.from("cv_evaluations").select("report").eq("id", evaluationId).maybeSingle();
@@ -47,14 +47,22 @@ return async function handler(req: Request, res: Response) {
     if (cv.kind === "document") {
       const document = await client.from("candidate_documents").select("storage_path,name,size_bytes").eq("id", cv.id).single();
       if (document.error || !document.data) return res.status(404).json({ error: "Candidate document unavailable." });
-      if (document.data.size_bytes > MAX_CV_BYTES || !document.data.name.toLowerCase().endsWith(".pdf")) return res.status(400).json({ error: "Choose a PDF up to 3 MB, or paste its CV text." });
+      if (document.data.size_bytes > MAX_CV_BYTES || !document.data.name.toLowerCase().endsWith(".pdf")) return res.status(400).json({ error: "Choose a PDF up to 10 MB, or paste its CV text." });
       const download = await client.storage.from("candidate-documents").download(document.data.storage_path);
       if (download.error || !download.data) return res.status(404).json({ error: "Could not retrieve this CV." });
-      if (download.data.size > MAX_CV_BYTES) return res.status(400).json({ error: "CV exceeds 3 MB." });
+      if (download.data.size > MAX_CV_BYTES) return res.status(400).json({ error: "CV exceeds 10 MB." });
       cv = { kind: "pdf", data: Buffer.from(await download.data.arrayBuffer()).toString("base64"), name: document.data.name };
     }
+    if (cv.kind === "storage") {
+      // RLS decides which bucket paths this user may read — same check as their own browser.
+      if (!cv.name.toLowerCase().endsWith(".pdf")) return res.status(400).json({ error: "Choose a PDF up to 10 MB, or paste its CV text." });
+      const download = await client.storage.from("candidate-documents").download(cv.path);
+      if (download.error || !download.data) return res.status(404).json({ error: "Could not retrieve this CV. Upload it again." });
+      if (download.data.size > MAX_CV_BYTES) return res.status(400).json({ error: "CV exceeds 10 MB." });
+      cv = { kind: "pdf", data: Buffer.from(await download.data.arrayBuffer()).toString("base64"), name: cv.name };
+    }
     const pdf = cv.kind === "pdf" ? Buffer.from(cv.data, "base64") : null;
-    if (pdf && (pdf.length > MAX_CV_BYTES || pdf.subarray(0, 5).toString() !== "%PDF-")) return res.status(400).json({ error: "Upload a valid PDF up to 3 MB." });
+    if (pdf && (pdf.length > MAX_CV_BYTES || pdf.subarray(0, 5).toString() !== "%PDF-")) return res.status(400).json({ error: "Upload a valid PDF up to 10 MB." });
     const instructions = process.env.CV_ANALYSIS_INSTRUCTIONS?.trim() || DEFAULT_INSTRUCTIONS;
     const model = aiSettings.model;
     const { output } = await deps.generateText({

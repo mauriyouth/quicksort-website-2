@@ -17,7 +17,7 @@ Preserve existing unrelated sales, operations, settings, brand, and account work
 
 All consequential HR transitions use authenticated database commands. The database derives the actor from the session, validates permission and current state, and saves state and history in one transaction. Frontend forms show the same prerequisites and retain inputs after errors.
 
-The normalized relationships are person identity, recruitment applications, and employment periods. Interviews and employment offers belong to an application. Onboarding, reviews, exits, and project assignments belong to an employment period. Portal accounts map explicitly to people. Salary, interview notes, and exit evidence remain restricted to HR and authorized administrators.
+The normalized relationships are person identity, recruitment applications, and employment periods. Interviews and employment offers belong to an application. Onboarding, reviews, exits, and project assignments belong to an employment period. Portal accounts map explicitly to people. Salary and interview notes remain restricted to HR and authorized administrators.
 
 ## Synthesis
 
@@ -31,15 +31,16 @@ Backend writes authoritative fields and the command union into `apps/admin/src/h
 - `hr_applications`: id, person_id, opportunity_id, recruitment stage, status active/hired/rejected/withdrawn, reason, screening summary/recommendation, source/referrer, stage_entered_at, version, timestamps. Talent-only intake creates a person without an application. Applications require a requisition.
 - `employees`: employment periods with id, person_id, application_id, accepted offer reference, role, manager_email, parrain, start_date, end_date, planned_exit_date, status preboarding/active/offboarding/ended, onboarding_completed_at, independent probation_status and probation_end, version, timestamps.
 - `interviews` and `offers` use application_id. Offers have deterministic margin, separate approvals, and approved/shared/accepted/declined states. Sharing publishes an actual portal-visible offer. External delivery is explicitly manual or pending, never falsely successful.
-- `onboarding_items` and `reviews` use employee_id. Tasks have required, assignee, due_date, dependency, evidence, completion timestamp. `offboarding_records` uses employee_id and preserves handover, exit evidence, rehire outcome, and legal-document evidence. Checklists use completion timestamps.
+- `onboarding_items` and `reviews` use employee_id. Tasks have required, assignee, due_date, dependency, evidence, completion timestamp. `offboarding_records` uses employee_id and preserves handover, exit interview, and rehire outcome. Checklists use completion timestamps.
 - `employee_project_assignments` uses employment-period employee_id. Dated proposed/reserved/confirmed/active/completed/cancelled periods permit repeat assignments to one project. Capacity counts commitments at interval boundaries and locks the employment root. Removal retains history.
+- `employee_salaries` uses employment-period employee_id. Non-overlapping dated intervals (start_date, nullable end_date) carry salary_monthly and one open interval is current; hiring seeds the first interval from the accepted offer, `save_salary` closes the previous open interval the day before a change, and exit closes history at the exit date. Staff-only projections see no salary rows.
 - `hr_events`: person_id, optional application_id and employee_id, semantic kind, previous/next state, actor identity, rationale, request UUID, timestamp. `hr_command_receipts` makes identical retries idempotent and rejects changed payloads under the same key.
 - Contracts retain account-owned candidate_id for portal/storage, with explicit person_id, application_id, optional employee_id. Keep candidate signatures and add `contract_countersignatures` for employer signatures. Hire checks both records.
 - `hr_ai_suggestions`: target IDs, kind, payload, sources, input_version, model, status, review metadata. Save suggestions only after checking source versions and scope. Review accepted/dismissed is separate from applying facts.
 - `my_applications`, `my_application_events`, `my_employment`, `my_onboarding_items`, and `my_offers` are explicit account-scoped safe projections. No email authorization and no confidential notes in portal views.
 - Opportunities retain existing requisition fields and gain staffing project reference and version. Stable imports use `hr_person_external_ids`.
 
-`loadWorkspace()` returns parsed arrays people, applications, employees, opportunities, interviews, offers, tasks, reviews, exits, exitItems, assignments, events, contracts, signatures, countersignatures, suggestions, projects, clients, accounts, plus capabilities. Prefer a single scoped `hr_workspace_snapshot()` RPC. `executeCommand(input)` validates a discriminated snake-case kind payload, adds request_id if absent, invokes `hr_command({command})`, and parses returned IDs/version. State changes carry expected_version. SQL raises descriptive permission, prerequisite, and stale-version errors and rolls back. `hr_application_requirements(application_id,to_stage)` supplies the UI and SQL with the same gates.
+`loadWorkspace()` returns parsed arrays people, applications, employees, salaries, opportunities, interviews, offers, tasks, reviews, exits, exitItems, assignments, events, contracts, signatures, countersignatures, suggestions, projects, clients, accounts, plus capabilities. Prefer a single scoped `hr_workspace_snapshot()` RPC. `executeCommand(input)` validates a discriminated snake-case kind payload, adds request_id if absent, invokes `hr_command({command})`, and parses returned IDs/version. State changes carry expected_version. SQL raises descriptive permission, prerequisite, and stale-version errors and rolls back. `hr_application_requirements(application_id,to_stage)` supplies the UI and SQL with the same gates.
 
 Required intents: create/update person, link account, create/move/dispose application, update screening, add note, schedule/complete/cancel interview, create/approve/share/respond offer, hire, start/complete onboarding, save/complete task, schedule/record review, open/save/complete exit, assign/end assignment, create/update/approve/publish requisition, countersign contract, save/review suggestion, and source-keyed import person. Import is an explicit attributed historical operation, never a normal hire bypass.
 
@@ -64,7 +65,7 @@ flowchart LR
   Employment --> Onboarding[Preboarding and onboarding tasks]
   Onboarding --> Review[Probation review]
   Employment --> Staffing[Dated project commitments]
-  Employment --> Exit[Exit evidence and checklist]
+  Employment --> Exit[Exit details and checklist]
   Exit --> Alumni[Ended employment / alumni]
   Alumni --> Application
 ```

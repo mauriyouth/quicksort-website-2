@@ -135,10 +135,20 @@ begin
  -- Direct engagement: a talent-pool person becomes staffable without an application, offer or contract.
  result:=pg_temp.command('{"kind":"create_person","full_name":"Ravi Patel","skills":"React, Node"}'); pool_person:=(result->>'person_id')::uuid;
 
- perform pg_temp.command(jsonb_build_object('kind','engage_person','person_id',pool_person,'role','Frontend Freelance','contract_type','Freelance','start_date',current_date,'rationale','Freelance already contracted by the client'));
+ perform pg_temp.command(jsonb_build_object('kind','engage_person','person_id',pool_person,'role','Frontend Freelance','contract_type','Freelance','start_date',current_date,'rationale','Freelance already contracted by the client','daily_rate',520));
  pool_emp:=(select id from public.employees where person_id=pool_person);
  perform pg_temp.assert_true((select status from public.employees where id=pool_emp)='active','Immediate engagement starts active');
  perform pg_temp.assert_true((select contract_type from public.employees where id=pool_emp)='Freelance','Engagement stores its contract type');
+ -- Freelance compensation is a daily rate: the engagement seeds one daily interval.
+ perform pg_temp.assert_true((select rate_kind from public.employee_salaries where employee_id=pool_emp)='daily','Engagement seeds a daily rate interval');
+ perform pg_temp.assert_true((select daily_rate from public.employee_salaries where employee_id=pool_emp)=520,'Seeded daily rate matches the engagement');
+ perform pg_temp.assert_true((select salary_monthly from public.employee_salaries where employee_id=pool_emp) is null,'Daily intervals carry no monthly figure');
+ -- Daily rate changes close the previous open interval the day before.
+ perform pg_temp.command(jsonb_build_object('kind','save_salary','employee_id',pool_emp,'rate_kind','daily','daily_rate',560,'start_date',current_date+30,'rationale','Rate renegotiation'));
+ perform pg_temp.assert_true((select daily_rate from public.employee_salaries where employee_id=pool_emp and end_date is null)=560,'Latest open daily interval carries the new TJM');
+ perform pg_temp.assert_true(exists(select 1 from public.hr_events where employee_id=pool_emp and kind='save_salary' and previous_state='520' and next_state='560'),'Daily rate change is audited with old and new amounts');
+ perform pg_temp.must_fail(jsonb_build_object('kind','save_salary','employee_id',pool_emp,'rate_kind','daily','salary_monthly',3000,'start_date',current_date+60,'rationale','Wrong figure'),'Daily rate is required');
+ perform pg_temp.must_fail(jsonb_build_object('kind','save_salary','employee_id',pool_emp,'rate_kind','daily','daily_rate',-1,'start_date',current_date+60,'rationale','Negative'),'zero or positive');
  perform pg_temp.assert_true(exists(select 1 from public.hr_events where person_id=pool_person and kind='engage_person' and next_state='engaged'),'Engagement lands in the audit log');
  perform pg_temp.must_fail(jsonb_build_object('kind','engage_person','person_id',pool_person,'role','Again','contract_type','Freelance','start_date',current_date,'rationale','Duplicate engagement'),'open employment period');
  -- Rationale is optional: a direct engagement without one still engages and lands in the audit log.

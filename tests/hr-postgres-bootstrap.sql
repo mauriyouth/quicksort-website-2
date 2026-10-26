@@ -16,6 +16,12 @@ $$;
 create function auth.uid() returns uuid language sql stable as $$
   select coalesce(auth.jwt()->>'sub', nullif(current_setting('request.jwt.claim.sub', true), ''))::uuid
 $$;
+-- Hosted Supabase projects ship this helper in the private schema; plain
+-- PostgreSQL verification databases need the same surface.
+create schema if not exists private;
+create function private.current_user_id() returns uuid language sql stable as $$
+  select auth.uid()
+$$;
 grant usage on schema auth, storage, public to anon, authenticated, service_role;
 grant execute on all functions in schema auth to anon, authenticated, service_role;
 create table storage.buckets (

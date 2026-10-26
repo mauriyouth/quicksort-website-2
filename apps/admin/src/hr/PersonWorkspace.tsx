@@ -833,17 +833,23 @@ function EngageDirectly({
   return <details className="hr-disclosure">
     <summary>Engage directly — no application</summary>
     <p className="hr-source-list">For people hired outside the pipeline (freelancers, direct contracts). Skips offers and contracts — an optional rationale is recorded as audit evidence.</p>
-    <Form run={run} busy={busy} button="Record engagement" success="Engagement recorded. The person can be staffed on projects right away." submit={data => ({
-      kind: 'engage_person',
-      person_id: person.id,
-      role: text(data, 'role'),
-      contract_type: text(data, 'contract_type'),
-      start_date: text(data, 'start_date'),
-      manager_email: text(data, 'manager_email'),
-      rationale: text(data, 'rationale')
-    })}>
+    <Form run={run} busy={busy} button="Record engagement" success="Engagement recorded. The person can be staffed on projects right away." submit={data => {
+      const contractType = text(data, 'contract_type');
+      const dailyRateText = text(data, 'daily_rate');
+      return {
+        kind: 'engage_person' as const,
+        person_id: person.id,
+        role: text(data, 'role'),
+        contract_type: contractType,
+        start_date: text(data, 'start_date'),
+        manager_email: text(data, 'manager_email'),
+        rationale: text(data, 'rationale'),
+        ...(contractType === 'Freelance' && dailyRateText ? { daily_rate: Number(dailyRateText) } : {})
+      };
+    }}>
       <Field name="role" label="Engagement role" value={person.headline} required />
       <Field name="contract_type" label="Contract type" value="Freelance" options={options(['Freelance', 'CDI', 'CDD', 'Internship', 'Apprenticeship'])} required />
+      <Field name="daily_rate" label="Daily rate — TJM (€/day)" type="number" min={0} step="0.01" hint="Freelance only: recorded as the first daily-rate entry in the compensation history." />
       <Field name="start_date" label="Start date" type="date" value={today()} required />
       <Field name="manager_email" label="Manager email" type="email" />
       <Field name="rationale" label="Engagement rationale" type="textarea" hint="Optional — why this person is engaged without the application pipeline." />
@@ -957,6 +963,7 @@ export function EmploymentDetail({
     reload
   } = context;
   const tasks = workspace.tasks.filter(task => task.employee_id === employee.id);
+  const freelance = employee.contract_type === 'Freelance';
   const salaries = workspace.salaries.filter(entry => entry.employee_id === employee.id).sort((a, b) => b.start_date.localeCompare(a.start_date));
   const reviews = workspace.reviews.filter(review => review.employee_id === employee.id);
   const exit = workspace.exits.find(record => record.employee_id === employee.id);
@@ -1063,9 +1070,9 @@ export function EmploymentDetail({
         <Field name="rationale" label="Renunciation rationale" type="textarea" required />
       </Form>}
     </EmpSection>
-    <EmpSection title="Salary" detail="Dated monthly salary history. A new entry closes the previous one the day before it starts; hiring seeds the first entry from the accepted offer.">
+    <EmpSection title={freelance ? 'Daily rate (TJM)' : 'Salary'} detail={freelance ? 'Dated daily-rate history. A new entry closes the previous one the day before it starts; freelance engagements and hires seed the first entry.' : 'Dated monthly salary history. A new entry closes the previous one the day before it starts; hiring seeds the first entry from the accepted offer.'}>
       {!salaries.length && <div className="hr-emp-empty">
-        <span>No salary recorded</span>
+        <span>{freelance ? 'No daily rate recorded' : 'No salary recorded'}</span>
       </div>}
       {!!salaries.length && <ul className="hr-emp-tasks">
         {salaries.map(entry => {
@@ -1073,7 +1080,7 @@ export function EmploymentDetail({
           return <li key={entry.id} className="hr-emp-task">
             <div className="hr-emp-task-main">
               <span className="hr-emp-task-title">
-                €{entry.salary_monthly.toLocaleString()} / month
+                €{(entry.rate_kind === 'daily' ? entry.daily_rate : entry.salary_monthly)?.toLocaleString()} / {entry.rate_kind === 'daily' ? 'day' : 'month'}
               </span>
               <span className="hr-emp-task-meta">
                 {date(entry.start_date)} – {entry.end_date ? date(entry.end_date) : 'ongoing'}
@@ -1088,17 +1095,19 @@ export function EmploymentDetail({
               {editing ? 'Close' : 'Edit'}
             </button>}
             {editing && canEdit && <div className="hr-emp-task-form">
-              <Form run={run} busy={busy} button="Save salary entry" success="Salary entry updated." submit={data => ({
+              <Form run={run} busy={busy} button="Save entry" success="Entry updated." submit={data => ({
                 kind: 'save_salary',
                 employee_id: employee.id,
                 salary_id: entry.id,
                 expected_version: entry.version,
-                salary_monthly: number(data, 'salary_monthly'),
+                rate_kind: entry.rate_kind,
+                salary_monthly: entry.rate_kind === 'daily' ? undefined : number(data, 'salary_monthly'),
+                daily_rate: entry.rate_kind === 'daily' ? number(data, 'daily_rate') : undefined,
                 start_date: text(data, 'start_date'),
                 end_date: nullable(data, 'end_date'),
                 rationale: text(data, 'rationale')
               })}>
-                <Field name="salary_monthly" label="Monthly salary (€)" type="number" min={0} step="0.01" value={entry.salary_monthly} required />
+                <Field name={entry.rate_kind === 'daily' ? 'daily_rate' : 'salary_monthly'} label={entry.rate_kind === 'daily' ? 'Daily rate — TJM (€)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" value={(entry.rate_kind === 'daily' ? entry.daily_rate : entry.salary_monthly) ?? undefined} required />
                 <Field name="start_date" label="Effective from" type="date" value={entry.start_date} required />
                 <Field name="end_date" label="Effective until (empty = ongoing)" type="date" value={entry.end_date} />
                 <Field name="rationale" label="Change rationale" type="textarea" required />
@@ -1112,16 +1121,18 @@ export function EmploymentDetail({
         setEditingSalaryId('');
       }}>
         <Plus size={13} aria-hidden="true" />
-        Record salary change
+        {freelance ? 'Record rate change' : 'Record salary change'}
       </button>}
-      {canEdit && addingSalary && <Form run={run} busy={busy} button="Record salary change" success="Salary change recorded." submit={data => ({
+      {canEdit && addingSalary && <Form run={run} busy={busy} button="Record change" success="Change recorded." submit={data => ({
         kind: 'save_salary',
         employee_id: employee.id,
-        salary_monthly: number(data, 'salary_monthly'),
+        rate_kind: freelance ? 'daily' : 'monthly',
+        salary_monthly: freelance ? undefined : number(data, 'salary_monthly'),
+        daily_rate: freelance ? number(data, 'daily_rate') : undefined,
         start_date: text(data, 'start_date'),
         rationale: text(data, 'rationale')
       })}>
-        <Field name="salary_monthly" label="Monthly salary (€)" type="number" min={0} step="0.01" required />
+        <Field name={freelance ? 'daily_rate' : 'salary_monthly'} label={freelance ? 'Daily rate — TJM (€)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" required />
         <Field name="start_date" label="Effective from" type="date" value={today()} required />
         <Field name="rationale" label="Rationale" type="textarea" hint="Raise, correction, indexation — recorded as audit evidence." />
       </Form>}

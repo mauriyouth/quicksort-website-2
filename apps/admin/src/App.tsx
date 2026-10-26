@@ -20,6 +20,7 @@ import { CandidateProfilesManager } from "./CandidateProfilesManager";
 import { ProjectsDirectory } from "./ProjectsDirectory";
 
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
+import { useSession } from "@clerk/react";
 import {
   BrowserRouter,
   Navigate,
@@ -62,7 +63,7 @@ import {
   type Job,
   type Row,
 } from "@quicksort/hr-db";
-import { db as candidateDb, type Row as CandidateRow } from "@quicksort/candidate-db";
+import { db as candidateDb, setSessionToken as setCandidateSessionToken, type Row as CandidateRow } from "@quicksort/candidate-db";
 import { isLinkedInUrl, slugify, validateFile } from "@quicksort/hr-db/validation";
 import { useAuth } from "@quicksort/hr-db/auth";
 import {
@@ -147,6 +148,15 @@ function PreserveSearchRedirect({ to }: { to: string }) {
 }
 export default function App() {
   const auth = useAuth();
+  const { session: clerkSession } = useSession();
+  // Candidate capability tables (candidate_profiles/skills/projects) are
+  // queried through @quicksort/candidate-db; give it the same Clerk-issued
+  // Supabase token as hr-db so PostgREST resolves the authenticated role
+  // instead of anon (which has no grants on those tables).
+  useEffect(() => {
+    setCandidateSessionToken(async () => clerkSession?.getToken({ template: "supabase" }) ?? null);
+    return () => setCandidateSessionToken(async () => null);
+  }, [clerkSession?.id]);
   const staff = !auth.loading && !!auth.session && (auth.role === "admin" || auth.role === "hr");
   return (
     <BrowserRouter>

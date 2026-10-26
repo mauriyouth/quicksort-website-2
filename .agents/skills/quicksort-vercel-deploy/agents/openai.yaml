@@ -1,0 +1,4 @@
+interface:
+  display_name: "QuickSort Vercel Deploy"
+  short_description: "Deploy this repository only to Jeremiah’s Mohamed Vercel project"
+  default_prompt: "Deploy the requested QuickSort app to the verified Mohamed Vercel project."

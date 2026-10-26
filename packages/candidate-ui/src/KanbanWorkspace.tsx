@@ -1,0 +1,426 @@
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Columns3, Pencil, Plus, RefreshCw, Sparkles, Trash2, Redo2, Undo2, Users, X } from "lucide-react";
+import { db, errorMessage, type Row } from "@quicksort/candidate-db";
+import { Empty, Heading, Notice } from "./index";
+import "./kanban.css";
+import { kanbanHistoryShortcut } from "./kanbanUndo";
+import { MagicDesign } from "./MagicDesign";
+
+type Project = Row<"kanban_projects">;
+type Board = Row<"kanban_boards">;
+type Column = Row<"kanban_columns">;
+type Card = Row<"kanban_cards">;
+type BusinessAccount = Row<"business_accounts">;
+type BoardAccount = Row<"kanban_board_accounts">;
+type Panel = "project" | "board" | "edit-board" | "card" | "access" | "delete-project" | "delete-board" | null;
+
+// Supabase caps each response; fetch all pages so larger boards are not silently truncated.
+async function readAll<T>(query: () => { range(from: number, to: number): PromiseLike<{ data: T[] | null; error: unknown }> }) {
+  const data: T[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = await query().range(offset, offset + 499);
+    if (page.error) throw page.error;
+    data.push(...(page.data || []));
+    if ((page.data?.length || 0) < 500) return { data, error: null };
+  }
+}
+
+export function KanbanWorkspace({ admin }: { admin: boolean }) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [columns, setColumns] = useState<Column[]>([]);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [people, setPeople] = useState<Row<"profiles">[]>([]);
+  const [projectMembers, setProjectMembers] = useState<Row<"kanban_project_members">[]>([]);
+  const [boardMembers, setBoardMembers] = useState<Row<"kanban_board_members">[]>([]);
+  const [businessAccounts, setBusinessAccounts] = useState<BusinessAccount[]>([]);
+  const [boardAccounts, setBoardAccounts] = useState<BoardAccount[]>([]);
+  const [accountToMap, setAccountToMap] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [boardId, setBoardId] = useState("");
+  const [creator, setCreator] = useState("");
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [deletingCard, setDeletingCard] = useState<Card | null>(null);
+  const [magicOpen, setMagicOpen] = useState(false);
+  const [panel, setPanel] = useState<Panel>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: "project" | "board"; id: string; name: string } | null>(null);
+  const [confirmation, setConfirmation] = useState("");
+  const [columnDrafts, setColumnDrafts] = useState<{ key: string; id?: string; name: string; selected: boolean }[]>([]);
+  const [cardColumn, setCardColumn] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [historyMode, setHistoryMode] = useState<"undo" | "redo">("undo");
+  const [undoToken, setUndoToken] = useState<string | null>(null);
+  const request = useRef(0);
+  const mutation = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const load = useCallback(async () => {
+    const version = ++request.current;
+    try {
+      const [p, b, c, t, users, pm, bm, accounts, accountLinks] = await Promise.all([
+        readAll(() => db().from("kanban_projects").select("*").order("created_at").order("id")),
+        readAll(() => db().from("kanban_boards").select("*").order("created_at").order("id")),
+        readAll(() => db().from("kanban_columns").select("*").order("position").order("id")),
+        readAll(() => db().from("kanban_cards").select("*").order("created_at").order("id")),
+        admin ? readAll(() => db().from("profiles").select("*").order("full_name").order("id")) : Promise.resolve({ data: [], error: null }),
+        admin ? readAll(() => db().from("kanban_project_members").select("*").order("project_id").order("user_id")) : Promise.resolve({ data: [], error: null }),
+        admin ? readAll(() => db().from("kanban_board_members").select("*").order("board_id").order("user_id")) : Promise.resolve({ data: [], error: null }),
+        admin ? readAll(() => db().from("business_accounts").select("id, slug, name").order("name")) : Promise.resolve({ data: [], error: null }),
+        admin ? readAll(() => db().from("kanban_board_accounts").select("*").order("created_at")) : Promise.resolve({ data: [], error: null }),
+      ]);
+      for (const result of [p, b, c, t, users, pm, bm, accounts, accountLinks]) if (result.error) throw result.error;
+      if (version !== request.current) return;
+      setProjects(p.data || []); setBoards(b.data || []); setColumns(c.data || []); setCards(t.data || []);
+      setPeople(users.data || []); setProjectMembers(pm.data || []); setBoardMembers(bm.data || []);
+      setBusinessAccounts(accounts.data || []); setBoardAccounts(accountLinks.data || []);
+    } catch (err) {
+      if (version === request.current) {
+        setProjects([]); setBoards([]); setColumns([]); setCards([]);
+        setPeople([]); setProjectMembers([]); setBoardMembers([]);
+        setBusinessAccounts([]); setBoardAccounts([]);
+        setPanel(null);
+        setError(errorMessage(err));
+      }
+    } finally {
+      if (version === request.current) setLoading(false);
+    }
+  }, [admin]);
+  useEffect(() => {
+    void load();
+    const refresh = () => { if (!mutation.current) void load(); };
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    return () => { ++request.current; clearInterval(timer); window.removeEventListener("focus", refresh); };
+  }, [load]);
+  useEffect(() => {
+    if (panel) formRef.current?.querySelector<HTMLInputElement>("input, select, textarea")?.focus();
+  }, [panel]);
+
+  const project = projects.find(p => p.id === projectId) || projects[0];
+  const projectBoards = boards.filter(b => b.project_id === project?.id);
+  const board = projectBoards.find(b => b.id === boardId) || projectBoards[0];
+  const boardColumns = columns.filter(c => c.board_id === board?.id);
+  const boardCards = cards.filter(c => c.board_id === board?.id);
+  const mappedAccounts = businessAccounts.filter(account => boardAccounts.some(link => link.board_id === board?.id && link.account_id === account.id));
+  const selectedCard = boardCards.find(card => card.id === selectedCardId);
+  const creators = [...new Map(boardCards.map(c => [c.created_by, c.creator_name])).entries()];
+  useEffect(() => {
+    setPanel(null);
+    setMagicOpen(false);
+    setDeletingCard(null);
+    setSelectedCardId(null);
+    setCreator("");
+    setAccountToMap("");
+  }, [project?.id, board?.id]);
+  const personName = (id: string) => people.find(p => p.id === id)?.full_name || people.find(p => p.id === id)?.email || "Workspace member";
+
+  async function rememberUndo() {
+    const result = await db().rpc("kanban_undo_token", {});
+    if (result.data !== undoToken) setHistoryMode("undo");
+    setUndoToken(result.error ? null : result.data);
+  }
+  async function replayHistory() {
+    if (!undoToken || mutation.current || loading || magicOpen) return;
+    await action(async () => {
+      const result = await db().rpc("undo_kanban_action", { expected_token: undoToken });
+      if (result.error) throw result.error;
+      setUndoToken(result.data); setHistoryMode(historyMode === "undo" ? "redo" : "undo"); setSelectedCardId(null); setDeletingCard(null);
+    }, historyMode === "undo" ? "Last action undone." : "Last action redone.", true, false);
+  }
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!undoToken || mutation.current || loading || magicOpen || kanbanHistoryShortcut(event) !== historyMode) return;
+      event.preventDefault();
+      void replayHistory();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+
+  async function action(work: () => Promise<void>, success: string, close = true, recordUndo = true) {
+    if (mutation.current) return;
+    mutation.current = true; setBusy(true); setError(""); setMessage("");
+    try {
+      await work();
+      if (recordUndo) await rememberUndo();
+      if (close) setPanel(null);
+      setMessage(success);
+      await load();
+    } catch (err) { setError(errorMessage(err)); }
+    finally { mutation.current = false; setBusy(false); }
+  }
+  function open(next: Panel) {
+    if (next === "board") setColumnDrafts(["To do", "In progress", "Blocked", "Done"].map(name => ({ key: crypto.randomUUID(), name, selected: true })));
+    if (next === "edit-board") setColumnDrafts(boardColumns.map(c => ({ key: c.id, id: c.id, name: c.name, selected: true })));
+    setPanel(next); setError(""); setMessage(""); }
+  function openDelete(kind: "project" | "board") {
+    const target = kind === "project" ? project : board;
+    if (!admin || !target) return;
+    setDeleteTarget({ kind, id: target.id, name: target.name });
+    setConfirmation("");
+    open(kind === "project" ? "delete-project" : "delete-board");
+  }
+  async function submitDelete(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!admin || !deleteTarget || confirmation !== deleteTarget.name) return;
+    const target = deleteTarget;
+    await action(async () => {
+      const result = await db().from(target.kind === "project" ? "kanban_projects" : "kanban_boards")
+        .delete().eq("id", target.id).eq("name", confirmation).select("id").maybeSingle();
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error("This item changed, was already deleted, or you no longer have permission. Refresh and try again.");
+      // Remove stale content immediately, even if refreshing subsequently fails.
+      const removedBoardIds = new Set(target.kind === "board" ? [target.id] : boards.filter(b => b.project_id === target.id).map(b => b.id));
+      if (target.kind === "project") {
+        setProjects(items => items.filter(p => p.id !== target.id));
+        setProjectMembers(items => items.filter(m => m.project_id !== target.id));
+        setProjectId("");
+      }
+      setBoards(items => items.filter(b => !removedBoardIds.has(b.id)));
+      setColumns(items => items.filter(c => !removedBoardIds.has(c.board_id)));
+      setCards(items => items.filter(c => !removedBoardIds.has(c.board_id)));
+      setBoardMembers(items => items.filter(m => !removedBoardIds.has(m.board_id)));
+      setBoardId(""); setCreator(""); setConfirmation(""); setDeleteTarget(null);
+    }, `${target.kind === "project" ? "Project" : "Board"} “${target.name}” deleted.`);
+  }
+  function changeProject(id: string) { setProjectId(id); setBoardId(""); setCreator(""); setPanel(null); }
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const values = new FormData(e.currentTarget);
+    const name = String(values.get("name") || "").trim();
+    if (panel !== "access" && !name) { setError("Enter a name or title."); return; }
+    const selectedColumns = columnDrafts.filter(c => c.selected);
+    if (panel === "board" || panel === "edit-board") {
+      if (!selectedColumns.length || selectedColumns.some(c => !c.name.trim())) { setError("Choose at least one column and give each selected column a name."); return; }
+      if (new Set(selectedColumns.map(c => c.name.trim().toLowerCase())).size !== selectedColumns.length) { setError("Use a different name for each column."); return; }
+    }
+    await action(async () => {
+      if (panel === "project") {
+        const result = await db().from("kanban_projects").insert({ name }).select("*").single();
+        if (result.error) throw result.error;
+        setProjectId(result.data.id); setBoardId("");
+      } else if ((panel === "board" || panel === "edit-board") && project) {
+        const result = await db().rpc("save_kanban_board", {
+          target_project: project.id, board_name: name,
+          target_board: panel === "edit-board" ? board!.id : undefined,
+          column_drafts: selectedColumns.map(c => ({ ...(c.id ? { id: c.id } : {}), name: c.name.trim() })),
+        });
+        if (result.error) throw result.error;
+        setBoardId(result.data!); setCreator("");
+      } else if (panel === "card" && board) {
+        const result = await db().from("kanban_cards").insert({ title: name, description: String(values.get("description") || "").trim(), due_at: values.get("deadline") ? new Date(String(values.get("deadline"))).toISOString() : null, board_id: board.id, column_id: String(values.get("column")) }).select("id").single();
+        if (result.error) throw result.error;
+        setCreator("");
+      } else if (panel === "access" && project) {
+        const user_id = String(values.get("person"));
+        const result = values.get("scope") === "project"
+          ? await db().from("kanban_project_members").upsert({ user_id, project_id: project.id }, { onConflict: "project_id,user_id", ignoreDuplicates: true })
+          : await db().from("kanban_board_members").upsert({ user_id, board_id: board!.id }, { onConflict: "board_id,user_id", ignoreDuplicates: true });
+        if (result.error) throw result.error;
+      } else throw new Error("This board is no longer available. Refresh and try again.");
+    }, panel === "access" ? "Access granted." : "Saved.", panel !== "access");
+  }
+  function moveCard(card: Card, columnId: string) {
+    if (columnId === card.column_id || !boardColumns.some(c => c.id === columnId)) return;
+    void action(async () => {
+      const result = await db().from("kanban_cards").update({ column_id: columnId }).eq("id", card.id).select("id").single();
+      if (result.error) throw result.error;
+    }, `Moved “${card.title}” to ${boardColumns.find(c => c.id === columnId)?.name}.`, false);
+  }
+  const deleting = panel === "delete-project" || panel === "delete-board";
+  const panelTitle = deleting ? `Delete ${deleteTarget?.kind}` : panel === "project" ? "Create a project" : panel === "board" ? "Create a board" : panel === "edit-board" ? "Edit Kanban board" : panel === "access" ? "Manage access" : "Create a card";
+
+  return <section className="kanban-workspace" aria-label="Kanban workspace" aria-busy={busy || loading}>
+    <Heading eyebrow="Team workspace" title="Operations board" action={<div className="kanban-actions">
+      <button className="btn secondary" disabled={!undoToken || historyMode !== "undo" || busy || loading || magicOpen} onClick={() => void replayHistory()} title="Undo last action (⌘Z / Ctrl+Z)" aria-keyshortcuts="Meta+Z Control+Z"><Undo2 size={16} />Undo</button>
+      <button className="btn secondary" disabled={!undoToken || historyMode !== "redo" || busy || loading || magicOpen} onClick={() => void replayHistory()} title="Redo last action (⌘Shift+Z / Ctrl+Shift+Z)" aria-keyshortcuts="Meta+Shift+Z Control+Shift+Z"><Redo2 size={16} />Redo</button>
+      <button className="btn secondary" aria-label="Refresh boards" disabled={busy || loading} onClick={() => { setError(""); void load(); }}><RefreshCw size={16} /></button>
+      {admin && <button className="btn" disabled={busy} onClick={() => open("project")}><Plus size={16} />New project</button>}
+    </div>}>
+      {admin ? "Organize work across projects. Give your team access to the boards they need." : "Your shared projects and boards. Create cards and keep work moving."}
+    </Heading>
+    <Notice error>{error}</Notice>
+    <span className="kanban-announcement" role="status">{message}</span>
+    {loading && <p role="status">Loading your boards…</p>}
+    {!loading && !projects.length && !error && <Empty title={admin ? "A space for every project" : "No boards shared yet"}>
+      {admin ? "Create your first project for sales, events, marketing, or internal work." : "Your admin can give you access to a project or a specific board."}
+    </Empty>}
+    {!!projects.length && <>
+      <nav className="kanban-projects" aria-label="Projects">{projects.map(p => <button key={p.id} disabled={busy} className={p.id === project?.id ? "active" : ""} aria-current={p.id === project?.id ? "page" : undefined} onClick={() => changeProject(p.id)}><small>PRJ-{String(p.project_number).padStart(4, "0")}</small>{p.name}<span>{boards.filter(b => b.project_id === p.id).length}</span></button>)}</nav>
+      <div className="kanban-toolbar">
+        <label>Board<select value={board?.id || ""} disabled={busy || !projectBoards.length} onChange={e => { setBoardId(e.target.value); setCreator(""); setPanel(null); }}>
+          {!projectBoards.length && <option value="">No boards yet</option>}{projectBoards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select></label>
+        {board && <label>Card creator<select value={creator} onChange={e => setCreator(e.target.value)}><option value="">All card creators</option>{creators.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>}
+        {admin && <div className="kanban-actions"><button className="btn secondary" disabled={busy} onClick={() => open("board")}><Plus size={16} />New board</button><button className="btn secondary" disabled={busy} onClick={() => open("access")}><Users size={16} />Manage access</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("project")}><Trash2 size={16} />Delete project</button></div>}
+      </div>
+    </>}
+    {panel && <section className="panel kanban-editor" aria-label={panelTitle}>
+      <div className="panel-head"><h2>{panelTitle}</h2><button className="btn secondary" aria-label="Close form" disabled={busy} onClick={() => setPanel(null)}><X size={16} /></button></div>
+      {deleting && deleteTarget ? <form ref={formRef} className="form" onSubmit={submitDelete}>
+        <fieldset disabled={busy}>
+          <p id="kanban-delete-warning">Delete {deleteTarget.kind} <strong>{deleteTarget.name}</strong>? {deleteTarget.kind === "project" ? "All boards in this project, their columns, cards, and access grants will also be deleted." : "All columns, cards, and access grants for this board will also be deleted."} You can undo this as your next action with Undo, ⌘Z, or Ctrl+Z.</p>
+          <label>Type “{deleteTarget.name}” to confirm<input name="confirmation" value={confirmation} onChange={e => setConfirmation(e.target.value)} required autoComplete="off" spellCheck={false} aria-describedby="kanban-delete-warning kanban-delete-hint" /></label>
+          <p id="kanban-delete-hint" className="muted">The name must match exactly, including capital letters and spaces.</p>
+          <div className="kanban-actions"><button className="btn secondary" type="button" onClick={() => setPanel(null)}>Cancel</button><button className="btn kanban-danger-solid" type="submit" disabled={busy || confirmation !== deleteTarget.name}>{busy ? "Deleting…" : `Delete ${deleteTarget.kind}`}</button></div>
+        </fieldset>
+      </form> : <form ref={formRef} className="form" key={`${panel}-${project?.id}-${board?.id}`} onSubmit={submit}>
+        <fieldset disabled={busy}>
+          {panel !== "access" ? <label>{panel === "card" ? "Card title" : "Name"}<input name="name" defaultValue={panel === "edit-board" ? board?.name : undefined} required maxLength={panel === "card" ? 200 : 100} placeholder={panel === "project" ? "e.g. Events" : panel === "board" ? "e.g. Paris launch" : "What needs to be done?"} /></label> : <>
+            <p className="muted">Project access includes every current and future board. Board access includes only the selected board. Everyone needs an explicit grant in the candidate portal, including admins and creators. Admins manage all boards only in the admin portal.</p>
+            <label>Person<select name="person" required defaultValue=""><option value="" disabled>Select a person</option>{people.map(p => <option key={p.id} value={p.id}>{p.full_name || p.email} · {p.email}</option>)}</select></label>
+            <label>Access level<select name="scope"><option value="project">Entire project: {project?.name}</option>{board && <option value="board">Only this board: {board.name}</option>}</select></label>
+          </>}
+          {(panel === "board" || panel === "edit-board") && <fieldset className="kanban-column-editor">
+            <legend>Columns</legend>
+            <p className="muted">{panel === "board" ? "Choose your starting columns, rename them, or add your own." : "Rename columns here. Existing cards stay in their columns, and candidates see the updated names."}</p>
+            {columnDrafts.map((column, index) => <div className="kanban-column-draft" key={column.key}>
+              {!column.id && <input type="checkbox" aria-label={`Include column ${index + 1}`} checked={column.selected} onChange={e => setColumnDrafts(items => items.map(c => c.key === column.key ? { ...c, selected: e.target.checked } : c))} />}
+              <label>Column {index + 1}<input value={column.name} disabled={!column.selected} required={column.selected} maxLength={100} onChange={e => setColumnDrafts(items => items.map(c => c.key === column.key ? { ...c, name: e.target.value } : c))} /></label>
+            </div>)}
+            <button className="btn secondary" type="button" onClick={() => setColumnDrafts(items => [...items, { key: crypto.randomUUID(), name: "", selected: true }])}><Plus size={16} />Add another column</button>
+          </fieldset>}
+          {panel === "card" && <><label>Description<textarea name="description" maxLength={4000} rows={3} /></label><label>Deadline (optional)<input type="datetime-local" name="deadline" /><span className="muted">Your local date and time.</span></label><label>Column<select name="column" defaultValue={cardColumn || boardColumns[0]?.id} required>{boardColumns.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label><p className="muted">Your name will be recorded automatically as the creator.</p></>}
+          <button className="btn" type="submit">{busy ? "Saving…" : panel === "access" ? "Grant access" : "Save"}</button>
+        </fieldset>
+      </form>}
+      {panel === "access" && <div className="kanban-grants">
+        <h3>Project access</h3>
+        {!projectMembers.some(m => m.project_id === project?.id) && <p className="muted">No project grants yet.</p>}
+        {projectMembers.filter(m => m.project_id === project?.id).map(m => <div className="list-row" key={m.user_id}><span>{personName(m.user_id)}</span><button className="btn secondary" disabled={busy} onClick={() => void action(async () => {
+          const result = await db().from("kanban_project_members").delete().eq("project_id", m.project_id).eq("user_id", m.user_id).select("user_id").single();
+          if (result.error) throw result.error;
+        }, "Project access removed. Any separate board grants still apply.", false)}>Revoke project access</button></div>)}
+        {board && <><h3>Direct access to {board.name}</h3><p className="muted">Project members also have access to this board.</p>{boardMembers.filter(m => m.board_id === board.id).map(m => <div className="list-row" key={m.user_id}><span>{personName(m.user_id)}</span><button className="btn secondary" disabled={busy} onClick={() => void action(async () => {
+          const result = await db().from("kanban_board_members").delete().eq("board_id", m.board_id).eq("user_id", m.user_id).select("user_id").single();
+          if (result.error) throw result.error;
+        }, "Board grant removed. Project access, if granted, still applies.", false)}>Revoke board access</button></div>)}</>}
+      </div>}
+    </section>}
+    {board && <>
+      <div className="kanban-board-heading"><div><h2><Columns3 size={20} />{board.name}</h2><p className="kanban-creator">{board.creator_name ? `Created by ${board.creator_name}` : "Creator not recorded for this older board"}</p><p className="muted">{boardCards.length} {boardCards.length === 1 ? "card" : "cards"} · Drag cards between columns to move them.</p>{admin && <div className="kanban-account-links"><strong>Linked accounts</strong>{mappedAccounts.map(account => <span key={account.id}>{account.name}<button aria-label={`Remove ${account.name}`} onClick={() => void action(async () => { const result = await db().from("kanban_board_accounts").delete().eq("board_id", board.id).eq("account_id", account.id); if (result.error) throw result.error; }, `${account.name} removed from this board.`, false, false)}><X size={12}/></button></span>)}<select aria-label="Account to map" value={accountToMap} onChange={event => setAccountToMap(event.target.value)}><option value="">Select account…</option>{businessAccounts.filter(account => !mappedAccounts.some(item => item.id === account.id)).map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select><button className="btn secondary" disabled={!accountToMap || busy} onClick={() => void action(async () => { const result = await db().from("kanban_board_accounts").upsert({ board_id: board.id, account_id: accountToMap }, { onConflict: "board_id,account_id" }); if (result.error) throw result.error; setAccountToMap(""); }, "Account mapped to this board.", false, false)}>Map account</button></div>}</div><div className="kanban-actions">{admin && <button className="btn secondary kanban-magic" disabled={busy || !boardColumns.length} onClick={() => setMagicOpen(true)}><Sparkles size={15} />Magic design</button>}{admin && <><button className="btn secondary" disabled={busy} onClick={() => open("edit-board")}><Pencil size={16} />Edit Kanban board</button><button className="btn secondary kanban-danger" disabled={busy} onClick={() => openDelete("board")}><Trash2 size={16} />Delete board</button></>}</div></div>
+      <div className="kanban-columns" aria-label={`${board.name} columns`}>
+        {boardColumns.map(column => {
+          const visibleCards = boardCards.filter(c => c.column_id === column.id && (!creator || c.created_by === creator));
+          return <section className="kanban-column" key={column.id} aria-label={column.name} onDragOver={e => { if (!busy) e.preventDefault(); }} onDrop={e => { e.preventDefault(); const card = boardCards.find(c => c.id === e.dataTransfer.getData("text/plain")); if (card && !busy) moveCard(card, column.id); }}>
+            <header><h3>{column.name}</h3><span>{visibleCards.length}</span></header>
+            {visibleCards.map(card => <article className="kanban-card" key={card.id} onClick={() => { if (!busy) { setError(""); setSelectedCardId(card.id); } }} draggable={!busy} onDragStart={e => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; }}>
+              <span className="kanban-card-number">CARD-{String(card.card_number).padStart(6, "0")}</span><div className="kanban-card-heading"><h4><button className="kanban-card-open" disabled={busy} aria-label={`Open card: ${card.title}`} onClick={event => { event.stopPropagation(); setError(""); setSelectedCardId(card.id); }}>{card.title}</button></h4>{admin && <button className="kanban-delete-card" aria-label={`Delete card: ${card.title}`} title="Delete card" disabled={busy} onClick={event => { event.stopPropagation(); setError(""); setDeletingCard(card); }}><Trash2 size={14} /></button>}</div>{card.description && <p className="kanban-description">{card.description}</p>}
+              {card.due_at && <p className="kanban-deadline">Due <time dateTime={card.due_at}>{new Date(card.due_at).toLocaleString()}</time></p>}
+              <span className="kanban-creator" title={`Created by ${card.creator_name}`}>Created by {card.creator_name}</span>
+            </article>)}
+            {!visibleCards.length && <p className="kanban-empty">{creator ? "No matching cards" : "No cards yet"}</p>}
+            <button className="kanban-add" disabled={busy} onClick={() => { setCardColumn(column.id); open("card"); }}><Plus size={16} />Add a card</button>
+          </section>;
+        })}
+      </div>
+      {!boardColumns.length && <Empty title="This board needs a column">{admin ? "Use Edit Kanban board to add a column and start creating cards." : "Your admin will set up the columns for this board."}</Empty>}
+    </>}
+    {selectedCard && <CardDetailsDialog key={selectedCard.id} card={selectedCard} columns={boardColumns} admin={admin} busy={busy} error={error} onClose={() => setSelectedCardId(null)} onSave={async changes => {
+      let saved = false;
+      await action(async () => {
+        const result = await db().from("kanban_cards").update(changes).eq("id", selectedCard.id).eq("board_id", selectedCard.board_id).select("*").single();
+        if (result.error) throw result.error;
+        setCards(items => items.map(card => card.id === result.data.id ? result.data : card));
+        saved = true;
+      }, "Card updated.", false);
+      return saved;
+    }} />}
+    {admin && deletingCard && <DeleteCardDialog card={deletingCard} busy={busy} error={error} onClose={() => setDeletingCard(null)} onDelete={() => void action(async () => {
+      const result = await db().from("kanban_cards").delete().eq("id", deletingCard.id).eq("board_id", deletingCard.board_id).select("id").maybeSingle();
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error("This card is no longer available or you no longer have permission to delete it.");
+      setCards(items => items.filter(card => card.id !== deletingCard.id));
+      setDeletingCard(null);
+    }, "Card deleted.", false)} />}
+    {admin && magicOpen && board && <MagicDesign key={board.id} boardId={board.id} boardName={board.name} columns={boardColumns} onClose={() => setMagicOpen(false)} onSaved={count => { void rememberUndo(); setMagicOpen(false); setCreator(""); setMessage(`${count} ${count === 1 ? "card" : "cards"} added.`); void load(); }} />}
+    {project && !board && !loading && <Empty title="No boards in this project">{admin ? "Create a board for your first event, initiative, or workstream." : "Your admin has not shared a board here yet."}</Empty>}
+  </section>;
+}
+
+function DeleteCardDialog({ card, busy, error, onClose, onDelete }: { card: Card; busy: boolean; error: string; onClose(): void; onDelete(): void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [confirmation, setConfirmation] = useState("");
+  useEffect(() => {
+    const element = dialog.current!;
+    const opener = document.activeElement as HTMLElement | null;
+    element.showModal();
+    element.querySelector<HTMLInputElement>("input")?.focus();
+    return () => { element.close(); opener?.focus(); };
+  }, []);
+  return <dialog ref={dialog} className="kanban-magic-dialog" aria-labelledby="delete-card-title" onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
+    <h2 id="delete-card-title">Delete card</h2>
+    <p>Delete <strong>{card.title}</strong>? You can undo this as your next action with Undo, ⌘Z, or Ctrl+Z.</p>
+    <form className="form" onSubmit={event => { event.preventDefault(); if (!busy && confirmation === "delete") onDelete(); }}>
+      <label>Type delete to confirm<input value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} autoComplete="off" spellCheck={false} /></label>
+      {error && <p role="alert">{error}</p>}
+      <div className="kanban-actions"><button type="button" className="btn secondary" disabled={busy} onClick={onClose}>Cancel</button><button className="btn kanban-danger-solid" disabled={busy || confirmation !== "delete"}>{busy ? "Deleting…" : "Delete card"}</button></div>
+    </form>
+  </dialog>;
+}
+
+
+function localDateTime(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function CardDetailsDialog({ card, columns, admin, busy, error, onClose, onSave }: {
+  card: Card; columns: Column[]; admin: boolean; busy: boolean; error: string;
+  onClose(): void;
+  onSave(changes: { title: string; description: string; column_id: string; due_at: string | null }): Promise<boolean>;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [validation, setValidation] = useState("");
+  useEffect(() => {
+    const element = dialog.current!;
+    const opener = document.activeElement as HTMLElement | null;
+    element.showModal();
+    return () => { element.close(); opener?.focus(); };
+  }, []);
+  useEffect(() => {
+    if (editing) dialog.current?.querySelector<HTMLInputElement>('input[name="title"]')?.focus();
+  }, [editing]);
+  return <dialog ref={dialog} className="kanban-magic-dialog kanban-card-dialog" aria-labelledby="card-details-title" onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
+    <div className="panel-head">
+      <h2 id="card-details-title">{editing ? "Edit card" : card.title}</h2>
+      <div className="kanban-actions">
+        {admin && !editing && <button className="btn secondary" disabled={busy} onClick={() => { setValidation(""); setEditing(true); }}><Pencil size={14} />Edit</button>}
+        <button className="btn secondary" aria-label="Close card" disabled={busy} onClick={onClose}><X size={16} /></button>
+      </div>
+    </div>
+    {editing ? <form className="form" onSubmit={async event => {
+      event.preventDefault();
+      if (busy || !admin) return;
+      const values = new FormData(event.currentTarget);
+      const title = String(values.get("title") || "").trim();
+      if (!title) { setValidation("Enter a card title."); return; }
+      setValidation("");
+      const saved = await onSave({ title, description: String(values.get("description") || "").trim(), column_id: String(values.get("column")), due_at: values.get("deadline") ? new Date(String(values.get("deadline"))).toISOString() : null });
+      if (saved) setEditing(false);
+    }}>
+      <fieldset disabled={busy}>
+        <label>Card title<input name="title" defaultValue={card.title} required maxLength={200} /></label>
+        <label>Description<textarea name="description" defaultValue={card.description} rows={10} maxLength={4000} placeholder="Describe what needs to be done, the steps, and the expected outcome." /></label>
+        <label>Status<select name="column" defaultValue={card.column_id}>{columns.map(column => <option key={column.id} value={column.id}>{column.name}</option>)}</select></label>
+        <label>Deadline (optional)<input name="deadline" type="datetime-local" defaultValue={localDateTime(card.due_at)} /><span className="muted">Your local date and time. Clear the field to remove the deadline.</span></label>
+        {(validation || error) && <p role="alert">{validation || error}</p>}
+        <div className="kanban-actions"><button type="submit" className="btn">{busy ? "Saving…" : "Save changes"}</button><button type="button" className="btn secondary" onClick={() => setEditing(false)}>Cancel</button></div>
+      </fieldset>
+    </form> : <>
+      <dl className="kanban-card-metadata">
+        <div><dt>Card number</dt><dd>CARD-{String(card.card_number).padStart(6, "0")}</dd></div><div><dt>Status</dt><dd>{columns.find(column => column.id === card.column_id)?.name}</dd></div>
+        <div><dt>Created by</dt><dd>{card.creator_name}</dd></div>
+        <div><dt>Created</dt><dd><time dateTime={card.created_at}>{new Date(card.created_at).toLocaleString()}</time></dd></div>
+        <div><dt>Deadline</dt><dd>{card.due_at ? <time dateTime={card.due_at}>{new Date(card.due_at).toLocaleString()}</time> : "No deadline"}</dd></div>
+      </dl>
+      <h3>Description</h3>
+      <p className="kanban-full-description">{card.description || "No description yet."}</p>
+    </>}
+  </dialog>;
+}

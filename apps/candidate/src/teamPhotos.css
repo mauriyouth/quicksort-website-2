@@ -1,0 +1,8 @@
+.team-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 24px; }
+.team-photo-card { background: var(--qs-paper, #fff); border: 1px solid var(--qs-line, #ddd); border-radius: 16px; overflow: hidden; }
+.team-photo-frame { aspect-ratio: 2 / 3; background: #e5e2dc; display: grid; place-items: center; }
+.team-photo-frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.team-photo-frame span { display: grid; justify-items: center; gap: 12px; color: #565650; }
+.team-photo-details { padding: 20px; }
+.team-photo-details h2 { font-size: 18px; margin: 0 0 8px; }
+.team-photo-details .btn { margin-top: 12px; width: 100%; justify-content: center; }

@@ -31,7 +31,7 @@ return async function handler(req: Request, res: Response) {
     if (role.error || !["admin", "hr"].includes(role.data?.role || "")) return res.status(403).json({ error: "HR access is required." });
     const aiSettings = await deps.loadAiSettings(client);
     configuredModel = aiSettings.model;
-    if (!aiSettings.apiKey) return res.status(503).json({ error: "Add an OpenAI API key in Settings → AI configuration." });
+    if (!aiSettings.apiKey) return res.status(503).json({ error: "Configure the AI connection in Settings → AI configuration." });
     const parsed = analysisRequest.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Choose a job and provide a PDF up to 10 MB or CV text between 50 and 60,000 characters." });
     const input = parsed.data;

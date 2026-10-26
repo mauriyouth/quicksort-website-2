@@ -25,6 +25,7 @@ export function AiSettings({ isOwner }: { isOwner: boolean }) {
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   async function request(path: string, method = "GET", body?: unknown) {
@@ -63,9 +64,17 @@ export function AiSettings({ isOwner }: { isOwner: boolean }) {
       await request("/api/ai-settings", remove ? "DELETE" : "PUT", remove ? undefined : { apiKey: keyLooksValid ? apiKey.trim() : undefined, model });
       setApiKey(""); setReplacing(false); setConfirmRemove(false);
       await refresh();
-      setMessage(remove ? "Saved key removed. A server-configured key, if present, will be used." : "API key saved securely. The CV analyzer will use it on its next run.");
+      setMessage(remove ? "Saved key removed. A server-configured key, if present, will be used." : apiKey.trim() ? "API key and model saved securely. The CV analyzer will use them on its next run." : "Model saved. The CV analyzer will use it with your existing API key on its next run.");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save settings."); }
     finally { setBusy(false); }
+  }
+  async function testConnection() {
+    setBusy(true); setTesting(true); setError(""); setMessage("");
+    try {
+      const result = await request("/api/ai-settings", "POST", { ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}), model }) as { model: string };
+      setMessage(`Connection successful: ${result.model} is accessible. Testing does not save changes.`);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not test the connection."); }
+    finally { setBusy(false); setTesting(false); }
   }
   const statusLabel = !status ? "Checking…" : configured ? "Key configured" : "Not configured";
   const saveLabel = busy
@@ -218,10 +227,15 @@ export function AiSettings({ isOwner }: { isOwner: boolean }) {
             </div>
 
             <footer className="sp-foot">
-              <span className="sp-row-hint">Saving does not make a paid AI request; the first analysis verifies provider access.</span>
-              <button type="button" className="sp-btn" disabled={!canSubmit} onClick={() => void save()}>
-                {saveLabel}
-              </button>
+              <span className="sp-row-hint">Saving makes no AI request. Test connection sends a small paid request with the entered key, or your saved key if left blank, and checks access.</span>
+              <span className="sp-inline">
+                <button type="button" className="sp-btn-ghost" disabled={busy || !status || (!configured && !keyLooksValid) || !model.trim()} onClick={() => void testConnection()}>
+                  {testing ? "Testing…" : "Test connection"}
+                </button>
+                <button type="button" className="sp-btn" disabled={!canSubmit} onClick={() => void save()}>
+                  {saveLabel}
+                </button>
+              </span>
             </footer>
           </>
         )}

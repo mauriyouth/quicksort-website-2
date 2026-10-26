@@ -5,7 +5,7 @@ import { ArrowLeftIcon } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { MainNavigationSection } from "@components/MainNavigationSection";
 import { SiteFooter } from "@components/SiteFooter";
-import { getBlogPost } from "@lib/blogPosts";
+import { useBlogPosts } from "@lib/useBlogPosts";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -18,17 +18,18 @@ const markdownModules = import.meta.glob("../../content/blog/**/*.md", {
 });
 
 export const BlogPostDetail = (): JSX.Element => {
-  const { t, localize, locale } = useLocale();
+  const { t, locale } = useLocale();
   const { slug } = useParams<{ slug: string }>();
-  const post = slug ? getBlogPost(slug) : undefined;
-  const markdownContent = Object.entries(markdownModules).find(([path]) => path === `../../content/blog/${locale === "en" ? "" : locale + "/"}${slug}.md`)?.[1] as string | undefined;
+  const { posts, loading, error } = useBlogPosts();
+  const post = posts.find(post => post.slug === slug);
+  const markdownContent = (locale === "fr" ? post?.contentFr || post?.content : post?.content) ?? Object.entries(markdownModules).find(([path]) => path === `../../content/blog/${locale === "en" ? "" : locale + "/"}${slug}.md`)?.[1] as string | undefined;
 
   if (!post || !markdownContent) {
     return (
       <main className="flex flex-col w-full items-center relative bg-surface min-h-screen overflow-x-hidden">
         <MainNavigationSection />
         <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-          <h1 className="text-2xl font-bold text-ink mb-4">{t("Post Not Found")}</h1>
+          <h1 className="text-2xl font-bold text-ink mb-4">{t(loading ? "Loading article…" : error ? "Unable to load article. Please refresh to try again." : "Post Not Found")}</h1>
           <Link to="/blog">
             <Button variant="outline">{t("Back to Blog")}</Button>
           </Link>
@@ -73,6 +74,8 @@ export const BlogPostDetail = (): JSX.Element => {
             </p>
           </div>
         </div>
+
+        {post.image && <img src={post.image} alt={post.imageAlt || post.title} className="w-full rounded-2xl mb-8" />}
 
         <div className="prose prose-invert prose-lg max-w-none">
 

@@ -1,0 +1,544 @@
+import type { BlogRecord, BlogInsert } from "./blog";
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
+  public: {
+    Tables: {
+      candidate_profiles: {
+        Row: { candidate_id: string; headline: string; bio: string; location: string; linkedin_url: string; availability: string; review_status: string; approved_at: string | null; approved_by: string | null; updated_at: string };
+        Insert: { candidate_id: string; headline?: string; bio?: string; location?: string; linkedin_url?: string; availability?: string; review_status?: string; approved_at?: string | null; approved_by?: string | null; updated_at?: string };
+        Update: { candidate_id?: string; headline?: string; bio?: string; location?: string; linkedin_url?: string; availability?: string; review_status?: string; approved_at?: string | null; approved_by?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      candidate_skills: {
+        Row: { id: string; candidate_id: string; vertical: string; name: string; proficiency: string; years_experience: number; approved: boolean; updated_at: string };
+        Insert: { id?: string; candidate_id?: string; vertical: string; name: string; proficiency?: string; years_experience?: number; approved?: boolean; updated_at?: string };
+        Update: { id?: string; candidate_id?: string; vertical?: string; name?: string; proficiency?: string; years_experience?: number; approved?: boolean; updated_at?: string };
+        Relationships: [];
+      };
+      candidate_projects: {
+        Row: { id: string; candidate_id: string | null; vertical: string; title: string; client_name: string; summary: string; outcome: string; technologies: string[]; project_url: string; video_urls: string[]; contributor_name: string; contributor_email: string; approved: boolean; updated_at: string };
+        Insert: { id?: string; candidate_id?: string | null; vertical: string; title: string; client_name?: string; summary: string; outcome?: string; technologies?: string[]; project_url?: string; video_urls?: string[]; contributor_name?: string; contributor_email?: string; approved?: boolean; updated_at?: string };
+        Update: { id?: string; candidate_id?: string | null; vertical?: string; title?: string; client_name?: string; summary?: string; outcome?: string; technologies?: string[]; project_url?: string; video_urls?: string[]; contributor_name?: string; contributor_email?: string; approved?: boolean; updated_at?: string };
+        Relationships: [];
+      };
+      events: {
+        Row: { id: string; title: string; event_date: string; location: string; event_url: string; banner_url: string; published: boolean; created_at: string; updated_at: string };
+        Insert: { title: string; event_date: string; location: string; event_url: string; banner_url: string; published?: boolean };
+        Update: { title?: string; event_date?: string; location?: string; event_url?: string; banner_url?: string; published?: boolean };
+        Relationships: [];
+      };
+      kanban_projects: { Row: { id: string; name: string; project_number: number; created_at: string; created_by: string | null; creator_name: string | null }; Insert: { name: string; project_number?: number }; Update: { name?: string; project_number?: number }; Relationships: [] };
+      kanban_boards: { Row: { id: string; project_id: string; name: string; created_at: string; created_by: string | null; creator_name: string | null }; Insert: { project_id: string; name: string }; Update: { name?: string }; Relationships: [] };
+      kanban_columns: { Row: { id: string; board_id: string; name: string; position: number }; Insert: { board_id: string; name: string; position: number }; Update: { name?: string; position?: number }; Relationships: [] };
+      kanban_cards: { Row: { id: string; board_id: string; column_id: string; title: string; description: string; card_number: number; due_at: string | null; created_by: string; creator_name: string; created_at: string }; Insert: { board_id: string; column_id: string; title: string; description?: string; card_number?: number; due_at?: string | null }; Update: { column_id?: string; title?: string; description?: string; card_number?: number; due_at?: string | null }; Relationships: [] };
+      kanban_board_accounts: { Row: { board_id: string; account_id: string; created_by: string | null; created_at: string }; Insert: { board_id: string; account_id: string; created_by?: string | null }; Update: never; Relationships: [] };
+      kanban_card_contacts: { Row: { card_id: string; account_id: string; contact_key: string; created_by: string | null; created_at: string }; Insert: { card_id: string; account_id: string; contact_key: string; created_by?: string | null }; Update: never; Relationships: [] };
+      business_accounts: { Row: { id: string; slug: string; name: string }; Insert: { id?: string; slug: string; name: string }; Update: { slug?: string; name?: string }; Relationships: [] };
+      kanban_project_members: { Row: { project_id: string; user_id: string }; Insert: { project_id: string; user_id: string }; Update: never; Relationships: [] };
+      kanban_board_members: { Row: { board_id: string; user_id: string }; Insert: { board_id: string; user_id: string }; Update: never; Relationships: [] };
+      blog_posts: { Row: BlogRecord; Insert: BlogInsert; Update: Partial<BlogRecord>; Relationships: [] };
+      admin_access_audit: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: number
+          target_id: string
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          id?: never
+          target_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          id?: never
+          target_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_access_audit_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_access_audit_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_access_requests: {
+        Row: {
+          created_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_access_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_access_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidate_documents: {
+        Row: {
+          candidate_id: string
+          category: string
+          created_at: string
+          id: string
+          name: string
+          size_bytes: number
+          storage_path: string
+        }
+        Insert: {
+          candidate_id: string
+          category: string
+          created_at?: string
+          id?: string
+          name: string
+          size_bytes: number
+          storage_path: string
+        }
+        Update: {
+          candidate_id?: string
+          category?: string
+          created_at?: string
+          id?: string
+          name?: string
+          size_bytes?: number
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_documents_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_signatures: {
+        Row: {
+          candidate_id: string
+          consent_text: string
+          contract_id: string
+          document_sha256: string
+          signed_at: string
+          signer_name: string
+        }
+        Insert: {
+          candidate_id?: string
+          consent_text?: string
+          contract_id: string
+          document_sha256?: string
+          signed_at?: string
+          signer_name: string
+        }
+        Update: {
+          candidate_id?: string
+          consent_text?: string
+          contract_id?: string
+          document_sha256?: string
+          signed_at?: string
+          signer_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_signatures_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_signatures_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: true
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contracts: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          document_sha256: string
+          id: string
+          storage_path: string
+          title: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          document_sha256: string
+          id?: string
+          storage_path: string
+          title: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          document_sha256?: string
+          id?: string
+          storage_path?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobs: {
+        Row: {
+          created_at: string
+          department: string
+          description: string
+          employment_type: string
+          id: string
+          linkedin_url: string
+          location: string
+          published: boolean
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string
+          description: string
+          employment_type?: string
+          id?: string
+          linkedin_url: string
+          location: string
+          published?: boolean
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department?: string
+          description?: string
+          employment_type?: string
+          id?: string
+          linkedin_url?: string
+          location?: string
+          published?: boolean
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      portal_owners: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_owners_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string
+          id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      tool_requests: {
+        Row: {
+          admin_note: string
+          candidate_id: string
+          created_at: string
+          id: string
+          reason: string
+          status: string
+          tool_name: string
+        }
+        Insert: {
+          admin_note?: string
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          reason: string
+          status?: string
+          tool_name: string
+        }
+        Update: {
+          admin_note?: string
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          status?: string
+          tool_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tool_requests_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          role: string
+          user_id: string
+        }
+        Insert: {
+          role?: string
+          user_id: string
+        }
+        Update: {
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      kanban_undo_token: { Args: Record<string, never>; Returns: string | null };
+      undo_kanban_action: { Args: { expected_token: string }; Returns: string };
+      save_kanban_board: { Args: { target_project: string; board_name: string; column_drafts: Json; target_board?: string }; Returns: string };
+      sync_clerk_profile: { Args: Record<PropertyKey, never>; Returns: string };
+      review_admin_access: {
+        Args: { decision: string; target_email: string }
+        Returns: undefined
+      }
+      approve_candidate_capability_profile: {
+        Args: { target_candidate: string }
+        Returns: undefined
+      }
+      get_business_capabilities: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 export { blogCategories, validateBlogImage, type BlogRecord } from "./blog";
+export { capabilityVerticals, capabilityName, type CapabilityVerticalId } from "./capabilities";
 import type { Database } from "./database.types";
 export type { Database } from "./database.types";
 export type Row<T extends keyof Database["public"]["Tables"]> =
@@ -9,6 +10,7 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 export const configured = Boolean(url && key);
 let sessionToken: () => Promise<string | null> = async () => null;
+export function getSessionToken() { return sessionToken(); }
 export function setSessionToken(getToken: () => Promise<string | null>) {
   sessionToken = getToken;
 }

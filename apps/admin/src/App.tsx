@@ -1,3 +1,5 @@
+import { KanbanWorkspace } from "@quicksort/candidate-ui/kanban";
+import { EventsManager } from "./EventsManager";
 import { BlogManager } from "./BlogManager";
 import { AccessManager } from "./AccessManager";
 import { AdminSettings } from "./AdminSettings";
@@ -14,6 +16,8 @@ import { SectionHeader, SALES_TABS, HR_TABS, OPS_TABS, type SectionTab } from ".
 import { SettingsPage, type SettingsSection } from "./SettingsPage";
 import { Clients } from "./sales/Clients";
 import { People } from "./sales/People";
+import { CandidateProfilesManager } from "./CandidateProfilesManager";
+import { ProjectsDirectory } from "./ProjectsDirectory";
 
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
 import {
@@ -29,6 +33,8 @@ import {
   FileText,
   KeyRound,
   LayoutDashboard,
+  Columns3,
+  CalendarDays,
   Plus,
   Search,
   ArrowUpRight,
@@ -41,6 +47,7 @@ import {
   DoorOpen,
   Briefcase,
   KanbanSquare,
+  FolderKanban,
 } from "lucide-react";
 
 // Loaded on demand so each audience only downloads its own shell.
@@ -55,6 +62,7 @@ import {
   type Job,
   type Row,
 } from "@quicksort/hr-db";
+import { db as candidateDb, type Row as CandidateRow } from "@quicksort/candidate-db";
 import { isLinkedInUrl, slugify, validateFile } from "@quicksort/hr-db/validation";
 import { useAuth } from "@quicksort/hr-db/auth";
 import {
@@ -104,6 +112,10 @@ const nav = [
       { id: "contracts", href: "/hr/contracts", label: "Contracts" },
     ],
   },
+  { id: "kanban", href: "/kanban", label: "Kanban boards", icon: Columns3 },
+  { id: "events", href: "/events", label: "Events", icon: CalendarDays },
+  { id: "candidates", href: "/candidates", label: "Candidates", icon: UsersRound },
+  { id: "projects", href: "/projects", label: "Project directory", icon: FolderKanban },
   { id: "blogs", href: "/blog-posts", label: "Blog posts", icon: FileText },
   { id: "administration", href: "/administration", label: "Administration", icon: SlidersHorizontal },
   { id: "people", href: "/accounts", label: "Accounts", icon: Users },
@@ -205,6 +217,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     [people, setPeople] = useState<Row<"profiles">[]>([]),
     [salesPeople, setSalesPeople] = useState<SpotlightSalesContact[]>([]),
     [userRoles, setUserRoles] = useState<Row<"user_roles">[]>([]),
+    [candidateProfiles, setCandidateProfiles] = useState<CandidateRow<"candidate_profiles">[]>([]),
+    [candidateSkills, setCandidateSkills] = useState<CandidateRow<"candidate_skills">[]>([]),
+    [candidateProjects, setCandidateProjects] = useState<CandidateRow<"candidate_projects">[]>([]),
     [contracts, setContracts] = useState<Row<"contracts">[]>([]),
     [documents, setDocuments] = useState<Row<"candidate_documents">[]>([]),
     [requests, setRequests] = useState<Row<"tool_requests">[]>([]),
@@ -234,6 +249,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
           .from("profiles")
           .select("*")
           .order("created_at", { ascending: false }),
+        candidateDb().from("candidate_profiles").select("*").order("updated_at", { ascending: false }),
+        candidateDb().from("candidate_skills").select("*").order("updated_at", { ascending: false }),
+        candidateDb().from("candidate_projects").select("*").order("updated_at", { ascending: false }),
         db()
           .from("contracts")
           .select("*")
@@ -255,14 +273,17 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
       for (const r of results) if ("error" in r && r.error) throw r.error;
       setJobs(results[0].data || []);
       setPeople(results[1].data || []);
-      setContracts(results[2].data || []);
-      setDocuments(results[3].data || []);
-      setRequests(results[4].data || []);
-      setSignatures(results[5].data || []);
-      setOpportunities(results[6].data || []);
-      setHr(results[7]);
-      setCandidateRequests(results[8].data || []);
-      setUserRoles(results[9].data || []);
+      setCandidateProfiles(results[2].data || []);
+      setCandidateSkills(results[3].data || []);
+      setCandidateProjects(results[4].data || []);
+      setContracts(results[5].data || []);
+      setDocuments(results[6].data || []);
+      setRequests(results[7].data || []);
+      setSignatures(results[8].data || []);
+      setOpportunities(results[9].data || []);
+      setHr(results[10]);
+      setCandidateRequests(results[11].data || []);
+      setUserRoles(results[12].data || []);
       // Delivery projects back the Spotlight "Projects" group. The table
       // arrives with its own migration, so a missing table must never block
       // the whole workspace — degrade to an empty list instead.
@@ -610,6 +631,10 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/hr/onboarding/*" element={<PreserveSearchRedirect to="/hr/journeys" />} />
         <Route path="/hr/offboarding/*" element={<PreserveSearchRedirect to="/hr/journeys" />} />
         {isOwner && <Route path="/admin-access" element={<AccessManager />} />}
+        <Route path="/kanban" element={<KanbanWorkspace admin={true} />} />
+        <Route path="/events" element={<EventsManager />} />
+        <Route path="/candidates" element={<CandidateProfilesManager people={people} profiles={candidateProfiles} skills={candidateSkills} projects={candidateProjects} selected={person} onSelect={setPerson} busy={busy} action={action} />} />
+        <Route path="/projects" element={<ProjectsDirectory projects={candidateProjects} people={people} />} />
         <Route path="/hr" element={<HrWorkspace view="overview" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/recruiting" element={<HrWorkspace view="recruiting" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/people/*" element={<HrWorkspace view="people" actorEmail={email} role={role} openProject={openProject} />} />

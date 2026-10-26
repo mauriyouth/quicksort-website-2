@@ -1,4 +1,4 @@
-import { portraitBackground, portraitBrightness } from "@lib/portraits";
+import { portraitBackground, teamPortraits } from "@lib/portraits";
 import { useLocale } from '@lib/i18n';
 import { useEffect, useRef } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
@@ -315,8 +315,7 @@ export const TeamShowcaseSection = (): JSX.Element => {
                   className="team-card group flex-shrink-0 w-[280px] sm:w-[300px] md:w-[320px] aspect-[2/3] border-0 rounded-lg overflow-hidden relative"
                 >
                   <img
-                    src={frame ? `/team/portraits/${frame.file}.JPG` : member.image}
-                    srcSet={frame ? undefined : member.imageSet}
+                    src={teamPortraits[portraitFile]}
                     sizes="(min-width: 768px) 320px, (min-width: 640px) 300px, 280px"
                     width={member.imageWidth}
                     height={member.imageHeight}
@@ -325,14 +324,8 @@ export const TeamShowcaseSection = (): JSX.Element => {
                     alt={t(member.name)}
                     className="absolute inset-0 w-full h-full object-cover"
                     style={{
-                      maskImage: `url(/team/masks/${portraitFile}-soft.svg)`,
-                      maskMode: "luminance",
-                      maskSize: frame ? "100% 100%" : "cover",
-                      maskPosition: frame ? "center" : "center bottom",
-                      maskRepeat: "no-repeat",
                       // Preserve the approved headroom while retaining the full original photo.
                       objectPosition: frame ? "center" : "center bottom",
-                      filter: `brightness(${portraitBrightness[portraitFile] ?? 1})`,
                       ...(frame ? {
                         maxWidth: "none",
                         width: `${1344 / frame.width * 100}%`,

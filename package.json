@@ -6,6 +6,8 @@
     "dev:web": "pnpm --filter @quicksort/web dev",
     "dev:admin": "pnpm --filter @quicksort/admin dev",
     "dev": "pnpm --filter @quicksort/admin dev",
+    "dev:candidate": "pnpm --filter @quicksort/candidate dev",
+    "dev:business": "pnpm --filter @quicksort/intelligence dev",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
@@ -14,8 +16,9 @@
     "test:hr-db": "node scripts/verify-hr-database.mjs"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
+    "@electric-sql/pglite": "0.5.8",
+    "@playwright/test": "1.58.2",
     "supabase": "2.116.0",
-    "@playwright/test": "1.58.2"
+    "typescript": "5.9.3"
   }
 }

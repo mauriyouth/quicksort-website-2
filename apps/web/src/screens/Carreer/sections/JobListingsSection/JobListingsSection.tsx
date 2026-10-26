@@ -1,4 +1,4 @@
-import { portraitBackground, portraitBrightness } from "@lib/portraits";
+import { portraitBackground, teamPortraits } from "@lib/portraits";
 import { usePublishedJobs } from '@lib/usePublishedJobs';
 import { useLocale } from '@lib/i18n';
 import { LocaleLink as Link } from '@lib/i18n';
@@ -127,15 +127,9 @@ export const JobListingsSection = (): JSX.Element => {
                 style={{ backgroundColor: portraitBackground }}
                 className={`absolute overflow-hidden ${image.position} ${image.size}`}
               >
-                <img src={image.src} alt="" loading="lazy" decoding="async"
+                <img src={teamPortraits[image.file]} alt="" loading="lazy" decoding="async"
                   className="absolute inset-0 w-full h-full object-cover"
                   style={image.frame ? {
-                    maskImage: `url(/team/masks/${image.file}-soft.svg)`,
-                    maskMode: "luminance",
-                    maskSize: "100% 100%",
-                    maskPosition: "center",
-                    maskRepeat: "no-repeat",
-                    filter: `brightness(${portraitBrightness[image.file] ?? 1})`,
                     maxWidth: "none",
                     width: `${1344 / image.frame.width * 100}%`,
                     height: `${1881 / image.frame.height * 100}%`,

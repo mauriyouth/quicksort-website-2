@@ -1,0 +1,62 @@
+// Development-only fixture server. No Clerk bypass is added to either portal.
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+const require = createRequire(new URL('../../apps/admin/package.json', import.meta.url));
+const { createServer } = require('vite');
+const react = require('@vitejs/plugin-react');
+const port = Number(process.env.KANBAN_PREVIEW_PORT || 5176);
+const root = fileURLToPath(new URL('../..', import.meta.url));
+const projects = ['Sales', 'Events', 'Marketing', 'Internal projects'].map((name,i) => ({ id: `p${i}`, name, created_at: new Date().toISOString() }));
+const boards = [{ id: 'b0', project_id: 'p0', name: 'Sales decks' }, { id: 'b1', project_id: 'p1', name: 'Paris launch' }];
+const columns = boards.flatMap(b => ['To do','In progress','Blocked','Done'].map((name,i) => ({ id: b.id + i, board_id:b.id, name, position:i })));
+const state = {
+  kanban_projects: projects, kanban_boards: boards, kanban_columns: columns,
+  kanban_cards: [{ id:'c1', board_id:'b0', column_id:'b00', title:'Prepare the client presentation', description:'Bring together the proposal, timeline, and next steps.', created_by:'alex', creator_name:'Alex Morgan', created_at:new Date().toISOString() }],
+  profiles:[{id:'alex',full_name:'Alex Morgan',email:'alex@example.invalid'},{id:'casey',full_name:'Casey Martin',email:'casey@example.invalid'}],
+  kanban_project_members:[], kanban_board_members:[],
+};
+const server = await createServer({
+  configFile: false, root: fileURLToPath(new URL('.', import.meta.url)),
+  plugins: [react(), { name:'kanban-fixtures', configureServer(server) {
+    server.middlewares.use('/api/generate-cards', async (req, res) => {
+      let raw = ''; for await (const part of req) raw += part;
+      const { boardId } = JSON.parse(raw);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ cards: [{ title: 'Plan the launch', description: 'Confirm the timeline and budget.', columnId: columns.find(c => c.board_id === boardId).id }] }));
+    });
+    server.middlewares.use('/rest/v1', async (req,res,next) => {
+      const url = new URL(req.url, 'http://localhost');
+      const table = url.pathname.slice(1); if (!(table in state) && table !== 'rpc/save_kanban_board') return next();
+      let raw=''; for await (const part of req) raw+=part;
+      const body = raw ? JSON.parse(raw) : {};
+      if (table === 'rpc/save_kanban_board') {
+        let board = state.kanban_boards.find(b => b.id === body.target_board);
+        if (!board) { board = {id:crypto.randomUUID(), project_id:body.target_project}; state.kanban_boards.push(board); }
+        board.name = body.board_name;
+        body.column_drafts.forEach((draft, i) => {
+          const column = state.kanban_columns.find(c => c.id === draft.id && c.board_id === board.id);
+          if (column) column.name = draft.name;
+          else state.kanban_columns.push({id:crypto.randomUUID(), board_id:board.id, name:draft.name, position:i});
+        });
+        res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(board.id)); return;
+      }
+      let records = state[table];
+      const matches = row => [...url.searchParams].filter(([,v]) => v.startsWith('eq.')).every(([k,v]) => row[k] === v.slice(3));
+      if(req.method==='POST') {
+        const inserted = (Array.isArray(body) ? body : [body]).map(value => ({id:crypto.randomUUID(), created_at:new Date().toISOString(), ...value}));
+        if(table==='kanban_cards') inserted.forEach(row => Object.assign(row,{created_by:'alex',creator_name:'Alex Morgan'}));
+        const row = inserted[0];
+        if(table==='kanban_cards') Object.assign(row,{created_by:'alex',creator_name:'Alex Morgan'});
+        records.push(...inserted); records=inserted;
+        if(table==='kanban_boards') state.kanban_columns.push(...['To do','In progress','Blocked','Done'].map((name,i)=>({id:crypto.randomUUID(),board_id:row.id,name,position:i})));
+      } else if(req.method==='PATCH') { records=records.filter(matches); records.forEach(r=>Object.assign(r,body)); }
+      else if(req.method==='DELETE') { records=records.filter(matches); state[table]=state[table].filter(r=>!matches(r)); }
+      else records=records.filter(matches).slice(Number(url.searchParams.get("offset") || 0), Number(url.searchParams.get("offset") || 0) + Number(url.searchParams.get("limit") || 1000));
+      res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(req.headers.accept?.includes('object') ? records[0] : records));
+    });
+  }}],
+  resolve: { alias: { 'react-dom': `${root}/apps/admin/node_modules/react-dom`, 'react': `${root}/apps/admin/node_modules/react` } },
+  define: {'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(`http://127.0.0.1:${port}`), 'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify('fixture-only')},
+  server:{host:'127.0.0.1',port,strictPort:true,fs:{allow:[root]}},
+});
+await server.listen(); server.printUrls();

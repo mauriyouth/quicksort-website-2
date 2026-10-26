@@ -1,0 +1,55 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { autoPanVelocity, draggedPosition, zoomPanAtPoint } from "../apps/intelligence/src/relationshipCanvasMath.ts";
+
+test("cards can move to any world coordinate without clamping", () => {
+  assert.deepEqual(
+    draggedPosition({ x: 100, y: 100 }, { x: 300, y: 300 }, { x: -200, y: 1200 }, { x: 0, y: 0 }, { x: 0, y: 0 }, 1),
+    { x: -400, y: 1000 },
+  );
+});
+
+test("edge panning keeps a dragged card under the pointer", () => {
+  const bounds = { left: 0, right: 1000, top: 0, bottom: 700, width: 1000, height: 700 };
+  assert.deepEqual(autoPanVelocity({ x: 500, y: 350 }, bounds), { x: 0, y: 0 });
+  assert.ok(autoPanVelocity({ x: 995, y: 695 }, bounds).x < 0);
+  assert.ok(autoPanVelocity({ x: 5, y: 5 }, bounds).y > 0);
+
+  const position = draggedPosition({ x: 400, y: 300 }, { x: 500, y: 350 }, { x: 995, y: 695 }, { x: 0, y: 0 }, { x: -18, y: -18 }, 1);
+  assert.deepEqual(position, { x: 913, y: 663 });
+});
+
+test("pinch zoom keeps the world point under two fingers anchored", () => {
+  const pointer = { x: 420, y: 260 };
+  const currentPan = { x: 40, y: -20 };
+  const nextPan = zoomPanAtPoint(currentPan, 1, 1.5, pointer);
+
+  assert.deepEqual(nextPan, { x: -150, y: -160 });
+  assert.deepEqual({
+    x: nextPan.x + ((pointer.x - currentPan.x) / 1) * 1.5,
+    y: nextPan.y + ((pointer.y - currentPan.y) / 1) * 1.5,
+  }, pointer);
+});
+
+test("card inspector stays below the app header and closes on outside pointer actions", () => {
+  const app = readFileSync(new URL("../apps/intelligence/src/App.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../apps/intelligence/src/styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.relationship-layout\{[^}]*isolation:isolate/);
+  assert.match(app, /inspectorRef\.current\?\.contains\(event\.target as Node\)/);
+  assert.match(app, /window\.addEventListener\("pointerdown", dismissInspector, true\)/);
+  assert.match(app, /<aside ref=\{inspectorRef\} className="relationship-inspector">/);
+});
+
+test("Teleperformance relationship seed maps researched leadership without replacing existing contacts", () => {
+  const app = readFileSync(new URL("../apps/intelligence/src/App.tsx", import.meta.url), "utf8");
+  assert.match(app, /tp-relationship-map-2026-10-09-v1/);
+  assert.match(app, /name: "Danny Kuivenhoven"/);
+  assert.match(app, /name: "Akash Pugalia"/);
+  assert.match(app, /name: "Rob Lewington", role: "SVP, Head of Trust & Safety"/);
+  assert.match(app, /name: "Paul Joustra", role: "AI and CX transformation leader \(exact title to verify\)"/);
+  assert.match(app, /Cross-functional connections show working alignment, not unverified HR reporting lines/);
+  assert.match(app, /usefulExistingContacts/);
+  assert.match(app, /mappingVersion: tpMappingVersion/);
+});

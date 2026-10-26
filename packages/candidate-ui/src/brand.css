@@ -1,0 +1,12 @@
+:root {
+  --qs-bg: #f5f6f2;
+  --qs-paper: #ffffff;
+  --qs-ink: #18221c;
+  --qs-muted: #677269;
+  --qs-line: #e0e5dc;
+  --qs-lime: #ccff00;
+  --qs-deep: #14271e;
+  --qs-danger: #a52932;
+  --qs-font: "Inter", "Segoe UI", sans-serif;
+  --qs-radius: 16px;
+}

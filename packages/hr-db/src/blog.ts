@@ -18,7 +18,7 @@ export type BlogRecord = {
 }
 export type BlogInsert = Pick<BlogRecord, "slug" | "title"> & Partial<Omit<BlogRecord, "slug" | "title">>;
 export function validateBlogImage(file: File) {
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Choose a JPG, PNG or WebP image.");
+  if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) throw new Error("Choose a JPG, PNG, WebP or GIF image.");
   if (!file.size || file.size > 5 * 1024 * 1024) throw new Error("Choose an image smaller than 5 MB.");
 }
 

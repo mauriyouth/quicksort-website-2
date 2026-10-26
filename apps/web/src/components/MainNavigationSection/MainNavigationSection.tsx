@@ -101,6 +101,7 @@ const navigationItems = [
     { label: "Home", href: "/" },
     { label: "Resources", href: "/blog" },
     { label: "Freelancer", href: "/freelancer" },
+    { label: "Events", href: "/events" },
 ];
 
 const servicesData = [

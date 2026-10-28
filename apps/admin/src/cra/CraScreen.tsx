@@ -190,7 +190,7 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, bas
     {context && employee && <>
       {!fixedEmployeeId && <div className="cra-filters panel">
         <div className="cra-field"><label className="qs-label" htmlFor="cra-employee">Employee</label><EmployeePicker employees={context.employees} selectedId={employeeId} onSelect={selectEmployee} /></div>
-      </div>}      <MonthEditor key={`${employeeId}:${month}`} employee={employee} month={month} months={monthChoices} onMonth={changeMonth} assignments={context.assignments} draftOwner={draftOwner} />
+      </div>}      <MonthEditor key={`${employeeId}:${month}`} employee={employee} month={month} months={monthChoices} onMonth={changeMonth} assignments={context.assignments} draftOwner={draftOwner} audience={audience} />
     </>}
   </section>;
 }
@@ -276,7 +276,7 @@ type Cell = {
   out: boolean;
 };
 
-function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner }: { employee: Employee; month: string; months: string[]; onMonth: (month: string) => void; assignments: Assignment[]; draftOwner: string }) {
+function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner, audience }: { employee: Employee; month: string; months: string[]; onMonth: (month: string) => void; assignments: Assignment[]; draftOwner: string; audience: 'admin' | 'employee' }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [version, setVersion] = useState(0);
@@ -298,6 +298,10 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   const draftKey = `quicksort:cra:${draftOwner}:${employee.id}:${month}`;
   const days = monthDays(month);
   const dayInfo = useMemo(() => new Map(days.map(day => [day.day, day])), [days]);
+  // A validated invoice covers this consultant-month: consultants are locked
+  // out (the server enforces it too), admin/HR get a warning and keep editing.
+  const invoiced = !!snapshot?.invoiced;
+  const invoiceLocked = invoiced && audience === 'employee';
   const dirty = !!snapshot && JSON.stringify(entries) !== JSON.stringify(snapshot.entries);
   const monthLabel = new Date(`${month}-01T12:00:00`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   // Six-month window strip (design): the viewed month sits near the middle,
@@ -511,6 +515,8 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
     {!snapshot && !error && <p role="status" className="muted">Loading {monthLabel}…</p>}
     {!snapshot && error && <button className="btn secondary" onClick={discard}>Retry loading month</button>}
     {snapshot && <>
+      {invoiceLocked && <Notice>This month has been invoiced and is locked. Ask an admin to change it.</Notice>}
+      {invoiced && !invoiceLocked && <Notice>A validated invoice covers this month — changes will not update it.</Notice>}
       <section className="cra-months" aria-label="Months">
         <button className="cra-month-nav" type="button" aria-label="Earlier months" disabled={windowStart <= 0 || busy} onClick={() => setWindowStart(value => value - 1)}><ChevronLeft size={18} aria-hidden="true" /></button>
         <div className="cra-months-track">
@@ -534,7 +540,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
           <p className="cra-toolbar-meta">{workdays.length} working days{holidayCount ? ` · ${holidayCount} public ${holidayCount === 1 ? 'holiday' : 'holidays'}` : ''}{defaultProject ? ` · Default ${defaultProject.client_name} — ${defaultProject.title}` : ''}</p>
         </div>
         <div className="cra-toolbar-actions">
-          {defaultProject && remaining > 0 && <button className="btn secondary" type="button" disabled={busy} onClick={fillDefault}>Fill {fmtDays(remaining)} empty</button>}
+          {defaultProject && remaining > 0 && !invoiceLocked && <button className="btn secondary" type="button" disabled={busy} onClick={fillDefault}>Fill {fmtDays(remaining)} empty</button>}
         </div>
       </section>
 
@@ -543,7 +549,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
         <span className="cra-save-state" role="status">{statusLabel}</span>
         <div className="cra-savebar-actions">
           {dirty && <button className="btn secondary" type="button" disabled={busy} onClick={discard}><RefreshCw size={16} aria-hidden="true" />Discard</button>}
-          <button className="btn" type="button" disabled={busy || !dirty} onClick={() => void save()}><Save size={16} aria-hidden="true" />{busy ? 'Saving…' : 'Save'}</button>
+          <button className="btn" type="button" disabled={busy || !dirty || invoiceLocked} onClick={() => void save()}><Save size={16} aria-hidden="true" />{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
 
@@ -589,7 +595,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
               }
               return <button key={cell.iso} type="button"
                 className={`cra-cell${has ? ' cra-cell--fill' : ' cra-cell--empty'}${cell.weekend ? ' cra-cell--weekend' : ''}${cell.locked ? ' cra-cell--off' : ''}${selectedSet.has(cell.iso) ? ' cra-cell--sel' : ''}`}
-                disabled={cell.locked || busy}
+                disabled={cell.locked || busy || invoiceLocked}
                 aria-pressed={selectedSet.has(cell.iso)}
                 aria-label={aria}
                 title={!withinEmployment(employee, cell.iso) ? 'Outside employment period' : undefined}
@@ -620,7 +626,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
             {DURATIONS.map(item => <button key={item.id} type="button" role="radio" aria-checked={duration === item.id} className={`cra-seg${duration === item.id ? ' cra-seg-on' : ''}`} onClick={() => setDuration(item.id)}>{item.name}</button>)}
           </div>
           <div className={selected.length ? 'cra-types' : 'cra-types cra-types--dim'}>
-            {[...projectBrushes, ...plainBrushes].map(brush => <button key={brush.value} type="button" className="cra-type" disabled={!selected.length || busy} onClick={() => applyBrush(brush.value, brush.label)}>
+            {[...projectBrushes, ...plainBrushes].map(brush => <button key={brush.value} type="button" className="cra-type" disabled={!selected.length || busy || invoiceLocked} onClick={() => applyBrush(brush.value, brush.label)}>
               <span aria-hidden="true" className={`cra-dot cra-dot--${brush.cls}`} />
               <span className="cra-type-text">
                 <span className="cra-type-label">{brush.label}</span>
@@ -628,7 +634,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
               </span>
               <span className="cra-type-count">{valueCounts.get(brush.value) ? `${fmtDays(valueCounts.get(brush.value)!)} d` : ''}</span>
             </button>)}
-            <button type="button" className="cra-clear-entries" disabled={!selected.length || busy} onClick={() => applyBrush('', 'Clear entries')}>Clear entries</button>
+            <button type="button" className="cra-clear-entries" disabled={!selected.length || busy || invoiceLocked} onClick={() => applyBrush('', 'Clear entries')}>Clear entries</button>
           </div>
           <div className="cra-seg-group" role="group" aria-label="Days shown">
             <button type="button" aria-pressed={!weekends} className={`cra-seg${!weekends ? ' cra-seg-on' : ''}`} onClick={() => setWeekends(false)}>Mon–Fri</button>

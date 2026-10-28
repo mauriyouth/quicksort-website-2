@@ -344,7 +344,8 @@ export async function projectSummary(ctx: LifecycleCtx, projectId: string) {
     if (i.status === "paid") paid += cents(i.total_ttc);
     else outstanding += cents(i.total_ttc);
   }
-  const rows: ToInvoiceRow[] = [];
+  // Each row carries its month so the project view can create the draft.
+  const rows: (ToInvoiceRow & { month: string })[] = [];
   const { startMonth } = ctx.settings;
   if (startMonth) {
     const projectStart = ym(project.start_date);
@@ -353,7 +354,7 @@ export async function projectSummary(ctx: LifecycleCtx, projectId: string) {
     if (from <= to) {
       const src = await loadSources(ctx, { from, to, projectId });
       for (let m = from; m <= to; m = shiftMonth(m, 1)) {
-        rows.push(...rowsForMonth(ctx, src, m).filter((r) => r.projectId === projectId && r.status === "not_invoiced"));
+        rows.push(...rowsForMonth(ctx, src, m).filter((r) => r.projectId === projectId && r.status === "not_invoiced").map((r) => ({ ...r, month: m })));
       }
     }
   }

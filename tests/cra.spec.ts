@@ -23,7 +23,7 @@ const employees = [
   { id: employeeId, full_name: 'Sam Rivera', role: 'Engineer', start_date: '2026-01-01', end_date: null },
   { id: otherEmployeeId, full_name: 'Jordan Lee', role: 'Designer', start_date: '2026-10-12', end_date: null },
 ];
-async function mock(page: Page, { admin = false, failSave = false, conflict = false, assignments }: { admin?: boolean; failSave?: boolean; conflict?: boolean; assignments?: unknown[] } = {}) {
+async function mock(page: Page, { admin = false, failSave = false, conflict = false, invoiced = false, assignments }: { admin?: boolean; failSave?: boolean; conflict?: boolean; invoiced?: boolean; assignments?: unknown[] } = {}) {
   const saves: z.infer<typeof saveSchema>[] = [];
   const months = new Map<string, Snapshot>();
   const contextAssignments = assignments ?? [{ id: '33000000-0000-4000-8000-000000000001', employee_id: employeeId, project_id: projectId, title: 'Client platform', client_name: 'Acme', start_date: '2026-10-05', end_date: '2026-10-16', status: 'active' }];
@@ -35,19 +35,21 @@ async function mock(page: Page, { admin = false, failSave = false, conflict = fa
       employees: admin ? employees : employees.slice(0, 1),
       assignments: contextAssignments,
     });
+    // Leave-balance strip: no balances and default accrual rates.
+    if (path.endsWith('/employee_leave_balances') || path.endsWith('/leave_accrual_settings')) return reply([]);
     const input = z.object({ target_employee: z.uuid(), target_month: z.iso.date() }).parse(route.request().postDataJSON());
     const key = `${input.target_employee}:${input.target_month}`;
-    const snapshot = months.get(key) || { version: 0, entries: [], updated_at: null, updated_by: null };
+    const snapshot = months.get(key) || { version: 0, entries: [], updated_at: null, updated_by: null, invoiced };
     if (path.endsWith('/cra_month_snapshot')) return reply(snapshot);
     if (path.endsWith('/cra_save_month')) {
       const save = saveSchema.parse(route.request().postDataJSON());
       saves.push(save);
       if (failSave && saves.length === 1) return reply({ message: 'Connection failed. Try saving again.' }, 503);
       if (conflict && saves.length === 1) {
-        months.set(key, { version: 1, entries: [{ day: '2026-10-01', part: 'full', status: 'rtt', project_id: null }], updated_at: '2026-10-04T14:00:00Z', updated_by: 'admin@example.invalid' });
+        months.set(key, { version: 1, entries: [{ day: '2026-10-01', part: 'full', status: 'rtt', project_id: null }], updated_at: '2026-10-04T14:00:00Z', updated_by: 'admin@example.invalid', invoiced: false });
         return reply({ message: 'This CRA was changed by another person. Reload the month before saving.' }, 409);
       }
-      const saved = { version: snapshot.version + 1, entries: save.entries, updated_at: '2026-10-04T14:00:00Z', updated_by: admin ? 'admin@example.invalid' : 'employee@example.invalid' };
+      const saved = { version: snapshot.version + 1, entries: save.entries, updated_at: '2026-10-04T14:00:00Z', updated_by: admin ? 'admin@example.invalid' : 'employee@example.invalid', invoiced };
       months.set(key, saved); return reply(saved);
     }
     return reply({ message: `Unexpected endpoint ${path}` }, 404);
@@ -286,4 +288,23 @@ test('CRA works at desktop and mobile widths in light and dark themes', async ({
     }
   }
   expect(errors).toEqual([]);
+});
+
+test('invoiced month is read-only for the consultant', async ({ page }) => {
+  await mock(page, { invoiced: true });
+  await openOctober(page);
+  await expect(page.getByText('This month has been invoiced and is locked. Ask an admin to change it.')).toBeVisible();
+  await expect(dayCell(page, '2026-10-05')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Fill .* empty$/ })).toHaveCount(0);
+});
+
+test('invoiced month warns admin/HR but stays editable', async ({ page }) => {
+  await mock(page, { admin: true, invoiced: true });
+  await openOctober(page, true);
+  await expect(page.getByText('A validated invoice covers this month — changes will not update it.')).toBeVisible();
+  await expect(page.getByText('This month has been invoiced and is locked.')).toHaveCount(0);
+  await expect(dayCell(page, '2026-10-05')).toBeEnabled();
+  await paint(page, ['2026-10-07'], /^Internal Non-billable/);
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
 });

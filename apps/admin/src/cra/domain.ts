@@ -22,7 +22,7 @@ export const contextSchema = z.object({
 // Snapshots written before half-day support have no `part` — treat those
 // entries as full days so old months keep loading until the migration runs.
 const storedEntrySchema = z.preprocess(value => typeof value === 'object' && value !== null && !('part' in value) ? { part: 'full', ...value } : value, entrySchema);
-export const snapshotSchema = z.object({ version: z.number().int().nonnegative(), entries: z.array(storedEntrySchema), updated_at: z.string().nullable(), updated_by: z.string().nullable() });
+export const snapshotSchema = z.object({ version: z.number().int().nonnegative(), entries: z.array(storedEntrySchema), updated_at: z.string().nullable(), updated_by: z.string().nullable(), invoiced: z.boolean().default(false) });
 export type Entry = z.infer<typeof entrySchema>;
 export type Context = z.infer<typeof contextSchema>;
 export type Employee = Context['employees'][number];

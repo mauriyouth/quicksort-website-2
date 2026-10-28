@@ -144,3 +144,12 @@ test("blocked when pricing line has no rate", () => {
   );
   assert.deepEqual(r, { ok: false, blocker: "no_rate", pricingLine: "Ghost" });
 });
+
+test("draftTotals handles arbitrary quantities", () => {
+  const line = (quantity, unitPrice, vatRate) => ({
+    title: "t", description: "", quantity, unit: "jour", unitPrice, vatRate,
+  });
+  assert.equal(draftTotals([line("2.25", "100.00", "0.2")]).ht, "225.00");
+  assert.equal(draftTotals([line("0.1", "100.00", "0")]).ht, "10.00");
+  assert.equal(draftTotals([line("0.25", "100.00", "0.2")]).ht, "25.00");
+});

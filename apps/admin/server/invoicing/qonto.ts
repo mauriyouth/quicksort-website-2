@@ -54,7 +54,7 @@ function mapLine(i: Json): DraftLine {
     quantity: String(i?.quantity ?? ""),
     unit: i?.unit ?? "",
     unitPrice: amount(i?.unit_price),
-    vatRate: String(i?.vat_rate ?? "0"),
+    vatRate: String(i?.vat_rate ?? "0.2"),
   };
 }
 
@@ -88,7 +88,7 @@ export function createQontoProvider(config: QontoConfig, fetchImpl: typeof fetch
 
   async function request(method: string, path: string, body?: unknown): Promise<Json> {
     const headers: Record<string, string> = {
-      authorization: `${config.login}:${config.secretKey}`,
+      authorization: config.login ? `${config.login}:${config.secretKey}` : config.secretKey,
       accept: "application/json",
     };
     if (config.stagingToken) headers["X-Qonto-Staging-Token"] = config.stagingToken;
@@ -175,7 +175,7 @@ export function createQontoProvider(config: QontoConfig, fetchImpl: typeof fetch
         description: p.description ?? "",
         unit: p.unit ?? null,
         unitPrice: p.unit_price ? amount(p.unit_price) : null,
-        vatRate: String(p.vat_rate ?? "0"),
+        vatRate: String(p.vat_rate ?? "0.2"),
       }));
     },
     async listInvoices() {

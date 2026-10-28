@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createQontoProvider } from "../apps/admin/server/invoicing/qonto.ts";
 import { ProviderError } from "../apps/admin/server/invoicing/provider.ts";
 
-const config = { login: "acme-1234", secretKey: "sk", iban: "FR7600000000000000000000000" };
+const config = { login: "acme-1234", secretKey: "sk-SECRET-XYZ", iban: "FR7600000000000000000000000" };
 
 function fakeFetch(responses) {
   const calls = [];
@@ -32,7 +32,7 @@ test("createDraft sends draft payload with iban and auth header", async () => {
   const c = calls[0];
   assert.equal(c.url, "https://thirdparty.qonto.com/v2/client_invoices");
   assert.equal(c.method, "POST");
-  assert.equal(c.headers.authorization, "acme-1234:sk");
+  assert.equal(c.headers.authorization, "acme-1234:sk-SECRET-XYZ");
   const body = JSON.parse(c.body);
   assert.equal(body.status, "draft");
   assert.deepEqual(body.items[0].unit_price, { value: "650.00", currency: "EUR" });
@@ -79,7 +79,23 @@ test("422 surfaces detail without secret", async () => {
     assert.ok(e instanceof ProviderError);
     assert.equal(e.message, "due_date must be after issue_date");
     assert.equal(e.status, 422);
-    assert.ok(!e.message.includes("sk"));
+    assert.ok(!e.message.includes("sk-SECRET-XYZ"));
     return true;
   });
+});
+
+test("empty login sends bare secret as authorization", async () => {
+  const { impl, calls } = fakeFetch([json({ organization: { bank_accounts: [] } })]);
+  await createQontoProvider({ ...config, login: "" }, impl).listPaymentAccounts();
+  assert.equal(calls[0].headers.authorization, "sk-SECRET-XYZ");
+});
+
+test("missing vat_rate defaults to 0.2 for products and invoice lines", async () => {
+  const { impl } = fakeFetch([
+    json({ products: [{ id: "p1", title: "T" }], meta: { next_page: null } }),
+    json({ client_invoices: [{ id: "i1", status: "draft", total_amount: { value: "1.00" }, vat_amount: { value: "0.00" }, items: [{ title: "x", vat_rate: null }] }], meta: { next_page: null } }),
+  ]);
+  const p = createQontoProvider(config, impl);
+  assert.equal((await p.listProducts())[0].vatRate, "0.2");
+  assert.equal((await p.listInvoices())[0].lines[0].vatRate, "0.2");
 });

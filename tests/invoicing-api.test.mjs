@@ -80,3 +80,17 @@ test("link_product copies product fields", async () => {
 test("providerFromSettings requires a secret", () => {
   assert.throws(() => providerFromSettings({ login: "", iban: "", staging: false, secret: null, stagingToken: null }));
 });
+test("staging without a staging token is rejected and fails closed", async () => {
+  const f = fixture();
+  const r = await f.request("POST", { body: { action: "save_settings", login: "org", secret: "new", iban: "FR76", staging: true, dueDays: 30, startMonth: "2026-01" } });
+  assert.equal(r.code, 400);
+  assert.equal(r.body.error, "Add the Qonto staging token to use the sandbox.");
+  assert.equal(f.ops.length, 0);
+  assert.throws(() => providerFromSettings({ login: "", iban: "", staging: true, secret: "s", stagingToken: null }), /staging token/);
+});
+test("link_product rejects an invalid vatRate", async () => {
+  const f = fixture();
+  const r = await f.request("POST", { body: { action: "link_product", projectId: PROJECT, pricingLine: "X", product: { id: "p", title: "t", description: "", unit: null, vatRate: "abc" } } });
+  assert.equal(r.code, 400);
+  assert.equal(f.ops.length, 0);
+});

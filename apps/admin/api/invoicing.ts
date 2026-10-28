@@ -32,7 +32,7 @@ const linkClient = z.object({
 });
 const product = z.object({
   id: z.string().min(1).max(200), title: z.string().max(500), description: z.string().max(5000),
-  unit: z.string().max(50).nullable(), unitPrice: z.string().nullable().optional(), vatRate: z.string().max(20),
+  unit: z.string().max(50).nullable(), unitPrice: z.string().nullable().optional(), vatRate: z.string().regex(/^(0(\.\d+)?|1(\.0+)?)$/),
 });
 const linkProduct = z.object({
   action: z.literal("link_product"),
@@ -67,6 +67,7 @@ const actions: Record<string, (ctx: Ctx, input: any) => Promise<Result>> = {
   async save_settings({ client, userId, deps, settings }, input: z.infer<typeof saveSettings>) {
     const secret = input.secret ?? settings.secret;
     const stagingToken = input.stagingToken ?? settings.stagingToken;
+    if (input.staging && !stagingToken) return { status: 400, body: { error: "Add the Qonto staging token to use the sandbox." } };
     if (input.secret) {
       try {
         await deps.createProvider({ login: input.login, iban: input.iban, staging: input.staging, secret: input.secret, stagingToken }).listPaymentAccounts();

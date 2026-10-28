@@ -45,6 +45,7 @@ export function providerFromSettings(
   fetchImpl?: typeof fetch,
 ): InvoicingProvider {
   if (!s.secret) throw new Error("Invoicing provider is not configured.");
+  if (s.staging && !s.stagingToken) throw new Error("Add the Qonto staging token to use the sandbox.");
   return createQontoProvider({
     login: s.login, secretKey: s.secret, iban: s.iban,
     ...(s.staging && s.stagingToken ? { stagingToken: s.stagingToken } : {}),

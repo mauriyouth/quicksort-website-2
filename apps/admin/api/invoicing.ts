@@ -4,15 +4,20 @@ import { z } from "zod";
 import { ProviderError } from "../server/invoicing/provider.ts";
 import type { InvoicingProvider } from "../server/invoicing/provider.ts";
 import { encryptCredentials, loadInvoicingSettings, providerFromSettings } from "../server/invoicing/settings.ts";
+import * as lifecycle from "../server/invoicing/lifecycle.ts";
+import { HttpError } from "../server/invoicing/lifecycle.ts";
+import type { LifecycleCtx } from "../server/invoicing/lifecycle.ts";
 
 type Request = { method?: string; query?: Record<string, string | string[] | undefined>; headers: Record<string, string | string[] | undefined>; body: unknown };
 type Response = { setHeader(name: string, value: string): void; status(code: number): Response; json(body: unknown): void };
 type Deps = { createClient: typeof createClient; createProvider: typeof providerFromSettings; now?: () => Date };
-type Ctx = { client: SupabaseClient; userId: string; deps: Deps; settings: Awaited<ReturnType<typeof loadInvoicingSettings>>; provider: () => InvoicingProvider };
+type Ctx = {
+  client: SupabaseClient; userId: string; deps: Deps; settings: Awaited<ReturnType<typeof loadInvoicingSettings>>;
+  provider: () => InvoicingProvider; query: Record<string, string | undefined>; life: LifecycleCtx;
+};
 type Result = { status: number; body: unknown };
 
 const NOT_CONFIGURED = "Connect Qonto in Invoicing settings first.";
-class HttpError extends Error { status: number; constructor(message: string, status: number) { super(message); this.status = status; } }
 
 const saveSettings = z.object({
   action: z.literal("save_settings"),
@@ -40,7 +45,29 @@ const linkProduct = z.object({
   pricingLine: z.string().trim().min(1).max(300),
   product: product.nullable(),
 });
-const actionSchema = z.discriminatedUnion("action", [saveSettings, linkClient, linkProduct]);
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const invoiceRef = { invoiceId: z.string().min(1).max(100) };
+const createDraft = z.object({ action: z.literal("create_draft"), projectId: z.uuid(), employeeId: z.uuid(), month: z.string().regex(MONTH) });
+const draftLineEdit = z.object({
+  id: z.string().min(1).max(100),
+  quantity: z.coerce.string().trim().regex(/^\d{1,6}(\.\d{1,4})?$/).refine((q) => Number(q) > 0, "Quantity must be positive."),
+  unitPrice: z.coerce.string().trim().regex(/^\d{1,9}(\.\d{1,2})?$/).transform((p) => Number(p).toFixed(2)),
+  description: z.string().max(5000),
+});
+const updateDraft = z.object({
+  action: z.literal("update_draft"), ...invoiceRef,
+  dueDate: z.string().regex(DATE), purchaseOrder: z.string().trim().max(200), lines: z.array(draftLineEdit).max(100),
+});
+const regenerateDraft = z.object({ action: z.literal("regenerate_draft"), ...invoiceRef });
+const deleteDraft = z.object({ action: z.literal("delete_draft"), ...invoiceRef });
+const finalize = z.object({ action: z.literal("finalize"), ...invoiceRef });
+const send = z.object({ action: z.literal("send"), ...invoiceRef, resend: z.boolean().optional() });
+const cancel = z.object({ action: z.literal("cancel"), ...invoiceRef });
+const assign = z.object({ action: z.literal("assign"), ...invoiceRef, projectId: z.uuid().nullable(), ignored: z.boolean().optional() });
+const actionSchema = z.discriminatedUnion("action", [
+  saveSettings, linkClient, linkProduct, createDraft, updateDraft, regenerateDraft, deleteDraft, finalize, send, cancel, assign,
+]);
 
 function fail(error: { message?: string } | null | undefined, fallback: string): never {
   if (error) throw new Error(error.message || fallback);
@@ -60,6 +87,19 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
   },
   async "provider-products"({ provider }) { return { products: await provider().listProducts() }; },
   async "payment-accounts"({ provider }) { return { accounts: await provider().listPaymentAccounts() }; },
+  async month({ life, query }) {
+    if (!MONTH.test(query.month ?? "")) throw new HttpError("Choose a month (YYYY-MM).", 400);
+    return lifecycle.monthRows(life, query.month as string);
+  },
+  async invoices({ life, query }) { return lifecycle.listInvoices(life, query.refresh === "1"); },
+  async invoice({ life, query }) {
+    if (!query.id) throw new HttpError("Choose an invoice.", 400);
+    return lifecycle.invoiceDetail(life, query.id);
+  },
+  async project({ life, query }) {
+    if (!z.uuid().safeParse(query.projectId).success) throw new HttpError("Choose a project.", 400);
+    return lifecycle.projectSummary(life, query.projectId as string);
+  },
 };
 
 // POST { action }
@@ -114,6 +154,14 @@ const actions: Record<string, (ctx: Ctx, input: any) => Promise<Result>> = {
     if (result.error) fail(result.error, "Could not save the product link.");
     return { status: 200, body: { linked: true } };
   },
+  create_draft: ({ life }, input: z.infer<typeof createDraft>) => lifecycle.createDraft(life, input),
+  update_draft: ({ life }, input: z.infer<typeof updateDraft>) => lifecycle.updateDraft(life, input),
+  regenerate_draft: ({ life }, input: z.infer<typeof regenerateDraft>) => lifecycle.regenerateDraft(life, input),
+  delete_draft: ({ life }, input: z.infer<typeof deleteDraft>) => lifecycle.deleteDraft(life, input),
+  finalize: ({ life }, input: z.infer<typeof finalize>) => lifecycle.finalizeInvoice(life, input),
+  send: ({ life }, input: z.infer<typeof send>) => lifecycle.sendInvoice(life, input),
+  cancel: ({ life }, input: z.infer<typeof cancel>) => lifecycle.cancelInvoice(life, input),
+  assign: ({ life }, input: z.infer<typeof assign>) => lifecycle.assignInvoice(life, input),
 };
 // Actions that work before a provider is connected.
 const worksUnconfigured = new Set(["save_settings"]);
@@ -135,16 +183,20 @@ export function createInvoicingHandler(deps: Deps = { createClient, createProvid
       if (role.error || role.data?.role !== "admin") return res.status(403).json({ error: "Admin access is required." });
 
       const settings = await loadInvoicingSettings(client);
+      const userId = String(identity.data);
+      let cached: InvoicingProvider | null = null;
+      const provider = () => {
+        if (!settings.secret) throw new HttpError(NOT_CONFIGURED, 409);
+        return (cached ??= deps.createProvider(settings));
+      };
+      const query: Record<string, string | undefined> = {};
+      for (const [k, v] of Object.entries(req.query ?? {})) query[k] = Array.isArray(v) ? v[0] : v;
       const ctx: Ctx = {
-        client, userId: String(identity.data), deps, settings,
-        provider: () => {
-          if (!settings.secret) throw new HttpError(NOT_CONFIGURED, 409);
-          return deps.createProvider(settings);
-        },
+        client, userId, deps, settings, provider, query,
+        life: { client, provider, actor: userId, now: () => deps.now?.() ?? new Date(), settings },
       };
       if (req.method === "GET") {
-        const raw = req.query?.resource;
-        const name = Array.isArray(raw) ? raw[0] : raw;
+        const name = query.resource;
         const load = name && Object.hasOwn(resources, name) ? resources[name] : undefined;
         if (!load) return res.status(400).json({ error: "Unknown resource." });
         return res.status(200).json(await load(ctx));

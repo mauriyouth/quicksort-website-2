@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   projectDayAmounts,
   buildDraftLines,
+  draftTotals,
 } from "../apps/admin/server/invoicing/draft.ts";
 
 const P = "p1";
@@ -123,4 +124,23 @@ test("no days", () => {
     { day: "2026-11-02", part: "full", status: "client_project", project_id: "other" },
   ];
   assert.deepEqual(buildDraftLines(base({ entries })), { ok: false, blocker: "no_days" });
+});
+
+test("draftTotals uses exact integer rounding", () => {
+  const line = (quantity, unitPrice, vatRate) => ({
+    title: "t", description: "", quantity, unit: "jour", unitPrice, vatRate,
+  });
+  assert.deepEqual(draftTotals([line("0.5", "128.17", "0.2")]), {
+    ht: "64.09", vat: "12.82", ttc: "76.91",
+  });
+  assert.deepEqual(draftTotals([line("3", "100.05", "0.055")]), {
+    ht: "300.15", vat: "16.51", ttc: "316.66",
+  });
+});
+
+test("blocked when pricing line has no rate", () => {
+  const r = buildDraftLines(
+    base({ assignments: [{ ...assignment, pricing_line: "Ghost" }] }),
+  );
+  assert.deepEqual(r, { ok: false, blocker: "no_rate", pricingLine: "Ghost" });
 });

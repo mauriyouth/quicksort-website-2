@@ -65,9 +65,13 @@ export function draftTotals(lines: DraftLine[]): { ht: string; vat: string; ttc:
   let ht = 0;
   let vat = 0;
   for (const l of lines) {
-    const lineHt = Math.round(Number(l.quantity) * Number(l.unitPrice) * 100);
+    // Integer arithmetic only (half-up rounding) to avoid float drift.
+    const qh = Math.round(Number(l.quantity) * 2);
+    const pc = Math.round(Number(l.unitPrice) * 100);
+    const bp = Math.round(Number(l.vatRate) * 10000);
+    const lineHt = Math.floor((qh * pc + 1) / 2);
     ht += lineHt;
-    vat += Math.round(lineHt * Number(l.vatRate));
+    vat += Math.floor((lineHt * bp * 2 + 10000) / 20000);
   }
   const f = (c: number) => (c / 100).toFixed(2);
   return { ht: f(ht), vat: f(vat), ttc: f(ht + vat) };

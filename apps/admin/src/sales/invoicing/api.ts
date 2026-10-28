@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useSession } from "@clerk/react";
 
 const PATH = "/api/invoicing";
@@ -29,8 +29,13 @@ export function errorText(error: unknown, fallback = "The invoicing request fail
  */
 export function useInvoicingApi() {
   const { session } = useSession();
+  // Clerk replaces the session object on refresh/focus; keying callbacks on it
+  // would re-run loads and wipe unsaved edits. Track it in a ref, key on the id.
+  const sessionRef = useRef(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+  const sessionId = session?.id;
   const request = useCallback(async <T,>(method: "GET" | "POST", query: string, body?: object): Promise<T> => {
-    const token = await session?.getToken({ template: "supabase" });
+    const token = await sessionRef.current?.getToken({ template: "supabase" });
     if (!token) throw new Error("Sign in again to manage invoicing.");
     const response = await fetch(`${PATH}${query}`, {
       method,
@@ -45,7 +50,8 @@ export function useInvoicingApi() {
       throw new InvoicingError(typeof result.error === "string" && result.error ? result.error : "The invoicing request failed.", response.status, result);
     }
     return result as T;
-  }, [session]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   return useMemo(() => ({
     get<T>(params: Record<string, string>): Promise<T> {

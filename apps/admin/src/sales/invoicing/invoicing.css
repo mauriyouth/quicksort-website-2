@@ -490,6 +490,12 @@
   font-size: 14px;
   color: var(--qs-muted);
 }
+.inv-confirm-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  color: var(--qs-ink);
+}
 .inv-confirm-actions {
   display: flex;
   justify-content: flex-end;

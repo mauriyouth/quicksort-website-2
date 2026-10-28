@@ -6,7 +6,8 @@ import { dateTime, invoiceRowLabel, lineTotals, money, monthLabel, shortDate, so
 import type { DraftResponse, InvoiceDetail, InvoiceLine, InvoiceResponse } from "./types";
 
 type LineEdit = { id: string; quantity: string; unitPrice: string; description: string };
-type Confirm = "validate" | "delete" | "cancel" | "resend" | null;
+type Confirm = "validate" | "delete" | "cancel" | "send" | "resend" | null;
+const RECIPIENTS_UNREAD = "Couldn't read the client's invoice emails from Qonto — refresh and try again.";
 
 const QTY = /^\d{1,6}(\.\d{1,4})?$/;
 const PRICE = /^\d{1,9}(\.\d{1,2})?$/;
@@ -325,7 +326,7 @@ export function InvoiceDraftPanel({
                       <h3 className="pj-card-title">Send</h3>
                       <p className="pj-card-desc">
                         {detail.recipients === null
-                          ? "Recipients could not be read from Qonto."
+                          ? RECIPIENTS_UNREAD
                           : detail.recipients.length
                             ? `To ${detail.recipients.join(", ")}`
                             : "This client has no invoice email in Qonto."}
@@ -384,8 +385,9 @@ export function InvoiceDraftPanel({
               </a>
             )}
             {validated && (
-              <button type="button" className="pj-btn pj-btn-primary" disabled={locked || detail.recipients?.length === 0}
-                onClick={() => (invoice.sent_at ? setConfirm("resend") : void send(false))}>
+              <button type="button" className="pj-btn pj-btn-primary" disabled={locked || !detail.recipients || detail.recipients.length === 0}
+                title={detail.recipients === null ? RECIPIENTS_UNREAD : undefined}
+                onClick={() => setConfirm(invoice.sent_at ? "resend" : "send")}>
                 <Send size={14} /> {busy === "send" ? "Sending…" : invoice.sent_at ? "Resend" : "Send"}
               </button>
             )}
@@ -415,6 +417,15 @@ export function InvoiceDraftPanel({
                   <p>The {money(invoice.total_ttc, currency)} TTC invoice is canceled in Qonto. This cannot be undone.</p>
                 </>
               )}
+              {confirm === "send" && (
+                <>
+                  <h3 id="inv-confirm-title">Send invoice {invoice.number}?</h3>
+                  <p>Qonto emails the {money(invoice.total_ttc, currency)} TTC invoice to:</p>
+                  <ul className="inv-confirm-list">
+                    {(detail?.recipients ?? []).map((r) => <li key={r}>{r}</li>)}
+                  </ul>
+                </>
+              )}
               {confirm === "resend" && (
                 <>
                   <h3 id="inv-confirm-title">Send this invoice again?</h3>
@@ -425,18 +436,18 @@ export function InvoiceDraftPanel({
                 <button type="button" className="pj-btn pj-btn-ghost" disabled={locked} onClick={() => setConfirm(null)}>Back</button>
                 <button
                   type="button"
-                  className={`pj-btn ${confirm === "validate" || confirm === "resend" ? "pj-btn-primary" : "pj-btn-ghost inv-danger"}`}
+                  className={`pj-btn ${confirm === "validate" || confirm === "send" || confirm === "resend" ? "pj-btn-primary" : "pj-btn-ghost inv-danger"}`}
                   disabled={locked}
                   onClick={() => {
                     if (confirm === "validate") void validate();
                     else if (confirm === "delete") void remove();
                     else if (confirm === "cancel") void cancel();
-                    else void send(true);
+                    else void send(confirm === "resend");
                   }}
                 >
                   {locked
                     ? "Working…"
-                    : confirm === "validate" ? "Validate" : confirm === "delete" ? "Delete draft" : confirm === "cancel" ? "Cancel invoice" : "Send again"}
+                    : confirm === "validate" ? "Validate" : confirm === "delete" ? "Delete draft" : confirm === "cancel" ? "Cancel invoice" : confirm === "send" ? "Send" : "Send again"}
                 </button>
               </div>
             </div>

@@ -62,13 +62,13 @@ import {
   type LineStaffing,
   type StaffingPerson,
 } from "./ProjectStaffing";
+import { ProjectInvoices } from "./invoicing/ProjectInvoices";
 
 /**
  * Projects (sales.md §14 Phase 2) — the delivery continuation of won deals.
  * Each project keeps the pricing model of its origin opportunity (régie
  * TJM × days / forfait fixed price) and its lifecycle statuses come from the
  * configurable referentials edited under Administration → Global settings,
-import { ProjectInvoices } from "./invoicing/ProjectInvoices";
  * BoondManager-style. Régie contracts carry named pricing lines
  * ("Lead dev", "Data engineer"…), each with its own rate and end date —
  * the line window runs from the contract start to that date and the project
@@ -2347,6 +2347,12 @@ function ProjectForm({
               </section>
             )}
 
+            {editing && editing.pricing_model === "regie" && (
+              <section className="pj-card">
+                <ProjectInvoices projectId={editing.id} />
+              </section>
+            )}
+
             <section className="pj-card">
               <div className="pj-card-head">
                 <div>
@@ -2435,12 +2441,6 @@ function ProjectForm({
                           currency,
                         )}{" "}
                         to go
-            {editing && editing.pricing_model === "regie" && (
-              <section className="pj-card">
-                <ProjectInvoices projectId={editing.id} />
-              </section>
-            )}
-
                       </span>
                     </div>
                   </>

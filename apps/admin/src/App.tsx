@@ -9,6 +9,7 @@ import { loadWorkspace, executeCommand } from "./hr/data";
 import type { Workspace } from "./hr/domain";
 import { Opportunities } from "./sales/Opportunities";
 import { Projects } from "./sales/Projects";
+import { Invoicing } from "./sales/invoicing/Invoicing";
 import { OpsBoard } from "./ops/OpsBoard";
 import { PipelineBoard } from "./sales/PipelineBoard";
 import { SalesDashboard } from "./sales/SalesDashboard";
@@ -91,6 +92,7 @@ const nav = [
       { id: "sales-people", href: "/sales/people", label: "Contacts" },
       { id: "opportunities", href: "/sales/opportunities", label: "Opportunities" },
       { id: "sales-projects", href: "/sales/projects", label: "Projects" },
+      { id: "sales-invoicing", href: "/sales/invoicing", label: "Invoicing" },
     ],
   },
   {
@@ -549,6 +551,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     "sales-people",
     "opportunities",
     "sales-projects",
+    "sales-invoicing",
   ];
   const isSales = salesTabIds.includes(tab);
   const hrTabIds = [
@@ -656,6 +659,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/sales/opportunities" element={<Opportunities actorEmail={email} />} />
         <Route path="/sales/projects" element={<Projects actorEmail={email} />} />
         <Route path="/sales/projects/:projectId" element={<Projects actorEmail={email} />} />
+        <Route path="/sales/invoicing/*" element={<Invoicing />} />
         <Route path="/operations" element={<OpsBoard actorEmail={email} />} />
         <Route path="/blog-posts" element={<BlogManager />} />
         <Route path="/administration" element={<AdminSettings />} />

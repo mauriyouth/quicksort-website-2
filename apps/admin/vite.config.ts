@@ -15,6 +15,7 @@ function apiRoutes(): Plugin {
     '/api/analysis-history': '/api/analysis-history.ts',
     '/api/sales-pipeline': '/api/sales-pipeline.ts',
     '/api/boondmanager': '/api/boondmanager.ts',
+    '/api/invoicing': '/api/invoicing.ts',
     '/api/team-photo': '/api/team-photo.mjs',
   };
   return {

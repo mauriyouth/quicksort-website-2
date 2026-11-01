@@ -52,6 +52,10 @@ import {
 const HrPortal = lazy(() =>
   import("./portal/HrPortal").then((m) => ({ default: m.HrPortal })),
 );
+// pdf.js is large; only the payslip import page needs it.
+const PayslipImport = lazy(() =>
+  import("./payslips/PayslipImport").then((m) => ({ default: m.PayslipImport })),
+);
 const BusinessPlan = lazy(() =>
   import("./ops/business-plan/BusinessPlan").then((m) => ({ default: m.BusinessPlan })),
 );
@@ -114,6 +118,7 @@ const nav = [
       { id: "hr-people", href: "/hr/people", label: "People" },
       { id: "journeys", href: "/hr/journeys", label: "Journeys" },
       { id: "hr-documents", href: "/hr/documents", label: "Documents" },
+      { id: "hr-payslips", href: "/hr/payslips", label: "Payslips" },
       { id: "jobs", href: "/hr/jobs", label: "Job posts" },
     ],
   },
@@ -491,7 +496,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
   const hrTabIds = [
     "hr",
     "hr-overview", "recruiting", "hr-people", "journeys",
-    "hr-documents", "jobs",
+    "hr-documents", "hr-payslips", "jobs",
   ];
   const isHr = hrTabIds.includes(tab);
   const isOps = tab === "operations" || tab === "ops-business-plan";
@@ -582,6 +587,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/hr/people/*" element={<HrWorkspace view="people" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/journeys" element={<HrWorkspace view="journeys" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/documents" element={<DocumentAlerts />} />
+        <Route path="/hr/payslips" element={<Suspense fallback={null}><PayslipImport /></Suspense>} />
         <Route path="/sales" element={<SalesDashboard actorEmail={email} onOpenClient={(id) => routerNavigate(`/sales/clients/${id}`)} />} />
         <Route path="/sales/pipeline" element={<PipelineBoard />} />
         <Route path="/sales/clients/*" element={<Clients actorEmail={email} />} />

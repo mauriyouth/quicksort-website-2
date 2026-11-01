@@ -1,0 +1,14 @@
+/* HR → Payslips import (src/payslips/PayslipImport.tsx). Reuses the HR table, tag and checkbox styles. */
+.payslips-drop { display: grid; justify-items: center; gap: 8px; padding: 28px 20px; border: 1px dashed var(--qs-line); border-radius: 12px; background: var(--qs-paper); color: var(--qs-muted); font-size: 13px; }
+.payslips-drop.on { border-color: var(--qs-lime); background: color-mix(in srgb, var(--qs-lime) 10%, var(--qs-paper)); }
+.payslips-drop p { margin: 0; }
+.payslips-review { display: grid; gap: 14px; }
+.payslips-table { white-space: normal; }
+.payslips-table th, .payslips-table td { padding: 12px 14px; }
+.payslips-table td { vertical-align: top; }
+.payslips-file { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.payslips-employee { min-width: 200px; }
+.payslips-employee select { width: 100%; font-size: 13px; }
+.payslips-employee .hr-checkbox { margin-top: 7px; }
+.payslips-error { color: var(--qs-danger); }
+.payslips-progress { color: var(--qs-muted); font-size: 12px; }

@@ -29,6 +29,7 @@ export const HR_TABS: SectionTab[] = [
   { id: "hr-people", href: "/hr/people", label: "People" },
   { id: "journeys", href: "/hr/journeys", label: "Journeys" },
   { id: "hr-documents", href: "/hr/documents", label: "Documents" },
+  { id: "hr-payslips", href: "/hr/payslips", label: "Payslips" },
   { id: "jobs", href: "/hr/jobs", label: "Job posts" },
 ];
 

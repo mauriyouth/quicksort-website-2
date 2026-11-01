@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { createGoogleDriveHandler, contractFolderName } from '../apps/admin/server/google-drive.ts';
-import { encryptApiKey } from '../apps/admin/server/ai-settings.ts';
+import { decryptApiKey, encryptApiKey } from '../apps/admin/server/ai-settings.ts';
 
 process.env.SUPABASE_URL = 'https://example.supabase.co';
 process.env.SUPABASE_PUBLISHABLE_KEY = 'public-anon-key';
@@ -123,6 +123,41 @@ test('PUT saves the service account and resolves the Contrats_Clients root folde
   assert.equal(upserts[0][0].id, 'connection');
   assert.ok(upserts[0][0].encrypted_credentials.startsWith('v1.'));
   assert.equal(upserts[0][0].encrypted_credentials.includes(privateKeyPem), false, 'key stored encrypted');
+});
+
+test('PUT with only the HR folder keeps the saved key and contracts root', async t => {
+  const drive = [];
+  mockDrive(t, drive, {
+    files: async (target) => {
+      const u = new URL(target);
+      if (u.pathname.endsWith(`/files/${rootFolderId}`)) return { ok: true, status: 200, json: async () => ({ id: rootFolderId, name: 'Contrats_Clients' }) };
+      if (u.pathname.endsWith('/files/hr-folder')) return { ok: true, status: 200, json: async () => ({ id: 'hr-folder', name: 'Collaborateurs' }) };
+      throw new Error(`unexpected Drive call ${target}`);
+    },
+  });
+  const upserts = [];
+  const base = makeClient();
+  const client = {
+    ...base,
+    from: (table) => table === 'google_drive_settings'
+      ? chain(null, { upserts, maybeSingle: async () => ({ data: { encrypted_credentials: encrypted }, error: null }) })
+      : base.from(table),
+  };
+  const handler = createGoogleDriveHandler({ createClient: () => client });
+  let res = makeRes();
+  await handler({ method: 'PUT', headers: { authorization: 'Bearer actor' }, body: { peopleRootFolderId: 'hr-folder' } }, res);
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.equal(res.body.rootFolderName, 'Contrats_Clients');
+  assert.equal(res.body.peopleRootFolderName, 'Collaborateurs');
+  assert.ok(!drive.some(d => new URL(d.url).searchParams.get('q')), 'No root folder search: the saved root is reused');
+  const saved = JSON.parse(decryptApiKey(upserts[0][0].encrypted_credentials));
+  assert.equal(saved.private_key, privateKeyPem, 'Saved key kept');
+  assert.equal(saved.people_root_folder_id, 'hr-folder');
+
+  res = makeRes();
+  await handler({ method: 'PUT', headers: { authorization: 'Bearer actor' }, body: { peopleRootFolderId: rootFolderId } }, res);
+  assert.equal(res.code, 400);
+  assert.match(res.body.error, /must be separate from the contracts root/);
 });
 
 test('PUT without a shared root folder explains the share step', async t => {

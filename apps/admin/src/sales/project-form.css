@@ -293,6 +293,10 @@
   font-weight: 400;
   color: var(--qs-muted);
 }
+.pj-label-opt {
+  color: var(--qs-faint, var(--qs-muted));
+  font-size: 12px;
+}
 .pj-field input,
 .pj-field select,
 .pj-field textarea {

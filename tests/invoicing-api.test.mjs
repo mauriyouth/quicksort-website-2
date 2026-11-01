@@ -240,7 +240,7 @@ test("create_draft twice makes one provider call", async () => {
   assert.equal(f.count("createDraft"), 1);
   const [draft] = f.calls.find((c) => c.name === "createDraft").args;
   assert.deepEqual({ ...draft, lines: undefined }, { clientId: "qc-1", issueDate: "2026-10-28", dueDate: "2026-11-27", currency: "EUR", periodStart: "2026-09-01", periodEnd: "2026-09-30", purchaseOrder: "", lines: undefined });
-  assert.deepEqual(draft.lines, [{ title: "Prestation de conseil", description: "Assistance technique\nConsultant : Jane Doe — septembre 2026", quantity: "18", unit: "jour", unitPrice: "650.00", vatRate: "0.2" }]);
+  assert.deepEqual(draft.lines, [{ title: "Prestation de conseil", description: "Assistance technique", quantity: "18", unit: "jour", unitPrice: "650.00", vatRate: "0.2" }]);
   const [row] = f.tables.invoices;
   assert.equal(row.provider_invoice_id, "q-1");
   assert.equal(row.status, "draft");
@@ -366,6 +366,39 @@ test("assign only applies to imported invoices", async () => {
   assert.equal(r.code, 200);
   assert.equal(f.tables.invoices.find((i) => i.id === "inv-imp").project_id, P2);
 });
+test("set_period moves an imported invoice to another month, never a CRA one", async () => {
+  const f = fixture({ invoices: [craInvoice(), { id: "inv-imp", provider_invoice_id: "q-9", source: "imported", status: "paid", project_id: null, issue_date: "2026-10-03" }] });
+  assert.equal((await f.request("POST", { body: { action: "set_period", invoiceId: "inv-1", month: "2026-07" } })).code, 409);
+  assert.equal((await f.request("POST", { body: { action: "set_period", invoiceId: "inv-imp", month: "2026-13" } })).code, 400);
+  assert.equal((await f.request("POST", { body: { action: "set_period", invoiceId: "inv-imp", month: "2026-09" } })).code, 200);
+  assert.equal(f.tables.invoices.find((i) => i.id === "inv-imp").period_month, "2026-09-01");
+  assert.equal((await f.request("POST", { body: { action: "set_period", invoiceId: "inv-imp", month: null } })).code, 200);
+  assert.equal(f.tables.invoices.find((i) => i.id === "inv-imp").period_month, null);
+});
+test("assign_consultant picks a consultant staffed on the imported invoice's project", async () => {
+  const OTHER = "55555555-5555-4555-8555-555555555555";
+  const f = fixture({ invoices: [craInvoice(), { id: "inv-imp", provider_invoice_id: "q-9", source: "imported", status: "paid", project_id: PROJECT, employee_id: null }] });
+  const detail = await f.request("GET", { query: { resource: "invoice", id: "inv-imp" } });
+  assert.deepEqual(detail.body.consultants, [{ id: EMP, name: "Jane Doe" }]);
+  assert.equal((await f.request("POST", { body: { action: "assign_consultant", invoiceId: "inv-1", employeeId: EMP } })).code, 409);
+  assert.equal((await f.request("POST", { body: { action: "assign_consultant", invoiceId: "inv-imp", employeeId: OTHER } })).code, 400);
+  const r = await f.request("POST", { body: { action: "assign_consultant", invoiceId: "inv-imp", employeeId: EMP } });
+  assert.equal(r.code, 200);
+  assert.equal(r.body.invoice.consultant_name, "Jane Doe");
+  assert.equal((await f.request("POST", { body: { action: "assign", invoiceId: "inv-imp", projectId: P2 } })).code, 200);
+  assert.equal(f.tables.invoices.find((i) => i.id === "inv-imp").employee_id, null);
+});
+test("link_invoice makes a Qonto import cover a CRA consultant-month", async () => {
+  const f = fixture({ invoices: [{ id: "inv-imp", provider_invoice_id: "q-9", source: "imported", status: "paid", project_id: null, employee_id: null, ignored: true, billed_client_id: CLIENT }] });
+  const link = (over = {}) => f.request("POST", { body: { action: "link_invoice", invoiceId: "inv-imp", projectId: PROJECT, employeeId: EMP, month: "2026-09", ...over } });
+  assert.equal((await link({ employeeId: "55555555-5555-4555-8555-555555555555" })).code, 400);
+  assert.equal((await link()).code, 200);
+  const row = f.tables.invoices.find((i) => i.id === "inv-imp");
+  assert.deepEqual([row.project_id, row.employee_id, row.period_month, row.ignored], [PROJECT, EMP, "2026-09-01", false]);
+  f.tables.invoices.push(craInvoice({ id: "inv-2", period_month: "2026-10-01" }));
+  assert.equal((await link({ month: "2026-10" })).code, 409);
+});
+
 test("sync keeps manual project assignment", async () => {
   const f = fixture({
     invoices: [{ id: "inv-imp", provider_invoice_id: "q-9", source: "imported", status: "finalized", project_id: "p2", number: "F-1" }],
@@ -387,8 +420,26 @@ test("sync imports unknown invoices with the provider and removes vanished draft
   });
   const r = await f.request("GET", { query: { resource: "invoices", refresh: "1" } });
   assert.equal(r.code, 200);
-  assert.deepEqual(f.tables.invoices.map((i) => [i.provider_invoice_id, i.provider, i.source]), [["q-new", "qonto", "imported"]]);
+  assert.deepEqual(f.tables.invoices.map((i) => [i.provider_invoice_id, i.provider, i.source, i.period_month]), [["q-new", "qonto", "imported", "2026-09-01"]]);
   assert.equal(r.body.invoices[0].client_name, "Acme");
+});
+test("sync stores imported invoice lines, links by line title and leaves CRA lines alone", async () => {
+  const line = (title, description = "") => ({ title, description, quantity: "2", unit: "jour", unitPrice: "650.00", vatRate: "0.2" });
+  let remoteLines = [line("Mission Data Platform – Octobre", "Assistance technique")];
+  const f = fixture({
+    invoices: [craInvoice()],
+    provider: { listInvoices: async () => [remoteInvoice(), remoteInvoice({ id: "q-new", status: "finalized", number: "F-9", lines: remoteLines })] },
+  });
+  f.tables.invoice_lines.push({ id: "cra-line", invoice_id: "inv-1", position: 0, title: "Ours", description: "", quantity: 18, unit: "jour", unit_price: 650, vat_rate: 0.2 });
+  await f.request("GET", { query: { resource: "invoices", refresh: "1" } });
+  const imported = f.tables.invoices.find((i) => i.provider_invoice_id === "q-new");
+  assert.equal(imported.project_id, PROJECT);
+  const linesOf = (id) => f.tables.invoice_lines.filter((l) => l.invoice_id === id).map((l) => [l.position, l.title, l.description, l.quantity, l.unit_price]);
+  assert.deepEqual(linesOf(imported.id), [[0, "Mission Data Platform – Octobre", "Assistance technique", 2, 650]]);
+  assert.deepEqual(linesOf("inv-1"), [[0, "Ours", "", 18, 650]]);
+  remoteLines = [line("Data Platform – revised")];
+  await f.request("GET", { query: { resource: "invoices", refresh: "1" } });
+  assert.deepEqual(linesOf(imported.id), [[0, "Data Platform – revised", "", 2, 650]]);
 });
 test("invoices list skips sync when it ran less than 5 minutes ago", async () => {
   const f = fixture({ lastSyncedAt: "2026-10-28T08:57:00Z" });
@@ -417,6 +468,7 @@ test("project totals sum validated and paid invoices", async () => {
   const r = await f.request("GET", { query: { resource: "project", projectId: PROJECT } });
   assert.deepEqual(r.body.totals, { invoicedHt: "300.30", paidTtc: "240.24", outstandingTtc: "120.12" });
   assert.equal(r.body.rows.length, 0);
+  assert.deepEqual(r.body.consultants, [{ id: EMP, name: "Jane Doe" }]);
 });
 test("invoice resource returns lines and events", async () => {
   const f = fixture();

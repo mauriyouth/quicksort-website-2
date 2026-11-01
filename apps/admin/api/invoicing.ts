@@ -65,8 +65,13 @@ const finalize = z.object({ action: z.literal("finalize"), ...invoiceRef });
 const send = z.object({ action: z.literal("send"), ...invoiceRef, resend: z.boolean().optional() });
 const cancel = z.object({ action: z.literal("cancel"), ...invoiceRef });
 const assign = z.object({ action: z.literal("assign"), ...invoiceRef, projectId: z.uuid().nullable(), ignored: z.boolean().optional() });
+const setPeriod = z.object({ action: z.literal("set_period"), ...invoiceRef, month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).nullable() });
+const assignConsultant = z.object({ action: z.literal("assign_consultant"), ...invoiceRef, employeeId: z.uuid().nullable() });
+const linkInvoice = z.object({
+  action: z.literal("link_invoice"), ...invoiceRef, projectId: z.uuid(), employeeId: z.uuid(), month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+});
 const actionSchema = z.discriminatedUnion("action", [
-  saveSettings, linkClient, linkProduct, createDraft, updateDraft, regenerateDraft, deleteDraft, finalize, send, cancel, assign,
+  saveSettings, linkClient, linkProduct, createDraft, updateDraft, regenerateDraft, deleteDraft, finalize, send, cancel, assign, setPeriod, assignConsultant, linkInvoice,
 ]);
 
 function fail(error: { message?: string } | null | undefined, fallback: string): never {
@@ -162,6 +167,9 @@ const actions: Record<string, (ctx: Ctx, input: any) => Promise<Result>> = {
   send: ({ life }, input: z.infer<typeof send>) => lifecycle.sendInvoice(life, input),
   cancel: ({ life }, input: z.infer<typeof cancel>) => lifecycle.cancelInvoice(life, input),
   assign: ({ life }, input: z.infer<typeof assign>) => lifecycle.assignInvoice(life, input),
+  set_period: ({ life }, input: z.infer<typeof setPeriod>) => lifecycle.setInvoicePeriod(life, input),
+  link_invoice: ({ life }, input: z.infer<typeof linkInvoice>) => lifecycle.linkInvoice(life, input),
+  assign_consultant: ({ life }, input: z.infer<typeof assignConsultant>) => lifecycle.assignConsultant(life, input),
 };
 // Actions that work before a provider is connected.
 const worksUnconfigured = new Set(["save_settings"]);

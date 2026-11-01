@@ -11,6 +11,7 @@ import {
   Images,
   CalendarDays,
 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   db,
   downloadFile,
@@ -20,7 +21,7 @@ import {
 } from "@quicksort/hr-db";
 import { validateFile } from "@quicksort/hr-db/validation";
 import {
-  usePortalRoute,
+  resolvePortalRoute,
   AccountSecurity,
   Shell,
   Stat,
@@ -33,6 +34,30 @@ import { z } from "zod";
 import { executeCommand } from "../hr/data";
 import { TeamPhotos } from './TeamPhotos';
 import { CraScreen } from '../cra/CraScreen';
+
+type PortalRoute = { id: string; href: string };
+
+/** Section navigation through react-router, so the portal and the pages it
+ * hosts (the CRA screen) share one history. "/" lands on the first section. */
+function usePortalRoute(routes: readonly PortalRoute[]) {
+  const location = useLocation();
+  const routerNavigate = useNavigate();
+  useEffect(() => {
+    if (location.pathname === "/")
+      routerNavigate(routes[0].href + location.search + location.hash, { replace: true });
+  }, [location.pathname, routes]);
+  const current = resolvePortalRoute(routes, location.pathname);
+  const navigate = useCallback((id: string, href?: string) => {
+    const route = routes.find(item => item.id === id);
+    if (!route) return;
+    // Deep links pass their full path; plain navigation uses the section href.
+    const target = href ?? route.href;
+    if (window.location.pathname + window.location.search + window.location.hash !== target)
+      routerNavigate(target);
+    window.scrollTo(0, 0);
+  }, [routes, routerNavigate]);
+  return [current, navigate] as const;
+}
 
 const applicationSchema = z.object({ id: z.uuid(), person_id: z.uuid(), opportunity_id: z.uuid(), full_name: z.string(), title: z.string(), stage: z.string(), status: z.string(), created_at: z.string(), updated_at: z.string() });
 const applicationEventSchema = z.object({ id: z.number(), application_id: z.uuid(), to_stage: z.string(), kind: z.string(), created_at: z.string() });

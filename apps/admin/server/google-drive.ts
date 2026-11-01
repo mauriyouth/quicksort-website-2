@@ -1,7 +1,24 @@
-import { createSign } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { decryptApiKey, encryptApiKey, settingsReady } from "./ai-settings.ts";
+import { encryptApiKey, decryptApiKey, settingsReady } from "./ai-settings.ts";
+import { contractFolderName } from "./documents/folders.ts";
+import { MAX_UPLOAD_BYTES } from "./documents/storage/types.ts";
+import {
+  FOLDER_MIME,
+  ROOT_FOLDER_NAME,
+  SETTING_ID,
+  createUploadSession,
+  driveApi,
+  ensureChildFolder,
+  loadDriveSettings as loadSettings,
+  serviceAccountSchema,
+  settingsSchema,
+  type DriveFile,
+  type DriveSettings,
+} from "./documents/storage/google-drive.ts";
+import { browserOrigin } from "./documents/storage/origin.ts";
+
+export { contractFolderName };
 
 /**
  * Google Drive contract storage API. Follows the boondmanager pattern: the
@@ -17,10 +34,12 @@ import { decryptApiKey, encryptApiKey, settingsReady } from "./ai-settings.ts";
  *
  * GET    /api/google-drive — connection status (configured, root folder,
  *        service-account email, canSave).
- * PUT    /api/google-drive — save { serviceAccountJson, rootFolderId? }
+ * PUT    /api/google-drive — save { serviceAccountJson?, rootFolderId?, peopleRootFolderId? }
  *        (portal owners only). Without rootFolderId the single folder named
  *        "Contrats_Clients" is looked up at save time — which also proves the
- *        share works.
+ *        share works. Without serviceAccountJson the saved key and root are
+ *        kept. peopleRootFolderId is the HR documents folder (by ID only —
+ *        it must be shared with HR alone); a saved one is kept when omitted.
  * DELETE /api/google-drive — remove the saved connection (portal owners only).
  * POST   /api/google-drive — Drive actions (admins):
  *        { action: "prepare-upload", projectId, fileName, mimeType, size }
@@ -41,28 +60,19 @@ type Request = {
 };
 type Response = { setHeader(name: string, value: string): void; status(code: number): Response; json(body: unknown): Response };
 
-const SETTING_ID = "connection";
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable";
-const API_BASE = "https://www.googleapis.com/drive/v3";
-const FOLDER_MIME = "application/vnd.google-apps.folder";
-const ROOT_FOLDER_NAME = "Contrats_Clients";
-const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
-
-const serviceAccountSchema = z.object({
-  client_email: z.string().trim().min(3).max(300),
-  private_key: z.string().min(1).max(20000),
-});
+/** Accepts a bare folder ID or a pasted Drive folder URL (…/folders/<id>, ?id=<id>). */
+const folderIdInput = z
+  .string()
+  .trim()
+  .max(500)
+  .transform(value => value.match(/\/folders\/([\w-]+)/)?.[1] || value.match(/[?&]id=([\w-]+)/)?.[1] || value)
+  .pipe(z.string().max(200).regex(/^[\w-]*$/, "Paste the folder ID or the folder's Drive URL."));
 
 const saveSchema = z.object({
-  serviceAccountJson: z.string().trim().min(1).max(50000),
-  rootFolderId: z.string().trim().max(200).optional(),
-});
-
-const settingsSchema = serviceAccountSchema.extend({
-  root_folder_id: z.string().min(1).max(200),
-  root_folder_name: z.string().max(500),
+  // Omitted: keep the saved key and its contracts root (e.g. to set the HR folder only).
+  serviceAccountJson: z.string().trim().max(50000).optional(),
+  rootFolderId: folderIdInput.optional(),
+  peopleRootFolderId: folderIdInput.optional(),
 });
 
 const actionSchema = z.discriminatedUnion("action", [
@@ -88,165 +98,6 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-type DriveSettings = z.infer<typeof settingsSchema>;
-type DriveFile = {
-  id: string;
-  name: string;
-  mimeType: string;
-  size?: string;
-  modifiedTime?: string;
-  webViewLink?: string;
-};
-
-const base64url = (value: string) => Buffer.from(value, "utf8").toString("base64url");
-
-/** Short-lived access tokens are cached per service account until expiry. */
-const tokenCache = new Map<string, { token: string; expiresAt: number }>();
-
-function serviceJwt(sa: Pick<DriveSettings, "client_email" | "private_key">) {
-  const now = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = base64url(
-    JSON.stringify({ iss: sa.client_email, scope: DRIVE_SCOPE, aud: TOKEN_URL, iat: now, exp: now + 3600 }),
-  );
-  let signature: string;
-  try {
-    const signer = createSign("RSA-SHA256");
-    signer.update(`${header}.${payload}`);
-    signature = signer.sign(sa.private_key, "base64url");
-  } catch {
-    throw new Error("The service-account private_key is not a valid RSA key. Paste the whole JSON key file, including -----BEGIN PRIVATE KEY-----.");
-  }
-  return `${header}.${payload}.${signature}`;
-}
-
-async function driveToken(sa: Pick<DriveSettings, "client_email" | "private_key">) {
-  const hit = tokenCache.get(sa.client_email);
-  if (hit && hit.expiresAt > Date.now() + 60_000) return hit.token;
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: serviceJwt(sa),
-    }),
-  });
-  if (!response.ok) {
-    let detail = "";
-    try { detail = (await response.json())?.error?.description || ""; } catch { /* keep the generic message */ }
-    throw new Error(
-      detail
-        ? `Google refused the service-account credentials: ${detail}`
-        : "Google refused the service-account credentials (HTTP " + response.status + "). Check that the JSON key belongs to an existing service account and that the Google Drive API is enabled for its project.",
-    );
-  }
-  const body = (await response.json()) as { access_token?: string; expires_in?: number };
-  if (!body.access_token) throw new Error("Google did not return an access token for the service account.");
-  const seconds = Number(body.expires_in) || 3600;
-  tokenCache.set(sa.client_email, { token: body.access_token, expiresAt: Date.now() + seconds * 1000 });
-  return body.access_token;
-}
-
-function driveError(status: number, message: string, sa: Pick<DriveSettings, "client_email">) {
-  if (status === 401 || status === 403)
-    return new Error(
-      `Google Drive denied access for ${sa.client_email}. Share the contracts root folder with that service-account email (Editor) and retry.${message ? ` (${message})` : ""}`,
-    );
-  if (status === 404)
-    return new Error(
-      `The Drive folder was not found or is not shared with ${sa.client_email}.${message ? ` (${message})` : ""}`,
-    );
-  return new Error(message ? `Google Drive answered ${status}: ${message}` : `Google Drive answered with status ${status}.`);
-}
-
-async function driveApi<T>(sa: DriveSettings, path: string, opts: { method?: string; query?: Record<string, string>; body?: unknown } = {}): Promise<T> {
-  const token = await driveToken(sa);
-  const suffix = opts.query ? `?${new URLSearchParams(opts.query).toString()}` : "";
-  const response = await fetch(`${API_BASE}${path}${suffix}`, {
-    method: opts.method || "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
-    },
-    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
-  });
-  if (!response.ok) {
-    let message = "";
-    try { message = ((await response.json()) as { error?: { message?: string } })?.error?.message || ""; } catch { /* bare status */ }
-    throw driveError(response.status, message, sa);
-  }
-  if (response.status === 204) return null as T;
-  return (await response.json()) as T;
-}
-
-/** Query escaping for Drive's name filter. */
-const escapeName = (name: string) => name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-
-async function findFolder(sa: DriveSettings, parentId: string, name: string): Promise<DriveFile | null> {
-  const body = await driveApi<{ files?: DriveFile[] }>(sa, "/files", {
-    query: {
-      q: `mimeType='${FOLDER_MIME}' and name='${escapeName(name)}' and '${parentId}' in parents and trashed=false`,
-      fields: "files(id,name,webViewLink)",
-      pageSize: "10",
-    },
-  });
-  return body.files?.[0] || null;
-}
-
-/** Drive allows "/" inside a name; the team names contract folders "<Client>/<Contract>". */
-const cleanPart = (value: string) => value.replace(/\s+/g, " ").replace(/^\/+|\/+$/g, "").trim();
-export const contractFolderName = (clientName: string, title: string) =>
-  (`${cleanPart(clientName)}/${cleanPart(title)}`.slice(0, 200).trim()) || "Contract";
-
-async function ensureContractFolder(sa: DriveSettings, name: string): Promise<DriveFile> {
-  const existing = await findFolder(sa, sa.root_folder_id, name);
-  if (existing) return existing;
-  return driveApi<DriveFile>(sa, "/files", {
-    method: "POST",
-    query: { fields: "id,name,webViewLink", supportsAllDrives: "true" },
-    body: { name, mimeType: FOLDER_MIME, parents: [sa.root_folder_id] },
-  });
-}
-
-/** Opens a resumable upload session; the browser streams the bytes to the returned URL. */
-async function createUploadSession(sa: DriveSettings, file: { name: string; mimeType: string; size: number }, folderId: string) {
-  const token = await driveToken(sa);
-  const response = await fetch(UPLOAD_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json; charset=UTF-8",
-      "X-Upload-Content-Type": file.mimeType || "application/octet-stream",
-      "X-Upload-Content-Length": String(file.size),
-    },
-    body: JSON.stringify({ name: file.name, parents: [folderId] }),
-  });
-  if (!response.ok) {
-    let message = "";
-    try { message = ((await response.json()) as { error?: { message?: string } })?.error?.message || ""; } catch { /* bare status */ }
-    throw driveError(response.status, message, sa);
-  }
-  const uploadUrl = response.headers.get("location");
-  if (!uploadUrl) throw new Error("Google Drive did not return an upload session URL.");
-  return uploadUrl;
-}
-
-async function loadSettings(client: SupabaseClient): Promise<DriveSettings | null> {
-  const { data, error } = await client
-    .from("google_drive_settings")
-    .select("encrypted_credentials")
-    .eq("id", SETTING_ID)
-    .maybeSingle();
-  // Existing installations work before the new migration is applied.
-  if (error && !["42P01", "PGRST205"].includes(String(error.code || ""))) throw error;
-  if (error || !data) return null;
-  try {
-    return settingsSchema.parse(JSON.parse(decryptApiKey(data.encrypted_credentials)));
-  } catch {
-    throw new Error("The saved Google Drive credentials could not be read. Save them again.");
-  }
-}
-
 /** Loads the project and its client name, and links the contract folder when new. */
 async function projectContractFolder(
   client: SupabaseClient,
@@ -266,7 +117,7 @@ async function projectContractFolder(
   if (!folder) {
     const clientRow = await client.from("sales_clients").select("id,name").eq("id", row.client_id).single();
     const clientName = clientRow.data?.name || "Client";
-    folder = await ensureContractFolder(sa, contractFolderName(clientName, row.title));
+    folder = await ensureChildFolder(sa, sa.root_folder_id, contractFolderName(clientName, row.title));
     const patch = {
       drive_folder_id: folder.id,
       drive_folder_name: folder.name,
@@ -319,7 +170,10 @@ export function createGoogleDriveHandler(deps = { createClient }) {
           updatedAt: data.updated_at,
           canSave: settingsReady(),
           serviceAccountEmail: settings.client_email,
+          rootFolderId: settings.root_folder_id,
           rootFolderName: settings.root_folder_name,
+          peopleRootFolderId: settings.people_root_folder_id || null,
+          peopleRootFolderName: settings.people_root_folder_name || null,
         });
       }
 
@@ -341,19 +195,29 @@ export function createGoogleDriveHandler(deps = { createClient }) {
         const parsed = saveSchema.safeParse(req.body);
         if (!parsed.success)
           return res.status(400).json({ error: "Paste the service-account JSON key (and optionally the root folder ID)." });
-        let rawAccount: unknown;
-        try {
-          rawAccount = JSON.parse(parsed.data.serviceAccountJson);
-        } catch {
-          return res.status(400).json({ error: "The service-account key is not valid JSON. Copy the whole key file contents." });
+        const saved = await loadSettings(client).catch(() => null);
+        let account: { client_email: string; private_key: string };
+        if (parsed.data.serviceAccountJson) {
+          let rawAccount: unknown;
+          try {
+            rawAccount = JSON.parse(parsed.data.serviceAccountJson);
+          } catch {
+            return res.status(400).json({ error: "The service-account key is not valid JSON. Copy the whole key file contents." });
+          }
+          const checked = serviceAccountSchema.safeParse(rawAccount);
+          if (!checked.success)
+            return res.status(400).json({ error: "The JSON key has no client_email/private_key. Export a service-account key from Google Cloud (IAM → Service Accounts → Keys)." });
+          account = checked.data;
+        } else if (saved) {
+          account = { client_email: saved.client_email, private_key: saved.private_key };
+        } else {
+          return res.status(400).json({ error: "Paste the service-account JSON key (and optionally the root folder ID)." });
         }
-        const account = serviceAccountSchema.safeParse(rawAccount);
-        if (!account.success)
-          return res.status(400).json({ error: "The JSON key has no client_email/private_key. Export a service-account key from Google Cloud (IAM → Service Accounts → Keys)." });
 
         const probe: DriveSettings = {
-          ...account.data,
-          root_folder_id: parsed.data.rootFolderId || "",
+          ...account,
+          // A kept key keeps its root; a new key resolves it again (and proves the share).
+          root_folder_id: parsed.data.rootFolderId || (!parsed.data.serviceAccountJson && saved ? saved.root_folder_id : ""),
           root_folder_name: "",
         };
         let root: DriveFile;
@@ -370,28 +234,37 @@ export function createGoogleDriveHandler(deps = { createClient }) {
               q: `mimeType='${FOLDER_MIME}' and name='${ROOT_FOLDER_NAME}' and trashed=false`,
               fields: "files(id,name,webViewLink)",
               pageSize: "10",
+              supportsAllDrives: "true",
+              includeItemsFromAllDrives: "true",
             },
           });
           const folders = matches.files || [];
           if (!folders.length)
             throw new Error(
-              `No "${ROOT_FOLDER_NAME}" folder is visible to ${account.data.client_email}. Share your Drive contracts folder with the service-account email (Editor), then retry.`,
+              `No "${ROOT_FOLDER_NAME}" folder is visible to ${account.client_email}. Share your Drive contracts folder with the service-account email (Editor), then retry.`,
             );
           if (folders.length > 1)
             throw new Error(`Several "${ROOT_FOLDER_NAME}" folders are visible — pass the root folder ID explicitly.`);
           root = folders[0];
         }
+        const peopleId = parsed.data.peopleRootFolderId || saved?.people_root_folder_id || "";
+        if (peopleId && peopleId === root.id)
+          return res.status(400).json({ error: "The HR documents folder must be separate from the contracts root — it holds identity documents." });
+        const people = peopleId
+          ? await driveApi<DriveFile>(probe, `/files/${peopleId}`, { query: { fields: "id,name", supportsAllDrives: "true" } })
+          : null;
         const settings: DriveSettings = {
-          ...account.data,
+          ...account,
           root_folder_id: root.id,
           root_folder_name: root.name || ROOT_FOLDER_NAME,
+          ...(people ? { people_root_folder_id: people.id, people_root_folder_name: people.name } : {}),
         };
         const result = await client.from("google_drive_settings").upsert(
           { id: SETTING_ID, encrypted_credentials: encryptApiKey(JSON.stringify(settings)), updated_at: new Date().toISOString() },
           { onConflict: "id" },
         );
         if (result.error) throw result.error;
-        return res.status(200).json({ saved: true, rootFolderName: settings.root_folder_name, serviceAccountEmail: settings.client_email });
+        return res.status(200).json({ saved: true, rootFolderName: settings.root_folder_name, peopleRootFolderName: settings.people_root_folder_name || null, serviceAccountEmail: settings.client_email });
       }
 
       // POST — Drive actions (admins).
@@ -408,27 +281,29 @@ export function createGoogleDriveHandler(deps = { createClient }) {
             orderBy: "name",
             pageSize: "200",
             fields: "files(id,name,mimeType,size,modifiedTime,webViewLink)",
+            supportsAllDrives: "true",
+            includeItemsFromAllDrives: "true",
           },
         });
         return res.status(200).json({ files: body.files || [] });
       }
 
       if (action.action === "delete-file") {
-        await driveApi(sa, `/files/${action.fileId}`, { method: "DELETE" });
+        await driveApi(sa, `/files/${action.fileId}`, { method: "DELETE", query: { supportsAllDrives: "true" } });
         return res.status(200).json({ deleted: true });
       }
 
       const { folder } = await projectContractFolder(client, sa, action.projectId);
 
       if (action.action === "prepare-upload") {
-        const uploadUrl = await createUploadSession(sa, { name: action.fileName, mimeType: action.mimeType, size: action.size }, folder.id);
+        const uploadUrl = await createUploadSession(sa, { name: action.fileName, mimeType: action.mimeType, size: action.size }, folder.id, browserOrigin(req));
         return res.status(200).json({ uploadUrl, folder });
       }
 
       // confirm-upload — the folder is already linked by prepare-upload;
       // this just reads the file back so the UI can show the fresh entry.
       const file = await driveApi<DriveFile>(sa, `/files/${action.fileId}`, {
-        query: { fields: "id,name,mimeType,size,modifiedTime,webViewLink" },
+        query: { fields: "id,name,mimeType,size,modifiedTime,webViewLink", supportsAllDrives: "true" },
       });
       return res.status(200).json({ file, folder });
     } catch (e) {

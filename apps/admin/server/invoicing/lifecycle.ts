@@ -130,7 +130,7 @@ async function confirmed(
 // ---------- source data (CRA, staffing, projects, links) ----------
 
 type Sources = {
-  projects: Row[]; employees: { id: string; full_name: string; start_date: string; end_date: string | null }[];
+  projects: Row[]; employees: { id: string; person_id: string | null; full_name: string; start_date: string; end_date: string | null }[];
   entries: Row[]; craMonths: Row[]; assignments: Row[]; extensions: Row[]; clients: Row[];
   clientLinks: Row[]; productLinks: Row[]; invoices: Row[];
 };
@@ -179,7 +179,7 @@ async function loadSources(ctx: LifecycleCtx, o: { from: string; to: string; pro
   const names = new Map(people.map((p) => [p.id, p.full_name ?? ""]));
   const employees = employeeRows
     .filter((e) => !employeeIds || employeeIds.includes(e.id))
-    .map((e) => ({ id: e.id, full_name: String(names.get(e.person_id) ?? ""), start_date: e.start_date, end_date: e.end_date ?? null }));
+    .map((e) => ({ id: e.id, person_id: e.person_id ?? null, full_name: String(names.get(e.person_id) ?? ""), start_date: e.start_date, end_date: e.end_date ?? null }));
   return { projects, employees, entries, craMonths, assignments, extensions, clients, clientLinks, productLinks, invoices };
 }
 
@@ -253,11 +253,13 @@ async function decorate(ctx: LifecycleCtx, invoices: Row[]): Promise<Row[]> {
   const clientName = new Map(clients.map((c) => [c.id, c.name]));
   const personName = new Map(people.map((p) => [p.id, p.full_name]));
   const consultant = new Map(employees.map((e) => [e.id, personName.get(e.person_id) ?? null]));
+  const person = new Map(employees.map((e) => [e.id, e.person_id ?? null]));
   return invoices.map((i) => ({
     ...i,
     project_title: title.get(i.project_id) ?? null,
     client_name: clientName.get(i.billed_client_id) ?? null,
     consultant_name: consultant.get(i.employee_id) ?? null,
+    consultant_person_id: person.get(i.employee_id) ?? null,
   }));
 }
 
@@ -270,9 +272,9 @@ export async function syncInvoices(ctx: LifecycleCtx): Promise<string> {
   const { client } = ctx;
   // Read our rows before the remote list so a draft created meanwhile is never treated as vanished.
   const [existing, clientLinks, projects, extensions] = await Promise.all([
-    many(client.from("invoices").select("id,provider_invoice_id,status,project_id"), "Could not read invoices."),
+    many(client.from("invoices").select("id,provider_invoice_id,status,project_id,source,ignored"), "Could not read invoices."),
     many(client.from("invoicing_client_links").select("client_id,provider_client_id"), "Could not read client links."),
-    many(client.from("sales_projects").select("id,pricing_model,client_id,intermediary_client_id,start_date,end_date"), "Could not read projects."),
+    many(client.from("sales_projects").select("id,title,pricing_model,client_id,intermediary_client_id,start_date,end_date"), "Could not read projects."),
     many(client.from("sales_project_extensions").select("project_id,status,end_date"), "Could not read extensions."),
   ]);
   const remote = await ctx.provider().listInvoices(); // complete list: the adapter pages through everything
@@ -287,7 +289,7 @@ export async function syncInvoices(ctx: LifecycleCtx): Promise<string> {
   if (inserts.length) {
     const { error } = await client.from("invoices")
       .upsert(inserts.map((r) => ({ ...r, provider: ctx.settings.provider })), { onConflict: "provider,provider_invoice_id", ignoreDuplicates: true });
-    if (error) throw new Error("Could not import invoices.");
+    if (error) throw new Error("Could not import invoices.", { cause: error });
   }
   for (const u of updates) {
     const { error } = await client.from("invoices").update({ ...u.patch, updated_at: now }).eq("id", u.id);
@@ -297,9 +299,31 @@ export async function syncInvoices(ctx: LifecycleCtx): Promise<string> {
     const { error } = await client.from("invoices").delete().in("id", removedDraftIds).eq("status", "draft");
     if (error) throw new Error("Could not remove deleted drafts.");
   }
+  await storeImportedLines(ctx, remote);
   const { error } = await client.from("invoicing_settings").update({ last_synced_at: now }).eq("id", "default");
   if (error) throw new Error("Could not save the sync time.");
   return now;
+}
+
+// Imported invoices keep Qonto's lines (title, description…), replaced on every sync. CRA lines are ours and untouched.
+async function storeImportedLines(ctx: LifecycleCtx, remote: ProviderInvoice[]) {
+  const ids = remote.map((r) => r.id);
+  if (!ids.length) return;
+  const rows = await many(
+    ctx.client.from("invoices").select("id,provider_invoice_id").eq("source", "imported").in("provider_invoice_id", ids),
+    "Could not read invoices.",
+  );
+  if (!rows.length) return;
+  const byProviderId = new Map(remote.map((r) => [r.id, r]));
+  const removed = await ctx.client.from("invoice_lines").delete().in("invoice_id", rows.map((r) => r.id));
+  if (removed.error) throw new Error("Could not replace invoice lines.", { cause: removed.error });
+  const lines = rows.flatMap((row) => (byProviderId.get(row.provider_invoice_id)?.lines ?? []).map((l, position) => ({
+    invoice_id: row.id, position, title: l.title, description: l.description, quantity: Number(l.quantity) || 0,
+    unit: l.unit, unit_price: Number(l.unitPrice) || 0, vat_rate: Number(l.vatRate) || 0,
+  })));
+  if (!lines.length) return;
+  const added = await ctx.client.from("invoice_lines").insert(lines);
+  if (added.error) throw new Error("Could not import invoice lines.", { cause: added.error });
 }
 
 export async function listInvoices(ctx: LifecycleCtx, refresh: boolean) {
@@ -308,6 +332,7 @@ export async function listInvoices(ctx: LifecycleCtx, refresh: boolean) {
   const stale = !lastSyncedAt || ctx.now().getTime() - Date.parse(lastSyncedAt) > SYNC_TTL_MS;
   if (ctx.settings.hasSecret && (refresh || stale)) {
     try { lastSyncedAt = await syncInvoices(ctx); } catch (error) {
+      console.error("[invoicing] sync failed", error);
       syncError = error instanceof ProviderError || error instanceof HttpError ? error.message : "Could not refresh invoices from Qonto.";
     }
   }
@@ -327,7 +352,20 @@ export async function invoiceDetail(ctx: LifecycleCtx, id: string) {
     try { recipients = (await ctx.provider().getInvoice(invoice.provider_invoice_id)).clientEmails; } catch { recipients = null; }
   }
   const [decorated] = await decorate(ctx, [invoice]);
-  return { invoice: decorated, lines, events, recipients };
+  const consultants = invoice.source === "imported" && invoice.project_id ? await projectConsultants(ctx, invoice.project_id) : [];
+  return { invoice: decorated, lines, events, recipients, consultants };
+}
+
+// Everyone ever staffed on the project, by name: the consultants an imported invoice can be assigned to.
+async function projectConsultants(ctx: LifecycleCtx, projectId: string): Promise<{ id: string; name: string }[]> {
+  const staffing = await many(ctx.client.from("employee_project_assignments").select("employee_id").eq("project_id", projectId), "Could not read staffing.");
+  const ids = [...new Set(staffing.map((a) => a.employee_id))];
+  if (!ids.length) return [];
+  const employees = await many(ctx.client.from("employees").select("id,person_id").in("id", ids), "Could not read employees.");
+  const personIds = [...new Set(employees.map((e) => e.person_id).filter(Boolean))];
+  const people = personIds.length ? await many(ctx.client.from("hr_people").select("id,full_name").in("id", personIds), "Could not read people.") : [];
+  const name = new Map(people.map((p) => [p.id, String(p.full_name ?? "")]));
+  return employees.map((e) => ({ id: e.id, name: name.get(e.person_id) || "Unnamed consultant" })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function projectSummary(ctx: LifecycleCtx, projectId: string) {
@@ -360,6 +398,7 @@ export async function projectSummary(ctx: LifecycleCtx, projectId: string) {
   }
   return {
     invoices: await decorate(ctx, invoices),
+    consultants: await projectConsultants(ctx, projectId),
     totals: { invoicedHt: money(invoiced), paidTtc: money(paid), outstandingTtc: money(outstanding) },
     rows,
   };
@@ -574,9 +613,64 @@ export async function assignInvoice(ctx: LifecycleCtx, input: { invoiceId: strin
     if (!project) return { status: 404, body: { error: "Project not found." } };
   }
   const ignored = input.ignored ?? (input.projectId ? false : !!row.ignored);
-  const saved = await updateInvoice(ctx, row.id, { project_id: input.projectId, ignored });
+  // A consultant only makes sense on the project they were staffed on.
+  const employee = input.projectId === row.project_id ? {} : { employee_id: null };
+  const saved = await updateInvoice(ctx, row.id, { project_id: input.projectId, ignored, ...employee });
   if (!saved) throw new Error("Could not assign the invoice.");
   const warnings: string[] = [];
   await record(ctx, row.id, "assign", { project_id: input.projectId, ignored }, warnings);
+  return { status: 200, body: withWarnings({ invoice: saved }, warnings) };
+}
+
+// The month an imported invoice is listed under, independent of its issue date (e.g. September work billed in October).
+// CRA invoices keep their CRA month. null falls back to the issue date.
+export async function setInvoicePeriod(ctx: LifecycleCtx, input: { invoiceId: string; month: string | null }): Promise<Result> {
+  const row = await loadInvoice(ctx, input.invoiceId);
+  if (row.source !== "imported") return { status: 409, body: { error: "The month of a CRA invoice is its CRA month." } };
+  const saved = await updateInvoice(ctx, row.id, { period_month: input.month ? `${input.month}-01` : null });
+  if (!saved) throw new Error("Could not save the invoice month.");
+  const warnings: string[] = [];
+  await record(ctx, row.id, "set_period", { month: input.month }, warnings);
+  return { status: 200, body: withWarnings({ invoice: saved }, warnings) };
+}
+
+// The consultant an imported invoice bills, picked among those staffed on its project. null unassigns it.
+export async function assignConsultant(ctx: LifecycleCtx, input: { invoiceId: string; employeeId: string | null }): Promise<Result> {
+  const row = await loadInvoice(ctx, input.invoiceId);
+  if (row.source !== "imported") return { status: 409, body: { error: "The consultant of a CRA invoice comes from its CRA." } };
+  if (!row.project_id) return { status: 409, body: { error: "Attach the invoice to a project first." } };
+  if (input.employeeId && !(await projectConsultants(ctx, row.project_id)).some((c) => c.id === input.employeeId)) {
+    return { status: 400, body: { error: "This consultant is not staffed on the invoice's project." } };
+  }
+  const saved = await updateInvoice(ctx, row.id, { employee_id: input.employeeId });
+  if (!saved) throw new Error("Could not assign the consultant.");
+  const warnings: string[] = [];
+  await record(ctx, row.id, "assign_consultant", { employee_id: input.employeeId }, warnings);
+  const [decorated] = await decorate(ctx, [saved]);
+  return { status: 200, body: withWarnings({ invoice: decorated }, warnings) };
+}
+
+// Link a Qonto import to a CRA consultant-month: it then covers that month instead of a CRA draft.
+export async function linkInvoice(
+  ctx: LifecycleCtx, input: { invoiceId: string; projectId: string; employeeId: string; month: string },
+): Promise<Result> {
+  const row = await loadInvoice(ctx, input.invoiceId);
+  if (row.source !== "imported") return { status: 409, body: { error: "Only invoices imported from Qonto can be linked to a CRA." } };
+  if (row.status === "canceled") return { status: 409, body: { error: "A canceled invoice cannot cover a CRA." } };
+  if (!(await projectConsultants(ctx, input.projectId)).some((c) => c.id === input.employeeId)) {
+    return { status: 400, body: { error: "This consultant is not staffed on that project." } };
+  }
+  const covering = await many(
+    ctx.client.from("invoices").select("id").eq("project_id", input.projectId).eq("employee_id", input.employeeId)
+      .eq("period_month", `${input.month}-01`).neq("status", "canceled").neq("id", row.id),
+    "Could not read invoices.",
+  );
+  if (covering.length) return { status: 409, body: { error: "Another invoice already covers this consultant-month." } };
+  const saved = await updateInvoice(ctx, row.id, {
+    project_id: input.projectId, employee_id: input.employeeId, period_month: `${input.month}-01`, ignored: false,
+  });
+  if (!saved) throw new Error("Could not link the invoice.");
+  const warnings: string[] = [];
+  await record(ctx, row.id, "link_cra", { project_id: input.projectId, employee_id: input.employeeId, month: input.month }, warnings);
   return { status: 200, body: withWarnings({ invoice: saved }, warnings) };
 }

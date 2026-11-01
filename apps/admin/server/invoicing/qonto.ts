@@ -41,6 +41,11 @@ function uniqueEmails(...lists: unknown[]): string[] {
   return out;
 }
 
+// Qonto sends "" for unset dates; Postgres rejects "" for date/timestamptz columns.
+function date(v: unknown): string | null {
+  return typeof v === "string" && v ? v : null;
+}
+
 function mapStatus(s: string): InvoiceStatus {
   if (s === "unpaid") return "finalized";
   if (s === "draft" || s === "paid" || s === "canceled") return s;
@@ -67,16 +72,16 @@ function mapInvoice(inv: Json): ProviderInvoice {
     status: mapStatus(inv.status),
     clientId: inv.client?.id ?? inv.client_id ?? null,
     clientEmails: uniqueEmails(inv.client?.email, inv.client?.extra_emails),
-    issueDate: inv.issue_date ?? null,
-    dueDate: inv.due_date ?? null,
-    periodStart: inv.performance_start_date ?? null,
-    periodEnd: inv.performance_end_date ?? null,
+    issueDate: date(inv.issue_date),
+    dueDate: date(inv.due_date),
+    periodStart: date(inv.performance_start_date),
+    periodEnd: date(inv.performance_end_date),
     currency: inv.currency ?? inv.total_amount?.currency ?? "EUR",
     totalHt: fromCents(toCents(ttc) - toCents(vat)),
     totalVat: vat,
     totalTtc: ttc,
-    paidAt: inv.paid_at ?? null,
-    finalizedAt: inv.finalized_at ?? null,
+    paidAt: date(inv.paid_at),
+    finalizedAt: date(inv.finalized_at),
     invoiceUrl: inv.invoice_url ?? null,
     purchaseOrder: inv.purchase_order ?? "",
     lines: Array.isArray(inv.items) ? inv.items.map(mapLine) : [],

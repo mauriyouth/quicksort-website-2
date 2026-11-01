@@ -23,7 +23,7 @@ const employees = [
   { id: employeeId, full_name: 'Sam Rivera', role: 'Engineer', start_date: '2026-01-01', end_date: null },
   { id: otherEmployeeId, full_name: 'Jordan Lee', role: 'Designer', start_date: '2026-10-12', end_date: null },
 ];
-async function mock(page: Page, { admin = false, failSave = false, conflict = false, invoiced = false, assignments }: { admin?: boolean; failSave?: boolean; conflict?: boolean; invoiced?: boolean; assignments?: unknown[] } = {}) {
+async function mock(page: Page, { admin = false, failSave = false, conflict = false, invoiced = false, freelance = false, assignments }: { admin?: boolean; failSave?: boolean; conflict?: boolean; invoiced?: boolean; freelance?: boolean; assignments?: unknown[] } = {}) {
   const saves: z.infer<typeof saveSchema>[] = [];
   const months = new Map<string, Snapshot>();
   const contextAssignments = assignments ?? [{ id: '33000000-0000-4000-8000-000000000001', employee_id: employeeId, project_id: projectId, title: 'Client platform', client_name: 'Acme', start_date: '2026-10-05', end_date: '2026-10-16', status: 'active' }];
@@ -32,7 +32,7 @@ async function mock(page: Page, { admin = false, failSave = false, conflict = fa
     const reply = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
     if (route.request().method() === 'OPTIONS') return reply({});
     if (path.endsWith('/cra_context')) return reply({
-      employees: admin ? employees : employees.slice(0, 1),
+      employees: (admin ? employees : employees.slice(0, 1)).map(employee => freelance ? { ...employee, contract_type: 'Freelance' } : employee),
       assignments: contextAssignments,
     });
     // Leave-balance strip: no balances and default accrual rates.
@@ -81,7 +81,7 @@ test('employee paints all activities with brushes, saves, and reloads the saved 
   await paint(page, ['2026-10-07'], /^Internal Non-billable/);
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('CRA saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Saved by /)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
   expect(saves).toEqual([{ target_employee: employeeId, target_month: '2026-10-01', expected_version: 0, entries: [
     { day: '2026-10-01', part: 'full', status: 'rtt', project_id: null },
@@ -96,6 +96,19 @@ test('employee paints all activities with brushes, saves, and reloads the saved 
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
 });
 
+test('freelancers get a single Absence brush and no CP/RTT balance', async ({ page }) => {
+  await mock(page, { freelance: true });
+  await openOctober(page);
+  await expect(page.getByRole('button', { name: /^Absence Not worked, not billed/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^RTT Reduced working time/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Congés Payés Paid leave/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Congés sans solde Unpaid leave/ })).toHaveCount(0);
+  await expect(page.getByText(/Solde CP/)).toHaveCount(0);
+  await paint(page, ['2026-10-02'], /^Absence Not worked, not billed/);
+  await expect(dayCell(page, '2026-10-02')).toHaveAccessibleName(/Absence, full day/);
+  await expect(page.locator('.cra-breakdown')).toHaveText('Absence 1');
+});
+
 test('half days fill mornings and afternoons, then merge back into a full day', async ({ page }) => {
   const { saves } = await mock(page);
   await openOctober(page);
@@ -105,7 +118,7 @@ test('half days fill mornings and afternoons, then merge back into a full day', 
   await paint(page, ['2026-10-08'], /^Internal Non-billable/, 'Afternoon');
   await expect(dayCell(page, '2026-10-08')).toHaveAccessibleName(/morning RTT, afternoon Internal/);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('CRA saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Saved by /)).toBeVisible();
   expect(saves[0].entries.filter(entry => entry.day === '2026-10-08')).toEqual([
     { day: '2026-10-08', part: 'am', status: 'rtt', project_id: null },
     { day: '2026-10-08', part: 'pm', status: 'internal', project_id: null },
@@ -115,7 +128,7 @@ test('half days fill mornings and afternoons, then merge back into a full day', 
   await page.reload();
   await paint(page, ['2026-10-08'], /^Internal Non-billable/);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('CRA saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Saved by /)).toBeVisible();
   expect(saves[1].entries.filter(entry => entry.day === '2026-10-08')).toEqual([
     { day: '2026-10-08', part: 'full', status: 'internal', project_id: null },
   ]);
@@ -131,7 +144,7 @@ test('default project fills empty weekdays within assignment dates and keeps exi
   // The project is assigned 10-05 → 10-16, so 10-19 stays empty.
   await expect(dayCell(page, '2026-10-19')).toHaveAccessibleName(/not filled, full day/);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('CRA saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Saved by /)).toBeVisible();
   expect(saves[0].entries.map(entry => entry.day)).toEqual(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
 });
 
@@ -142,7 +155,7 @@ test('client brush skips days outside the assignment and reports the skip', asyn
   await page.getByRole('button', { name: /^Acme Client project · Client platform/, exact: true }).click();
   await expect(page.getByText(/skipped \(project not assigned on those dates\)/)).toBeVisible();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('CRA saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Saved by /)).toBeVisible();
   expect(saves[0].entries.map(entry => entry.day)).toEqual(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
 });
 
@@ -161,7 +174,7 @@ test('assigned projects appear as brushes even outside the viewed month, but onl
   await paint(page, ['2026-11-03'], /^Acme Client project · Client platform/);
   await expect(dayCell(page, '2026-11-03')).toHaveAccessibleName(/Client Project Client platform \(Acme\), full day/);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('CRA saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Saved by /)).toBeVisible();
 });
 
 test('admin can fill another employee and drafts stay separate per employee and month', async ({ page }) => {
@@ -182,7 +195,7 @@ test('admin can fill another employee and drafts stay separate per employee and 
   await expect(page.getByText(/\d+ days selected/)).toBeVisible();
   await page.getByRole('button', { name: /^Internal Non-billable/ }).click();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('CRA saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Saved by /)).toBeVisible();
   expect(saves[0].target_employee).toBe(otherEmployeeId);
   expect(saves[0].entries[0]).toEqual({ day: '2026-10-12', part: 'full', status: 'internal', project_id: null });
   expect(saves[0].entries.every(entry => entry.day >= '2026-10-12')).toBe(true);
@@ -214,7 +227,7 @@ test('failed save keeps entries and succeeds when retried', async ({ page }) => 
   await expect(page.getByRole('alert')).toHaveText('Connection failed. Try saving again.');
   await expect(dayCell(page, '2026-10-01')).toHaveAccessibleName(/Internal, full day/);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText('CRA saved.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Saved by /)).toBeVisible();
   expect(saves[1]).toEqual(saves[0]);
 });
 

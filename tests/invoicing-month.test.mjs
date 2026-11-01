@@ -47,6 +47,17 @@ test("row with amount and invoiced status", () => {
   assert.deepEqual(r.blockers, []);
 });
 
+test("a Qonto import linked to the consultant-month covers it, a CRA invoice wins", () => {
+  const imported = { id: "q1", project_id: "p1", employee_id: "e1", period_month: "2026-11-01", status: "paid", source: "imported", cra_version: null, total_ht: 11700, number: "F-7" };
+  const [r] = toInvoiceRows(input({ invoices: [imported] }));
+  assert.equal(r.status, "paid");
+  assert.equal(r.invoiceId, "q1");
+  assert.equal(r.craChanged, false);
+  const cra = { id: "i1", project_id: "p1", employee_id: "e1", period_month: "2026-11-01", status: "draft", source: "cra", cra_version: 4, total_ht: 11700, number: null };
+  assert.equal(toInvoiceRows(input({ invoices: [imported, cra] }))[0].invoiceId, "i1");
+  assert.equal(toInvoiceRows(input({ invoices: [{ ...imported, status: "canceled" }] }))[0].status, "not_invoiced");
+});
+
 test("intermediary is billed and must be linked", () => {
   const rows = toInvoiceRows(input({ projects: [{ ...project, intermediary_client_id: "c2" }] }));
   assert.equal(rows[0].billedClientId, "c2");

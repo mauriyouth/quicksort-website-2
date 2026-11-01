@@ -35,10 +35,20 @@ export function blockerLabel(blocker: Blocker | RowWarning | string): string {
   return BLOCKERS[blocker as Blocker] ?? "This draft cannot be created yet";
 }
 
+// fr-FR groups thousands with a narrow no-break space (U+202F), which reads
+// as "626500,00 €" at UI sizes; widen it to a full no-break space.
+const widen = (s: string) => s.replace(/ /g, " ");
+
 export function money(value: number | string | null | undefined, currency = "EUR"): string {
   const n = Number(value ?? 0);
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: currency || "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    .format(Number.isFinite(n) ? n : 0);
+  return widen(new Intl.NumberFormat("fr-FR", { style: "currency", currency: currency || "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .format(Number.isFinite(n) ? n : 0));
+}
+
+/** Daily rates read in whole euros (650 €); cents only when there are any. */
+export function rate(value: number): string {
+  return widen(new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: Number.isInteger(value) ? 0 : 2, maximumFractionDigits: 2 })
+    .format(value));
 }
 
 export function days(n: number): string {
@@ -63,9 +73,36 @@ export function monthLabel(month: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
+// Row click/Enter opens the invoice; clicks on the row's own links and controls keep their action.
+export function rowOpener(open: () => void, disabled = false) {
+  const inControl = (t: EventTarget) => t instanceof Element && !!t.closest("a, button, input, select, textarea, label");
+  return {
+    tabIndex: 0,
+    onClick: (e: { target: EventTarget }) => { if (!disabled && !inControl(e.target)) open(); },
+    onKeyDown: (e: { key: string; target: EventTarget; currentTarget: EventTarget; preventDefault: () => void }) => {
+      if (disabled || e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+      e.preventDefault();
+      open();
+    },
+  };
+}
+
 export function shiftMonth(month: string, delta: number): string {
   const [y, m] = month.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1 + delta, 1)).toISOString().slice(0, 7);
+}
+
+// Billing months offered for an invoice: its issue month and the 12 before, newest first; a stored month outside that range stays listed.
+export function billingMonthOptions(issueDate: string | null | undefined, stored: string | null | undefined): string[] {
+  const anchor = (issueDate ?? parisToday()).slice(0, 7);
+  const months = Array.from({ length: 13 }, (_, n) => shiftMonth(anchor, -n));
+  const current = (stored ?? "").slice(0, 7);
+  return current && !months.includes(current) ? [...months, current].sort().reverse() : months;
+}
+
+export function addDays(isoDate: string, days: number): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
 export function previousMonth(): string {

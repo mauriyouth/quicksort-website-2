@@ -73,6 +73,19 @@ test("listInvoices maps unpaid to finalized and computes HT", async () => {
   assert.deepEqual(inv.clientEmails, ["a@x.fr"]);
 });
 
+test("listInvoices maps empty date strings to null", async () => {
+  const { impl } = fakeFetch([
+    json({ client_invoices: [{ id: "i1", status: "unpaid", total_amount: { value: "120.00" }, vat_amount: { value: "20.00" }, issue_date: "2026-10-01", due_date: "", performance_start_date: "", performance_end_date: "", paid_at: "", finalized_at: "", items: [] }], meta: { next_page: null } }),
+  ]);
+  const [inv] = await createQontoProvider(config, impl).listInvoices();
+  assert.equal(inv.issueDate, "2026-10-01");
+  assert.equal(inv.dueDate, null);
+  assert.equal(inv.periodStart, null);
+  assert.equal(inv.periodEnd, null);
+  assert.equal(inv.paidAt, null);
+  assert.equal(inv.finalizedAt, null);
+});
+
 test("422 surfaces detail without secret", async () => {
   const { impl } = fakeFetch([json({ errors: [{ status: "422", code: "x", detail: "due_date must be after issue_date" }] }, 422)]);
   await assert.rejects(createQontoProvider(config, impl).createDraft(draft), (e) => {

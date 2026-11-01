@@ -14,11 +14,15 @@ export function ClientPicker({
   value,
   onChange,
   required,
+  name = "client_id",
 }: {
   clients: SalesClient[];
   value: string;
   onChange: (id: string) => void;
   required?: boolean;
+  /** Form field name for the hidden input carrying the picked id — a
+      second picker on the same form (e.g. an intermediary) passes its own. */
+  name?: string;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -120,7 +124,7 @@ export function ClientPicker({
           }}
         />
       </div>
-      <input type="hidden" name="client_id" value={value} />
+      <input type="hidden" name={name} value={value} />
       {open && (
         <ul className="client-picker-list" role="listbox" id="client-picker-list">
           {results.length ? (

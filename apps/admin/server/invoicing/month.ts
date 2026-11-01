@@ -8,7 +8,7 @@ export type InvoiceRowRef = {
   status: InvoiceStatus; source: "cra" | "imported"; cra_version: number | null; total_ht: number; number: string | null;
 };
 export type ToInvoiceRow = {
-  projectId: string; projectTitle: string; employeeId: string; consultantName: string;
+  projectId: string; projectTitle: string; employeeId: string; personId: string | null; consultantName: string;
   billedClientId: string; billedClientName: string; days: number; amountHt: string | null;
   status: "not_invoiced" | InvoiceStatus; invoiceId: string | null; craChanged: boolean;
   blockers: ("client_not_linked" | "no_pricing_line" | "no_rate" | "product_not_linked")[];
@@ -46,7 +46,7 @@ export function missingWorkingDays(
 export function toInvoiceRows(input: {
   month: string;
   startMonth: string | null;
-  employees: { id: string; full_name: string; start_date: string; end_date: string | null }[];
+  employees: { id: string; person_id?: string | null; full_name: string; start_date: string; end_date: string | null }[];
   craByEmployee: Record<string, { version: number; entries: CraEntry[] }>;
   assignments: AssignmentRef[];
   projects: (ProjectRef & { title: string; pricing_model: string; client_id: string; intermediary_client_id: string | null })[];
@@ -82,15 +82,15 @@ export function toInvoiceRows(input: {
       let amountHt: string | null = null;
       if (built.ok) amountHt = built.totals.ht;
       else if (built.blocker !== "no_days") blockers.push(built.blocker);
-      const invoice = input.invoices.find(
-        (i) =>
-          i.source === "cra" && i.status !== "canceled" && i.project_id === project.id &&
-          i.employee_id === emp.id && (i.period_month ?? "").slice(0, 7) === input.month,
-      );
+      // The CRA invoice, else a Qonto import linked to this consultant-month.
+      const covers = (i: InvoiceRowRef) => i.status !== "canceled" && i.project_id === project.id &&
+        i.employee_id === emp.id && (i.period_month ?? "").slice(0, 7) === input.month;
+      const invoice = input.invoices.find((i) => i.source === "cra" && covers(i)) ?? input.invoices.find((i) => i.source === "imported" && covers(i));
       rows.push({
         projectId: project.id,
         projectTitle: project.title,
         employeeId: emp.id,
+        personId: emp.person_id ?? null,
         consultantName: emp.full_name,
         billedClientId,
         billedClientName: input.clients.find((c) => c.id === billedClientId)?.name ?? "",
@@ -98,7 +98,7 @@ export function toInvoiceRows(input: {
         amountHt,
         status: invoice ? invoice.status : "not_invoiced",
         invoiceId: invoice ? invoice.id : null,
-        craChanged: !!invoice && invoice.cra_version !== cra.version,
+        craChanged: !!invoice && invoice.source === "cra" && invoice.cra_version !== cra.version,
         blockers,
         warnings: incomplete ? ["cra_incomplete"] : [],
       });

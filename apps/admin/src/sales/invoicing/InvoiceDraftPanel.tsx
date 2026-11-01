@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ExternalLink, RefreshCw, Send, Trash2, X } from "lucide-react";
 import { Notice } from "@quicksort/hr-ui";
 import { errorText, InvoicingError, type InvoicingApi } from "./api";
-import { dateTime, invoiceRowLabel, lineTotals, money, monthLabel, shortDate, sourceLabel } from "./format";
+import { addDays, billingMonthOptions, dateTime, invoiceRowLabel, lineTotals, money, monthLabel, parisToday, shortDate, sourceLabel } from "./format";
 import type { DraftResponse, InvoiceDetail, InvoiceLine, InvoiceResponse } from "./types";
+
+// Payment-term shortcuts, counted from the issue date.
+const DUE_PRESETS = [15, 30, 45, 60];
 
 type LineEdit = { id: string; quantity: string; unitPrice: string; description: string };
 type Confirm = "validate" | "delete" | "cancel" | "send" | "resend" | null;
@@ -45,6 +48,8 @@ export function InvoiceDraftPanel({
   const [lines, setLines] = useState<LineEdit[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [purchaseOrder, setPurchaseOrder] = useState("");
+  const [periodMonth, setPeriodMonth] = useState("");
+  const [consultantId, setConsultantId] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [warning, setWarning] = useState(initialWarning);
@@ -58,6 +63,8 @@ export function InvoiceDraftPanel({
     setLines(next.lines.map(toEdit));
     setDueDate(next.invoice.due_date ?? "");
     setPurchaseOrder(next.invoice.purchase_order ?? "");
+    setPeriodMonth((next.invoice.period_month ?? "").slice(0, 7));
+    setConsultantId(next.invoice.employee_id ?? "");
   }, []);
 
   const load = useCallback(async () => {
@@ -163,6 +170,18 @@ export function InvoiceDraftPanel({
     await load();
     setMessage("Invoice canceled in Qonto.");
   });
+
+  const savePeriod = () => run("period", () => api.post<InvoiceResponse>("set_period", { invoiceId, month: periodMonth || null }), async () => {
+    await load();
+    setMessage(periodMonth ? `Listed under ${monthLabel(periodMonth)}.` : "Listed under its issue month.");
+  });
+
+  const saveConsultant = () => run("consultant", () => api.post<InvoiceResponse>("assign_consultant", { invoiceId, employeeId: consultantId || null }), async () => {
+    await load();
+    setMessage(consultantId ? "Consultant assigned." : "Consultant removed.");
+  });
+
+  const periodOptions = useMemo(() => billingMonthOptions(invoice?.issue_date, invoice?.period_month), [invoice?.issue_date, invoice?.period_month]);
 
   const setLine = (id: string, patch: Partial<LineEdit>) => setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const locked = busy !== null;
@@ -289,11 +308,22 @@ export function InvoiceDraftPanel({
                 <div className="pj-grid pj-grid-2">
                   {editable ? (
                     <>
-                      <label className="pj-field">
-                        <span className="pj-label">Due date</span>
-                        <input type="date" value={dueDate} min={invoice.issue_date ?? undefined} disabled={locked}
+                      <div className="pj-field">
+                        <label className="pj-label" htmlFor="inv-due-date">Due date</label>
+                        <input id="inv-due-date" type="date" value={dueDate} min={invoice.issue_date ?? undefined} disabled={locked}
                           onChange={(e) => setDueDate(e.target.value)} />
-                      </label>
+                        <div className="inv-due-presets" role="group" aria-label="Payment terms">
+                          {DUE_PRESETS.map((n) => {
+                            const date = addDays(invoice.issue_date ?? parisToday(), n);
+                            return (
+                              <button key={n} type="button" className={`inv-due-preset${dueDate === date ? " on" : ""}`} disabled={locked}
+                                title={`Due ${shortDate(date)}`} onClick={() => setDueDate(date)}>
+                                J+{n}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <label className="pj-field">
                         <span className="pj-label">Purchase order <span className="pj-label-opt">(optional)</span></span>
                         <input value={purchaseOrder} maxLength={200} disabled={locked} onChange={(e) => setPurchaseOrder(e.target.value)} />
@@ -302,6 +332,38 @@ export function InvoiceDraftPanel({
                   ) : (
                     <>
                       <div className="pj-field"><span className="pj-label">Issue date</span><span className="inv-static">{shortDate(invoice.issue_date)}</span></div>
+                      {invoice.source === "imported" && (
+                        <div className="pj-field">
+                          <label className="pj-label" htmlFor="inv-period">Billing month</label>
+                          <div className="inv-period">
+                            <select id="inv-period" value={periodMonth} disabled={locked} onChange={(e) => setPeriodMonth(e.target.value)}>
+                              <option value="">Issue month{invoice.issue_date ? ` (${monthLabel(invoice.issue_date)})` : ""}</option>
+                              {periodOptions.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                            </select>
+                            <button type="button" className="pj-btn pj-btn-ghost" disabled={locked || periodMonth === (invoice.period_month ?? "").slice(0, 7)} onClick={savePeriod}>
+                              {busy === "period" ? "Saving…" : "Save"}
+                            </button>
+                          </div>
+                          <span className="pj-field-help">The month the work was done.</span>
+                        </div>
+                      )}
+                      {invoice.source === "imported" && invoice.project_id && (
+                        <div className="pj-field">
+                          <label className="pj-label" htmlFor="inv-consultant">Consultant</label>
+                          <div className="inv-period">
+                            <select id="inv-consultant" value={consultantId} disabled={locked} onChange={(e) => setConsultantId(e.target.value)}>
+                              <option value="">Not assigned</option>
+                              {(detail.consultants ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <button type="button" className="pj-btn pj-btn-ghost" disabled={locked || consultantId === (invoice.employee_id ?? "")} onClick={saveConsultant}>
+                              {busy === "consultant" ? "Saving…" : "Save"}
+                            </button>
+                          </div>
+                          <span className="pj-field-help">
+                            {detail.consultants?.length ? "Staffed on this project." : "Nobody is staffed on this project yet."}
+                          </span>
+                        </div>
+                      )}
                       <div className="pj-field"><span className="pj-label">Due date</span><span className="inv-static">{shortDate(invoice.due_date)}</span></div>
                       {invoice.purchase_order && <div className="pj-field"><span className="pj-label">Purchase order</span><span className="inv-static">{invoice.purchase_order}</span></div>}
                       {invoice.sent_at && <div className="pj-field"><span className="pj-label">Sent</span><span className="inv-static">{dateTime(invoice.sent_at)}</span></div>}
@@ -364,7 +426,7 @@ export function InvoiceDraftPanel({
               </button>
             )}
             {editable && (
-              <button type="button" className="pj-btn pj-btn-ghost" disabled={locked || !dirty || invalid} onClick={save}>
+              <button type="button" className="pj-btn pj-btn-ghost" disabled={locked || !dirty || invalid} data-save-shortcut onClick={save}>
                 {busy === "save" ? "Saving…" : "Save changes"}
               </button>
             )}

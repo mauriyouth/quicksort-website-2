@@ -4,6 +4,7 @@ import { Notice } from "@quicksort/hr-ui";
 import { storedPricingLines } from "../pricing-lines";
 import { errorText, type InvoicingApi } from "./api";
 import { previousMonth } from "./format";
+import { ServicePicker } from "./ServicePicker";
 import type { ClientLink, InvoicingSettings as Settings, PaymentAccount, ProductLink, ProviderClient, ProviderProduct } from "./types";
 
 type RegieProject = { id: string; title: string; client_id: string; intermediary_client_id: string | null; status: string; lines: string[] };
@@ -284,22 +285,21 @@ export function InvoicingSettings({ api, focus, onSaved }: { api: InvoicingApi; 
                 {p.lines.length === 0 && <span className="inv-muted">No pricing line on this project.</span>}
                 {p.lines.map((name) => {
                   const link = productLinks.find((l) => l.project_id === p.id && l.pricing_line === name);
-                  const missing = link && !products.some((x) => x.id === link.provider_product_id);
                   return (
-                    <label className="inv-map-row" key={name || "unnamed"}>
+                    <div className="inv-map-row" key={name || "unnamed"}>
                       <span className="inv-map-name">{name || "Unnamed line"}</span>
                       {name ? (
-                        <select value={link?.provider_product_id ?? ""} disabled={locked} onChange={(e) => void linkProduct(p.id, name, e.target.value)}>
-                          <option value="">Not linked</option>
-                          {missing && <option value={link.provider_product_id}>{link.title} (not found in Qonto)</option>}
-                          {products.map((x) => (
-                            <option key={x.id} value={x.id}>{x.title} · VAT {Math.round(Number(x.vatRate) * 1000) / 10} %</option>
-                          ))}
-                        </select>
+                        <ServicePicker
+                          products={products}
+                          value={link?.provider_product_id ?? ""}
+                          missingLabel={link?.title}
+                          disabled={locked}
+                          onChange={(id) => void linkProduct(p.id, name, id)}
+                        />
                       ) : (
                         <span className="inv-muted">Name this pricing line on the project to link it.</span>
                       )}
-                    </label>
+                    </div>
                   );
                 })}
               </div>

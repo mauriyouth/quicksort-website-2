@@ -3,7 +3,7 @@ import type { InvoiceStatus, ProviderInvoice } from "./provider.ts";
 export type LinkContext = {
   clientLinks: { client_id: string; provider_client_id: string }[];
   projects: {
-    id: string; pricing_model: string; client_id: string; intermediary_client_id: string | null;
+    id: string; title: string; pricing_model: string; client_id: string; intermediary_client_id: string | null;
     start_date: string | null; end_date: string | null; extension_end_dates: (string | null)[];
   }[];
 };
@@ -13,8 +13,39 @@ export function billedClientFor(remote: ProviderInvoice, ctx: LinkContext): stri
   return ctx.clientLinks.find((l) => l.provider_client_id === remote.clientId)?.client_id ?? null;
 }
 
+// Case, accents and runs of spaces don't count when comparing titles.
+function normalize(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// A single code-like word mixing letters and digits, e.g. "TWCF2025QSFXD1025".
+function isReference(title: string): boolean {
+  const t = title.trim();
+  return /^[A-Za-z0-9-]{6,}$/.test(t) && /[A-Za-z]/.test(t) && /\d/.test(t);
+}
+
+// The project whose title appears in an invoice line title; the longest title wins, a tie matches nothing.
+// When the Qonto client is linked, only that client's projects (as main client or intermediary) count.
+function titleMatch(remote: ProviderInvoice, ctx: LinkContext, billed: string | null): string | null | undefined {
+  const lines = remote.lines.map((l) => normalize(l.title));
+  let best: { id: string; length: number; tied: boolean } | null = null;
+  for (const p of ctx.projects) {
+    if (billed && p.client_id !== billed && p.intermediary_client_id !== billed) continue;
+    const title = normalize(p.title ?? "");
+    if (!title || !lines.some((l) => l.includes(title))) continue;
+    if (!best || title.length > best.length) best = { id: p.id, length: title.length, tied: false };
+    else if (title.length === best.length) best.tied = true;
+  }
+  if (!best) return undefined;
+  return best.tied ? null : best.id;
+}
+
 export function autoLinkProject(remote: ProviderInvoice, ctx: LinkContext): string | null {
   const billed = billedClientFor(remote, ctx);
+  const byTitle = titleMatch(remote, ctx, billed);
+  if (byTitle !== undefined) return byTitle;
+  // A line titled with a project reference we don't know bills another project: don't guess one by date.
+  if (remote.lines.some((l) => isReference(l.title))) return null;
   const d = remote.periodStart ?? remote.issueDate;
   if (!billed || !d) return null;
   const candidates = ctx.projects.filter((p) => {
@@ -31,7 +62,10 @@ export function autoLinkProject(remote: ProviderInvoice, ctx: LinkContext): stri
 
 // Rows carry DB column names. `provider` is intentionally not set here: the caller adds it.
 export function reconcile(
-  existing: { id: string; provider_invoice_id: string | null; status: InvoiceStatus; project_id: string | null }[],
+  existing: {
+    id: string; provider_invoice_id: string | null; status: InvoiceStatus; project_id: string | null;
+    source?: string; ignored?: boolean;
+  }[],
   remote: ProviderInvoice[],
   ctx: LinkContext,
 ): { inserts: Record<string, unknown>[]; updates: { id: string; patch: Record<string, unknown> }[]; removedDraftIds: string[] } {
@@ -56,7 +90,9 @@ export function reconcile(
       invoice_url: r.invoiceUrl,
     };
     if (known) {
-      updates.push({ id: known.id, patch: shared });
+      // Imported invoices still unassigned get another chance; manual and ignored ones are left alone.
+      const link = known.source === "imported" && !known.project_id && !known.ignored ? autoLinkProject(r, ctx) : null;
+      updates.push({ id: known.id, patch: link ? { ...shared, project_id: link } : shared });
     } else {
       inserts.push({
         source: "imported",
@@ -64,6 +100,8 @@ export function reconcile(
         provider_client_id: r.clientId,
         billed_client_id: billedClientFor(r, ctx),
         project_id: autoLinkProject(r, ctx),
+        // Listed under the month of the work (Qonto's performance start), editable afterwards.
+        period_month: r.periodStart ? `${r.periodStart.slice(0, 7)}-01` : null,
         ...shared,
       });
     }

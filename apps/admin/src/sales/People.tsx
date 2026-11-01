@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Plus, RefreshCw, Search, Star, X } from "lucide-react";
 import { db } from "@quicksort/hr-db";
 import { Empty, Notice } from "@quicksort/hr-ui";
@@ -33,7 +34,6 @@ export function People({ actorEmail }: { actorEmail: string }) {
   const [onlySponsors, setOnlySponsors] = useState(false);
   const [onlyStale, setOnlyStale] = useState(false);
   const [showNew, setShowNew] = useState(false);
-  const [focusId, setFocusId] = useState("");
   const [newClientId, setNewClientId] = useState("");
 
   // Close the create dialog with Escape, like every other sheet.
@@ -46,27 +46,19 @@ export function People({ actorEmail }: { actorEmail: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [showNew]);
 
-  const readFocus = () =>
-    new URLSearchParams(window.location.search).get("focus") || "";
-  useEffect(() => {
-    setFocusId(readFocus());
-    const sync = () => setFocusId(readFocus());
-    window.addEventListener("popstate", sync);
-    return () => window.removeEventListener("popstate", sync);
-  }, []);
-
-  const openPerson = (id: string) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("focus", id);
-    window.history.pushState(null, "", url.pathname + url.search);
-    setFocusId(id);
+  // The focused contact lives in the URL (?focus=<id>).
+  const location = useLocation();
+  const navigate = useNavigate();
+  const focusId = new URLSearchParams(location.search).get("focus") || "";
+  const setFocus = (id: string) => {
+    const params = new URLSearchParams(location.search);
+    if (id) params.set("focus", id);
+    else params.delete("focus");
+    const search = params.toString();
+    navigate(location.pathname + (search ? `?${search}` : ""));
   };
-  const closePerson = () => {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("focus");
-    window.history.pushState(null, "", url.pathname + url.search);
-    setFocusId("");
-  };
+  const openPerson = (id: string) => setFocus(id);
+  const closePerson = () => setFocus("");
 
   const clientName = (id: string) => data.clients.find((c) => c.id === id)?.name || "";
   const sponsorPersonIds = new Set(data.sponsors.map((s) => s.person_id));

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowUpDown,
   ChevronDown,
@@ -124,34 +125,24 @@ export function Clients({ actorEmail }: { actorEmail: string }) {
   const [view, setView] = useState<View>("list");
   const [editing, setEditing] = useState<SalesClient | null | undefined>(undefined);
 
-  const detailId = () => {
-    const match = window.location.pathname.match(DETAIL_RE);
-    return match ? match[1] : "";
-  };
-  const [selectedId, setSelectedId] = useState(detailId);
-
-  // Keep the detail view in sync with browser back/forward navigation.
-  useEffect(() => {
-    const sync = () => setSelectedId(detailId());
-    window.addEventListener("popstate", sync);
-    return () => window.removeEventListener("popstate", sync);
-  }, []);
+  // The open client lives in the URL (/sales/clients/<id>).
+  const location = useLocation();
+  const navigate = useNavigate();
+  const selectedId = location.pathname.match(DETAIL_RE)?.[1] ?? "";
 
   useEffect(() => {
     document.title = "Clients · Quicksort Admin";
   }, []);
 
   const openClient = useCallback((id: string) => {
-    window.history.pushState(null, "", `/sales/clients/${id}`);
-    setSelectedId(id);
+    navigate(`/sales/clients/${id}`);
     setEditing(undefined);
     window.scrollTo(0, 0);
-  }, []);
+  }, [navigate]);
 
   const closeClient = useCallback(() => {
-    window.history.pushState(null, "", "/sales/clients");
-    setSelectedId("");
-  }, []);
+    navigate("/sales/clients");
+  }, [navigate]);
 
   const client = data.clients.find((c) => c.id === selectedId);
   if (selectedId) {

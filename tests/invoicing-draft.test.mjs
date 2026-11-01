@@ -68,9 +68,14 @@ test("single line from CRA", () => {
     unitPrice: "650.00",
     unit: "jour",
     vatRate: "0.2",
-    description: "Assistance technique\nConsultant : Jane Doe — novembre 2026",
+    description: "Assistance technique",
   });
   assert.deepEqual(r.totals, { ht: "11700.00", vat: "2340.00", ttc: "14040.00" });
+});
+
+test("consultant line only when the service has no description", () => {
+  const r = buildDraftLines(base({ products: { "Data Engineer": { ...product, description: "" } } }));
+  assert.equal(r.lines[0].description, "Consultant : Jane Doe — novembre 2026");
 });
 
 test("title truncated to 40 chars", () => {

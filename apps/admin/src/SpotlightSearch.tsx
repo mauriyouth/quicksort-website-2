@@ -2,7 +2,6 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Briefcase,
-  FileText,
   FolderKanban,
   GraduationCap,
   Search,
@@ -57,7 +56,6 @@ export type SpotlightJob = {
   department: string;
   location: string;
 };
-export type SpotlightContract = { id: string; title: string };
 export type SpotlightRequest = { id: string; tool_name: string; status: string };
 export type SpotlightProject = {
   id: string;
@@ -86,7 +84,6 @@ const GROUP_ORDER = [
   "Opportunities",
   "Projects",
   "Job posts",
-  "Contracts",
   "Tool requests",
 ];
 
@@ -109,7 +106,6 @@ export function SpotlightSearch({
   employees = [],
   opportunities,
   jobs,
-  contracts,
   requests,
   projects = [],
 }: {
@@ -122,7 +118,6 @@ export function SpotlightSearch({
   employees?: SpotlightEmployee[];
   opportunities: SpotlightOpportunity[];
   jobs: SpotlightJob[];
-  contracts: SpotlightContract[];
   requests: SpotlightRequest[];
   projects?: SpotlightProject[];
 }) {
@@ -279,16 +274,6 @@ export function SpotlightSearch({
         target: "jobs",
       }),
     );
-    contracts.forEach((c) =>
-      out.push({
-        key: `contract:${c.id}`,
-        group: "Contracts",
-        title: c.title,
-        haystack: c.title,
-        icon: FileText,
-        target: "contracts",
-      }),
-    );
     requests.forEach((r) =>
       out.push({
         key: `request:${r.id}`,
@@ -301,7 +286,7 @@ export function SpotlightSearch({
       }),
     );
     return out;
-  }, [nav, salesPeople, candidates, employees, opportunities, projects, jobs, contracts, requests]);
+  }, [nav, salesPeople, candidates, employees, opportunities, projects, jobs, requests]);
 
   const results = useMemo(() => {
     const q = norm(query.trim());

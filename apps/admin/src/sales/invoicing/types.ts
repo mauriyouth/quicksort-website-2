@@ -11,6 +11,7 @@ export type ToInvoiceRow = {
   projectId: string;
   projectTitle: string;
   employeeId: string;
+  personId: string | null;
   consultantName: string;
   billedClientId: string;
   billedClientName: string;
@@ -54,6 +55,7 @@ export type Invoice = {
   project_title?: string | null;
   client_name?: string | null;
   consultant_name?: string | null;
+  consultant_person_id?: string | null;
 };
 
 export type InvoiceLine = {
@@ -73,7 +75,11 @@ export type InvoiceLine = {
 
 export type InvoiceEvent = { id: string; kind: string; actor: string | null; detail: Record<string, unknown>; created_at: string };
 
-export type InvoiceDetail = { invoice: Invoice; lines: InvoiceLine[]; events: InvoiceEvent[]; recipients: string[] | null };
+export type InvoiceDetail = {
+  invoice: Invoice; lines: InvoiceLine[]; events: InvoiceEvent[]; recipients: string[] | null;
+  // Imported invoices on a project: the consultants staffed on it.
+  consultants?: { id: string; name: string }[];
+};
 export type InvoicesList = { invoices: Invoice[]; lastSyncedAt: string | null; syncError?: string };
 
 export type InvoicingSettings = {

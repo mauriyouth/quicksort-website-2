@@ -122,11 +122,11 @@ export function buildDraftLines(input: {
     const product = input.products[g.pricingLine];
     if (!product) return { ok: false, blocker: "product_not_linked", pricingLine: g.pricingLine };
     const multi = groups.filter((x) => x.pricingLine === g.pricingLine).length > 1;
-    const head = product.description ? `${product.description}\n` : "";
     const range = multi ? ` (du ${ddmm(g.first)} au ${ddmm(g.last)})` : "";
     lines.push({
       title: product.title.slice(0, 40),
-      description: `${head}Consultant : ${input.consultantName} — ${label}${range}`,
+      // The Qonto service's own text wins; the consultant line only fills an empty description.
+      description: `${product.description || `Consultant : ${input.consultantName} — ${label}`}${range}`,
       quantity: fmtQty(g.qty),
       unit: product.unit,
       unitPrice: g.rate.toFixed(2),

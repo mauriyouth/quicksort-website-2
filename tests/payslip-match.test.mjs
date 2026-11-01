@@ -72,3 +72,14 @@ test("already filed vs changed, compared by person, period, title and sha256", (
   assert.equal(one(pdf({ index: 2, sha256: "bb" }), [emp()], filed).status, "matched");
   assert.equal(one(pdf({ period: "2026-09" }), [emp()], filed).status, "matched");
 });
+
+test("weak matches never become changed; confirm keeps supersedes for the differing filed row", () => {
+  const filed = [{ id: "d1", person_id: "p1", valid_from: "2026-10-01", title: payslipTitle("2026-10", 1), sha256: "zz" }];
+  const a = one(pdf({ nameFromFile: "BOB OTHER" }), [emp()], filed);
+  assert.equal(a.status, "confirm"); assert.ok(a.warning); assert.equal(a.supersedes, "d1");
+  const b = one(pdf({ matricule: "00099" }), [emp()], filed);
+  assert.equal(b.status, "confirm"); assert.equal(b.supersedes, "d1");
+  const same = [{ ...filed[0], sha256: "aa" }];
+  const c = one(pdf({ nameFromFile: "BOB OTHER" }), [emp()], same);
+  assert.equal(c.status, "confirm"); assert.equal(c.supersedes, null);
+});

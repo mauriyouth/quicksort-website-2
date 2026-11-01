@@ -99,8 +99,14 @@ export function matchPayslips(files: Array<ParsedPayslip | UnreadablePayslip>, e
       const validFrom = `${file.period}-01`;
       const title = payslipTitle(file.period, file.index);
       const existing = filed.filter((f) => f.person_id === result.personId && f.valid_from === validFrom && f.title === title);
+      const differing = existing.find((f) => f.sha256 !== file.sha256);
+      if (result.status === "confirm") {
+        // Weak matches are never auto-filed or auto-changed; keep confirm, but remember what filing would supersede.
+        // An identical filed copy stays confirm with supersedes null.
+        return differing && !existing.some((f) => f.sha256 === file.sha256) ? { ...result, supersedes: differing.id } : result;
+      }
       if (existing.some((f) => f.sha256 === file.sha256)) return { ...result, status: "already-filed" };
-      if (existing.length) return { ...result, status: "changed", supersedes: existing[0].id };
+      if (differing) return { ...result, status: "changed", supersedes: differing.id };
     }
     return result;
   });

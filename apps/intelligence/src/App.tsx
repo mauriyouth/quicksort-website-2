@@ -5,6 +5,7 @@ import type { EventAiIntelligence } from "./event-intelligence-schema";
 import type { CompetitorRecord, CompetitorResult } from "./competitor-schema";
 import { autoPanVelocity, draggedPosition, zoomPanAtPoint } from "./relationshipCanvasMath";
 import { filterWorkspaceSearch, type WorkspaceSearchEntry } from "./workspaceSearch";
+import ResearchUsage from "./ResearchUsage";
 import PublicOpportunities from "./PublicOpportunities";
 import {
   Activity, ArrowLeft, ArrowUpRight, BookOpen, Building2, CalendarDays, ChevronDown, CircleDollarSign,
@@ -12,7 +13,7 @@ import {
   Landmark, Maximize2, Minus, PanelLeftClose, PanelLeftOpen, Pencil, Redo2, Save, Scissors, ShieldCheck, Sparkles, SquareDashed, Target, Trash2, Undo2, UserPlus, Users, X,
 } from "lucide-react";
 
-type View = "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "caseStudies" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "opportunities" | "pipeline" | "kanban" | "doors" | "guide";
+type View = "researchUsage" | "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "caseStudies" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "opportunities" | "pipeline" | "kanban" | "doors" | "guide";
 type GlobalSearchEntry = WorkspaceSearchEntry & {
   target: "view" | "account" | "event";
   view: View;
@@ -206,6 +207,7 @@ const nav = [
   { id: "pipeline" as View, path: "/pipeline", label: "Pipeline", sidebarLabel: "Pipeline", icon: Target },
   { id: "kanban" as View, path: "/kanban", label: "Kanban", sidebarLabel: "Kanban", icon: LayoutGrid },
   { id: "doors" as View, path: "/open-doors", label: "Open doors", sidebarLabel: "Open doors", icon: ContactRound },
+  { id: "researchUsage" as View, path: "/research-usage", label: "Research usage", sidebarLabel: "Research usage", icon: CircleDollarSign },
   { id: "guide" as View, path: "/guide", label: "GTM workspace guide", sidebarLabel: "How to use", icon: BookOpen },
 ];
 
@@ -574,6 +576,7 @@ export default function App({ email = "" }: { email?: string }) {
           <div className="breadcrumbs">Intelligence <span>/</span> {eventRecords.find((event) => event.id === selectedEvent)?.title ?? nav.find((item) => item.id === view)?.label}</div>
           <div className="top-actions"><button className="icon-button" aria-label="Search workspace" aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} onClick={openWorkspaceSearch}><Search size={18}/></button></div>
         </header>
+        {view === "researchUsage" && <ResearchUsage />}
         {view === "overview" && <Overview active={active} capabilities={capabilities} selected={selected} setSelected={setSelected} go={go} notify={notify} accounts={accountRecords} leads={leadRecords} events={eventRecords}/>}
         {(view === "market" || view === "marketing" || view === "partners" || view === "executive") && <IntelligencePage workspace={intelligenceWorkspaces[view]} notify={notify}/>}
         {view === "businessPartners" && <BusinessPartners partners={businessPartnerRecords} accounts={accountRecords} intel={intelRecords} onChange={saveBusinessPartners} openAccount={(id) => navigate("accounts", id)} notify={notify}/>}

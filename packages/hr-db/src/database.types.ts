@@ -1018,6 +1018,7 @@ export type Database = {
       register_document: { Args: { document: DocumentRegistration; supersedes?: string | null; request_id?: string }; Returns: DocumentRecord };
       set_employee_matricule: { Args: { employee_id: string; matricule: string; request_id?: string }; Returns: HrEmployee };
       payslip_download_source: { Args: { document_id: string }; Returns: { provider_file_id: string; file_name: string; mime_type: string; size_bytes: number | null; storage_provider: string; encrypted_credentials: string | null }[] };
+      move_payslip: { Args: { document_id: string; to_person_id: string; to_folder_id: string; request_id?: string }; Returns: DocumentRecord };
       log_document_access: { Args: { document_id: string; request_id?: string }; Returns: undefined };
       hr_workspace_snapshot: { Args: Record<PropertyKey, never>; Returns: Json };
       hr_application_requirements: { Args: { application_id: string; to_stage: string }; Returns: Json };

@@ -204,12 +204,19 @@ export async function loadDriveSettings(client: SupabaseClient): Promise<DriveSe
   // Existing installations work before the new migration is applied.
   if (error && !["42P01", "PGRST205"].includes(String(error.code || ""))) throw error;
   if (error || !data) return null;
+  return decryptDriveSettings(data.encrypted_credentials);
+}
+
+/** Decrypts and validates the saved ciphertext; the one place that reads it. */
+export function decryptDriveSettings(encrypted: string): DriveSettings {
   try {
-    return settingsSchema.parse(JSON.parse(decryptApiKey(data.encrypted_credentials)));
+    return settingsSchema.parse(JSON.parse(decryptApiKey(encrypted)));
   } catch {
     throw new Error("The saved Google Drive credentials could not be read. Save them again.");
   }
 }
+
+export const driveStorageFromEncrypted = (encrypted: string): DocumentStorage => createDriveStorage(decryptDriveSettings(encrypted));
 
 const toFolder = (file: DriveFile): StorageFolder => ({ id: file.id, name: file.name, link: file.webViewLink || null });
 const toStoredFile = (file: DriveFile): StoredFile => ({

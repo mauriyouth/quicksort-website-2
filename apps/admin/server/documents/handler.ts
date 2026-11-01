@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { FOLDER_LABELS, datedSubfolder, documentFileName, folderPath, type FolderOwner } from "./folders.ts";
-import { createDriveStorage, loadDriveSettings } from "./storage/google-drive.ts";
+import { createDriveStorage, driveStorageFromEncrypted, loadDriveSettings } from "./storage/google-drive.ts";
 import { MAX_UPLOAD_BYTES, type DocumentStorage, type StorageFolder, type StoredFile } from "./storage/types.ts";
 import { browserOrigin } from "./storage/origin.ts";
 
@@ -29,6 +29,12 @@ import { browserOrigin } from "./storage/origin.ts";
  *   { action: "download", documentId }
  *     Streams the file (person documents are logged to hr_events first).
  *     Files above the inline limit answer { link } instead.
+ *   { action: "download-own-payslip", documentId }
+ *     Any signed-in role. payslip_download_source only answers for an active
+ *     payslip of a person linked to the caller (and logs the access itself).
+ *   { action: "move-payslip", documentId, toPersonId, requestId? }
+ *     HR. Moves a wrongly filed payslip to another person's folder; move_payslip
+ *     archives the old row and registers the new one atomically.
  */
 type Request = {
   method?: string;
@@ -88,6 +94,8 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("list-unfiled"), owner: ownerSchema }),
   z.object({ action: z.literal("file-existing"), ...metadataFields }),
   z.object({ action: z.literal("download"), documentId: uuid, preview: z.boolean().optional().default(false) }),
+  z.object({ action: z.literal("download-own-payslip"), documentId: uuid, preview: z.boolean().optional().default(false) }),
+  z.object({ action: z.literal("move-payslip"), documentId: uuid, toPersonId: uuid, requestId: uuid.optional() }),
 ]);
 
 type Owner = z.infer<typeof ownerSchema>;
@@ -256,7 +264,9 @@ const contentDisposition = (name: string) =>
 export function createDocumentsHandler(deps: {
   createClient: typeof createClient;
   storage?: (client: SupabaseClient) => Promise<DocumentStorage | null>;
+  storageFromEncrypted?: (encrypted: string) => DocumentStorage;
 } = { createClient }) {
+  const storageFromCredentials = deps.storageFromEncrypted || driveStorageFromEncrypted;
   const storageFor = deps.storage || defaultStorage;
   return async function handler(req: Request, res: Response) {
     res.setHeader("Cache-Control", "no-store");
@@ -277,6 +287,26 @@ export function createDocumentsHandler(deps: {
       const client = deps.createClient(url, key, { accessToken: async () => token.slice(7) });
       const identity = await client.rpc("sync_clerk_profile");
       if (identity.error || !identity.data) return res.status(401).json({ error: "Sign in again." });
+      if (action.action === "download-own-payslip") {
+        const source = await client.rpc("payslip_download_source", { document_id: action.documentId });
+        if (source.error) throw source.error;
+        const row = (Array.isArray(source.data) ? source.data[0] : source.data) as
+          | { provider_file_id: string; file_name: string; mime_type: string | null; size_bytes: number | null; storage_provider: string; encrypted_credentials: string | null }
+          | null | undefined;
+        if (!row) return res.status(404).json({ error: "Payslip not found." });
+        if (row.storage_provider !== "gdrive" || !row.encrypted_credentials)
+          return res.status(503).json({ error: "The storage holding this payslip is not connected." });
+        const storage = storageFromCredentials(row.encrypted_credentials);
+        if ((row.size_bytes ?? 0) > INLINE_DOWNLOAD_BYTES)
+          return res.status(200).json({ link: (await storage.getFile(row.provider_file_id)).link });
+        const bytes = await (await storage.download(row.provider_file_id)).arrayBuffer();
+        res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
+        res.setHeader("Content-Disposition", action.preview
+          ? `inline; filename*=UTF-8''${encodeURIComponent(row.file_name)}`
+          : contentDisposition(row.file_name));
+        return res.status(200).send(Buffer.from(bytes));
+      }
+
       const role = await client.from("user_roles").select("role").eq("user_id", identity.data).single();
       const roleName = role.error ? "" : role.data?.role;
       if (roleName !== "admin" && roleName !== "hr") return res.status(403).json({ error: "Admin or HR access is required." });
@@ -318,6 +348,39 @@ export function createDocumentsHandler(deps: {
 
       const storage = await storageFor(client);
       if (!storage) return res.status(503).json({ error: "Connect Google Drive first (Settings → Google Drive)." });
+
+      if (action.action === "move-payslip") {
+        const { data: doc, error } = await client.from("documents").select("id,type_code,status,person_id,provider_file_id,provider_folder_id,valid_from,storage_provider").eq("id", action.documentId).maybeSingle();
+        if (error) throw error;
+        if (!doc) return res.status(404).json({ error: "Document not found." });
+        if (doc.type_code !== "PAYSLIP" || doc.status !== "active" || !doc.person_id)
+          return res.status(400).json({ error: "Only an active payslip can be moved." });
+        if (doc.person_id === action.toPersonId) return res.status(400).json({ error: "Choose a different person." });
+        if (storage.provider !== doc.storage_provider) return res.status(503).json({ error: "The storage holding this document is not connected." });
+        await folderOwner(client, { kind: "person", id: action.toPersonId });
+        const matricule = await client
+          .from("hr_events")
+          .select("employee_id,previous_state")
+          .eq("person_id", doc.person_id)
+          .eq("kind", "matricule_changed")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (matricule.error) throw matricule.error;
+        const target = await resolveFolder(client, storage, { kind: "person", id: action.toPersonId }, "bulletins", datedSubfolder("PAYSLIP", { validFrom: doc.valid_from }));
+        await storage.move(doc.provider_file_id, doc.provider_folder_id, target.id);
+        const moved = await client.rpc("move_payslip", { document_id: doc.id, to_person_id: action.toPersonId, to_folder_id: target.id, request_id: action.requestId ?? randomUUID() });
+        if (moved.error) {
+          await storage.move(doc.provider_file_id, target.id, doc.provider_folder_id).catch(() => undefined);
+          if (moved.error.code === "P0001") return res.status(400).json({ error: moved.error.message });
+          throw moved.error;
+        }
+        const previous = matricule.data as { employee_id: string | null; previous_state: string | null } | null;
+        return res.status(200).json({
+          document: moved.data,
+          previousMatricule: previous?.employee_id && previous.previous_state ? { employeeId: previous.employee_id, value: previous.previous_state } : null,
+        });
+      }
 
       if (action.action === "prepare-upload") {
         const type = await loadType(client, action.typeCode, action.owner, action.expiresOn);

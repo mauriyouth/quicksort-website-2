@@ -129,6 +129,31 @@ export async function previewDocument(doc: Pick<DocumentRecord, "id" | "file_nam
   }
 }
 
+/** Portal: an employee's own payslip (the server only answers for active payslips linked to them). */
+export async function downloadOwnPayslip(doc: Pick<DocumentRecord, "id" | "file_name">) {
+  const result = await request<Blob | { link: string }>({ action: "download-own-payslip", documentId: doc.id });
+  if (result instanceof Blob) saveBlob(result, doc.file_name);
+  else window.open(result.link, "_blank", "noopener");
+}
+
+export async function previewOwnPayslip(doc: Pick<DocumentRecord, "id">) {
+  const result = await request<Blob | { link: string }>({ action: "download-own-payslip", documentId: doc.id, preview: true });
+  if (result instanceof Blob) {
+    const url = URL.createObjectURL(result);
+    window.open(url, "_blank", "noopener");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } else {
+    window.open(result.link, "_blank", "noopener");
+  }
+}
+
+/** Re-files a payslip under another person; the old record is archived. */
+export async function movePayslip(documentId: string, toPersonId: string) {
+  return await request<{ document: DocumentRecord; previousMatricule: { employeeId: string; value: string } | null }>({
+    action: "move-payslip", documentId, toPersonId, requestId: crypto.randomUUID(),
+  });
+}
+
 /** Person-document audit trail: uploads (document_registered) and views/downloads (document_accessed). */
 export type DocumentActivityEvent = { id: number; kind: string; next_state: string; actor_email: string; rationale: string; created_at: string };
 

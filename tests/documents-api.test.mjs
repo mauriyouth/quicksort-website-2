@@ -28,6 +28,7 @@ function fakeSupabase({ role = 'admin', tables = {}, rpc = {} } = {}) {
     sales_clients: [{ id: clientId, name: 'Teamwill' }],
     sales_projects: [{ id: projectId, title: 'Refonte CRM', client_id: clientId, drive_folder_id: null }],
     document_folders: [],
+    hr_events: [],
     documents: [],
     ...tables,
   };
@@ -38,6 +39,8 @@ function fakeSupabase({ role = 'admin', tables = {}, rpc = {} } = {}) {
     const q = {
       select: () => q,
       eq: (k, v) => { filters.push([k, v]); return q; },
+      order: () => q,
+      limit: () => q,
       maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
       single: async () => (rows()[0] ? { data: rows()[0], error: null } : { data: null, error: { code: 'PGRST116' } }),
       then: (resolve) => resolve({ data: rows(), error: null }),
@@ -107,7 +110,7 @@ const call = async (handler, body) => {
 const setup = (options = {}) => {
   const supa = fakeSupabase(options);
   const storage = fakeStorage();
-  const handler = createDocumentsHandler({ createClient: () => supa.client, storage: async () => storage });
+  const handler = createDocumentsHandler({ createClient: () => supa.client, storage: async () => storage, storageFromEncrypted: encrypted => { storage.log.push(['fromEncrypted', encrypted]); return storage; } });
   return { supa, storage, handler };
 };
 
@@ -285,4 +288,88 @@ test('employees and sales roles are rejected', async () => {
     const res = await call(handler, { action: 'download', documentId });
     assert.equal(res.code, 403, role);
   }
+});
+
+const payslipRow = { provider_file_id: 'slip-1', file_name: 'bulletin.pdf', mime_type: 'application/pdf', size_bytes: 10, storage_provider: 'gdrive', encrypted_credentials: 'cipher' };
+
+test('an employee downloads their own payslip; foreign, unknown and sales callers get 404 and no storage call', async () => {
+  const own = setup({ role: 'employee', rpc: { payslip_download_source: ({ document_id }) => ({ data: document_id === documentId ? [payslipRow] : [], error: null }) } });
+  let res = await call(own.handler, { action: 'download-own-payslip', documentId });
+  assert.equal(res.code, 200);
+  assert.equal(res.body.toString(), 'drive:slip-1');
+  assert.match(res.headers['content-disposition'], /attachment/);
+  assert.ok(own.storage.log.some(entry => entry[0] === 'fromEncrypted' && entry[1] === 'cipher'));
+  assert.ok(!own.supa.calls.some(([name]) => name === 'log_document_access'), 'The RPC logs the access itself');
+  res = await call(own.handler, { action: 'download-own-payslip', documentId, preview: true });
+  assert.match(res.headers['content-disposition'], /^inline/);
+
+  own.storage.log.length = 0;
+  res = await call(own.handler, { action: 'download-own-payslip', documentId: '66666666-6666-4666-8666-666666666666' });
+  assert.equal(res.code, 404);
+  assert.equal(res.body.error, 'Payslip not found.');
+  assert.deepEqual(own.storage.log, []);
+
+  const sales = setup({ role: 'sales', rpc: { payslip_download_source: () => ({ data: [], error: null }) } });
+  res = await call(sales.handler, { action: 'download-own-payslip', documentId });
+  assert.equal(res.code, 404);
+  assert.deepEqual(sales.storage.log, []);
+});
+
+const personB = '77777777-7777-4777-8777-777777777777';
+const slip = { id: documentId, type_code: 'PAYSLIP', status: 'active', person_id: personId, provider_file_id: 'slip-1', provider_folder_id: 'old-folder', valid_from: '2026-09-01', storage_provider: 'gdrive' };
+const moveSetup = (extra = {}) => setup({
+  role: 'hr',
+  tables: {
+    hr_people: [{ id: personId, full_name: 'Ada Lovelace' }, { id: personB, full_name: 'Grace Hopper' }],
+    documents: [slip],
+    hr_events: [{ person_id: personId, kind: 'matricule_changed', employee_id: 'emp-1', previous_state: '00026' }],
+  },
+  rpc: { move_payslip: args => ({ data: { id: 'new-doc', person_id: args.to_person_id, provider_folder_id: args.to_folder_id }, error: null }) },
+  ...extra,
+});
+
+test('move-payslip files into the new person\'s bulletins/<year> folder and calls move_payslip', async () => {
+  const { supa, storage, handler } = moveSetup();
+  const res = await call(handler, { action: 'move-payslip', documentId, toPersonId: personB, requestId: '88888888-8888-4888-8888-888888888888' });
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.deepEqual(storage.log.filter(entry => entry[0] === 'ensureChild').map(entry => entry[2]), ['08_Bulletins_de_paie', '2026']);
+  const move = storage.log.find(entry => entry[0] === 'move');
+  assert.deepEqual(move.slice(0, 3), ['move', 'slip-1', 'old-folder']);
+  assert.match(move[3], />2026#/);
+  const [, args] = supa.calls.find(([name]) => name === 'move_payslip');
+  assert.deepEqual(args, { document_id: documentId, to_person_id: personB, to_folder_id: move[3], request_id: '88888888-8888-4888-8888-888888888888' });
+  assert.equal(res.body.document.person_id, personB);
+  assert.deepEqual(res.body.previousMatricule, { employeeId: 'emp-1', value: '00026' });
+  assert.ok(!supa.calls.some(([name]) => name === 'register_document'));
+});
+
+test('move-payslip has no previous matricule when the old person never had one changed', async () => {
+  const { handler } = moveSetup({ tables: { hr_people: [{ id: personId, full_name: 'Ada' }, { id: personB, full_name: 'Grace' }], documents: [slip] } });
+  const res = await call(handler, { action: 'move-payslip', documentId, toPersonId: personB });
+  assert.equal(res.code, 200);
+  assert.equal(res.body.previousMatricule, null);
+});
+
+test('a refused move puts the file back in the old folder', async () => {
+  const { storage, handler } = moveSetup({ rpc: { move_payslip: () => ({ data: null, error: { code: 'P0001', message: 'Only an active payslip can be moved.' } }) } });
+  const res = await call(handler, { action: 'move-payslip', documentId, toPersonId: personB });
+  assert.equal(res.code, 400);
+  assert.equal(res.body.error, 'Only an active payslip can be moved.');
+  const moves = storage.log.filter(entry => entry[0] === 'move');
+  assert.equal(moves.length, 2);
+  assert.deepEqual(moves[1], ['move', 'slip-1', moves[0][3], 'old-folder']);
+});
+
+test('move-payslip refuses other document types, archived payslips and employees', async () => {
+  let ctx = moveSetup({ tables: { hr_people: [{ id: personId, full_name: 'Ada' }, { id: personB, full_name: 'Grace' }], documents: [{ ...slip, type_code: 'CNI' }] } });
+  let res = await call(ctx.handler, { action: 'move-payslip', documentId, toPersonId: personB });
+  assert.equal(res.code, 400);
+  assert.equal(res.body.error, 'Only an active payslip can be moved.');
+  ctx = moveSetup({ tables: { hr_people: [{ id: personId, full_name: 'Ada' }, { id: personB, full_name: 'Grace' }], documents: [{ ...slip, status: 'archived' }] } });
+  res = await call(ctx.handler, { action: 'move-payslip', documentId, toPersonId: personB });
+  assert.equal(res.code, 400);
+  assert.ok(!ctx.storage.log.some(entry => entry[0] === 'move'));
+  ctx = setup({ role: 'employee' });
+  res = await call(ctx.handler, { action: 'move-payslip', documentId, toPersonId: personB });
+  assert.equal(res.code, 403);
 });

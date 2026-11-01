@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDocumentsHandler } from '../apps/admin/server/documents/handler.ts';
+import { FOLDER_LABELS, datedSubfolder } from '../apps/admin/server/documents/folders.ts';
 
 process.env.SUPABASE_URL = 'https://example.supabase.co';
 process.env.SUPABASE_PUBLISHABLE_KEY = 'public-anon-key';
@@ -15,6 +16,7 @@ const types = [
   { code: 'CNI', label: "Carte d'identité", owner_kinds: ['person'], folder: 'identite', requires_expiry: true },
   { code: 'RIB', label: 'RIB', owner_kinds: ['person'], folder: 'administratif', requires_expiry: false },
   { code: 'CLIENT_CONTRACT', label: 'Contrat principal', owner_kinds: ['project'], folder: 'contrat', requires_expiry: false },
+  { code: 'PAYSLIP', label: 'Bulletin de paie', owner_kinds: ['person'], folder: 'bulletins', requires_expiry: false },
 ];
 
 /** In-memory PostgREST: eq filters, maybeSingle/single, upsert with ignoreDuplicates. */
@@ -134,6 +136,18 @@ test('prepare-upload refuses a missing expiry, a wrong owner and sales documents
   assert.match(res.body.error, /cannot be filed on a person/);
   res = await call(handler, { ...base, owner: { kind: 'project', id: projectId }, typeCode: 'CLIENT_CONTRACT' });
   assert.equal(res.code, 403);
+});
+
+test('payslips file under 08_Bulletins_de_paie/<period year>', async () => {
+  assert.equal(FOLDER_LABELS.bulletins, '08_Bulletins_de_paie');
+  assert.deepEqual(datedSubfolder('PAYSLIP', { validFrom: '2025-12-01' }, new Date('2026-11-01')), ['2025']);
+  assert.deepEqual(datedSubfolder('TRANSPORT_PASS', { validFrom: '2025-03-01' }), ['Navigo', '2025']);
+
+  const { storage, handler } = setup({ role: 'hr' });
+  const res = await call(handler, { action: 'prepare-upload', owner: { kind: 'person', id: personId }, typeCode: 'PAYSLIP', title: 'Paie décembre 2025', fileName: 'bulletin.pdf', mimeType: 'application/pdf', size: 10, validFrom: '2025-12-01' });
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.deepEqual(storage.log.filter(entry => entry[0] === 'ensureChild').map(entry => entry[2]), ['08_Bulletins_de_paie', '2025']);
+  assert.equal(res.body.folder.name, '2025');
 });
 
 test('project uploads reuse the legacy contract folder linked on the project', async () => {

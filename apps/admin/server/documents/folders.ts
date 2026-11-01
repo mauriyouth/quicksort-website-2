@@ -10,6 +10,7 @@ import type { StorageRoot } from "./storage/types.ts";
  *   <people root>/<NOM Prénom> – <id>/01_Identite …           person documents
  *   <people root>/<NOM Prénom> – <id>/07_Justificatifs        Navigo, mutuelle and other proofs
  *   <people root>/<NOM Prénom> – <id>/07_Justificatifs/Navigo/2025   see YEARLY_SUBFOLDERS
+ *   <people root>/<NOM Prénom> – <id>/08_Bulletins_de_paie/2025     see YEAR_ONLY_SUBFOLDERS
  */
 export const FOLDER_LABELS: Record<string, string> = {
   contrat: "01_Contrat",
@@ -23,6 +24,7 @@ export const FOLDER_LABELS: Record<string, string> = {
   sante: "05_Sante",
   diplomes: "06_Diplomes_Certifications",
   justificatifs: "07_Justificatifs",
+  bulletins: "08_Bulletins_de_paie",
   sortie: "99_Sortie",
   divers: "99_Divers",
 };
@@ -36,11 +38,14 @@ export const YEARLY_SUBFOLDERS: Record<string, string> = {
   TRANSPORT_PASS: "Navigo",
 };
 
+/** Types filed by period year directly under their folder: 08_Bulletins_de_paie/2025. */
+export const YEAR_ONLY_SUBFOLDERS = new Set(["PAYSLIP"]);
+
 export function datedSubfolder(typeCode: string, dates: { validFrom?: string | null; issuedOn?: string | null }, today = new Date()): string[] {
   const name = YEARLY_SUBFOLDERS[typeCode];
-  if (!name) return [];
+  if (!name && !YEAR_ONLY_SUBFOLDERS.has(typeCode)) return [];
   const year = (dates.validFrom || dates.issuedOn)?.slice(0, 4) || String(today.getFullYear());
-  return [name, year];
+  return name ? [name, year] : [year];
 }
 
 /** Drive allows "/" inside a name; the team names contract folders "<Client>/<Contract>". */

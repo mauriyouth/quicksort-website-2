@@ -49,15 +49,17 @@ function sameName(a: string, b: string): boolean {
 
 const isReadable = (f: ParsedPayslip | UnreadablePayslip): f is ParsedPayslip => !("error" in f);
 
+/** Open row (status <> 'ended'), else the latest by start_date. */
+export function preferredEmployment(personId: string, employees: MatchEmployee[]): MatchEmployee | null {
+  const rows = employees.filter((e) => e.person_id === personId);
+  return rows.find((r) => r.status !== "ended") ?? [...rows].sort((a, b) => (b.start_date ?? "").localeCompare(a.start_date ?? ""))[0] ?? null;
+}
+
 export function matchPayslips(files: Array<ParsedPayslip | UnreadablePayslip>, employees: MatchEmployee[], filed: FiledPayslip[]): ReviewRow[] {
   const byPerson = new Map<string, MatchEmployee[]>();
   for (const e of employees) byPerson.set(e.person_id, [...(byPerson.get(e.person_id) ?? []), e]);
 
-  // Open row (status <> 'ended'), else the latest by start_date.
-  const preferredRow = (personId: string): MatchEmployee | null => {
-    const rows = byPerson.get(personId) ?? [];
-    return rows.find((r) => r.status !== "ended") ?? [...rows].sort((a, b) => (b.start_date ?? "").localeCompare(a.start_date ?? ""))[0] ?? null;
-  };
+  const preferredRow = (personId: string): MatchEmployee | null => preferredEmployment(personId, employees);
   const personName = (personId: string) => preferredRow(personId)?.full_name ?? personId;
   const nameMatches = (personId: string, printed: string) => (byPerson.get(personId) ?? []).some((r) => sameName(r.full_name, printed));
 

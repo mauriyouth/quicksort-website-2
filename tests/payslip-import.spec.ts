@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fixtureSupabaseURL, startComponentHarness } from './component-harness';
 
@@ -27,7 +28,7 @@ const PEOPLE = [
 const json = (route: Route, value: unknown, status = 200) =>
   route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(value) });
 
-async function mock(page: Page, { failRegisterFor = '' } = {}) {
+async function mock(page: Page, { failRegisterFor = '', filed = [] as unknown[] } = {}) {
   const rpcs: Array<Record<string, unknown>> = [];
   const registers: Array<Record<string, unknown>> = [];
   const queries: string[] = [];
@@ -37,6 +38,7 @@ async function mock(page: Page, { failRegisterFor = '' } = {}) {
     if (url.pathname.endsWith('/rpc/set_employee_matricule')) { rpcs.push(route.request().postDataJSON()); return json(route, {}); }
     if (url.pathname.endsWith('/employees')) { queries.push(url.search); return json(route, [ADA, BEN, FREE].filter((e) => e.contract_type !== 'Freelance')); }
     if (url.pathname.endsWith('/hr_people')) return json(route, PEOPLE);
+    if (url.pathname.endsWith('/documents')) return json(route, filed);
     return json(route, []);
   });
   await page.route('**/api/documents', async (route) => {
@@ -117,4 +119,34 @@ test('review table fits the content width', async ({ page }) => {
   await expect(page.getByText('Unreadable', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: '/private/tmp/claude-501/-Users-mohamedahmednah-dev-quicksort-website/ad1d9046-515a-475f-a5b9-c2ae4f5336ee/scratchpad/payslips-review.png', fullPage: true });
+});
+
+const filedFor = (personId: string, sha256: string) => ({ id: 'doc-filed', person_id: personId, valid_from: '2026-10-01', title: 'Bulletin de paie Octobre 2026', sha256 });
+
+test('a person picked on an unknown row is checked against what is already filed for them', async ({ page }) => {
+  const file = await pdf('NOBODY KNOWN', '00077', 'NOBODY_KNOWN_10_2026_1.pdf');
+  const sha = createHash('sha256').update(file.buffer).digest('hex');
+
+  // Identical copy already filed for Ben: the row cannot be filed.
+  const m = await mock(page, { filed: [filedFor(BEN.person_id, sha)] });
+  await page.goto(harness.url);
+  await page.getByLabel('Payslip files').setInputFiles([file]);
+  await page.getByLabel('Employee for NOBODY_KNOWN_10_2026_1.pdf').selectOption({ label: 'Ben Example' });
+  await page.getByLabel('Confirm NOBODY_KNOWN_10_2026_1.pdf').check();
+  await expect(page.getByText('Already filed for Ben Example')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'File 0 payslips' })).toBeDisabled();
+  expect(m.registers).toHaveLength(0);
+});
+
+test('a differing copy filed for the picked person is superseded', async ({ page }) => {
+  const file = await pdf('NOBODY KNOWN', '00077', 'NOBODY_KNOWN_10_2026_1.pdf');
+  const { registers } = await mock(page, { filed: [filedFor(BEN.person_id, 'different')] });
+  await page.goto(harness.url);
+  await page.getByLabel('Payslip files').setInputFiles([file]);
+  await page.getByLabel('Employee for NOBODY_KNOWN_10_2026_1.pdf').selectOption({ label: 'Ben Example' });
+  await page.getByLabel('Confirm NOBODY_KNOWN_10_2026_1.pdf').check();
+  await expect(page.getByText('Replaces the payslip already filed for Ben Example')).toBeVisible();
+  await page.getByRole('button', { name: 'File 1 payslip' }).click();
+  await expect(page.getByText('Filed', { exact: true })).toBeVisible();
+  expect(registers[0]).toMatchObject({ supersedes: 'doc-filed' });
 });

@@ -2,7 +2,8 @@ import { db, type DocumentRecord } from "@quicksort/hr-db";
 import { uploadDocument } from "../documents/client";
 import { payslipTitle } from "./read.browser";
 import type { FiledPayslip, MatchEmployee, ReviewRow } from "./match";
-import { sameMatricule } from "./match";
+import type { ParsedPayslip } from "./read.browser";
+import { preferredEmployment, sameMatricule } from "./match";
 
 const FREELANCE = "Freelance";
 const CHUNK = 100;
@@ -37,12 +38,6 @@ export async function loadMatchContext(): Promise<{ employees: MatchEmployee[]; 
   };
 }
 
-/** The employment row whose matricule a payslip for this person would set: open row, else the latest start. */
-export function employmentFor(personId: string, employees: MatchEmployee[]): MatchEmployee | null {
-  const rows = employees.filter((e) => e.person_id === personId);
-  return rows.find((r) => r.status !== "ended") ?? [...rows].sort((a, b) => (b.start_date ?? "").localeCompare(a.start_date ?? ""))[0] ?? null;
-}
-
 /** The real matricule HR would be overwriting by filing this payslip, or null (none held, QS- default, or the same). */
 export function replacedMatricule(matricule: string, employment: MatchEmployee | null): string | null {
   const held = employment?.matricule?.trim() ?? "";
@@ -54,10 +49,19 @@ export function replacedMatricule(matricule: string, employment: MatchEmployee |
  * the PDF's (the QS- default, a leading-zero variant such as "26", or a
  * confirmed replacement) it is set to the Silae form first.
  */
+/** What filing this row for `personId` would do to payslips already on file for that person and period. */
+export function filedConflict(file: ParsedPayslip, personId: string, filed: FiledPayslip[]): { identical: boolean; supersedes: string | null } {
+  const validFrom = `${file.period}-01`;
+  const title = payslipTitle(file.period, file.index);
+  const existing = filed.filter((f) => f.person_id === personId && f.valid_from === validFrom && f.title === title);
+  if (existing.some((f) => f.sha256 === file.sha256)) return { identical: true, supersedes: null };
+  return { identical: false, supersedes: existing[0]?.id ?? null };
+}
+
 export async function fileReviewRow(
   row: ReviewRow,
   chosen: { personId: string; employeeIdForMatricule: string | null; overwriteConfirmed: boolean },
-  employees: MatchEmployee[] = [],
+  employees: MatchEmployee[],
 ): Promise<DocumentRecord> {
   const file = row.file;
   if ("error" in file) throw new Error("An unreadable file cannot be filed.");

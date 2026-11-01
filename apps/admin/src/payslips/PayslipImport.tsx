@@ -3,8 +3,8 @@ import { Upload } from "lucide-react";
 import { Notice } from "@quicksort/hr-ui";
 import { errorMessage } from "@quicksort/hr-db";
 import { readPayslipDrop, payslipTitle } from "./read.browser";
-import { matchPayslips, type MatchEmployee, type ReviewRow, type ReviewStatus } from "./match";
-import { employmentFor, fileReviewRow, loadMatchContext, replacedMatricule } from "./client";
+import { matchPayslips, preferredEmployment, type FiledPayslip, type MatchEmployee, type ReviewRow, type ReviewStatus } from "./match";
+import { filedConflict, fileReviewRow, loadMatchContext, replacedMatricule } from "./client";
 import "../documents/documents.css";
 import "../hr/workspace.css";
 import "./payslips.css";
@@ -33,6 +33,7 @@ const periodLabel = (row: ReviewRow) => ("error" in row.file ? "—" : payslipTi
 export function PayslipImport() {
   const [items, setItems] = useState<Item[]>([]);
   const [employees, setEmployees] = useState<MatchEmployee[]>([]);
+  const [filed, setFiled] = useState<FiledPayslip[]>([]);
   const [error, setError] = useState("");
   const [reading, setReading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -45,10 +46,18 @@ export function PayslipImport() {
     return [...byPerson].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [employees]);
 
-  const employmentOf = (item: Item) => (item.personId ? employmentFor(item.personId, employees) : null);
+  const employmentOf = (item: Item) =>
+    !item.personId ? null
+      : item.personId === item.row.personId ? employees.find((e) => e.id === item.row.employeeIdForMatricule) ?? null
+      : preferredEmployment(item.personId, employees);
+  // Weak rows are re-checked against what is filed for the person HR picked; matched/changed rows keep the matcher's verdict.
+  const conflictOf = (item: Item) =>
+    NEEDS_CONFIRMATION(item.row.status) && item.personId && !("error" in item.row.file) ? filedConflict(item.row.file, item.personId, filed) : null;
+  const supersedesOf = (item: Item) => (NEEDS_CONFIRMATION(item.row.status) ? conflictOf(item)?.supersedes ?? null : item.row.supersedes);
+  const personName = (id: string | null) => people.find((p) => p.id === id)?.name ?? "—";
   const replacement = (item: Item) => ("error" in item.row.file ? null : replacedMatricule(item.row.file.matricule, employmentOf(item)));
   const ready = (item: Item) =>
-    item.state !== "done" && FILEABLE(item.row.status) && (!NEEDS_CONFIRMATION(item.row.status) || (!!item.personId && item.confirmed)) && (!replacement(item) || item.overwrite);
+    item.state !== "done" && FILEABLE(item.row.status) && !conflictOf(item)?.identical && (!NEEDS_CONFIRMATION(item.row.status) || (!!item.personId && item.confirmed)) && (!replacement(item) || item.overwrite);
   const queue = items.filter(ready);
   const busy = reading || progress !== null;
 
@@ -62,6 +71,7 @@ export function PayslipImport() {
       const parsed = await readPayslipDrop(files);
       const context = await loadMatchContext();
       setEmployees(context.employees);
+      setFiled(context.filed);
       setItems(matchPayslips(parsed, context.employees, context.filed).map((row) => ({ row, personId: row.personId, confirmed: false, overwrite: false, state: "idle", error: "" })));
     } catch (e) {
       setError(errorMessage(e));
@@ -84,8 +94,7 @@ export function PayslipImport() {
       patch(i, { state: "filing", error: "" });
       try {
         const employment = employmentOf(item);
-        // A supersede target belongs to the matched person; another person gets a fresh filing.
-        const row = item.personId === item.row.personId ? item.row : { ...item.row, supersedes: null };
+        const row = { ...item.row, supersedes: supersedesOf(item) };
         await fileReviewRow(row, { personId: item.personId!, employeeIdForMatricule: employment?.id ?? null, overwriteConfirmed: item.overwrite }, employees);
         patch(i, { state: "done" });
       } catch (e) {
@@ -149,8 +158,10 @@ export function PayslipImport() {
                             </label>
                           </>
                         ) : (
-                          people.find((p) => p.id === item.personId)?.name ?? "—"
+                          personName(item.personId)
                         )}
+                        {conflictOf(item)?.identical && item.state !== "done" && <small>Already filed for {personName(item.personId)}</small>}
+                        {supersedesOf(item) && NEEDS_CONFIRMATION(row.status) && item.state !== "done" && <small>Replaces the payslip already filed for {personName(item.personId)}</small>}
                         {row.warning && <small>{row.warning}</small>}
                         {replaced && item.state !== "done" && (
                           <label className="hr-checkbox">

@@ -250,7 +250,7 @@ async function registerFile(client: SupabaseClient, storage: DocumentStorage, me
   });
   if (!registered.error) return { status: 200, body: { document: registered.data } };
   if (registered.error.code === "23505") {
-    const existing = await client.from("documents").select("*").eq("storage_provider", storage.provider).eq("provider_file_id", file.id).maybeSingle();
+    const existing = await client.from("documents").select("*").eq("storage_provider", storage.provider).eq("provider_file_id", file.id).neq("status", "archived").maybeSingle();
     if (existing.data) return { status: 200, body: { document: existing.data } };
   }
   await undo().catch(() => undefined);

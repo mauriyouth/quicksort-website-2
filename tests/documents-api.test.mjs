@@ -35,13 +35,14 @@ function fakeSupabase({ role = 'admin', tables = {}, rpc = {} } = {}) {
   const calls = [];
   const query = table => {
     const filters = [];
-    const rows = () => db[table].filter(row => filters.every(([k, v]) => row[k] === v));
+    const rows = () => db[table].filter(row => filters.every(([k, v, negate]) => (row[k] === v) !== Boolean(negate)));
     const q = {
       select: () => q,
       eq: (k, v) => { filters.push([k, v]); return q; },
+      neq: (k, v) => { filters.push([k, v, true]); return q; },
       order: () => q,
       limit: () => q,
-      maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
+      maybeSingle: async () => (rows().length > 1 ? { data: null, error: { code: 'PGRST116' } } : { data: rows()[0] ?? null, error: null }),
       single: async () => (rows()[0] ? { data: rows()[0], error: null } : { data: null, error: { code: 'PGRST116' } }),
       then: (resolve) => resolve({ data: rows(), error: null }),
       upsert: async (row, opts) => {
@@ -196,6 +197,23 @@ test('a refused registration trashes the orphan upload and shows the database re
   assert.equal(res.code, 400);
   assert.equal(res.body.error, 'Only an active document can be renewed.');
   assert.deepEqual(storage.log.at(-1), ['trash', 'file-1']);
+});
+
+test('a double submit after a payslip move returns the live row and never trashes the file', async () => {
+  const archived = { id: '99999999-9999-4999-8999-999999999999', storage_provider: 'gdrive', provider_file_id: 'file-1', status: 'archived' };
+  const live = { id: documentId, storage_provider: 'gdrive', provider_file_id: 'file-1', status: 'active' };
+  const { storage, handler } = setup({
+    tables: {
+      document_folders: [{ storage_provider: 'gdrive', owner_kind: 'person', owner_id: personId, folder_code: 'identite', provider_folder_id: 'folder-id' }],
+      documents: [archived, live],
+    },
+    rpc: { register_document: () => ({ data: null, error: { code: '23505', message: 'duplicate key' } }) },
+  });
+  storage.files['file-1'] = { id: 'file-1', name: 'x.pdf', mimeType: '', size: 1, folderIds: ['folder-id'], sha256: null, link: null, modifiedAt: null };
+  const res = await call(handler, { action: 'register', owner: { kind: 'person', id: personId }, folderId: 'folder-id', fileId: 'file-1', typeCode: 'RIB', title: 'RIB' });
+  assert.equal(res.code, 200);
+  assert.equal(res.body.document.id, documentId);
+  assert.ok(!storage.log.some(entry => entry[0] === 'trash'));
 });
 
 test('a double-submitted registration returns the existing document and keeps the file', async () => {

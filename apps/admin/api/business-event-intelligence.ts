@@ -3,7 +3,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { loadAiSettings } from "../server/ai-settings.ts";
-import { enrichWithTreg } from "../server/treg.ts";
+import { enrichWithTreg, createUsageContext } from "../server/treg.ts";
 
 export const config = { maxDuration: 120 };
 type Request = { method?: string; headers: Record<string, string | string[] | undefined>; body: unknown };
@@ -20,7 +20,7 @@ export default async function handler(req: Request, res: Response) {
     const client = createClient(url, key, { accessToken: async () => authorization.slice(7) }); const identity = await client.rpc("sync_clerk_profile"); if (identity.error || !identity.data) return res.status(401).json({ error: "Your session expired. Sign in again." });
     const role = await client.from("user_roles").select("role").eq("user_id", identity.data).single(); if (role.error || role.data?.role !== "admin") return res.status(403).json({ error: "Business admin access is required." });
     const settings = await loadAiSettings(client); if (!settings.apiKey) return res.status(503).json({ error: "Configure the AI connection in Admin → AI configuration." });
-    const enrichment = await enrichWithTreg(parsed.data.attendees, parsed.data.event.id);
+    const enrichment = await enrichWithTreg(parsed.data.attendees, await createUsageContext(identity.data, "events"));
     const { output } = await generateText({ model: createOpenAI({ apiKey: settings.apiKey })(settings.model), instructions: "You are QuickSort's GTM event analyst. Personal email addresses are normal for Luma and must never reduce fit or imply student status. Use uploaded fields and supplied public professional-profile evidence to distinguish professionals, founders, students, and unknowns. Never merge people only because their names match. Rank B2B prospects, map represented organisations, identify likely buyer or decision-maker roles, colleagues already present in the attendee list, and specific human-reviewed outreach. Do not claim access to private LinkedIn data. Put only URLs actually present in supplied evidence in researchSources. Mark uncertain facts Low confidence. Never infer sensitive personal traits.", prompt: JSON.stringify({ ...parsed.data, publicProfessionalEnrichment: enrichment.profiles }), output: Output.object({ schema: outputSchema }), maxOutputTokens: 10000, maxRetries: 1, abortSignal: AbortSignal.timeout(100000), providerOptions: { openai: { store: false } } });
     return res.status(200).json({ ...outputSchema.parse(output), model: settings.model, analyzedAt: new Date().toISOString(), enrichmentProvider: enrichment.provider });
   } catch (problem) { return res.status(502).json({ error: problem instanceof Error && problem.message === "Backend research is not configured." ? problem.message : "Event intelligence could not be completed. Check the backend connection and AI configuration, then try again." }); }

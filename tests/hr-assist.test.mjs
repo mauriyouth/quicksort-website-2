@@ -43,7 +43,7 @@ test('HR assistant saves an attributed grounded draft and strips unrelated sensi
   assert.equal(res.code, 200);
   assert.deepEqual(res.body, { suggestion_id: suggestionId, payload, sources: [{ type: 'person', id: personId, version: 3 }] });
   const context = JSON.parse(app.prompts[0].messages[0].content);
-  assert.deepEqual(context.person, { id: personId, version: 3, full_name: 'Ada', headline: 'Platform engineer', skills: 'Kubernetes', location: 'Paris', contact_allowed: true });
+  assert.deepEqual(context.person, { id: personId, version: 3, full_name: 'Ada', headline: 'Platform engineer', skills: 'Kubernetes', languages: '', degrees: '', certifications: '', location: 'Paris', contact_allowed: true });
   assert.equal(JSON.stringify(context).includes('PRIVATE'), false);
   assert.equal('offers' in context, false);
   assert.equal('exits' in context, false);

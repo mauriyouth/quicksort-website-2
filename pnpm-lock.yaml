@@ -303,6 +303,9 @@ importers:
 
   packages/design-system:
     dependencies:
+      lucide-react:
+        specifier: 0.453.0
+        version: 0.453.0(react@18.3.1)
       react:
         specifier: ^18.2.0
         version: 18.3.1

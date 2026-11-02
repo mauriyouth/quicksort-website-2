@@ -3,15 +3,28 @@ export type UnreadablePayslip = { fileName: string; error: string };
 
 const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 const PERIOD = new RegExp(`^(${MONTHS.join("|")}) (\\d{4})$`, "i");
-const FILE_NAME = /^(.+)_(\d{2})_(\d{4})_(\d+)\.pdf$/i;
+// mySilae downloads append another `_n` (NAME_MM_YYYY_n_1.pdf); it is ignored.
+const FILE_NAME = /^(.+?)_(\d{2})_(\d{4})_(\d+)(?:_\d+)?\.pdf$/i;
 
 const clean = (item: string) => item.replace(/\u00a0/g, " ").trim();
 
+// Older Silae PDFs give their text word by word ("Matricule", ":" / "Janvier", "2021"),
+// so a label or value may span two consecutive non-blank items.
 const firstAfter = (rawItems: string[], label: string, pattern: RegExp) => {
-  const items = rawItems.map(clean);
-  const at = items.indexOf(label);
-  if (at < 0) return null;
-  return items.slice(at + 1).find((text) => text && pattern.test(text)) ?? null;
+  const items = rawItems.map(clean).filter(Boolean);
+  const pair = (i: number) => (i + 1 < items.length ? `${items[i]} ${items[i + 1]}` : null);
+  let start = -1;
+  for (let i = 0; i < items.length && start < 0; i++) {
+    if (items[i] === label) start = i + 1;
+    else if (pair(i) === label) start = i + 2;
+  }
+  if (start < 0) return null;
+  for (let i = start; i < items.length; i++) {
+    if (pattern.test(items[i])) return items[i];
+    const joined = pair(i);
+    if (joined && pattern.test(joined)) return joined;
+  }
+  return null;
 };
 
 const monthLabel = (month: number) => MONTHS[month - 1].charAt(0).toUpperCase() + MONTHS[month - 1].slice(1);

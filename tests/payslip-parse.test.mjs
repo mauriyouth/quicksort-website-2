@@ -44,6 +44,18 @@ test("parsePayslipText skips blanks and ignores the 15-digit SS number", () => {
   assert.deepEqual(parsePayslipText(items, "A_B_10_2026_2.pdf"), { fileName: "A_B_10_2026_2.pdf", matricule: "00026", period: "2026-10", index: 2, nameFromFile: "A B" });
 });
 
+test("parsePayslipText reads older Silae PDFs whose text comes word by word", () => {
+  const items = ["Période", " ", ":", " ", "Janvier", " ", "2021", "", "QUICKSORT", "Matricule", " ", ":", "N°", " ", "SS", " ", ":", "Emploi", " ", ":", "", "00002", "190059938020959"];
+  assert.deepEqual(parsePayslipText(items, "OTHMANE_BLIAL_01_2021_1.pdf"), { fileName: "OTHMANE_BLIAL_01_2021_1.pdf", matricule: "00002", period: "2021-01", index: 1, nameFromFile: "OTHMANE BLIAL" });
+});
+
+test("parsePayslipText accepts the extra _n mySilae adds to downloaded file names", () => {
+  const items = ["Période :", "Octobre 2026", "Matricule :", "00025"];
+  assert.equal(parsePayslipText(items, "TEZIER_CLAIRE_10_2026_1_1.pdf").index, 1);
+  assert.equal(parsePayslipText(items, "TEZIER_CLAIRE_10_2026_1_1.pdf").nameFromFile, "TEZIER CLAIRE");
+  assert.equal(parsePayslipText(items, "MUSTAFAYEV_MURAD_10_2026_2_1.pdf").index, 2);
+});
+
 test("limits: 201 files, an 11 MB file, a zip expanding past 100 MB are refused with a clear message", async () => {
   const pdfLike = enc("%PDF-1.4");
   await assert.rejects(readPayslipDrop(Array.from({ length: 201 }, (_, i) => ({ name: `f${i}.pdf`, bytes: pdfLike }))), /200 files/);

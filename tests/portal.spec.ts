@@ -35,6 +35,7 @@ type PortalFixture = {
   my_employment: View<'my_employment'>[];
   my_onboarding_items: View<'my_onboarding_items'>[];
   my_offers: View<'my_offers'>[];
+  my_payslips: View<'my_payslips'>[];
 };
 function portalFixture(): PortalFixture {
   return {
@@ -54,7 +55,16 @@ function portalFixture(): PortalFixture {
       { id: firstOffer, application_id: firstApplication, title: 'Platform employment offer', contract_type: 'CDI', salary_monthly: 4500, status: 'shared', shared_at: now, valid_until: '2099-01-01', version: 4 },
       { id: secondOffer, application_id: secondApplication, title: 'Data employment offer', contract_type: 'CDI', salary_monthly: 4800, status: 'shared', shared_at: now, valid_until: '2099-01-01', version: 2 },
     ],
+    my_payslips: [],
   };
+}
+const payslipOne = 'abababab-abab-4bab-8bab-abababababab';
+const payslipTwo = 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd';
+function addPayslips(state: PortalFixture) {
+  state.my_payslips.push(
+    { id: payslipOne, person_id: personId, title: 'Payslip March 2026', valid_from: '2026-03-01', file_name: 'payslip-2026-03.pdf', size_bytes: 52000, created_at: now },
+    { id: payslipTwo, person_id: personId, title: 'Payslip February 2026', valid_from: '2026-02-01', file_name: 'payslip-2026-02.pdf', size_bytes: 51000, created_at: now },
+  );
 }
 function addEmployment(state: PortalFixture) {
   state.my_employment.push({ id: employmentId, person_id: personId, matricule: 'QS-0001', role: 'Platform engineer', start_date: '2026-10-01', end_date: null, status: 'preboarding', onboarding_completed_at: null, probation_status: 'pending', probation_end: '2027-01-01' });
@@ -63,7 +73,7 @@ function addEmployment(state: PortalFixture) {
     { id: hrTaskId, employee_id: employmentId, phase: 'preboarding', title: 'Provision equipment', assignee: 'hr@example.test', due_date: '2026-10-05', required: true, dependency_id: null, evidence: '', completed_at: null, version: 1 },
   );
 }
-const tables = z.enum(['profiles', 'candidate_documents', 'contracts', 'contract_signatures', 'tool_requests', 'my_applications', 'my_application_events', 'my_employment', 'my_onboarding_items', 'my_offers']);
+const tables = z.enum(['profiles', 'candidate_documents', 'contracts', 'contract_signatures', 'tool_requests', 'my_applications', 'my_application_events', 'my_employment', 'my_onboarding_items', 'my_offers', 'my_payslips']);
 async function portalApi(page: Page, state: PortalFixture, failFirstCommand = false) {
   const commands: PortalCommand[] = [];
   let shouldFail = failFirstCommand;
@@ -101,7 +111,7 @@ async function portalApi(page: Page, state: PortalFixture, failFirstCommand = fa
 
 let harness: Awaited<ReturnType<typeof startComponentHarness>>;
 test.beforeAll(async () => {
-  harness = await startComponentHarness(`import {HrPortal} from '@app/portal/HrPortal'; createRoot(document.getElementById('root')).render(<HrPortal userId="${userId}" email="${email}"/>);`);
+  harness = await startComponentHarness(`import {BrowserRouter} from '${process.cwd()}/apps/admin/node_modules/react-router-dom'; import {HrPortal} from '@app/portal/HrPortal'; createRoot(document.getElementById('root')).render(<BrowserRouter><HrPortal userId="${userId}" email="${email}"/></BrowserRouter>);`);
 });
 test.afterAll(async () => { await harness.close(); });
 
@@ -185,6 +195,43 @@ test('offer response retains the selection and message after a command error, th
   await expect.poll(() => state.my_offers[1].status).toBe('declined');
   expect(commands[2]).toMatchObject({ kind: 'respond_offer', offer_id: secondOffer, expected_version: 2, response: 'declined', rationale: 'I am proceeding with my other application.' });
   expect(state.my_offers[0].status).toBe('accepted');
+});
+
+test('a linked employee sees their payslips grouped by year and downloads one through the own-payslip action', async ({ page }) => {
+  const state = portalFixture(); addEmployment(state); addPayslips(state);
+  const bodies: unknown[] = [];
+  await page.route('**/api/documents', async route => {
+    bodies.push(route.request().postDataJSON());
+    await route.fulfill({ contentType: 'application/pdf', body: '%PDF-1.4\n%%EOF' });
+  });
+  await portalApi(page, state);
+  await page.goto(new URL('/payslips', harness.url).href);
+  await expect(page.getByRole('heading', { name: '2026', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Payslip March 2026', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Payslip February 2026', exact: true })).toBeVisible();
+  const row = page.locator('.list-row').filter({ has: page.getByRole('heading', { name: 'Payslip March 2026', exact: true }) });
+  const download = page.waitForEvent('download');
+  await row.getByRole('button', { name: 'Download', exact: true }).click();
+  expect((await download).suggestedFilename()).toBe('payslip-2026-03.pdf');
+  expect(bodies).toEqual([{ action: 'download-own-payslip', documentId: payslipOne }]);
+});
+
+test('an account with no payslips sees the empty state', async ({ page }) => {
+  await portalApi(page, portalFixture());
+  await page.goto(new URL('/application', harness.url).href);
+  await page.getByRole('link', { name: 'My payslips', exact: true }).click();
+  await expect(page).toHaveURL(new URL('/payslips', harness.url).href);
+  await expect(page.getByText('Your payslips appear here once HR has filed them.')).toBeVisible();
+});
+
+test('an ended employment still sees its payslips', async ({ page }) => {
+  const state = portalFixture(); addEmployment(state); addPayslips(state);
+  state.my_employment[0].status = 'ended'; state.my_employment[0].end_date = '2026-09-30';
+  await portalApi(page, state);
+  await page.goto(new URL('/payslips', harness.url).href);
+  await expect(page.getByRole('link', { name: 'My payslips', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Payslip March 2026', exact: true })).toBeVisible();
+  await expect(page.getByText('Opens when you join')).toHaveCount(0);
 });
 
 test('public website shows a published job and removes it after unpublication', async ({ page }) => {

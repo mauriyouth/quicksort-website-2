@@ -12,3 +12,13 @@
 .payslips-employee .hr-checkbox { margin-top: 7px; }
 .payslips-error { color: var(--qs-danger); }
 .payslips-progress { color: var(--qs-muted); font-size: 12px; }
+
+/* Person page → Payslips section and matricule editor (src/payslips/PersonPayslips.tsx). */
+.payslips-person { display: grid; gap: 12px; }
+.payslips-person-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.payslips-person-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0; border-top: 1px solid var(--qs-line); font-size: 14px; }
+.payslips-person-list li:first-child { border-top: 0; }
+.payslips-person-actions { display: flex; flex-wrap: wrap; gap: 2px; }
+.payslips-person-move { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--qs-line); border-radius: 8px; background: var(--qs-paper); }
+.payslips-person-move p { margin: 0; font-size: 13px; }
+.payslips-matricule { display: grid; gap: 10px; }

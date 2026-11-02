@@ -13,6 +13,8 @@ import { DateField } from '../DateField';
 import { CraScreen } from '../cra/CraScreen';
 import { countryName, countryOptions, needsResidencePermit } from './countries';
 import { DocumentsPanel } from '../documents/DocumentsPanel';
+import { MatriculeEdit, PersonPayslips } from '../payslips/PersonPayslips';
+import '../payslips/payslips.css';
 import { Action, Empty, Field, Form, SearchField, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
 export const stages: ApplicationStage[] = ['application', 'screening', 'hr_interview', 'technical_interview', 'client_presentation', 'decision', 'offer', 'contract'];
 export const personName = (workspace: Workspace, id: string) => workspace.people.find(person => person.id === id)?.full_name ?? 'Unknown person';
@@ -1012,7 +1014,7 @@ export function EmploymentDetail({
         </div>
         <div>
           <dt>Matricule</dt>
-          <dd>{employee.matricule}</dd>
+          <dd>{workspace.capabilities.recruit ? <MatriculeEdit key={employee.id + employee.matricule} employeeId={employee.id} current={employee.matricule} onSaved={reload} /> : employee.matricule}</dd>
         </div>
         <div>
           <dt>Contract</dt>
@@ -1121,8 +1123,12 @@ export function EmploymentDetail({
         owner={{ kind: 'person', id: employee.person_id }}
         title=""
         requirements={ended ? [] : [employee.contract_type, ...(needsResidencePermit(employee.nationality) ? ['non_eu'] : [])].filter(Boolean)}
-        excludeTypeCodes={freelance ? undefined : COMPANY_DOC_TYPES}
+        excludeTypeCodes={[...(freelance ? [] : COMPANY_DOC_TYPES), 'PAYSLIP']}
+        hideFiledTypeCodes={['PAYSLIP']}
       />
+    </EmpSection>}
+    {workspace.capabilities.recruit && !freelance && <EmpSection title="Payslips" detail="Silae payslips filed for this person. Visible to HR only; every view and download is logged.">
+      <PersonPayslips personId={employee.person_id} personName={person.full_name} onChanged={reload} />
     </EmpSection>}
     <EmpSection title={freelance ? 'Daily rate (TJM)' : 'Salary'} detail={freelance ? 'Dated daily-rate history. A new entry closes the previous one the day before it starts; freelance engagements and hires seed the first entry.' : 'Dated monthly salary history. A new entry closes the previous one the day before it starts; hiring seeds the first entry from the accepted offer.'}>
       {!salaries.length && <div className="hr-emp-empty">

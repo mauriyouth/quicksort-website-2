@@ -74,6 +74,7 @@ export function DocumentsPanel({
   extensions = [],
   requirements,
   excludeTypeCodes,
+  hideFiledTypeCodes,
   onChanged,
 }: {
   owner: DocumentOwner;
@@ -89,6 +90,8 @@ export function DocumentsPanel({
   extensions?: ExtensionOption[];
   /** Types the owner cannot file here (e.g. company documents on an employment). */
   excludeTypeCodes?: string[];
+  /** Types whose filed documents are listed elsewhere (e.g. payslips have their own section). */
+  hideFiledTypeCodes?: string[];
   /** Called after any upload, renewal or archive (e.g. to refresh list flags). */
   onChanged?: () => void;
 }) {
@@ -138,8 +141,9 @@ export function DocumentsPanel({
     void refresh().catch(e => setError(errorMessage(e)));
   }, [refresh]);
 
-  const active = (docs || []).filter(d => d.status === "active");
-  const history = (docs || []).filter(d => d.status !== "active");
+  const shown = (docs || []).filter(d => !hideFiledTypeCodes?.includes(d.type_code));
+  const active = shown.filter(d => d.status === "active");
+  const history = shown.filter(d => d.status !== "active");
   const missing = requirements ? [] : alerts.filter(a => a.severity === "missing");
   const checklist = requirements ? requiredChecklist(ownerTypes, requirements, active) : [];
   const byId = new Map((docs || []).map(d => [d.id, d]));

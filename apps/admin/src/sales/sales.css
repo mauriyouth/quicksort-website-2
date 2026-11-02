@@ -911,7 +911,11 @@ tr.clients-row:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.projects-title:hover {
+.projects-cell-link {
+  cursor: pointer;
+}
+.projects-title:hover,
+.projects-cell-link:hover .projects-title {
   color: var(--qs-ink);
   text-decoration: underline;
 }

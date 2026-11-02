@@ -36,6 +36,12 @@ try {
   console.log('HR lifecycle database checks passed.');
   psql(readFileSync(resolve(root, 'tests/cra.sql'), 'utf8'));
   console.log('CRA database checks passed: employee/admin access, all activities, dated projects, atomic saves and version conflicts.');
+  psql(readFileSync(resolve(root, 'tests/invoicing.sql'), 'utf8'));
+  console.log('Invoicing database checks passed: admin-only RLS, one live invoice per consultant month and CRA lock.');
+  psql(readFileSync(resolve(root, 'tests/documents.sql'), 'utf8'));
+  console.log('Document checks passed: expiry windows, missing requirements, atomic renewal, immutability and role-scoped access.');
+  psql(readFileSync(resolve(root, 'tests/payslips.sql'), 'utf8'));
+  console.log('Payslip database checks passed.');
   psql(readFileSync(resolve(root, 'tests/leave-balances.sql'), 'utf8'));
   console.log('Leave balance checks passed: half-day consumption, accrual windows, overdraw, retroactive rates and access gating.');
 } finally {

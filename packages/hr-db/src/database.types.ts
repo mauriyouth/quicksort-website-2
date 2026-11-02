@@ -1,5 +1,6 @@
 import type { HrTable, HrPerson, HrApplication, HrEmployee, HrEmployeeSalary, HrOpportunity, HrInterview, HrOffer, HrJourneyTask, HrReview, HrExit, HrExitItem, HrAssignment, HrEvent, HrContract, HrSignature, HrCountersignature, HrSuggestion, HrAccount } from "./hr.types";
 import type { BlogRecord, BlogInsert } from "./blog";
+import type { DocumentTypeRecord, DocumentRecord, DocumentFolderRecord, DocumentAlert, DocumentRegistration } from "./documents.types";
 export type Json =
   | string
   | number
@@ -23,6 +24,9 @@ export type Database = {
       hr_ai_suggestions: HrTable<HrSuggestion>;
       hr_person_accounts: HrTable<HrAccount>;
       blog_posts: { Row: BlogRecord; Insert: BlogInsert; Update: Partial<BlogRecord>; Relationships: [] };
+      document_types: HrTable<DocumentTypeRecord>;
+      documents: HrTable<DocumentRecord>;
+      document_folders: HrTable<DocumentFolderRecord>;
       admin_access_audit: {
         Row: {
           action: string
@@ -205,6 +209,24 @@ export type Database = {
         Update: {
           kind?: string
           rate?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hr_economics_settings: {
+        Row: {
+          id: boolean
+          cjm_multiplier: number
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          cjm_multiplier: number
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          cjm_multiplier?: number
           updated_at?: string
         }
         Relationships: []
@@ -728,6 +750,7 @@ export type Database = {
           id: string
           title: string
           client_id: string
+          intermediary_client_id: string | null
           opportunity_id: string | null
           type: string
           pricing_model: string
@@ -753,6 +776,7 @@ export type Database = {
           id?: string
           title: string
           client_id: string
+          intermediary_client_id?: string | null
           opportunity_id?: string | null
           type?: string
           pricing_model: string
@@ -778,6 +802,7 @@ export type Database = {
           id?: string
           title?: string
           client_id?: string
+          intermediary_client_id?: string | null
           opportunity_id?: string | null
           type?: string
           pricing_model?: string
@@ -802,6 +827,13 @@ export type Database = {
           {
             foreignKeyName: "sales_projects_client_id_fkey"
             columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "sales_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_projects_intermediary_client_id_fkey"
+            columns: ["intermediary_client_id"]
             isOneToOne: false
             referencedRelation: "sales_clients"
             referencedColumns: ["id"]
@@ -970,6 +1002,8 @@ export type Database = {
       my_application_events: HrTable<{ id: number; application_id: string; to_stage: string; kind: string; created_at: string }>;
       my_employment: HrTable<Pick<HrEmployee, 'id' | 'person_id' | 'matricule' | 'role' | 'start_date' | 'end_date' | 'status' | 'onboarding_completed_at' | 'probation_status' | 'probation_end'>>;
       my_onboarding_items: HrTable<Omit<HrJourneyTask,'completed_by'|'created_at'>>;
+      document_alerts: HrTable<DocumentAlert>;
+      my_payslips: HrTable<{ id: string; person_id: string; title: string; valid_from: string | null; file_name: string; size_bytes: number | null; created_at: string }>;
       my_offers: HrTable<Pick<HrOffer,'id'|'application_id'|'title'|'contract_type'|'salary_monthly'|'status'|'shared_at'|'valid_until'|'version'>>;
     }
     Functions: {
@@ -981,6 +1015,11 @@ export type Database = {
         Returns: { employee_id: string; kind: string; accrued: number; consumed: number; available: number }[]
       };
       hr_command: { Args: { command: Json }; Returns: Json };
+      register_document: { Args: { document: DocumentRegistration; supersedes?: string | null; request_id?: string }; Returns: DocumentRecord };
+      set_employee_matricule: { Args: { employee_id: string; matricule: string; request_id?: string }; Returns: HrEmployee };
+      payslip_download_source: { Args: { document_id: string }; Returns: { provider_file_id: string; file_name: string; mime_type: string; size_bytes: number | null; storage_provider: string; encrypted_credentials: string | null }[] };
+      move_payslip: { Args: { document_id: string; to_person_id: string; to_folder_id: string; request_id?: string }; Returns: DocumentRecord };
+      log_document_access: { Args: { document_id: string; request_id?: string }; Returns: undefined };
       hr_workspace_snapshot: { Args: Record<PropertyKey, never>; Returns: Json };
       hr_application_requirements: { Args: { application_id: string; to_stage: string }; Returns: Json };
       sync_clerk_profile: { Args: Record<PropertyKey, never>; Returns: string };

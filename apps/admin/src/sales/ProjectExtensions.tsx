@@ -11,13 +11,17 @@ import { Notice } from "@quicksort/hr-ui";
 import { money } from "./data";
 import { DateField } from "../DateField";
 import {
-  lineDays,
   linesAmount,
   linesDays,
   storedPricingLines,
   type PricingLine,
 } from "./pricing-lines";
-import { proratedBillableDays } from "./billable-cap";
+import {
+  cappedLineDays,
+  extensionValue,
+  linesCappedAmount,
+  proratedBillableDays,
+} from "./billable-cap";
 import "./project-extensions.css";
 
 /**
@@ -166,9 +170,11 @@ function cleanLines(drafts: LineDraft[]): PricingLine[] {
 }
 
 /**
- * Flat columns kept in sync from the line set, so the generated `amount`
- * column (tjm × estimated_days) and the day budgets on dashboards stay
- * correct: total days = Σ line volumes, tjm = blended rate.
+ * Flat columns kept in sync from the line set: total days = Σ line
+ * volumes (the day budget), tjm = blended rate (display only). The
+ * generated `amount` column stays a by-product of these (mean rate ×
+ * days) — contract value is always recomputed per line from
+ * linesCappedAmount(), caps included, never read from `amount`.
  */
 function linesToFlat(
   lines: PricingLine[],
@@ -260,7 +266,9 @@ function LinesEditor({
           tjm: 0,
           end_date: null,
         };
-        const value = cleaned.tjm * lineDays(cleaned, windowStart, windowEnd);
+        const value =
+          cleaned.tjm *
+          cappedLineDays(cleaned, windowStart, windowEnd);
         // Live prorata caption, same rule as the contract lines.
         const capNumber = Number(line.cap) || 0;
         const capThisYear =
@@ -370,6 +378,7 @@ export function ProjectExtensionsSection({
   pricingModel,
   currency,
   profiles,
+  projectStartDate,
   tjm,
   estimatedDays,
   fixedPrice,
@@ -384,6 +393,8 @@ export function ProjectExtensionsSection({
   currency: string;
   /** The contract's initial pricing lines — prefilled into new extensions. */
   profiles: PricingLine[];
+  /** Initial contract window start — its lines bill from this date. */
+  projectStartDate: string | null;
   /** Project defaults prefilled into the add form. */
   tjm: number | null;
   estimatedDays: number | null;
@@ -583,7 +594,9 @@ export function ProjectExtensionsSection({
 
   const addLines = cleanLines(lineDrafts);
   const addDaysTotal = linesDays(addLines, fromDate, endDate || null);
-  const addAmount = linesAmount(addLines, fromDate, endDate || null);
+  // Preview value: per-line rate × capped open days — the same rule the
+  // project page and dashboards use once the extension is saved.
+  const addAmount = linesCappedAmount(addLines, fromDate, endDate || null);
 
   // Not a real <form>: this section renders inside the project edit form
   // (nested forms are dropped by the parser, which would submit the project
@@ -692,7 +705,9 @@ export function ProjectExtensionsSection({
     .reduce((sum, e) => sum + Number(e.estimated_days ?? 0), 0);
 
   const baseAmount = isRegie
-    ? Number(tjm ?? 0) * Number(estimatedDays ?? 0)
+    ? // Initial contract value: per-line rate × capped open days between
+      // the project dates — not the flat tjm × estimated_days product.
+      linesCappedAmount(profiles, projectStartDate, projectEndDate)
     : Number(fixedPrice ?? 0);
   const profileNames = profiles.map((p) => p.name).filter(Boolean);
   const lines = active.length
@@ -712,7 +727,7 @@ export function ProjectExtensionsSection({
               .filter(Boolean);
             return {
               label: `Extension ${i + 1}${suffix} · ${Number(ext.estimated_days ?? 0)} days${names.length ? ` · ${names.join(", ")}` : ""}`,
-              value: money(Number(ext.amount), ext.currency),
+              value: money(extensionValue(ext), ext.currency),
             };
           }
           return {
@@ -723,10 +738,10 @@ export function ProjectExtensionsSection({
       ]
     : [];
   const signedTotal =
-    baseAmount + signedExts.reduce((sum, e) => sum + Number(e.amount), 0);
+    baseAmount + signedExts.reduce((sum, e) => sum + extensionValue(e), 0);
   const proposedTotal = active
     .filter((e) => e.status !== "signed")
-    .reduce((sum, e) => sum + Number(e.amount), 0);
+    .reduce((sum, e) => sum + extensionValue(e), 0);
   const totalLabel = proposedTotal
     ? `Signed value · +${money(proposedTotal, currency)} more if proposed extensions are signed`
     : "Estimated value";

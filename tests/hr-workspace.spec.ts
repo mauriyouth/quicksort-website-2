@@ -8,11 +8,12 @@ test.use({ channel: 'chromium' });
 let harness: Awaited<ReturnType<typeof startComponentHarness>>;
 test.beforeAll(async () => {
   harness = await startComponentHarness(`
+    import { BrowserRouter } from '${process.cwd()}/apps/admin/node_modules/react-router-dom';
     import { HrWorkspace } from '@app/hr/HrWorkspace';
     const view = new URLSearchParams(location.search).get('view') || 'overview';
     createRoot(document.getElementById('root')).render(
       <main style={{ padding: 24, maxWidth: 1400, margin: 'auto' }}>
-        <HrWorkspace view={view} actorEmail="hr@example.invalid" role="hr" />
+        <BrowserRouter><HrWorkspace view={view} actorEmail="hr@example.invalid" role="hr" /></BrowserRouter>
       </main>
     );
   `);
@@ -25,13 +26,21 @@ async function reply(route: Route, value: unknown, status = 200) {
   return route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(value) });
 }
 
+const SAM = 'a51da95e-be9a-42b7-81c1-bb2043e41b56';
+const IMPORTED = 'c22e75a8-609e-4dfb-804d-9cc0eda7d1e6';
+const SAM_EMPLOYEE = '825b9051-882b-4e1e-9ae1-8dce434b0b05';
+const payslip = (id: string, title: string, valid_from: string) => ({ id, person_id: SAM, type_code: 'PAYSLIP', title, valid_from, file_name: `${id}.pdf`, status: 'active', created_at: '2026-11-01T10:00:00Z' });
+// Served out of order on purpose: the section must sort the newest period first.
+const SEPTEMBRE = payslip('doc-sep', 'Bulletin de paie Septembre 2026', '2026-09-01');
+const OCTOBRE = payslip('doc-oct', 'Bulletin de paie Octobre 2026', '2026-10-01');
 async function mock(page: Page, {
   staffingOnly = false,
   failFirstTask = false,
   staleSuggestion = false,
+  payslips = false,
 } = {}) {
   const suggestions: Suggestion[] = [];
-  const snapshot = { ...structuredClone(seed), suggestions };
+  const snapshot = { ...structuredClone(seed), suggestions, salaries: [] as never[] };
   const requests: Request[] = [];
   if (staffingOnly) snapshot.capabilities = { recruit: false, approve_offer: false, approve_direction: false, staff: true, admin: false };
   if (staleSuggestion) {
@@ -48,9 +57,33 @@ async function mock(page: Page, {
       created_at: new Date().toISOString(),
     });
   }
+  const rpcs: Array<Record<string, unknown>> = [];
+  const moves: Array<Record<string, unknown>> = [];
+  if (payslips) {
+    await page.route('**/api/documents', async (route) => {
+      const body = route.request().postDataJSON();
+      if (body.action === 'move-payslip') {
+        moves.push(body);
+        return reply(route, { document: { id: 'doc-moved' }, previousMatricule: { employeeId: SAM_EMPLOYEE, value: '00026' } });
+      }
+      return reply(route, { files: [] });
+    });
+  }
   await page.route(`${fixtureSupabaseURL}/**`, async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() === 'OPTIONS') return reply(route, {});
+    if (payslips && url.pathname.endsWith('/rpc/set_employee_matricule')) {
+      const body = route.request().postDataJSON();
+      rpcs.push(body);
+      if (body.matricule === 'QS-0003') return reply(route, { message: 'Matricule QS-0003 already belongs to Imported Person renamed.' }, 400);
+      return reply(route, null);
+    }
+    if (payslips && url.pathname.endsWith('/employees')) return reply(route, [{ person_id: SAM }, { person_id: IMPORTED }]);
+    if (payslips && url.pathname.endsWith('/hr_people')) return reply(route, [{ id: SAM, full_name: 'Sam Rivera' }, { id: IMPORTED, full_name: 'Imported Person renamed' }]);
+    if (payslips && url.pathname.endsWith('/documents')) {
+      const rows = [OCTOBRE, SEPTEMBRE];
+      return reply(route, url.search.includes('type_code=eq.PAYSLIP') ? rows : rows.map((row) => ({ ...row, status: 'active' })));
+    }
     if (url.pathname.endsWith('/rpc/hr_workspace_snapshot')) return reply(route, snapshot);
     if (url.pathname.endsWith('/rpc/hr_application_requirements')) return reply(route, [
       { key: 'screening', label: 'Screening evidence reviewed', done: true },
@@ -75,7 +108,7 @@ async function mock(page: Page, {
     }
     return reply(route, []);
   });
-  return { snapshot, requests };
+  return { snapshot, requests, rpcs, moves };
 }
 
 test('all connected HR views render at desktop and mobile widths without page overflow', async ({ page }, info) => {
@@ -267,4 +300,50 @@ test('creating a hiring need takes the role from the linked job post and links c
   expect(requests.map((request) => request.kind)).toEqual(['create_requisition']);
   expect(requests[0]).toMatchObject({ title: job.title, job_id: job.id, client_ids: [client.id] });
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+async function openSamEmployment(page: Page) {
+  await page.goto(`${harness.url}?view=people`);
+  await page.getByRole('button', { name: /Sam Rivera/ }).click();
+  await page.getByRole('tab', { name: /Employment/ }).click();
+}
+
+test('the Payslips section lists the newest period first and the Documents panel leaves payslips out', async ({ page }, info) => {
+  await mock(page, { payslips: true });
+  await page.setViewportSize({ width: 1155, height: 1000 });
+  await openSamEmployment(page);
+  const section = page.locator('section.hr-emp-section').filter({ has: page.getByRole('heading', { name: 'Payslips' }) });
+  const titles = section.locator('.payslips-person-title');
+  await expect(titles).toHaveText(['Bulletin de paie Octobre 2026', 'Bulletin de paie Septembre 2026']);
+  const documents = page.locator('section.hr-emp-section').filter({ has: page.getByRole('heading', { name: 'Documents' }) });
+  await expect(documents.getByText('Bulletin de paie')).toHaveCount(0);
+  await section.screenshot({ path: info.outputPath('person-payslips.png') });
+});
+
+test('editing a matricule another person holds shows the server error inline', async ({ page }) => {
+  const { rpcs } = await mock(page, { payslips: true });
+  await openSamEmployment(page);
+  await page.getByRole('button', { name: 'Change', exact: true }).first().click();
+  await expect(page.getByText('Silae employee number for salaried staff')).toBeVisible();
+  await page.getByLabel('Matricule').fill('QS-0003');
+  await page.getByRole('button', { name: 'Save matricule' }).click();
+  await expect(page.getByRole('alert')).toContainText('already belongs to');
+  expect(rpcs).toHaveLength(1);
+  expect(rpcs[0]).toMatchObject({ employee_id: SAM_EMPLOYEE, matricule: 'QS-0003' });
+});
+
+test('moving a payslip confirms the target, calls the API with toPersonId and offers the matricule reset', async ({ page }) => {
+  const { moves, rpcs } = await mock(page, { payslips: true });
+  await openSamEmployment(page);
+  await page.getByRole('button', { name: 'Move to another person…' }).first().click();
+  await page.getByLabel('Move payslip to').selectOption({ label: 'Imported Person renamed' });
+  await expect(page.getByText('Move Bulletin de paie Octobre 2026 from Sam Rivera to Imported Person renamed?')).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm move' }).click();
+  await expect(page.getByText("Reset Sam Rivera's matricule to 00026?")).toBeVisible();
+  expect(moves).toHaveLength(1);
+  expect(moves[0]).toMatchObject({ documentId: 'doc-oct', toPersonId: IMPORTED });
+  await page.getByRole('button', { name: 'Reset matricule' }).click();
+  await expect(page.getByText("Reset Sam Rivera's matricule to 00026?")).toHaveCount(0);
+  expect(rpcs).toHaveLength(1);
+  expect(rpcs[0]).toMatchObject({ employee_id: SAM_EMPLOYEE, matricule: '00026' });
 });

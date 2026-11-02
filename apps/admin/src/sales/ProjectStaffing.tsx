@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, UserPlus, X } from "lucide-react";
+import { Pencil, Search, UserPlus, X } from "lucide-react";
 import {
   errorMessage,
   executeCommand,
@@ -8,7 +8,7 @@ import {
 import { DateField } from "../DateField";
 import { money } from "./data";
 import { cappedBillableDays } from "./billable-cap";
-import { openDaysBetween, type PricingLine } from "./pricing-lines";
+import { lineDays, openDaysBetween, type PricingLine } from "./pricing-lines";
 import "./project-staffing.css";
 
 /**
@@ -100,7 +100,10 @@ export function lineStaffing(
       windowEnd && line.end_date && line.end_date > windowEnd
         ? windowEnd
         : line.end_date || windowEnd || "";
-    const rawDays = start && end ? openDaysBetween(start, end) : 0;
+    // Same volume rule as the contract value and its day chip: a line's
+    // days are the open days up to its own end date — a line without one
+    // bills 0 days, so it adds nothing to the staffed budget either.
+    const rawDays = lineDays(line, windowStart, windowEnd);
     // A capped line can't bill more than its yearly allowance — coverage
     // is measured against billable days, not calendar days (a 210-day cap
     // on a 261-open-day year never shows "261 of 261 days staffed").
@@ -147,7 +150,20 @@ const STATUS_LABEL: Record<string, string> = {
   active: "Active",
 };
 
+/** Statuses an assignment can hold — update_assignment accepts the same set. */
+type CommitStatus = "proposed" | "reserved" | "confirmed" | "active";
+
+const COMMIT_STATUSES: CommitStatus[] = [
+  "proposed",
+  "reserved",
+  "confirmed",
+  "active",
+];
+
 const ALLOC_PRESETS = [25, 50, 60, 80, 100];
+
+const nextDay = (iso: string) =>
+  `${new Date(new Date(`${iso}T12:00:00`).getTime() + 86400000).toISOString().slice(0, 10)}`;
 
 /**
  * The staffing block of one pricing line: a coverage bar, the people
@@ -185,6 +201,7 @@ export function LineStaffingPanel({
 }) {
   const today = todayISO();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState("");
   const [query, setQuery] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [engageId, setEngageId] = useState("");
@@ -424,39 +441,68 @@ export function LineStaffingPanel({
                 ? assignmentLineDays(a, staffing.start, staffing.end)
                 : 0;
             return (
-              <li className="pjs-row" key={a.id}>
-                <span className="pjs-ava" aria-hidden="true">
-                  {initialsOf(name)}
-                </span>
-                <span className="pjs-name">{name}</span>
-                <span className="pjs-meta">{a.allocation_pct}%</span>
-                <span className="pjs-meta">
-                  {shortDate(a.start_date)} →{" "}
-                  {a.end_date ? shortDate(a.end_date) : "open"}
-                </span>
-                <span className="pjs-meta">{fmtDays(Math.round(days * 10) / 10)} days</span>
-                <span
-                  className={`pjs-tag${a.status === "reserved" || a.status === "proposed" ? " soft" : ""}`}
-                >
-                  {STATUS_LABEL[a.status] || a.status}
-                </span>
-                <button
-                  type="button"
-                  className="pjs-remove"
-                  aria-label={`Unassign ${name}`}
-                  title={
-                    a.start_date <= today
-                      ? "End the assignment"
-                      : "Release the reservation"
+              <li className="pjs-item" key={a.id}>
+                <div className="pjs-row">
+                  <span className="pjs-ava" aria-hidden="true">
+                    {initialsOf(name)}
+                  </span>
+                  <span className="pjs-name">{name}</span>
+                  <span className="pjs-meta">{a.allocation_pct}%</span>
+                  <span className="pjs-meta">
+                    {shortDate(a.start_date)} →{" "}
+                    {a.end_date ? shortDate(a.end_date) : "open"}
+                  </span>
+                  <span className="pjs-meta">{fmtDays(Math.round(days * 10) / 10)} days</span>
+                  <span
+                    className={`pjs-tag${a.status === "reserved" || a.status === "proposed" ? " soft" : ""}`}
+                  >
+                    {STATUS_LABEL[a.status] || a.status}
+                  </span>
+                  <span className="pjs-row-actions">
+                    <button
+                      type="button"
+                      className="pjs-edit"
+                      aria-label={`Edit ${name}'s assignment`}
+                      aria-expanded={editId === a.id}
+                      title="Edit allocation, commitment or dates"
+                      disabled={saving}
+                      onClick={() => setEditId(editId === a.id ? "" : a.id)}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="pjs-remove"
+                      aria-label={`Unassign ${name}`}
+                      title={
+                        a.start_date <= today
+                          ? "End the assignment"
+                          : "Release the reservation"
+                      }
+                      disabled={saving}
+                      onClick={() => void unassign(a)}
+                    >
+                      <X size={14} />
+                    </button>
+                  </span>
+                </div>
+              {editId === a.id && (
+                <AssignmentEditForm
+                  assignment={a}
+                  windowStart={staffing.start}
+                  windowEnd={staffing.end}
+                  employmentStart={
+                    people.find((p) => p.employeeId === a.employee_id)
+                      ?.startDate ?? ""
                   }
-                  disabled={saving}
-                  onClick={() => void unassign(a)}
-                >
-                  <X size={14} />
-                </button>
-              </li>
-            );
-          })}
+                  assignmentsByEmployee={assignmentsByEmployee}
+                  onChanged={onChanged}
+                  onClose={() => setEditId("")}
+                />
+              )}
+            </li>
+          );
+        })}
         </ul>
       )}
       {!open && staffing.staff.length === 0 && (
@@ -723,6 +769,270 @@ export function LineStaffingPanel({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Inline editor for one staffed row: allocation, commitment and dates,
+ * saved through hr_command's update_assignment — the same command the
+ * HR workspace uses, so history is preserved instead of losing the
+ * assignment to a remove + re-add. The fields mirror the server's rules:
+ * dates stay inside the line's billing window and the employment period,
+ * capacity is re-checked across the new window (excluding this
+ * assignment itself), a started commitment cannot return to proposed,
+ * and an active assignment cannot start in the future. A change
+ * rationale is required — the command refuses an empty one.
+ */
+function AssignmentEditForm({
+  assignment,
+  windowStart,
+  windowEnd,
+  employmentStart,
+  assignmentsByEmployee,
+  onChanged,
+  onClose,
+}: {
+  assignment: Assignment;
+  /** The line's billing window — same bounds the assign panel enforces. */
+  windowStart: string;
+  windowEnd: string;
+  /** The person's employment start — assignments cannot begin earlier. */
+  employmentStart: string;
+  assignmentsByEmployee: Map<string, Assignment[]>;
+  onChanged: () => void;
+  onClose: () => void;
+}) {
+  const today = todayISO();
+  const allocOptions = ALLOC_PRESETS.includes(assignment.allocation_pct)
+    ? ALLOC_PRESETS
+    : [...ALLOC_PRESETS, assignment.allocation_pct].sort((a, b) => a - b);
+  const [alloc, setAlloc] = useState(assignment.allocation_pct);
+  const [commit, setCommit] = useState<CommitStatus>(
+    (COMMIT_STATUSES as readonly string[]).includes(assignment.status)
+      ? (assignment.status as CommitStatus)
+      : "confirmed",
+  );
+  const [dStart, setDStart] = useState(assignment.start_date);
+  const [dEnd, setDEnd] = useState(assignment.end_date ?? "");
+  const [rationale, setRationale] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  /** Capacity booked on a day by other open assignments (this one out). */
+  const bookedOn = (day: string) =>
+    (assignmentsByEmployee.get(assignment.employee_id) || [])
+      .filter(
+        (a) =>
+          a.id !== assignment.id &&
+          isOpenAssignment(a) &&
+          a.start_date <= day &&
+          (!a.end_date || a.end_date >= day),
+      )
+      .reduce((sum, a) => sum + a.allocation_pct, 0);
+
+  const dOutside =
+    !dStart ||
+    !dEnd ||
+    dStart < windowStart ||
+    dStart > windowEnd ||
+    dEnd < dStart ||
+    dEnd > windowEnd;
+  // hr_command re-checks capacity on every day of the new window —
+  // mirror it (skipping proposed, which the server exempts).
+  const overCapacity =
+    commit !== "proposed" &&
+    !dOutside &&
+    (() => {
+      let day = dStart;
+      for (let i = 0; i < 366 && day <= dEnd; i++) {
+        if (bookedOn(day) + alloc > 100) return true;
+        day = nextDay(day);
+      }
+      return false;
+    })();
+  const beforeEmployment = !!employmentStart && dStart < employmentStart;
+  // Server rules: a started commitment cannot return to proposed, and an
+  // active assignment cannot start in the future.
+  const cannotPropose =
+    assignment.status !== "proposed" && assignment.start_date <= today;
+  const activeFuture = commit === "active" && dStart > today;
+  const changed =
+    alloc !== assignment.allocation_pct ||
+    commit !== assignment.status ||
+    dStart !== assignment.start_date ||
+    (dEnd || null) !== (assignment.end_date ?? null);
+  const canSave =
+    changed && !!rationale.trim() && !dOutside && !overCapacity &&
+    !beforeEmployment && !activeFuture && !(cannotPropose && commit === "proposed");
+
+  const summary = activeFuture
+    ? "Active assignments cannot start in the future."
+    : cannotPropose && commit === "proposed"
+      ? "A started commitment cannot return to proposed."
+      : !changed
+        ? "Adjust a field to save."
+        : !rationale.trim()
+          ? "A change rationale is required."
+          : dOutside
+            ? `Dates must sit inside this line's billing period (${shortDate(windowStart)} → ${shortDate(windowEnd)}).`
+            : beforeEmployment
+              ? "The start precedes this person's employment."
+              : overCapacity
+                ? "This would exceed 100% capacity on these dates."
+                : `Saves ${alloc}% · ${STATUS_LABEL[commit]} · ${shortDate(dStart)} → ${shortDate(dEnd)}`;
+
+  async function save() {
+    if (!canSave || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await executeCommand({
+        kind: "update_assignment",
+        assignment_id: assignment.id,
+        expected_version: assignment.version,
+        position: assignment.position,
+        pricing_line: assignment.pricing_line,
+        allocation_pct: alloc,
+        start_date: dStart,
+        end_date: dEnd || null,
+        status: commit,
+        rationale: rationale.trim(),
+      });
+      onChanged();
+      onClose();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="pjs-panel pjs-edit-form" data-save-scope>
+      <div className="pjs-grid">
+        <div className="pjs-field">
+          <span className="pjs-label" id={`pjs-edit-alloc-${assignment.id}`}>
+            Allocation
+          </span>
+          <div
+            className="pj-seg"
+            role="group"
+            aria-labelledby={`pjs-edit-alloc-${assignment.id}`}
+          >
+            {allocOptions.map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={alloc === v}
+                className={alloc === v ? "on" : ""}
+                onClick={() => setAlloc(v)}
+              >
+                {v}%
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="pjs-field">
+          <span className="pjs-label" id={`pjs-edit-commit-${assignment.id}`}>
+            Commitment
+          </span>
+          <div
+            className="pj-seg"
+            role="group"
+            aria-labelledby={`pjs-edit-commit-${assignment.id}`}
+          >
+            {COMMIT_STATUSES.map((s) => {
+              const disabled =
+                (cannotPropose && s === "proposed") ||
+                (s === "active" && dStart > today);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  aria-pressed={commit === s}
+                  className={commit === s ? "on" : ""}
+                  disabled={disabled}
+                  title={
+                    cannotPropose && s === "proposed"
+                      ? "A started commitment cannot return to proposed"
+                      : s === "active" && dStart > today
+                        ? "Active assignments cannot start in the future"
+                        : undefined
+                  }
+                  onClick={() => setCommit(s)}
+                >
+                  {STATUS_LABEL[s]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="pjs-dates">
+        <label className="pjs-field">
+          <span className="pjs-label">From</span>
+          <DateField
+            aria-label="Assignment start"
+            value={dStart}
+            min={[windowStart, employmentStart].filter(Boolean).sort().pop()}
+            max={windowEnd}
+            onChange={(v) => setDStart(v)}
+          />
+        </label>
+        <label className="pjs-field">
+          <span className="pjs-label">To</span>
+          <DateField
+            aria-label="Assignment end"
+            value={dEnd}
+            min={dStart || windowStart}
+            max={windowEnd}
+            onChange={(v) => setDEnd(v)}
+          />
+        </label>
+      </div>
+
+      <label className="pjs-field">
+        <span className="pjs-label">Change rationale</span>
+        <textarea
+          className="pjs-rationale"
+          rows={2}
+          maxLength={5000}
+          placeholder="Why is this changing?"
+          value={rationale}
+          onChange={(e) => setRationale(e.target.value)}
+        />
+      </label>
+
+      {error && (
+        <p className="pjs-alert" role="alert">
+          {error}
+        </p>
+      )}
+
+      <div className="pjs-foot">
+        <span className="pjs-summary">{summary}</span>
+        <span className="pjs-actions">
+          <button
+            type="button"
+            className="pjs-cancel"
+            disabled={saving}
+            onClick={onClose}
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            className="pjs-assign"
+            disabled={!canSave || saving}
+            data-save-shortcut
+            onClick={() => void save()}
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+        </span>
+      </div>
     </div>
   );
 }

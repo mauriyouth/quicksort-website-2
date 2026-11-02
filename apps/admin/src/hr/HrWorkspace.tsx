@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { CalendarDays, Clock3, Plus, RefreshCw, Search, Users, X, ArrowUpRight, MapPin } from 'lucide-react';
 import { db, errorMessage } from '@quicksort/hr-db';
 import { executeCommand, loadWorkspace } from './data';
@@ -13,6 +14,7 @@ import { loadMonth } from '../cra/data';
 import { balanceFor, fmtDays, useLeaveBalances } from '../cra/balances';
 import { monthDays } from '../cra/domain';
 import './workspace.css';
+import { DocumentAlertsQueue } from '../documents/DocumentAlerts';
 export type HrView = 'overview' | 'recruiting' | 'people' | 'journeys';
 const viewCopy: Record<HrView, {
   title: string;
@@ -58,13 +60,15 @@ const SEGMENT_TABS: Record<string, PersonTab> = {
   cra: 'cra',
   activity: 'history'
 };
-const personRoute = (): { personId: string; tab: PersonTab } => {
+const personRoute = (): { personId: string; tab: PersonTab; employmentId: string } => {
   // The CRA tab pins the viewed month as extra segments:
   // /hr/people/<id>/cra/2026/10 (the CRA screen owns them; the record
-  // router keeps resolving the tab and ignores the tail).
-  const match = window.location.pathname.match(/^\/hr\/people\/([^/]+?)(?:\/([^/]+?)(?:\/(\d{4})\/(0[1-9]|1[0-2]))?)?\/?$/);
-  if (!match) return { personId: '', tab: 'profile' };
-  return { personId: match[1], tab: SEGMENT_TABS[match[2] ?? ''] ?? 'profile' };
+  // router keeps resolving the tab and ignores the tail). The employments
+  // tab pins the selected employment: /hr/people/<id>/employments/<employmentId>.
+  const match = window.location.pathname.match(/^\/hr\/people\/([^/]+?)(?:\/([^/]+?)(?:\/(\d{4})\/(0[1-9]|1[0-2])|\/([^/]+?))?)?\/?$/);
+  if (!match) return { personId: '', tab: 'profile', employmentId: '' };
+  const tab = SEGMENT_TABS[match[2] ?? ''] ?? 'profile';
+  return { personId: match[1], tab, employmentId: tab === 'employment' ? decodeURIComponent(match[5] ?? '') : '' };
 };
 // The People list keeps its filters (?q=, ?group=) in the URL; carry them
 // through person navigation so closing a record returns to the same list.
@@ -74,11 +78,18 @@ const listFilters = () => {
   for (const key of ['q', 'group']) if (params.get(key)) kept.set(key, params.get(key) ?? '');
   return kept;
 };
-const personUrl = (id: string, tab: PersonTab, params = new URLSearchParams()) => {
+const personUrl = (id: string, tab: PersonTab, params = new URLSearchParams(), employmentId = '') => {
   const segment = TAB_SEGMENTS[tab];
-  const url = new URL(`/hr/people/${id}${segment ? `/${segment}` : ''}`, window.location.origin);
+  const record = tab === 'employment' && employmentId ? `/${encodeURIComponent(employmentId)}` : '';
+  const url = new URL(`/hr/people/${id}${segment ? `/${segment}` : ''}${record}`, window.location.origin);
   url.search = params.toString();
-  return url;
+  return url.pathname + url.search;
+};
+// Rewrite one query param on the current URL (list filters, recruiting tab).
+const withParam = (key: string, value: string) => {
+  const url = new URL(window.location.href);
+  if (value) url.searchParams.set(key, value);else url.searchParams.delete(key);
+  return url.pathname + url.search + url.hash;
 };
 export function HrWorkspace({
   view,
@@ -101,7 +112,9 @@ export function HrWorkspace({
   const [personId, setPersonId] = useState(() => personRoute().personId);
   const [personTab, setPersonTab] = useState<PersonTab>(() => personRoute().tab);
   const [applicationId, setApplicationId] = useState(() => getParam('application'));
-  const [employeeId, setEmployeeId] = useState(() => getParam('employment'));
+  const [employeeId, setEmployeeId] = useState(() => personRoute().employmentId || getParam('employment'));
+  const location = useLocation();
+  const navigate = useNavigate();
   const reload = useCallback(async () => {
     const data = await loadWorkspace();
     setWorkspace(data);
@@ -122,49 +135,35 @@ export function HrWorkspace({
     };
   }, [view]);
   useEffect(() => {
-    // Legacy ?person= deep links (bookmarks, shared links) become paths.
-    const legacy = getParam('person');
-    if (!legacy) return;
-    const application = getParam('application');
+    // Legacy ?person= and ?employment= deep links (bookmarks, shared links)
+    // become paths.
+    const legacy = getParam('person') || personRoute().personId;
     const employment = getParam('employment');
+    if (!getParam('person') && !(legacy && employment)) return;
+    const application = getParam('application');
     const tab: PersonTab = application ? 'applications' : employment ? 'employment' : 'profile';
     const params = listFilters();
     if (application) params.set('application', application);
-    if (employment) params.set('employment', employment);
-    window.history.replaceState(null, '', personUrl(legacy, tab, params));
-    setPersonId(legacy);
-    setPersonTab(tab);
-    setApplicationId(application);
-    setEmployeeId(employment);
+    navigate(personUrl(legacy, tab, params, employment), { replace: true });
   }, []);
+  // The open record follows the URL: react-router owns history, so header
+  // tabs, back/forward and in-page links all land here.
   useEffect(() => {
-    const sync = () => {
-      const route = personRoute();
-      setPersonId(route.personId);
-      setPersonTab(route.tab);
-      setApplicationId(getParam('application'));
-      setEmployeeId(getParam('employment'));
-    };
-    window.addEventListener('popstate', sync);
-    return () => window.removeEventListener('popstate', sync);
-  }, []);
+    const route = personRoute();
+    setPersonId(route.personId);
+    setPersonTab(route.tab);
+    setApplicationId(getParam('application'));
+    setEmployeeId(route.employmentId || getParam('employment'));
+  }, [location.pathname, location.search]);
   const open: OpenPerson = (id, application, employee) => {
     const tab: PersonTab = application ? 'applications' : employee ? 'employment' : 'profile';
     const params = listFilters();
     if (application) params.set('application', application);
-    if (employee) params.set('employment', employee);
-    window.history.pushState(null, '', personUrl(id, tab, params));
-    setPersonId(id);
-    setPersonTab(tab);
-    setApplicationId(application ?? '');
-    setEmployeeId(employee ?? '');
+    navigate(personUrl(id, tab, params, employee));
   };
   const navigatePersonTab = (tab: PersonTab) => {
     if (!personId) return;
-    window.history.pushState(null, '', personUrl(personId, tab, listFilters()));
-    setPersonTab(tab);
-    setApplicationId('');
-    setEmployeeId('');
+    navigate(personUrl(personId, tab, listFilters()));
   };
   const run: RunCommand = async (input, success = 'Saved.') => {
     setBusy(true);
@@ -501,6 +500,16 @@ function Overview({
             </div> : <Empty>No pending review decisions.</Empty>}
           </Section>
         </div>
+        <div style={{
+          marginTop: 24
+        }}>
+          <Section title="Documents to renew" detail="Expired, expiring or missing employee documents.">
+            <DocumentAlertsQueue onOpenPerson={personId => {
+              const employee = workspace.employees.find(item => item.person_id === personId && item.status !== 'ended');
+              open(personId, undefined, employee?.id);
+            }} />
+          </Section>
+        </div>
       </div>
     </div>
   </>;
@@ -539,16 +548,24 @@ function People({
   const canRecruit = workspace.capabilities.recruit;
   const canStaff = workspace.capabilities.staff;
   const [query, setQuery] = useState(() => getParam('q'));
-  const [filter, setFilter] = useState(() => getParam('group') || (canRecruit ? 'all' : 'employees'));
+  // Current staff are grouped by contract; 'employees' links from before the split open on Everyone.
+  const [filter, setFilter] = useState(() => {
+    const param = getParam('group');
+    return param && param !== 'employees' ? param : 'all';
+  });
   const [day, setDay] = useState(today());
   const [capacityFilter, setCapacityFilter] = useState('all');
   const [assigning, setAssigning] = useState('');
   const activeOn = (employee: Employee) => employee.status !== 'ended' && employee.start_date <= day && (!employee.end_date || employee.end_date >= day) && (!employee.planned_exit_date || employee.planned_exit_date >= day);
   const employeeOnDate = (person: Person) => workspace.employees.find(employee => employee.person_id === person.id && activeOn(employee));
+  const contractGroups: Record<string, string> = { CDI: 'cdi', CDD: 'cdd', Freelance: 'freelance', Internship: 'interns', Apprenticeship: 'alternants' };
   const stateOf = (person: Person) => {
     const periods = workspace.employees.filter(employee => employee.person_id === person.id);
-    return periods.some(employee => employee.status !== 'ended') ? 'employees' : periods.length ? 'alumni' : workspace.applications.some(application => application.person_id === person.id && application.status === 'active') ? 'candidates' : 'talent';
+    const live = periods.find(employee => employee.status !== 'ended');
+    if (live) return contractGroups[live.contract_type] ?? 'no_contract';
+    return periods.length ? 'alumni' : workspace.applications.some(application => application.person_id === person.id && application.status === 'active') ? 'candidates' : 'talent';
   };
+  const groupCount = (value: string) => workspace.people.filter(person => value === 'all' || stateOf(person) === value).length;
   const groups = [{
     value: 'all',
     label: 'Everyone'
@@ -556,15 +573,30 @@ function People({
     value: 'candidates',
     label: 'Candidates'
   }, {
-    value: 'employees',
-    label: 'Employees'
+    value: 'cdi',
+    label: 'CDI'
+  }, {
+    value: 'cdd',
+    label: 'CDD'
+  }, {
+    value: 'freelance',
+    label: 'Freelancers'
+  }, {
+    value: 'interns',
+    label: 'Interns'
+  }, {
+    value: 'alternants',
+    label: 'Alternants'
+  }, {
+    value: 'no_contract',
+    label: 'Contract not set'
   }, {
     value: 'alumni',
     label: 'Alumni'
   }, {
     value: 'talent',
     label: 'Talent pool'
-  }];
+  }].filter(group => ['all', 'candidates', 'cdi', 'freelance', 'interns', 'alternants', 'alumni', 'talent'].includes(group.value) || group.value === filter || groupCount(group.value) > 0);
   const commits = workspace.assignments.filter(assignment => ['reserved', 'confirmed', 'active', 'completed'].includes(assignment.status) && assignment.start_date <= day && (!assignment.end_date || assignment.end_date >= day));
   const employeesOnDate = workspace.employees.filter(activeOn);
   const rolloffs = workspace.assignments.filter(assignment => !['completed', 'cancelled'].includes(assignment.status) && assignment.end_date && assignment.end_date >= day && assignment.end_date <= new Date(new Date(`${day}T12:00:00`).getTime() + 30 * 86400000).toISOString().slice(0, 10));
@@ -575,11 +607,8 @@ function People({
     if (capacityFilter === 'available' && (!employee || available(workspace, employee, day) <= 0)) return false;
     return `${person.full_name} ${person.email} ${person.skills} ${person.headline} ${person.location}`.toLowerCase().includes(query.toLowerCase());
   });
-  const update = (key: string, value: string) => {
-    const url = new URL(window.location.href);
-    if (value) url.searchParams.set(key, value);else url.searchParams.delete(key);
-    window.history.replaceState(null, '', url);
-  };
+  const navigate = useNavigate();
+  const update = (key: string, value: string) => navigate(withParam(key, value), { replace: true });
   const assigningEmployee = workspace.employees.find(employee => employee.id === assigning);
   return <>
     <div className="hr-metrics">
@@ -614,7 +643,7 @@ function People({
       }}>
         {group.label}
         <span>
-          {workspace.people.filter(person => group.value === 'all' || stateOf(person) === group.value).length}
+          {groupCount(group.value)}
         </span>
       </button>)}
     </div>
@@ -649,7 +678,7 @@ function People({
               </td>
               <td>
                 <Tag tone={employee ? 'good' : 'quiet'}>
-                  {label(stateOf(person))}
+                  {({ cdi: 'CDI', cdd: 'CDD', freelance: 'Freelancer', interns: 'Intern', alternants: 'Alternant', no_contract: 'Contract not set' } as Record<string, string>)[stateOf(person)] ?? label(stateOf(person))}
                 </Tag>
                 {employee && <small>{employee.planned_exit_date ? `Planned exit ${date(employee.planned_exit_date)}` : `Since ${date(employee.start_date)}`}</small>}
               </td>
@@ -711,6 +740,7 @@ function Recruiting({
     open
   } = context;
   const [tab, setTab] = useState(() => getParam('recruiting') || 'board');
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [opportunityId, setOpportunityId] = useState('');
   const [quickView, setQuickView] = useState<{
@@ -741,9 +771,7 @@ function Recruiting({
         count: workspace.offers.length
       }].map(item => <button key={item.value} role="tab" aria-selected={tab === item.value} onClick={() => {
         setTab(item.value);
-        const url = new URL(window.location.href);
-        url.searchParams.set('recruiting', item.value);
-        window.history.replaceState(null, '', url);
+        navigate(withParam('recruiting', item.value), { replace: true });
       }}>
         {item.title}
         <span>

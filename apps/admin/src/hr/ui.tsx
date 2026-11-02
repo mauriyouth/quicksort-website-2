@@ -88,6 +88,95 @@ export function Field({
     </small>}
   </label>;
 }
+/** Single-value search over a long option list (e.g. countries). The input
+    shows the picked label; typing filters, and the code travels through the
+    form as a hidden input. Clearing the text unsets the value. */
+export function SearchField({
+  name,
+  label: title,
+  value,
+  options,
+  placeholder = 'Search…',
+  hint
+}: {
+  name: string;
+  label: string;
+  value?: string | null;
+  options: {
+    value: string;
+    label: string;
+  }[];
+  placeholder?: string;
+  hint?: string;
+}) {
+  const labelOf = (code: string) => options.find(option => option.value === code)?.label ?? '';
+  const [selected, setSelected] = useState(value ?? '');
+  const [query, setQuery] = useState(() => labelOf(value ?? ''));
+  const [filtering, setFiltering] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
+  const needle = query.trim().toLowerCase();
+  const matches = filtering && needle ? options.filter(option => option.label.toLowerCase().includes(needle) || option.value.toLowerCase() === needle) : options;
+  const pick = (code: string) => {
+    setSelected(code);
+    setQuery(labelOf(code));
+    setFiltering(false);
+    setOpen(false);
+  };
+  useEffect(() => {
+    if (open) listRef.current?.children[highlight]?.scrollIntoView({ block: 'nearest' });
+  }, [open, highlight]);
+  return <div className="hr-field hr-search-field">
+    <span>
+      {title}
+    </span>
+    <div className="hr-search-anchor">
+    <input type="text" role="combobox" aria-label={title} aria-expanded={open} aria-autocomplete="list" value={query} placeholder={placeholder} autoComplete="off" onFocus={event => {
+      event.currentTarget.select();
+      setHighlight(Math.max(0, options.findIndex(option => option.value === selected)));
+      setOpen(true);
+    }} onChange={event => {
+      setQuery(event.target.value);
+      setFiltering(true);
+      setHighlight(0);
+      setOpen(true);
+    }} onBlur={() => {
+      setOpen(false);
+      setFiltering(false);
+      if (!query.trim()) setSelected('');
+      else setQuery(labelOf(selected));
+    }} onKeyDown={event => {
+      if (event.key === 'Escape' && open) {
+        event.stopPropagation();
+        setOpen(false);
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setOpen(true);
+        setHighlight(index => Math.min(index + 1, matches.length - 1));
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setHighlight(index => Math.max(index - 1, 0));
+      } else if (event.key === 'Enter' && open && matches[highlight]) {
+        event.preventDefault();
+        pick(matches[highlight].value);
+      }
+    }} />
+    <input type="hidden" name={name} value={selected} />
+    {open && <ul className="hr-search-list" role="listbox" ref={listRef}>
+      {matches.length ? matches.map((option, index) => <li key={option.value} role="option" aria-selected={option.value === selected} className={index === highlight ? 'on' : ''} onMouseDown={event => {
+        event.preventDefault();
+        pick(option.value);
+      }} onMouseEnter={() => setHighlight(index)}>
+        {option.label}
+      </li>) : <li className="hr-search-empty">No match for “{query.trim()}”.</li>}
+    </ul>}
+    </div>
+    {hint && <small>
+      {hint}
+    </small>}
+  </div>;
+}
 export function SearchMultiField({
   name,
   label: title,

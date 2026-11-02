@@ -9,7 +9,10 @@ type Status = {
   canSave: boolean;
   unreadable?: boolean;
   serviceAccountEmail?: string;
+  rootFolderId?: string;
   rootFolderName?: string;
+  peopleRootFolderId?: string | null;
+  peopleRootFolderName?: string | null;
 };
 
 /**
@@ -28,6 +31,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [serviceAccountJson, setServiceAccountJson] = useState("");
   const [rootFolderId, setRootFolderId] = useState("");
+  const [peopleRootFolderId, setPeopleRootFolderId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -47,9 +51,16 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
     return result;
   }
 
+  /** Shows the saved folders in the inputs, so the current value stays visible. */
+  function applyStatus(next: Status) {
+    setStatus(next);
+    setRootFolderId(next.rootFolderId || "");
+    setPeopleRootFolderId(next.peopleRootFolderId || "");
+  }
+
   useEffect(() => {
     void request()
-      .then(setStatus)
+      .then(applyStatus)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load the Google Drive status."));
   }, [session?.id]);
 
@@ -60,15 +71,22 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
     try {
       const result = (await request(
         remove ? "DELETE" : "PUT",
-        remove ? undefined : { serviceAccountJson: serviceAccountJson.trim(), rootFolderId: rootFolderId.trim() },
-      )) as { rootFolderName?: string };
+        remove
+          ? undefined
+          : {
+              ...(serviceAccountJson.trim() ? { serviceAccountJson: serviceAccountJson.trim() } : {}),
+              rootFolderId: rootFolderId.trim(),
+              peopleRootFolderId: peopleRootFolderId.trim(),
+            },
+      )) as { rootFolderName?: string; peopleRootFolderName?: string | null };
       setServiceAccountJson("");
-      setRootFolderId("");
-      setStatus(await request());
+      applyStatus(await request());
       setMessage(
         remove
           ? "Google Drive connection removed."
-          : `Google Drive connected — contracts go to “${result.rootFolderName || "Contrats_Clients"}”.`,
+          : `Google Drive connected — contracts go to “${result.rootFolderName || "Contrats_Clients"}”${
+              result.peopleRootFolderName ? `, HR documents to “${result.peopleRootFolderName}”` : ""
+            }.`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the Google Drive connection.");
@@ -86,7 +104,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
     : configured
       ? `Service account ${status.serviceAccountEmail || "(saved)"} connected${
           status.rootFolderName ? `, root folder “${status.rootFolderName}”` : ""
-        }${status.updatedAt ? ` — saved ${new Date(status.updatedAt).toLocaleString()}` : ""}.`
+        }${status.peopleRootFolderName ? `, HR folder “${status.peopleRootFolderName}”` : ", no HR folder yet"}${status.updatedAt ? ` — saved ${new Date(status.updatedAt).toLocaleString()}` : ""}.`
       : "No Google Drive service account connected yet.";
 
   return (
@@ -100,8 +118,9 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
             <p className="sp-card-desc">
               Store project contracts on Google Drive: one folder per contract (named{" "}
               <strong>Client/Contract</strong>) under the shared <strong>Contrats_Clients</strong>{" "}
-              root, with the contract and its annexes inside. Uploads happen from{" "}
-              <strong>Sales → Projects → Contract</strong>.
+              root, with the contract and its annexes inside. Employee documents go to a separate,
+              HR-only folder. Uploads happen from <strong>Sales → Projects</strong> and{" "}
+              <strong>HR → Employment</strong>.
             </p>
           </div>
           <span className={`sp-pill${pillClass}`} role="status">
@@ -156,8 +175,8 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
             {/* Root folder row */}
             <div className="sp-row">
               <div>
-                <div className="sp-row-label">Root folder ID</div>
-                <div className="sp-row-hint">Optional</div>
+                <div className="sp-row-label">Root folder ID or URL</div>
+                <div className="sp-row-hint">{status?.rootFolderName ? `Current: “${status.rootFolderName}”` : "Optional"}</div>
               </div>
               <input
                 className="sp-input"
@@ -166,6 +185,29 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
                 placeholder="Leave empty to use the single “Contrats_Clients” folder"
                 aria-label="Root folder ID"
               />
+            </div>
+
+            {/* HR documents folder row */}
+            <div className="sp-row">
+              <div>
+                <div className="sp-row-label">HR documents folder ID or URL</div>
+                <div className="sp-row-hint">
+                  {status?.peopleRootFolderName ? `Current: “${status.peopleRootFolderName}”` : "Needed for employee documents"}
+                </div>
+              </div>
+              <div className="sp-controls">
+                <input
+                  className="sp-input"
+                  value={peopleRootFolderId}
+                  onChange={e => setPeopleRootFolderId(e.target.value)}
+                  placeholder="ID of the Collaborateurs folder"
+                  aria-label="HR documents folder ID"
+                />
+                <p className="sp-row-hint">
+                  Identity cards, cartes Vitale and employment contracts are filed here, one folder per person. Share it with the
+                  service account and <strong>HR only</strong> — never with the whole domain. The ID is the last part of the folder URL.
+                </p>
+              </div>
             </div>
 
             <footer className="sp-foot">
@@ -181,8 +223,13 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
                     Remove
                   </button>
                 )}
-                <button type="button" className="sp-btn" disabled={busy || !serviceAccountJson.trim()} onClick={() => void save()}>
-                  {busy ? "Saving…" : configured ? "Replace key" : "Connect"}
+                <button
+                  type="button"
+                  className="sp-btn"
+                  disabled={busy || !(serviceAccountJson.trim() || (configured && (rootFolderId.trim() || peopleRootFolderId.trim())))}
+                  onClick={() => void save()}
+                >
+                  {busy ? "Saving…" : !configured ? "Connect" : serviceAccountJson.trim() ? "Replace key" : "Save folders"}
                 </button>
               </span>
             </footer>

@@ -10,7 +10,9 @@ import {
   Download,
   Images,
   CalendarDays,
+  Receipt,
 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   db,
   downloadFile,
@@ -20,7 +22,7 @@ import {
 } from "@quicksort/hr-db";
 import { validateFile } from "@quicksort/hr-db/validation";
 import {
-  usePortalRoute,
+  resolvePortalRoute,
   AccountSecurity,
   Shell,
   Stat,
@@ -33,12 +35,39 @@ import { z } from "zod";
 import { executeCommand } from "../hr/data";
 import { TeamPhotos } from './TeamPhotos';
 import { CraScreen } from '../cra/CraScreen';
+import { downloadOwnPayslip, previewOwnPayslip } from '../documents/client';
+
+type PortalRoute = { id: string; href: string };
+
+/** Section navigation through react-router, so the portal and the pages it
+ * hosts (the CRA screen) share one history. "/" lands on the first section. */
+function usePortalRoute(routes: readonly PortalRoute[]) {
+  const location = useLocation();
+  const routerNavigate = useNavigate();
+  useEffect(() => {
+    if (location.pathname === "/")
+      routerNavigate(routes[0].href + location.search + location.hash, { replace: true });
+  }, [location.pathname, routes]);
+  const current = resolvePortalRoute(routes, location.pathname);
+  const navigate = useCallback((id: string, href?: string) => {
+    const route = routes.find(item => item.id === id);
+    if (!route) return;
+    // Deep links pass their full path; plain navigation uses the section href.
+    const target = href ?? route.href;
+    if (window.location.pathname + window.location.search + window.location.hash !== target)
+      routerNavigate(target);
+    window.scrollTo(0, 0);
+  }, [routes, routerNavigate]);
+  return [current, navigate] as const;
+}
 
 const applicationSchema = z.object({ id: z.uuid(), person_id: z.uuid(), opportunity_id: z.uuid(), full_name: z.string(), title: z.string(), stage: z.string(), status: z.string(), created_at: z.string(), updated_at: z.string() });
 const applicationEventSchema = z.object({ id: z.number(), application_id: z.uuid(), to_stage: z.string(), kind: z.string(), created_at: z.string() });
 const employmentSchema = z.object({ id: z.uuid(), person_id: z.uuid(), matricule: z.string(), role: z.string(), start_date: z.string(), end_date: z.string().nullable(), status: z.string(), onboarding_completed_at: z.string().nullable(), probation_status: z.string(), probation_end: z.string().nullable() });
 const taskSchema = z.object({ id: z.uuid(), employee_id: z.uuid(), phase: z.string(), title: z.string(), assignee: z.string(), due_date: z.string().nullable(), required: z.boolean(), dependency_id: z.uuid().nullable(), evidence: z.string(), completed_at: z.string().nullable(), version: z.number().int() });
 const offerSchema = z.object({ id: z.uuid(), application_id: z.uuid(), title: z.string(), contract_type: z.string(), salary_monthly: z.number(), status: z.string(), shared_at: z.string().nullable(), valid_until: z.string().nullable(), version: z.number().int() });
+const payslipSchema = z.object({ id: z.uuid(), person_id: z.uuid(), title: z.string(), valid_from: z.string().nullable(), file_name: z.string(), size_bytes: z.number().nullable(), created_at: z.string() });
+type MyPayslip = z.infer<typeof payslipSchema>;
 type MyApplication = z.infer<typeof applicationSchema>;
 type MyApplicationEvent = z.infer<typeof applicationEventSchema>;
 type MyEmployment = z.infer<typeof employmentSchema>;
@@ -67,12 +96,23 @@ const nav = [
   { id: "overview", href: "/onboarding", label: "My onboarding", icon: LayoutDashboard },
   { id: "application", href: "/application", label: "My application", icon: FileText },
   { id: "documents", href: "/documents", label: "My documents", icon: Upload },
+  { id: "payslips", href: "/payslips", label: "My payslips", icon: Receipt },
   { id: "contracts", href: "/contracts", label: "My contracts", icon: FileText },
   { id: "cra", href: "/cra", label: "My CRA", icon: CalendarDays },
   { id: "requests", href: "/tool-access", label: "Tool access", icon: KeyRound },
   { id: "photos", href: "/team-photos", label: "Team photos", icon: Images },
   { id: "account", href: "/account", label: "Account", icon: Settings },
 ];
+
+/** Groups payslips by the year they cover (falling back to filing date), newest year first. */
+function payslipYears(rows: MyPayslip[]) {
+  const years = new Map<string, MyPayslip[]>();
+  for (const row of rows) {
+    const year = (row.valid_from ?? row.created_at).slice(0, 4);
+    years.set(year, [...(years.get(year) ?? []), row]);
+  }
+  return [...years.entries()].sort(([a], [b]) => b.localeCompare(a));
+}
 
 const GATED_TABS = ["overview", "requests", "photos"];
 
@@ -86,6 +126,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
   const [employments, setEmployments] = useState<MyEmployment[]>([]);
   const [tasks, setTasks] = useState<MyTask[]>([]);
   const [offers, setOffers] = useState<MyOffer[]>([]);
+  const [payslips, setPayslips] = useState<MyPayslip[]>([]);
   const [journeyError, setJourneyError] = useState("");
   const onboardingOpen = employments.some(e => e.status !== "ended");
   // Employment unlocks the journey; agreements remain available before hiring.
@@ -120,6 +161,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           db().from("my_employment").select("*").order("start_date", { ascending: false }),
           db().from("my_onboarding_items").select("*"),
           db().from("my_offers").select("*"),
+          db().from("my_payslips").select("*").order("valid_from", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }),
         ]);
         for (const result of journeys) if (result.error) throw result.error;
         setApplications(applicationSchema.array().parse(journeys[0].data));
@@ -127,8 +169,9 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
         setEmployments(employmentSchema.array().parse(journeys[2].data));
         setTasks(taskSchema.array().parse(journeys[3].data));
         setOffers(offerSchema.array().parse(journeys[4].data));
+        setPayslips(payslipSchema.array().parse(journeys[5].data));
       } catch (e) {
-        setApplications([]); setApplicationEvents([]); setEmployments([]); setTasks([]); setOffers([]);
+        setApplications([]); setApplicationEvents([]); setEmployments([]); setTasks([]); setOffers([]); setPayslips([]);
         setJourneyError(errorMessage(e));
       }
       const results = await Promise.all([
@@ -476,6 +519,46 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
             ))}
           </section>
         </>
+      )}
+      {tab === "payslips" && (
+        <section className="panel">
+          <h2>My payslips</h2>
+          {!payslips.length && !loading && (
+            <Empty title="No payslips yet">
+              Your payslips appear here once HR has filed them.
+            </Empty>
+          )}
+          {payslipYears(payslips).map(([year, rows]) => (
+            <div key={year}>
+              <h3>{year}</h3>
+              {rows.map((p) => (
+                <div className="list-row" key={p.id}>
+                  <div>
+                    <h3 className="document-name">{p.title}</h3>
+                    <p className="muted">{p.file_name}</p>
+                  </div>
+                  <div className="actions">
+                    <button
+                      className="btn secondary small"
+                      disabled={busy}
+                      onClick={() => void action(() => previewOwnPayslip(p), "Payslip opened.")}
+                    >
+                      Open
+                    </button>
+                    <button
+                      className="btn secondary small"
+                      disabled={busy}
+                      onClick={() => void action(() => downloadOwnPayslip(p), "Payslip downloaded.")}
+                    >
+                      <Download size={14} />
+                      Download
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </section>
       )}
       {tab === "contracts" && (
         <>

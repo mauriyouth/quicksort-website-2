@@ -6,6 +6,7 @@ import {
   type FormEvent,
   type ReactElement,
 } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
   ArchiveRestore,
@@ -18,6 +19,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { db, errorMessage, type Row } from "@quicksort/hr-db";
 import { Notice } from "@quicksort/hr-ui";
 import {
@@ -34,7 +36,8 @@ import {
   type AdminStatus,
 } from "../referentials";
 import { ClientPicker } from "./ClientPicker";
-import { ProjectContractSection, type ContractFolder } from "./ProjectContract";
+import { DocumentsPanel } from "../documents/DocumentsPanel";
+import { documentFlag, formatDay, loadAlerts } from "../documents/client";
 import {
   ProjectExtensionsSection,
   isActiveExtension,
@@ -49,11 +52,17 @@ import {
   storedPricingLines,
   type PricingLine,
 } from "./pricing-lines";
-import { craMonthYear, proratedBillableDays } from "./billable-cap";
+import {
+  cappedLineDays,
+  craMonthYear,
+  extensionValue,
+  linesCappedAmount,
+  proratedBillableDays,
+} from "./billable-cap";
 import { DateField } from "../DateField";
 import "./sales.css";
 import "./project-form.css";
-import { loadWorkspace, type Assignment } from "../hr/data";
+import { executeCommand, loadWorkspace, type Assignment } from "../hr/data";
 import {
   isOpenAssignment,
   lineStaffing,
@@ -62,6 +71,7 @@ import {
   type LineStaffing,
   type StaffingPerson,
 } from "./ProjectStaffing";
+import { ProjectInvoices } from "./invoicing/ProjectInvoices";
 
 /**
  * Projects (sales.md §14 Phase 2) — the delivery continuation of won deals.
@@ -70,8 +80,9 @@ import {
  * configurable referentials edited under Administration → Global settings,
  * BoondManager-style. Régie contracts carry named pricing lines
  * ("Lead dev", "Data engineer"…), each with its own rate and end date —
- * the line window runs from the contract start to that date and the project
- * amount is the sum of rate × open days across the lines.
+ * the line window runs from the contract start to that date and the
+ * contract value is the sum of rate × capped open days across the lines
+ * (annual billable cap per line), extensions valued the same way.
  */
 type Project = Row<"sales_projects">;
 
@@ -87,6 +98,9 @@ type TjmProfileDraft = {
   end_date: string;
   /** Full-year billable-days allowance for this line — "" when exempt. */
   cap: string;
+  /** The line's name as saved — assignments are keyed by it, so a rename
+      moves them along on save. Undefined for a line added in this draft. */
+  savedName?: string;
 };
 
 /** Semantic list tabs (source design "Projects — redesign.html"). */
@@ -98,6 +112,8 @@ type ProjectRow = {
   project: Project;
   meta: AdminStatus;
   client?: SalesClient;
+  /** Billing intermediary when set — invoices go to it, not the client. */
+  intermediary?: SalesClient;
   team: string[];
   who: string;
   initials: string;
@@ -138,11 +154,11 @@ function sheetFromUrl(list: Project[]): Project | null | undefined {
 }
 
 /** Legacy query-param deep links (?project=<id>, ?new=1) still arrive from
-    old bookmarks — rewrite the address bar to the path form. */
-function redirectLegacyProjectQuery() {
+    old bookmarks — returns the path form to redirect to, if any. */
+function legacyProjectRedirect(): string | null {
   const params = new URLSearchParams(window.location.search);
   const legacyId = params.get("project");
-  if (params.get("new") !== "1" && !legacyId) return;
+  if (params.get("new") !== "1" && !legacyId) return null;
   const url = new URL(window.location.href);
   url.pathname =
     params.get("new") === "1"
@@ -150,7 +166,7 @@ function redirectLegacyProjectQuery() {
       : `/sales/projects/${encodeURIComponent(legacyId!)}`;
   url.searchParams.delete("project");
   url.searchParams.delete("new");
-  window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  return url.pathname + url.search + url.hash;
 }
 
 /** Open working days between ISO dates lives in pricing-lines.ts. */
@@ -252,17 +268,31 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
   >(new Map());
   const [loadError, setLoadError] = useState("");
   const [reloadTick, setReloadTick] = useState(0);
+  /** Contract warnings per project (document_alerts): expired, missing, expiring. */
+  const [documentFlags, setDocumentFlags] = useState<Map<string, string>>(new Map());
+  // Finalized + paid invoices HT per project — feeds the Billed stat card.
+  const [billedByProject, setBilledByProject] = useState<Map<string, number>>(new Map());
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<ProjectsTab>("all");
   const [menuFor, setMenuFor] = useState<string | null>(null);
   // The create/edit form is a page, addressed by the URL: /sales/projects/<id>
   // edits, /sales/projects/new creates. `undefined` = the projects list itself.
   const [editing, setEditing] = useState<Project | null | undefined>(undefined);
+  // Finalized + paid invoices HT for the edited project, reported by its
+  // invoices card — feeds the Billed stat. Keyed so a stale project's
+  // figure never shows on another.
+  const [invoicedHt, setInvoicedHt] = useState<{
+    projectId: string;
+    amount: number;
+  } | null>(null);
   const projectsRef = useRef<Project[]>([]);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Old ?project=/?new= bookmarks redirect to the path form on arrival.
   useEffect(() => {
-    redirectLegacyProjectQuery();
+    const target = legacyProjectRedirect();
+    if (target) navigate(target, { replace: true });
   }, []);
 
   useEffect(() => {
@@ -274,12 +304,14 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
           : "Projects · Quicksort Admin";
   }, [editing]);
 
-  // Sync the open page from the address bar on back/forward navigation.
+  // The open page follows the URL: back/forward, header tabs and links
+  // from other pages (e.g. an HR assignment) all land here.
+  // Keeps the open object when it is the same project, so local patches
+  // (onProjectPatched) survive a same-page navigation.
   useEffect(() => {
-    const onPop = () => setEditing(sheetFromUrl(projectsRef.current));
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
+    const next = sheetFromUrl(projectsRef.current);
+    setEditing((prev) => (next && prev && prev.id === next.id ? prev : next));
+  }, [location.pathname]);
 
   /** The annual cap and its consumption are always evaluated against the
       current calendar year. */
@@ -451,6 +483,56 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     // reloadTick lets child sections (extensions) ask for a project refresh.
   }, [data, reloadTick]); // re-fetch after every sales action() reload
 
+  useEffect(() => {
+    let cancelled = false;
+    // Optional: before the documents migration the list simply has no contract flags.
+    loadAlerts({ kind: "project" }).then(
+      (alerts) => {
+        if (cancelled) return;
+        const byProject = new Map<string, typeof alerts>();
+        for (const alert of alerts)
+          if (alert.project_id) byProject.set(alert.project_id, [...(byProject.get(alert.project_id) || []), alert]);
+        setDocumentFlags(new Map([...byProject].map(([id, list]) => [id, documentFlag(list)])));
+      },
+      () => !cancelled && setDocumentFlags(new Map()),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [data, reloadTick]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Optional: before the invoicing migration the Billed stat stays at zero.
+    // Summed in cents, paged past PostgREST's 1000-row cap like the CRA pass.
+    // invoices is not in the generated Database types yet; read it untyped.
+    const untyped = db() as unknown as SupabaseClient;
+    (async () => {
+      const PAGE = 1000;
+      const cents = new Map<string, number>();
+      for (let offset = 0; ; offset += PAGE) {
+        const page = await untyped
+          .from("invoices")
+          .select("project_id, total_ht")
+          .in("status", ["finalized", "paid"])
+          .not("project_id", "is", null)
+          .range(offset, offset + PAGE - 1);
+        if (page.error) throw page.error;
+        for (const i of (page.data || []) as { project_id: string; total_ht: number | string }[])
+          cents.set(
+            i.project_id,
+            (cents.get(i.project_id) || 0) + Math.round(Number(i.total_ht) * 100),
+          );
+        if ((page.data?.length ?? 0) < PAGE) break;
+      }
+      if (!cancelled)
+        setBilledByProject(new Map([...cents].map(([id, c]) => [id, c / 100])));
+    })().catch(() => !cancelled && setBilledByProject(new Map()));
+    return () => {
+      cancelled = true;
+    };
+  }, [data, reloadTick]);
+
   const projectStatuses = statusesFor(ref.statuses, "project", {
     includeHidden: false,
   });
@@ -551,6 +633,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     return projects.map((p) => {
       const meta = statusMeta(ref.statuses, "project", p.status);
       const client = clientsById.get(p.client_id);
+      const intermediary = p.intermediary_client_id
+        ? clientsById.get(p.intermediary_client_id)
+        : undefined;
       const team = teamByProject.get(p.id) || [];
       const isRegie = p.pricing_model === "regie";
       // Signed extensions push the end date out and add value.
@@ -560,11 +645,22 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         if (ext.end_date && (!effEnd || ext.end_date > effEnd))
           effEnd = ext.end_date;
       }
+      // Contract value comes from the pricing lines only: each line bills
+      // its own rate over the open days of its window (window start → line
+      // end date), shrunk by its per-year billable cap. The stored amount
+      // columns (mean rate × days) are not used for régie.
       const extTotal = signedExts.reduce(
-        (sum, ext) => sum + Number(ext.amount),
+        (sum, ext) => sum + extensionValue(ext),
         0,
       );
-      const total = Number(p.amount) + extTotal;
+      const total =
+        (isRegie
+          ? linesCappedAmount(
+              storedTjmProfiles(p.tjm_profiles),
+              p.start_date,
+              p.end_date,
+            )
+          : Number(p.amount)) + extTotal;
       // Consumption comes from the CRA: signed régie extensions grow the
       // day budget alongside the value.
       const consumedDays = craDaysByProject.get(p.id) || 0;
@@ -635,6 +731,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             )
             .join(" · ");
       }
+      if (!flag) flag = documentFlags.get(p.id) ?? null;
       const rateChips = isRegie
         ? distinctRates([
             ...storedTjmProfiles(p.tjm_profiles),
@@ -656,6 +753,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         project: p,
         meta,
         client,
+        intermediary,
         team,
         who: team.length
           ? team.length > 1
@@ -675,6 +773,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         rateChips,
         metaLine: [
           client?.name,
+          intermediary ? `billed to ${intermediary.name}` : "",
           p.type ? typeLabel(ref.types, p.type) : "",
           rateLabel,
         ]
@@ -702,6 +801,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     signedExtensionsByProject,
     craDaysByProject,
     craLineYearDaysByProject,
+    documentFlags,
   ]);
 
   const activeRows = rows.filter((r) => !r.meta.is_terminal);
@@ -713,6 +813,12 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
   const staffedCount = activeRows.filter((r) => r.team.length > 0).length;
   const trackedRows = activeRows.filter((r) => r.budgetDays > 0);
   const consumedTotal = activeRows.reduce((sum, r) => sum + r.billed, 0);
+  // Billed vs contract value (signed extensions included) on active projects.
+  const invoicedTotal = activeRows.reduce(
+    (sum, r) => sum + (billedByProject.get(r.project.id) || 0),
+    0,
+  );
+  const contractTotal = activeRows.reduce((sum, r) => sum + r.total, 0);
   const attentionRows = rows.filter((r) => r.flag);
   const endingSoon = activeRows.filter((r) => {
     if (!r.effEnd) return false;
@@ -752,6 +858,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     return (
       p.title.toLowerCase().includes(query) ||
       (r.client?.name.toLowerCase().includes(query) ?? false) ||
+      (r.intermediary?.name.toLowerCase().includes(query) ?? false) ||
       typeLabel(ref.types, p.type).toLowerCase().includes(query) ||
       p.owner_email.toLowerCase().includes(query) ||
       r.team.join(" ").toLowerCase().includes(query)
@@ -784,7 +891,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     url.pathname = project
       ? `/sales/projects/${encodeURIComponent(project.id)}`
       : "/sales/projects/new";
-    window.history.pushState(null, "", url.pathname + url.search + url.hash);
+    navigate(url.pathname + url.search + url.hash);
     setEditing(project);
   }
 
@@ -795,11 +902,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     const url = new URL(window.location.href);
     if (url.pathname.replace(/\/+$/, "") !== "/sales/projects") {
       url.pathname = "/sales/projects";
-      window.history.replaceState(
-        null,
-        "",
-        url.pathname + url.search + url.hash,
-      );
+      navigate(url.pathname + url.search + url.hash, { replace: true });
     }
   }
 
@@ -817,13 +920,24 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       pricing_model === "regie"
         ? storedTjmProfiles(JSON.parse(String(f.get("tjm_profiles") || "[]")))
         : [];
+    // Saved lines renamed in this edit — their open assignments follow.
+    const renames: { from: string; to: string }[] =
+      editing && pricing_model === "regie"
+        ? JSON.parse(String(f.get("tjm_renames") || "[]"))
+        : [];
     const daysSum = linesDays(profiles, windowStart, windowEnd);
-    const regieAmount = linesAmount(profiles, windowStart, windowEnd);
+    const regieRate = linesAmount(profiles, windowStart, windowEnd);
+    // Stored amount: per-line rate × capped days — the contract value.
+    const regieAmount = linesCappedAmount(profiles, windowStart, windowEnd);
     const fixedPrice =
       pricing_model === "forfait" ? Number(f.get("fixed_price") ?? 0) : null;
     const values = {
       title: String(f.get("title")).trim(),
       client_id: String(f.get("client_id")),
+      // Optional intermediary: when set, invoices go to the intermediary
+      // instead of the main client. Empty picker → NULL → bill the client.
+      intermediary_client_id:
+        String(f.get("intermediary_client_id") || "") || null,
       // The convert picker only exists on create — never unlink on edit.
       opportunity_id: editing ? editing.opportunity_id : opportunityId || null,
       pricing_model,
@@ -832,7 +946,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       tjm:
         pricing_model === "regie"
           ? daysSum > 0
-            ? Math.round((regieAmount / daysSum) * 100) / 100
+            ? Math.round((regieRate / daysSum) * 100) / 100
             : 0
           : null,
       estimated_days: pricing_model === "regie" ? daysSum : null,
@@ -859,6 +973,24 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             .select("id")
             .single();
       if (result.error) throw result.error;
+      // Assignments reference their line by name: move the open ones onto
+      // the renamed line (after the save, so the new name exists).
+      for (const { from, to } of renames)
+        for (const a of staffingAssignments.filter(
+          (a) => a.project_id === editing?.id && a.pricing_line === from,
+        ))
+          await executeCommand({
+            kind: "update_assignment",
+            assignment_id: a.id,
+            expected_version: a.version,
+            position: a.position === from ? to : a.position,
+            pricing_line: to,
+            allocation_pct: a.allocation_pct,
+            start_date: a.start_date,
+            end_date: a.end_date,
+            status: a.status,
+            rationale: `Pricing line renamed to “${to}” on the contract page.`,
+          });
     }, "Project saved.");
     closeProjectDialog();
   }
@@ -912,6 +1044,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                         editing.status,
                       );
                       const client = clientsById.get(editing.client_id);
+                      const intermediary = editing.intermediary_client_id
+                        ? clientsById.get(editing.intermediary_client_id)
+                        : undefined;
                       const signed =
                         signedExtensionsByProject.get(editing.id) || [];
                       let effEnd = editing.end_date;
@@ -933,6 +1068,12 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                         items.push(
                           <span className="pj-meta-item" key="client">
                             {client.name}
+                          </span>,
+                        );
+                      if (intermediary)
+                        items.push(
+                          <span className="pj-meta-item" key="intermediary">
+                            {`Billed to ${intermediary.name} (intermediary)`}
                           </span>,
                         );
                       items.push(
@@ -966,6 +1107,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                   type="submit"
                   form="pj-form"
                   className="pj-btn pj-btn-primary"
+                  data-save-shortcut
                   disabled={busy}
                 >
                   {editing ? "Save changes" : "Create project"}
@@ -979,6 +1121,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
               signedExts={signedExtensionsByProject.get(editing.id) || []}
               craDays={craDaysByProject.get(editing.id) || 0}
               staffed={editingStaffing}
+              billedHt={
+                invoicedHt?.projectId === editing.id ? invoicedHt.amount : null
+              }
             />
           )}
           <ProjectForm
@@ -999,19 +1144,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             }
             onCancel={closeProjectDialog}
             onSubmit={save}
-            onFolderLinked={(projectId, folder) => {
-              const patch = {
-                drive_folder_id: folder.id,
-                drive_folder_name: folder.name,
-                drive_folder_link: folder.webViewLink || null,
-              };
-              setProjects((list) =>
-                list.map((x) => (x.id === projectId ? { ...x, ...patch } : x)),
-              );
-              setEditing((e) =>
-                e && e.id === projectId ? { ...e, ...patch } : e,
-              );
-            }}
+            onDocumentsChanged={() => setReloadTick((t) => t + 1)}
             onExtensionsChanged={() => setReloadTick((t) => t + 1)}
             onStaffingChanged={() => setReloadTick((t) => t + 1)}
             staffing={editingStaffing}
@@ -1019,6 +1152,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             talentPool={talentPool}
             canEngage={canEngage}
             assignmentsByEmployee={assignmentsByEmployee}
+            onInvoicedHt={(projectId, amount) =>
+              setInvoicedHt({ projectId, amount })
+            }
             onProjectPatched={(projectId, patch) => {
               setProjects((list) =>
                 list.map((x) => (x.id === projectId ? { ...x, ...patch } : x)),
@@ -1072,6 +1208,17 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                 {trackedRows.length
                   ? `Tracked on ${trackedRows.filter((r) => r.consumedDays > 0).length} of ${trackedRows.length} régie projects`
                   : "No régie contracts active"}
+              </span>
+            </div>
+            <div className="projects-stat">
+              <span className="projects-stat-label">Billed</span>
+              <span className="projects-stat-value">
+                {contractTotal > 0
+                  ? `${Math.round((invoicedTotal / contractTotal) * 100)}%`
+                  : "—"}
+              </span>
+              <span className="projects-stat-sub">
+                {money(invoicedTotal)} of {money(contractTotal)} contract value
               </span>
             </div>
             <div className="projects-stat projects-stat-inv">
@@ -1154,7 +1301,10 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                   const tracked = r.consumedDays > 0 && r.budgetDays > 0;
                   return (
                     <div className="projects-row" key={p.id}>
-                      <div className="projects-cell">
+                      <div
+                        className="projects-cell projects-cell-link"
+                        onClick={() => openProjectPage(p)}
+                      >
                         <span
                           className={`projects-avatar${
                             r.team.length ? "" : " unassigned"
@@ -1169,7 +1319,10 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                             type="button"
                             className="projects-title"
                             title={p.title}
-                            onClick={() => openProjectPage(p)}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              openProjectPage(p);
+                            }}
                           >
                             {p.title}
                           </button>
@@ -1467,10 +1620,13 @@ function ProjectStatsStrip({
   signedExts,
   craDays,
   staffed,
+  billedHt,
 }: {
   project: Project;
   signedExts: ProjectExtension[];
   craDays: number;
+  /** Finalized + paid invoices HT; null until the invoices card loads. */
+  billedHt: number | null;
   /** Open assignments vs billable line days (contract + extensions). */
   staffed: {
     days: number;
@@ -1490,15 +1646,22 @@ function ProjectStatsStrip({
   );
   const budget = isRegie ? days + extDays : 0;
   const extAmount = signedExts.reduce(
-    (sum, ext) => sum + Number(ext.amount),
+    (sum, ext) => sum + extensionValue(ext),
     0,
   );
-  const total = Number(project.amount) + extAmount;
+  const total =
+    (isRegie
+      ? linesCappedAmount(
+          storedTjmProfiles(project.tjm_profiles),
+          project.start_date,
+          project.end_date,
+        )
+      : Number(project.amount)) + extAmount;
   // Per-line annual billable caps (sales.md §14): a capped line can bill at
   // most its prorated allowance per calendar year, so line days beyond the
-  // cap never become value. Sum the lifetime excess over every year of
-  // every capped line's window (contract + signed extensions) and shrink
-  // the day budget — and with it value, consumption and remaining.
+  // cap never become value. The value itself is the per-line build-up —
+  // each line's rate × its capped open days, contract and signed
+  // extensions summed; cappedDaysLost below only shrinks the day budget.
   let cappedDaysLost = 0;
   const addCapLoss = (
     line: PricingLine,
@@ -1534,14 +1697,11 @@ function ProjectStatsStrip({
   for (const ext of signedExts)
     for (const line of storedTjmProfiles(ext.tjm_profiles))
       addCapLoss(line, ext.start_date, ext.end_date);
-  const capped = budget > 0 && cappedDaysLost > 0;
+  const capped = cappedDaysLost > 0;
   const budgetCapped = capped ? Math.max(0, budget - cappedDaysLost) : budget;
-  // Blended consumption value — the same approximation as the projects
-  // list, scaled to the capped budget/value so consumption never exceeds
-  // what the caps allow to bill.
-  const cappedTotal = capped
-    ? Math.round((budgetCapped / budget) * total)
-    : total;
+  // The value already reflects the caps line by line (see above), so it
+  // stands as the consumption ceiling — no proportional shrink needed.
+  const cappedTotal = total;
   const effDays = capped ? Math.min(craDays, budgetCapped) : craDays;
   const pct =
     budgetCapped > 0 ? Math.round((effDays / budgetCapped) * 100) : 0;
@@ -1564,7 +1724,7 @@ function ProjectStatsStrip({
         </span>
         <span className="pj-stat-sub">
           {isRegie
-            ? `${money(Number(project.tjm ?? 0), project.currency)} × ${fmtDays(budgetCapped)} days`
+            ? `${fmtDays(budgetCapped)} billable days`
             : "Forfait"}
           {extAmount > 0 ? " · incl. extensions" : ""}
           {capped ? " · capped by annual caps" : ""}
@@ -1593,6 +1753,19 @@ function ProjectStatsStrip({
             : "from CRA timesheets"}
         </span>
       </div>
+      {billedHt !== null && (
+        <div className="pj-stat">
+          <span className="pj-stat-label">Billed</span>
+          <span className="pj-stat-value">
+            {money(billedHt, project.currency)}
+          </span>
+          <span className="pj-stat-sub">
+            {cappedTotal > 0
+              ? `${Math.round((billedHt / cappedTotal) * 100)}% of contract value`
+              : "Finalized and paid invoices, HT"}
+          </span>
+        </div>
+      )}
       <div className="pj-stat">
         <span className="pj-stat-label">Remaining</span>
         <span className="pj-stat-value">
@@ -1638,7 +1811,7 @@ function ProjectForm({
   signedExtensions,
   onCancel,
   onSubmit,
-  onFolderLinked,
+  onDocumentsChanged,
   onExtensionsChanged,
   onStaffingChanged,
   staffing,
@@ -1646,6 +1819,7 @@ function ProjectForm({
   talentPool,
   canEngage,
   assignmentsByEmployee,
+  onInvoicedHt,
   onProjectPatched,
 }: {
   editing: Project | null;
@@ -1662,7 +1836,8 @@ function ProjectForm({
   signedExtensions: ProjectExtension[];
   onCancel: () => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
-  onFolderLinked: (projectId: string, folder: ContractFolder) => void;
+  /** Reload list flags after a contract or avenant was filed. */
+  onDocumentsChanged: () => void;
   onExtensionsChanged: () => void;
   /** Reload after an assignment was created or ended from the contract page. */
   onStaffingChanged: () => void;
@@ -1686,6 +1861,8 @@ function ProjectForm({
   canEngage: boolean;
   /** Open assignments per employee, all projects — availability readout. */
   assignmentsByEmployee: Map<string, Assignment[]>;
+  /** The invoices card's HT total, for the stat strip's Billed figure. */
+  onInvoicedHt: (projectId: string, amount: number) => void;
   onProjectPatched: (
     projectId: string,
     patch: { end_date: string | null; updated_at: string },
@@ -1698,6 +1875,12 @@ function ProjectForm({
     editing?.pricing_model || source?.pricing_model || "regie",
   );
   const [clientId, setClientId] = useState(editing?.client_id || "");
+  // Optional billing intermediary — when set, invoices go to it instead of
+  // the main client. Cleared if the main client is switched to the same id
+  // (the database rejects client == intermediary).
+  const [intermediaryId, setIntermediaryId] = useState(
+    editing?.intermediary_client_id || "",
+  );
   const [startDate, setStartDate] = useState(editing?.start_date || "");
   const [endDate, setEndDate] = useState(editing?.end_date || "");
   const [profiles, setProfiles] = useState<TjmProfileDraft[]>(() => {
@@ -1705,6 +1888,7 @@ function ProjectForm({
     if (editing && stored.length)
       return stored.map((p) => ({
         name: p.name,
+        savedName: p.name,
         tjm: String(p.tjm),
         end_date: p.end_date || "",
         cap:
@@ -1769,7 +1953,13 @@ function ProjectForm({
     max_billable_days_per_year: Number(p.cap) > 0 ? Number(p.cap) : null,
   }));
   const totalDays = linesDays(cleanedProfiles, startDate, endDate);
-  const regieTotal = linesAmount(cleanedProfiles, startDate, endDate);
+  // The contract's total days are the Σ of the profile line volumes — a
+  // profile can end before the contract does, so the raw start→end
+  // count overstates the budget. Forfait has no lines; the window count
+  // stands there.
+  const contractDays = pricingModel === "regie" ? totalDays : openDays;
+  // Estimated value: per-line rate × capped open days, no mean rate.
+  const regieTotal = linesCappedAmount(cleanedProfiles, startDate, endDate);
   const daysDiffer = openDays > 0 && totalDays !== openDays;
   const currencySymbol =
     { EUR: "€", USD: "$", SAR: "SAR" }[currency as "EUR" | "USD" | "SAR"] ||
@@ -1837,7 +2027,7 @@ function ProjectForm({
     0,
   );
   const extAmount = signedExtensions.reduce(
-    (sum, ext) => sum + Number(ext.amount),
+    (sum, ext) => sum + extensionValue(ext),
     0,
   );
   const consumptionBudget =
@@ -1930,9 +2120,30 @@ function ProjectForm({
                   <ClientPicker
                     clients={clients}
                     value={clientId}
-                    onChange={setClientId}
+                    onChange={(id) => {
+                      setClientId(id);
+                      if (intermediaryId && intermediaryId === id)
+                        setIntermediaryId("");
+                    }}
                     required
                   />
+                </div>
+                <div className="pj-field">
+                  <span className="pj-label">
+                    Intermediary{" "}
+                    <span className="pj-label-opt">(optional)</span>
+                  </span>
+                  <ClientPicker
+                    clients={clients.filter((c) => c.id !== clientId)}
+                    value={intermediaryId}
+                    onChange={setIntermediaryId}
+                    name="intermediary_client_id"
+                  />
+                  <span className="pj-field-help">
+                    {intermediaryId
+                      ? `Billed to ${clients.find((c) => c.id === intermediaryId)?.name || "the intermediary"} — the main client isn't invoiced.`
+                      : "No intermediary — the main client is billed directly."}
+                  </span>
                 </div>
                 <label className="pj-field">
                   <span className="pj-label">Status</span>
@@ -1977,8 +2188,8 @@ function ProjectForm({
                     continue as extensions below.
                   </p>
                 </div>
-                {openDays > 0 && (
-                  <span className="pj-chip">{openDays} working days</span>
+                {contractDays > 0 && (
+                  <span className="pj-chip">{contractDays} working days</span>
                 )}
               </div>
 
@@ -2120,6 +2331,11 @@ function ProjectForm({
                     {profiles.map((profile, i) => {
                       const cleaned = cleanedProfiles[i];
                       const days = lineDays(cleaned, startDate, endDate);
+                      const billableDays = cappedLineDays(
+                        cleaned,
+                        startDate,
+                        endDate,
+                      );
                       // Live prorata: the cap input is the full-year
                       // allowance; the caption shows what this calendar
                       // year actually allows over the line window.
@@ -2134,11 +2350,13 @@ function ProjectForm({
                             )
                           : null;
                       // Staffing follows the saved lines — assignments
-                      // are keyed by line name, so a renamed or brand-new
-                      // draft line can only be staffed after saving.
+                      // are keyed by the saved line name (possibly ""), so
+                      // a line keeps its staffing while being renamed and
+                      // a brand-new draft line can only be staffed after
+                      // saving.
                       const lineStaff =
-                        editing && cleaned.name
-                          ? staffingByLine.get(cleaned.name)
+                        editing && profile.savedName !== undefined
+                          ? staffingByLine.get(profile.savedName)
                           : undefined;
                       return (
                         <div className="pj-line" key={i}>
@@ -2211,9 +2429,13 @@ function ProjectForm({
                               <span className="pj-label">Subtotal</span>
                               <span
                                 className="pj-subtotal"
-                                title={`${days} working days`}
+                                title={
+                                  billableDays < days
+                                    ? `${fmtDays(billableDays)} billable of ${days} working days (annual cap)`
+                                    : `${days} working days`
+                                }
                               >
-                                {money(cleaned.tjm * days, currency)}
+                                {money(cleaned.tjm * billableDays, currency)}
                               </span>
                             </div>
                             <button
@@ -2282,6 +2504,19 @@ function ProjectForm({
                       name="tjm_profiles"
                       value={JSON.stringify(cleanedProfiles)}
                     />
+                    <input
+                      type="hidden"
+                      name="tjm_renames"
+                      value={JSON.stringify(
+                        profiles.flatMap((p, i) =>
+                          p.savedName !== undefined &&
+                          cleanedProfiles[i].name &&
+                          cleanedProfiles[i].name !== p.savedName
+                            ? [{ from: p.savedName, to: cleanedProfiles[i].name }]
+                            : [],
+                        ),
+                      )}
+                    />
                     <div className="pj-table-foot pj-lines-foot">
                       <button
                         type="button"
@@ -2321,6 +2556,7 @@ function ProjectForm({
                   pricingModel={pricingModel}
                   currency={currency}
                   profiles={storedTjmProfiles(editing.tjm_profiles)}
+                  projectStartDate={editing.start_date}
                   tjm={editing.tjm != null ? Number(editing.tjm) : null}
                   estimatedDays={
                     editing.estimated_days != null
@@ -2342,6 +2578,15 @@ function ProjectForm({
                     setEndDate(patch.end_date || "");
                     onProjectPatched(editing.id, patch);
                   }}
+                />
+              </section>
+            )}
+
+            {editing && editing.pricing_model === "regie" && (
+              <section className="pj-card">
+                <ProjectInvoices
+                  projectId={editing.id}
+                  onTotals={(amount) => onInvoicedHt(editing.id, amount)}
                 />
               </section>
             )}
@@ -2472,19 +2717,14 @@ function ProjectForm({
                 )}
               </section>
               <section className="pj-card">
-                <ProjectContractSection
-                  projectId={editing.id}
-                  folder={
-                    editing.drive_folder_id
-                      ? {
-                          id: editing.drive_folder_id,
-                          name: editing.drive_folder_name || "",
-                          webViewLink: editing.drive_folder_link || undefined,
-                        }
-                      : null
-                  }
-                  title="Contract files"
-                  onLinked={(folder) => onFolderLinked(editing.id, folder)}
+                <DocumentsPanel
+                  owner={{ kind: "project", id: editing.id }}
+                  title="Contract documents"
+                  extensions={signedExtensions.map((x) => ({
+                    id: x.id,
+                    label: x.label || (x.start_date ? `Extension from ${formatDay(x.start_date)}` : "Extension"),
+                  }))}
+                  onChanged={onDocumentsChanged}
                 />
               </section>
             </aside>

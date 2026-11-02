@@ -77,6 +77,18 @@
 .workspace {
   overflow-x: clip;
 }
+/* Seven Sales tabs: tighten the rhythm before the row has to scroll. */
+@media (max-width: 1400px) {
+  .section-header {
+    gap: 24px;
+  }
+  .section-header-label {
+    min-width: 0;
+  }
+  .section-header > * {
+    flex-shrink: 0;
+  }
+}
 @media (max-width: 1050px) {
   .section-header {
     --sb: 210px;

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, RefreshCw, Save, Search } from 'lucide-react';
 import { Empty, Notice } from '@quicksort/hr-ui';
 import { errorMessage } from '@quicksort/hr-db';
 import { z } from 'zod';
 import { loadContext, loadMonth, saveMonth } from './data';
 import { balanceFor, fmtDays, useLeaveBalances } from './balances';
-import { assignedProjects, currentMonth, dayHalves, entrySchema, entryValue, listMonths, setDayPart, shiftMonth, monthDays, monthSchema, sortEntries, statusLabels, withinEmployment, type ActivityValue, type Assignment, type Context, type Employee, type Entry, type Part, type Snapshot } from './domain';
+import { assignedProjects, currentMonth, dayHalves, entrySchema, entryValue, listMonths, setDayPart, shiftMonth, monthDays, monthSchema, sortEntries, statusLabels, freelanceStatusLabels, isFreelance, withinEmployment, type StatusLabels, type ActivityValue, type Assignment, type Context, type Employee, type Entry, type Part, type Snapshot } from './domain';
 import './cra.css';
 
 function employeeIdFromPath() {
@@ -48,21 +49,21 @@ function activityClass(value: ActivityValue): 'client' | 'internal' | 'cp' | 'rt
 }
 // Short cell label: the client name for projects, the leave name otherwise
 // (the design shows “BNP”, “Congés payés”, … next to a marker dot).
-function activityLabel(value: ActivityValue, projects: Assignment[]): string {
+function activityLabel(value: ActivityValue, projects: Assignment[], labels: StatusLabels): string {
   if (!value) return '';
-  if (value === 'internal') return statusLabels.internal;
-  if (value === 'paid_leave') return statusLabels.paid_leave;
-  if (value === 'rtt') return statusLabels.rtt;
-  if (value === 'unpaid_leave') return statusLabels.unpaid_leave;
+  if (value === 'internal') return labels.internal;
+  if (value === 'paid_leave') return labels.paid_leave;
+  if (value === 'rtt') return labels.rtt;
+  if (value === 'unpaid_leave') return labels.unpaid_leave;
   const project = projects.find(item => `project:${item.project_id}` === value);
-  return project?.client_name || statusLabels.client_project;
+  return project?.client_name || labels.client_project;
 }
-function activityName(value: ActivityValue, projects: Assignment[]): string {
+function activityName(value: ActivityValue, projects: Assignment[], labels: StatusLabels): string {
   if (!value) return 'not filled';
   if (value === 'internal') return 'Internal';
-  if (value === 'paid_leave') return statusLabels.paid_leave;
-  if (value === 'rtt') return 'RTT';
-  if (value === 'unpaid_leave') return statusLabels.unpaid_leave;
+  if (value === 'paid_leave') return labels.paid_leave;
+  if (value === 'rtt') return labels.rtt;
+  if (value === 'unpaid_leave') return labels.unpaid_leave;
   const project = projects.find(item => `project:${item.project_id}` === value);
   return project ? `Client Project ${project.title} (${project.client_name})` : 'Client Project';
 }
@@ -79,6 +80,8 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, bas
   // (the person record's CRA tab). Query-based embeds keep ?month=YYYY-MM;
   // dialogs without a basePath leave the address bar untouched.
   const syncUrl = !!basePath || manageUrl;
+  const location = useLocation();
+  const navigate = useNavigate();
   const pathMonth = !!basePath || (manageUrl && !linkBase);
   const readSharedId = () => {
     if (!manageUrl) return '';
@@ -128,23 +131,27 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, bas
   // Browser back/forward (or a colleague opening a shared link) moves the URL:
   // follow it as long as the id matches a known employee record. A bare path
   // without a month means the current month.
+  // Runs only when the URL actually moves (not on mount, where the initial
+  // state already came from it, so a legacy ?month= link folds in intact).
+  const contextRef = useRef(context);
+  contextRef.current = context;
+  const seenUrl = useRef(location.pathname + location.search);
   useEffect(() => {
+    const url = location.pathname + location.search;
+    if (seenUrl.current === url) return;
+    seenUrl.current = url;
     if (!syncUrl) return;
-    const sync = () => {
-      const fromLink = readSharedId();
-      if (fromLink) setEmployeeId(previous => context?.employees.some(employee => employee.id === fromLink) ? fromLink : previous);
-      const fromUrl = pathMonth ? readPathMonth() : readQueryMonth();
-      if (linkBase) { if (fromUrl) setMonthState(fromUrl); }
-      else setMonthState(fromUrl || currentMonth());
-    };
-    window.addEventListener('popstate', sync);
-    return () => window.removeEventListener('popstate', sync);
-  }, [syncUrl, pathMonth, linkBase, context]);
+    const fromLink = readSharedId();
+    if (fromLink) setEmployeeId(previous => contextRef.current?.employees.some(employee => employee.id === fromLink) ? fromLink : previous);
+    const fromUrl = pathMonth ? readPathMonth() : readQueryMonth();
+    if (linkBase) { if (fromUrl) setMonthState(fromUrl); }
+    else setMonthState(fromUrl || currentMonth());
+  }, [location.pathname, location.search]);
   function selectEmployee(id: string) {
     setEmployeeId(id);
     // Keep the URL shareable: picking someone turns the address bar into
     // the link HR can send to open this exact CRA month.
-    if (manageUrl && readSharedId() !== id) window.history.pushState(null, '', shareLink(id, month));
+    if (manageUrl && readSharedId() !== id) navigate(shareLink(id, month));
   }
   // Reflect the resolved employee and the viewed month in the address bar
   // (replace: no extra history entry) so copying the URL always yields a
@@ -152,7 +159,7 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, bas
   useEffect(() => {
     if (!syncUrl || !context || !employeeId) return;
     const target = shareLink(fixedEmployeeId || employeeId, month);
-    if (window.location.pathname + window.location.search !== target) window.history.replaceState(null, '', target);
+    if (window.location.pathname + window.location.search !== target) navigate(target, { replace: true });
   }, [syncUrl, pathMonth, linkBase, basePath, context, employeeId, fixedEmployeeId, month]);
   function changeMonth(next: string) {
     setMonthState(next);
@@ -160,7 +167,7 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, bas
     // One history entry per month: the address bar always holds a shareable
     // link and the back button steps through the visited months.
     const target = shareLink(fixedEmployeeId || employeeId, next);
-    if (window.location.pathname + window.location.search !== target) window.history.pushState(null, '', target);
+    if (window.location.pathname + window.location.search !== target) navigate(target);
   }
   const employee = context?.employees.find(item => item.id === (fixedEmployeeId || employeeId));
   const monthChoices = useMemo(() => {
@@ -190,7 +197,7 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, bas
     {context && employee && <>
       {!fixedEmployeeId && <div className="cra-filters panel">
         <div className="cra-field"><label className="qs-label" htmlFor="cra-employee">Employee</label><EmployeePicker employees={context.employees} selectedId={employeeId} onSelect={selectEmployee} /></div>
-      </div>}      <MonthEditor key={`${employeeId}:${month}`} employee={employee} month={month} months={monthChoices} onMonth={changeMonth} assignments={context.assignments} draftOwner={draftOwner} />
+      </div>}      <MonthEditor key={`${employeeId}:${month}`} employee={employee} month={month} months={monthChoices} onMonth={changeMonth} assignments={context.assignments} draftOwner={draftOwner} audience={audience} />
     </>}
   </section>;
 }
@@ -276,7 +283,7 @@ type Cell = {
   out: boolean;
 };
 
-function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner }: { employee: Employee; month: string; months: string[]; onMonth: (month: string) => void; assignments: Assignment[]; draftOwner: string }) {
+function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner, audience }: { employee: Employee; month: string; months: string[]; onMonth: (month: string) => void; assignments: Assignment[]; draftOwner: string; audience: 'admin' | 'employee' }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [version, setVersion] = useState(0);
@@ -290,6 +297,9 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   const [draftStored, setDraftStored] = useState(true);
   // Same strip for HR and the employee portal: everyone sees the same
   // remaining CP/RTT days, net of everything consumed so far.
+  // Freelancers accrue no CP/RTT: no balance strip, a single Absence brush.
+  const freelance = isFreelance(employee);
+  const labels = freelance ? freelanceStatusLabels : statusLabels;
   const { balances, error: balanceError } = useLeaveBalances([employee.id]);
   const cpLeft = balanceFor(balances, employee.id, 'cp');
   const rttLeft = balanceFor(balances, employee.id, 'rtt');
@@ -298,6 +308,10 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   const draftKey = `quicksort:cra:${draftOwner}:${employee.id}:${month}`;
   const days = monthDays(month);
   const dayInfo = useMemo(() => new Map(days.map(day => [day.day, day])), [days]);
+  // A validated invoice covers this consultant-month: consultants are locked
+  // out (the server enforces it too), admin/HR get a warning and keep editing.
+  const invoiced = !!snapshot?.invoiced;
+  const invoiceLocked = invoiced && audience === 'employee';
   const dirty = !!snapshot && JSON.stringify(entries) !== JSON.stringify(snapshot.entries);
   const monthLabel = new Date(`${month}-01T12:00:00`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   // Six-month window strip (design): the viewed month sits near the middle,
@@ -432,10 +446,14 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   const defaultProject = monthProjects.find(assignment => ['active', 'confirmed'].includes(assignment.status)) ?? monthProjects[0];
   const projectBrushes = employeeProjects.map(assignment => ({ value: `project:${assignment.project_id}` as ActivityValue, label: assignment.client_name, sub: `Client project · ${assignment.title}`, cls: 'client' }));
   const plainBrushes: { value: ActivityValue; label: string; sub: string; cls: string }[] = [
-    { value: 'internal', label: statusLabels.internal, sub: 'Non-billable', cls: 'internal' },
-    { value: 'paid_leave', label: statusLabels.paid_leave, sub: 'Paid leave', cls: 'cp' },
-    { value: 'rtt', label: statusLabels.rtt, sub: 'Reduced working time', cls: 'rtt' },
-    { value: 'unpaid_leave', label: statusLabels.unpaid_leave, sub: 'Unpaid leave', cls: 'css' },
+    { value: 'internal', label: labels.internal, sub: 'Non-billable', cls: 'internal' },
+    ...(freelance ? [
+      { value: 'unpaid_leave' as const, label: labels.unpaid_leave, sub: 'Not worked, not billed', cls: 'css' },
+    ] : [
+      { value: 'paid_leave' as const, label: labels.paid_leave, sub: 'Paid leave', cls: 'cp' },
+      { value: 'rtt' as const, label: labels.rtt, sub: 'Reduced working time', cls: 'rtt' },
+      { value: 'unpaid_leave' as const, label: labels.unpaid_leave, sub: 'Unpaid leave', cls: 'css' },
+    ]),
   ];
 
   // Weights count a full day as 1 and a half day as 0.5. Weekends and public
@@ -457,7 +475,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   }
   const remaining = Math.max(0, workdays.length - filled);
   const breakdown = Object.entries(counts).filter(([, amount]) => amount > 0)
-    .map(([status, amount]) => `${status === 'client_project' ? statusLabels.client_project : statusLabels[status as keyof typeof statusLabels]} ${fmtDays(amount)}`)
+    .map(([status, amount]) => `${labels[status as keyof StatusLabels]} ${fmtDays(amount)}`)
     .join(' · ');
   const invalidDays = entries.filter(entry => entry.status === 'client_project' && !assignedProjects(assignments, employee.id, entry.day).some(project => project.project_id === entry.project_id));
 
@@ -511,6 +529,8 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
     {!snapshot && !error && <p role="status" className="muted">Loading {monthLabel}…</p>}
     {!snapshot && error && <button className="btn secondary" onClick={discard}>Retry loading month</button>}
     {snapshot && <>
+      {invoiceLocked && <Notice>This month has been invoiced and is locked. Ask an admin to change it.</Notice>}
+      {invoiced && !invoiceLocked && <Notice>A validated invoice covers this month — changes will not update it.</Notice>}
       <section className="cra-months" aria-label="Months">
         <button className="cra-month-nav" type="button" aria-label="Earlier months" disabled={windowStart <= 0 || busy} onClick={() => setWindowStart(value => value - 1)}><ChevronLeft size={18} aria-hidden="true" /></button>
         <div className="cra-months-track">
@@ -534,7 +554,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
           <p className="cra-toolbar-meta">{workdays.length} working days{holidayCount ? ` · ${holidayCount} public ${holidayCount === 1 ? 'holiday' : 'holidays'}` : ''}{defaultProject ? ` · Default ${defaultProject.client_name} — ${defaultProject.title}` : ''}</p>
         </div>
         <div className="cra-toolbar-actions">
-          {defaultProject && remaining > 0 && <button className="btn secondary" type="button" disabled={busy} onClick={fillDefault}>Fill {fmtDays(remaining)} empty</button>}
+          {defaultProject && remaining > 0 && !invoiceLocked && <button className="btn secondary" type="button" disabled={busy} onClick={fillDefault}>Fill {fmtDays(remaining)} empty</button>}
         </div>
       </section>
 
@@ -543,7 +563,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
         <span className="cra-save-state" role="status">{statusLabel}</span>
         <div className="cra-savebar-actions">
           {dirty && <button className="btn secondary" type="button" disabled={busy} onClick={discard}><RefreshCw size={16} aria-hidden="true" />Discard</button>}
-          <button className="btn" type="button" disabled={busy || !dirty} onClick={() => void save()}><Save size={16} aria-hidden="true" />{busy ? 'Saving…' : 'Save'}</button>
+          <button className="btn" type="button" disabled={busy || !dirty || invoiceLocked} onClick={() => void save()}><Save size={16} aria-hidden="true" />{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
 
@@ -554,7 +574,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
             <span className="muted"> / {workdays.length} days filled{remaining ? '' : ' · Complete'}</span>
           </div>
           <div className="muted cra-breakdown">
-            {balanceError ? `Solde indisponible · ${balanceError}` : `Solde CP ${fmtDays(cpLeft)} j · RTT ${fmtDays(rttLeft)} j`}{!balanceError && breakdown ? ` · ${breakdown}` : ''}
+            {freelance ? breakdown : <>{balanceError ? `Solde indisponible · ${balanceError}` : `Solde CP ${fmtDays(cpLeft)} j · RTT ${fmtDays(rttLeft)} j`}{!balanceError && breakdown ? ` · ${breakdown}` : ''}</>}
           </div>
         </div>
         <div role="progressbar" aria-label="Days filled" aria-valuemin={0} aria-valuemax={workdays.length} aria-valuenow={filled} className="cra-progress">
@@ -579,17 +599,17 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
               const halves = dayHalves(entries, cell.iso);
               const whole = halves.am === halves.pm;
               const has = !!(halves.am || halves.pm);
-              const aria = `Activity for ${cell.iso}: ${whole ? `${activityName(halves.am, employeeProjects)}, full day` : `morning ${activityName(halves.am, employeeProjects)}, afternoon ${activityName(halves.pm, employeeProjects)}`}`;
+              const aria = `Activity for ${cell.iso}: ${whole ? `${activityName(halves.am, employeeProjects, labels)}, full day` : `morning ${activityName(halves.am, employeeProjects, labels)}, afternoon ${activityName(halves.pm, employeeProjects, labels)}`}`;
               const lines: { key: string; tag: string; text: string; cls: string }[] = [];
               if (whole) {
-                if (halves.am) lines.push({ key: 'day', tag: '', text: activityLabel(halves.am, employeeProjects), cls: activityClass(halves.am) });
+                if (halves.am) lines.push({ key: 'day', tag: '', text: activityLabel(halves.am, employeeProjects, labels), cls: activityClass(halves.am) });
               } else {
-                if (halves.am) lines.push({ key: 'am', tag: 'AM', text: activityLabel(halves.am, employeeProjects), cls: activityClass(halves.am) });
-                if (halves.pm) lines.push({ key: 'pm', tag: 'PM', text: activityLabel(halves.pm, employeeProjects), cls: activityClass(halves.pm) });
+                if (halves.am) lines.push({ key: 'am', tag: 'AM', text: activityLabel(halves.am, employeeProjects, labels), cls: activityClass(halves.am) });
+                if (halves.pm) lines.push({ key: 'pm', tag: 'PM', text: activityLabel(halves.pm, employeeProjects, labels), cls: activityClass(halves.pm) });
               }
               return <button key={cell.iso} type="button"
                 className={`cra-cell${has ? ' cra-cell--fill' : ' cra-cell--empty'}${cell.weekend ? ' cra-cell--weekend' : ''}${cell.locked ? ' cra-cell--off' : ''}${selectedSet.has(cell.iso) ? ' cra-cell--sel' : ''}`}
-                disabled={cell.locked || busy}
+                disabled={cell.locked || busy || invoiceLocked}
                 aria-pressed={selectedSet.has(cell.iso)}
                 aria-label={aria}
                 title={!withinEmployment(employee, cell.iso) ? 'Outside employment period' : undefined}
@@ -620,7 +640,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
             {DURATIONS.map(item => <button key={item.id} type="button" role="radio" aria-checked={duration === item.id} className={`cra-seg${duration === item.id ? ' cra-seg-on' : ''}`} onClick={() => setDuration(item.id)}>{item.name}</button>)}
           </div>
           <div className={selected.length ? 'cra-types' : 'cra-types cra-types--dim'}>
-            {[...projectBrushes, ...plainBrushes].map(brush => <button key={brush.value} type="button" className="cra-type" disabled={!selected.length || busy} onClick={() => applyBrush(brush.value, brush.label)}>
+            {[...projectBrushes, ...plainBrushes].map(brush => <button key={brush.value} type="button" className="cra-type" disabled={!selected.length || busy || invoiceLocked} onClick={() => applyBrush(brush.value, brush.label)}>
               <span aria-hidden="true" className={`cra-dot cra-dot--${brush.cls}`} />
               <span className="cra-type-text">
                 <span className="cra-type-label">{brush.label}</span>
@@ -628,7 +648,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
               </span>
               <span className="cra-type-count">{valueCounts.get(brush.value) ? `${fmtDays(valueCounts.get(brush.value)!)} d` : ''}</span>
             </button>)}
-            <button type="button" className="cra-clear-entries" disabled={!selected.length || busy} onClick={() => applyBrush('', 'Clear entries')}>Clear entries</button>
+            <button type="button" className="cra-clear-entries" disabled={!selected.length || busy || invoiceLocked} onClick={() => applyBrush('', 'Clear entries')}>Clear entries</button>
           </div>
           <div className="cra-seg-group" role="group" aria-label="Days shown">
             <button type="button" aria-pressed={!weekends} className={`cra-seg${!weekends ? ' cra-seg-on' : ''}`} onClick={() => setWeekends(false)}>Mon–Fri</button>

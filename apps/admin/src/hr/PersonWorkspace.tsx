@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useSession } from '@clerk/react';
-import { Check, CheckCircle2, Circle, Plus, Sparkles, AlertCircle, FileText, Search } from 'lucide-react';
+import { Check, CheckCircle2, Circle, Eye, Lock, Plus, Sparkles, AlertCircle, FileText, Search } from 'lucide-react';
 import { db, errorMessage } from '@quicksort/hr-db';
 import type { Application, ApplicationStage, Assignment, Employee, JourneyTask, Person, Requirement, StaffingProject, SuggestionKind, Workspace } from './domain';
 import { loadRequirements } from './data';
@@ -11,7 +11,11 @@ import { z } from 'zod';
 import { storedPricingLines } from '../sales/pricing-lines';
 import { DateField } from '../DateField';
 import { CraScreen } from '../cra/CraScreen';
-import { Action, Empty, Field, Form, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
+import { countryName, countryOptions, needsResidencePermit } from './countries';
+import { DocumentsPanel } from '../documents/DocumentsPanel';
+import { MatriculeEdit, PersonPayslips } from '../payslips/PersonPayslips';
+import '../payslips/payslips.css';
+import { Action, Empty, Field, Form, SearchField, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
 export const stages: ApplicationStage[] = ['application', 'screening', 'hr_interview', 'technical_interview', 'client_presentation', 'decision', 'offer', 'contract'];
 export const personName = (workspace: Workspace, id: string) => workspace.people.find(person => person.id === id)?.full_name ?? 'Unknown person';
 export const available = (workspace: Workspace, employee: Employee, day: string) => {
@@ -22,6 +26,8 @@ const options = (values: string[]) => values.map(value => ({
   value,
   label: label(value)
 }));
+/** Company/freelance-only document types, hidden from salaried employees' filings. */
+const COMPANY_DOC_TYPES = ['KBIS', 'URSSAF_VIGILANCE', 'RC_PRO', 'FREELANCE_CONTRACT'];
 /** Compact daily-rate suffix for pricing-line labels, e.g. "700 EUR/j". */
 const lineRateLabel = (tjm: number, currency: string) => `${Number.isInteger(tjm) ? tjm : tjm.toFixed(2)} ${currency}/j`;
 export type RecordContext = {
@@ -764,9 +770,6 @@ function ApplicationDetail({
         </div>;
       })}
       {!contracts.length && <Empty>No contract is linked to this application.</Empty>}
-      <p>
-        <a href={`/hr/contracts?person=${encodeURIComponent(person.id)}&application=${encodeURIComponent(application.id)}`}>Share a contract for this application</a>
-      </p>
     </Section>
     {application.status === 'active' && <Section title="Hire and start preboarding" detail="The person keeps all prior applications and employment periods.">
       <div className="hr-two-column">
@@ -970,6 +973,8 @@ export function EmploymentDetail({
   const ended = employee.status === 'ended';
   const canEdit = !ended && workspace.capabilities.recruit;
   const [editingPeople, setEditingPeople] = useState(false);
+  const [editingContract, setEditingContract] = useState(false);
+  const [editingNationality, setEditingNationality] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState('');
   const [editingTaskId, setEditingTaskId] = useState('');
   const [recordingReviewId, setRecordingReviewId] = useState('');
@@ -1009,11 +1014,32 @@ export function EmploymentDetail({
         </div>
         <div>
           <dt>Matricule</dt>
-          <dd>{employee.matricule}</dd>
+          <dd>{workspace.capabilities.recruit ? <MatriculeEdit key={employee.id + employee.matricule} employeeId={employee.id} current={employee.matricule} onSaved={reload} /> : employee.matricule}</dd>
         </div>
         <div>
           <dt>Contract</dt>
-          <dd>{employee.contract_type ? label(employee.contract_type) : 'Not recorded'}</dd>
+          <dd>{employee.contract_type ? <span className="hr-emp-value">
+              {label(employee.contract_type)}
+              {canEdit && <button type="button" className="hr-emp-mini" onClick={() => setEditingContract(open => !open)}>
+                Change
+              </button>}
+            </span> : canEdit ? <button type="button" className="hr-emp-assign" onClick={() => setEditingContract(open => !open)}>
+              <Plus size={13} aria-hidden="true" />
+              Set contract
+            </button> : 'Not recorded'}</dd>
+        </div>
+        <div>
+          <dt>Nationality</dt>
+          <dd>{employee.nationality ? <span className="hr-emp-value">
+              {countryName(employee.nationality)}
+              {needsResidencePermit(employee.nationality) && <Tag>Titre de séjour required</Tag>}
+              {canEdit && <button type="button" className="hr-emp-mini" onClick={() => setEditingNationality(open => !open)}>
+                Change
+              </button>}
+            </span> : canEdit ? <button type="button" className="hr-emp-assign" onClick={() => setEditingNationality(open => !open)}>
+              <Plus size={13} aria-hidden="true" />
+              Set nationality
+            </button> : 'Not recorded'}</dd>
         </div>
         <div>
           <dt>Entry date</dt>
@@ -1061,6 +1087,22 @@ export function EmploymentDetail({
         <Field name="manager_email" label="Manager email" type="email" value={employee.manager_email} />
         <Field name="parrain" label="Buddy" value={employee.parrain} />
       </Form>}
+      {editingContract && canEdit && <Form run={run} busy={busy} button="Save contract" success="Contract type updated." submit={data => ({
+        kind: 'update_employment',
+        employee_id: employee.id,
+        expected_version: employee.version,
+        contract_type: text(data, 'contract_type')
+      })}>
+        <Field name="contract_type" label="Contract type" value={employee.contract_type || 'CDI'} options={options(['CDI', 'CDD', 'Freelance', 'Internship', 'Apprenticeship'])} required />
+      </Form>}
+      {editingNationality && canEdit && <Form run={run} busy={busy} button="Save nationality" success="Nationality updated." submit={data => ({
+        kind: 'update_employment',
+        employee_id: employee.id,
+        expected_version: employee.version,
+        nationality: text(data, 'nationality')
+      })}>
+        <SearchField name="nationality" label="Nationality" value={employee.nationality} options={countryOptions} placeholder="Search a country…" hint="Outside the EU, EEA and Switzerland, a titre de séjour becomes a required document." />
+      </Form>}
       {cancellingHire && employee.status === 'preboarding' && <Form run={run} busy={busy} title="Cancel hire" button="Cancel hire" success="Hire cancelled. Employment closed, application withdrawn and commitments released." submit={data => ({
         kind: 'cancel_hire',
         employee_id: employee.id,
@@ -1070,6 +1112,24 @@ export function EmploymentDetail({
         <Field name="rationale" label="Renunciation rationale" type="textarea" required />
       </Form>}
     </EmpSection>
+    {workspace.capabilities.recruit && <EmpSection title="Documents" detail={ended
+      ? 'Documents kept from this employment. Nothing is required any more.'
+      : `Required for ${employee.contract_type ? label(employee.contract_type) : 'this employment'}${needsResidencePermit(employee.nationality) ? ' and a non-EU nationality' : ''}. Identity and social-security files are stored in the HR-only Drive folder.`}
+      rail={!ended && <div className="hr-emp-notes">
+        <span><Lock size={13} aria-hidden="true" /> Visible to HR only</span>
+        <span><Eye size={13} aria-hidden="true" /> Every view and download is logged</span>
+      </div>}>
+      <DocumentsPanel
+        owner={{ kind: 'person', id: employee.person_id }}
+        title=""
+        requirements={ended ? [] : [employee.contract_type, ...(needsResidencePermit(employee.nationality) ? ['non_eu'] : [])].filter(Boolean)}
+        excludeTypeCodes={[...(freelance ? [] : COMPANY_DOC_TYPES), 'PAYSLIP']}
+        hideFiledTypeCodes={['PAYSLIP']}
+      />
+    </EmpSection>}
+    {workspace.capabilities.recruit && !freelance && <EmpSection title="Payslips" detail="Silae payslips filed for this person. Visible to HR only; every view and download is logged.">
+      <PersonPayslips personId={employee.person_id} personName={person.full_name} onChanged={reload} />
+    </EmpSection>}
     <EmpSection title={freelance ? 'Daily rate (TJM)' : 'Salary'} detail={freelance ? 'Dated daily-rate history. A new entry closes the previous one the day before it starts; freelance engagements and hires seed the first entry.' : 'Dated monthly salary history. A new entry closes the previous one the day before it starts; hiring seeds the first entry from the accepted offer.'}>
       {!salaries.length && <div className="hr-emp-empty">
         <span>{freelance ? 'No daily rate recorded' : 'No salary recorded'}</span>
@@ -1297,7 +1357,7 @@ export function EmploymentDetail({
           notice_end: nullable(data, 'notice_end'),
           rationale: text(data, 'rationale')
         })}>
-          <Field name="exit_kind" label="Exit type" options={options(['resignation', 'rupture_conventionnelle', 'dismissal', 'probation_end', 'cdd_end'])} required />
+          <Field name="exit_kind" label="Exit type" options={options(['resignation', 'rupture_conventionnelle', 'dismissal', 'probation_end', 'cdd_end', 'internship_end'])} required />
           <Field name="exit_date" label="Exit date" type="date" required />
           <Field name="notice_end" label="Notice end" type="date" />
           <Field name="rationale" label="Reason" type="textarea" required />
@@ -1788,6 +1848,8 @@ function Assignments({
 }) {
   const periods = workspace.employees.filter(employee => employee.person_id === person.id);
   const live = periods.filter(employee => employee.status !== 'ended');
+  // Offboarding closes the door to new project work (mirrors hr_command).
+  const assignable = live.filter(employee => employee.status === 'preboarding' || employee.status === 'active');
   const day = today();
   const assignments = workspace.assignments
     .filter(assignment => periods.some(employee => employee.id === assignment.employee_id))
@@ -1867,11 +1929,11 @@ function Assignments({
     <section>
       <div className="hr-person-section-head">
         <h2>Active assignments</h2>
-        {!!live.length && !assignOpen && <button type="button" className="btn hr-person-assign-btn" aria-expanded={assignOpen} onClick={() => setAssignOpen(true)}>
+        {!!assignable.length && !assignOpen && <button type="button" className="btn hr-person-assign-btn" aria-expanded={assignOpen} onClick={() => setAssignOpen(true)}>
           <Plus size={16} aria-hidden="true" /> Assign to project
         </button>}
       </div>
-      {assignOpen && live.map(employee => <div className="hr-assign-panel" key={employee.id}>
+      {assignOpen && assignable.map(employee => <div className="hr-assign-panel" key={employee.id}>
         <div className="hr-assign-panel-head">
           <div>
             <h3>New assignment · {employee.role}</h3>
@@ -1959,6 +2021,10 @@ function AssignmentCard({
 }) {
   const day = today();
   const project = workspace.projects.find(item => item.id === assignment.project_id);
+  const employee = workspace.employees.find(item => item.id === assignment.employee_id);
+  // During offboarding the assignment is already capped at the exit date; it
+  // can still be ended earlier, but no longer edited.
+  const exitDate = employee && employee.status !== 'preboarding' && employee.status !== 'active' ? employee.planned_exit_date ?? employee.end_date : null;
   const [editing, setEditing] = useState(false);
   const [closing, setClosing] = useState(false);
   const overdue = !!assignment.end_date && assignment.end_date < day && !['completed', 'cancelled'].includes(assignment.status);
@@ -1994,9 +2060,9 @@ function AssignmentCard({
         </div>
       </div>
       <div className="hr-assign-actions">
-        <button type="button" className="btn secondary" aria-expanded={editing} onClick={() => { setEditing(current => !current); setClosing(false); }}>
+        {!exitDate && <button type="button" className="btn secondary" aria-expanded={editing} onClick={() => { setEditing(current => !current); setClosing(false); }}>
           {editing ? 'Close' : 'Edit…'}
-        </button>
+        </button>}
         <button type="button" className="btn secondary" aria-expanded={closing} onClick={() => { setClosing(current => !current); setEditing(false); }}>
           {closing ? 'Close' : 'End or cancel…'}
         </button>
@@ -2016,6 +2082,10 @@ function AssignmentCard({
     {overdue && <p className="hr-assignment-note">
       <span aria-hidden="true">!</span>
       <span>Planned end passed <strong>{overdueDays} days ago</strong> and no ending has been recorded. End the assignment below or agree a new end date with the client.</span>
+    </p>}
+    {exitDate && <p className="hr-assignment-note">
+      <span aria-hidden="true">!</span>
+      <span>Offboarding in progress: this assignment ends with the employment on <strong>{date(exitDate)}</strong>.</span>
     </p>}
     {editing && <AssignmentEdit assignment={assignment} workspace={workspace} day={day} run={run} busy={busy} onClose={() => setEditing(false)} />}
     {closing && <AssignmentClose assignment={assignment} day={day} run={run} busy={busy} onClose={() => setClosing(false)} />}
@@ -2131,12 +2201,12 @@ function AssignmentEdit({
       </div>
       <div className="hr-assign-field">
         <span>Starts</span>
-        <input type="date" className="hr-assign-input" value={startDate} min={startMin} max={endMax} onChange={event => setStartDate(event.target.value)} />
+        <DateField value={startDate} min={startMin} max={endMax} onChange={setStartDate} aria-label="Starts" required />
         {startMin && <small>No earlier than {date(startMin)}.</small>}
       </div>
       <div className="hr-assign-field">
         <span>Ends{endRequired ? '' : ', if known'}</span>
-        <input type="date" className="hr-assign-input" value={endDate} min={startDate} max={endMax} onChange={event => setEndDate(event.target.value)} />
+        <DateField value={endDate} min={startDate} max={endMax} onChange={setEndDate} aria-label="Ends" required={endRequired} />
         {windowEnd
           ? <small>The project ends {date(windowEnd)}; an end date is required.</small>
           : <small>Leave empty for open-ended. Capacity is still checked against overlapping commitments.</small>}
@@ -2240,7 +2310,7 @@ function AssignmentClose({
             <small>Today</small>
           </button>
         </div>
-        <input type="date" className="hr-assign-input" value={customDate} min={assignment.start_date} max={lastAllowedDay} aria-label="Custom end date" onChange={event => { setWhen('custom'); setCustomDate(event.target.value); }} />
+        <DateField value={customDate} min={assignment.start_date} max={lastAllowedDay} placeholder="Custom date" aria-label="Custom end date" onChange={value => { setWhen(value ? 'custom' : 'today'); setCustomDate(value); }} />
       </div>
       {reasonField}
     </div>}

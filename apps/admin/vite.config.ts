@@ -15,6 +15,10 @@ function apiRoutes(): Plugin {
     '/api/analysis-history': '/api/analysis-history.ts',
     '/api/sales-pipeline': '/api/sales-pipeline.ts',
     '/api/boondmanager': '/api/boondmanager.ts',
+    '/api/invoicing': '/api/invoicing.ts',
+    '/api/google-drive': '/api/google-drive.ts',
+    '/api/documents': '/api/documents.ts',
+    '/api/documents-extract': '/api/documents-extract.ts',
     '/api/team-photo': '/api/team-photo.mjs',
   };
   return {
@@ -38,6 +42,10 @@ function apiRoutes(): Plugin {
               json(body) {
                 if (!res.hasHeader('content-type')) res.setHeader('content-type', 'application/json');
                 res.end(JSON.stringify(body));
+              },
+              send(body) {
+                res.end(body);
+                return this as never;
               },
             },
           );

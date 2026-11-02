@@ -13,7 +13,7 @@ import {
   Landmark, Maximize2, Minus, PanelLeftClose, PanelLeftOpen, Pencil, Redo2, Save, Scissors, ShieldCheck, Sparkles, SquareDashed, Target, Trash2, Undo2, UserPlus, Users, X,
 } from "lucide-react";
 
-type View = "researchUsage" | "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "caseStudies" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "opportunities" | "pipeline" | "kanban" | "doors" | "guide";
+type View = "researchUsage" | "overview" | "market" | "competitors" | "marketing" | "partners" | "businessPartners" | "caseStudies" | "executive" | "capabilities" | "accounts" | "events" | "leads" | "opportunities" | "pipeline" | "doors" | "guide";
 type GlobalSearchEntry = WorkspaceSearchEntry & {
   target: "view" | "account" | "event";
   view: View;
@@ -205,7 +205,6 @@ const nav = [
   { id: "businessPartners" as View, path: "/business-partners", label: "Business partners", sidebarLabel: "Business partners", icon: Handshake },
   { id: "executive" as View, path: "/executive-intelligence", label: "Executive intelligence", sidebarLabel: "Executive", icon: FileText },
   { id: "pipeline" as View, path: "/pipeline", label: "Pipeline", sidebarLabel: "Pipeline", icon: Target },
-  { id: "kanban" as View, path: "/kanban", label: "Kanban", sidebarLabel: "Kanban", icon: LayoutGrid },
   { id: "doors" as View, path: "/open-doors", label: "Open doors", sidebarLabel: "Open doors", icon: ContactRound },
   { id: "researchUsage" as View, path: "/research-usage", label: "Research usage", sidebarLabel: "Research usage", icon: CircleDollarSign },
   { id: "guide" as View, path: "/guide", label: "GTM workspace guide", sidebarLabel: "How to use", icon: BookOpen },
@@ -238,11 +237,6 @@ export default function App({ email = "" }: { email?: string }) {
   const [selected, setSelected] = useState("ai_for_business");
   const [capabilities, setCapabilities] = useState<Capability[]>(emptyCapabilities);
   const [ownerOptions, setOwnerOptions] = useState<OwnerOption[]>([]);
-  const [kanbanProjects, setKanbanProjects] = useState<KanbanProject[]>([]);
-  const [kanbanBoards, setKanbanBoards] = useState<KanbanBoard[]>([]);
-  const [kanbanColumns, setKanbanColumns] = useState<KanbanColumn[]>([]);
-  const [kanbanCards, setKanbanCards] = useState<KanbanCard[]>([]);
-  const [kanbanBoardAccounts, setKanbanBoardAccounts] = useState<KanbanBoardAccount[]>([]);
   const [query, setQuery] = useState("");
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState("");
@@ -387,21 +381,6 @@ export default function App({ email = "" }: { email?: string }) {
     });
     return () => { activeRequest = false; };
   }, []);
-  const loadKanban = async () => {
-    const [projects, boards, columns, cards, links] = await Promise.all([
-      db().from("kanban_projects").select("id, name, project_number").order("project_number"),
-      db().from("kanban_boards").select("id, project_id, name").order("created_at"),
-      db().from("kanban_columns").select("id, board_id, name, position").order("position"),
-      db().from("kanban_cards").select("id, board_id, column_id, title, description, card_number, due_at").order("card_number"),
-      db().from("kanban_board_accounts").select("board_id, account_id"),
-    ]);
-    if (!projects.error) setKanbanProjects((projects.data || []) as KanbanProject[]);
-    if (!boards.error) setKanbanBoards((boards.data || []) as KanbanBoard[]);
-    if (!columns.error) setKanbanColumns((columns.data || []) as KanbanColumn[]);
-    if (!cards.error) setKanbanCards((cards.data || []) as KanbanCard[]);
-    if (!links.error) setKanbanBoardAccounts((links.data || []) as KanbanBoardAccount[]);
-  };
-  useEffect(() => { void loadKanban(); }, []);
   useEffect(() => {
     const label = accountRecords.find((account) => account.id === selectedAccount)?.name ?? eventRecords.find((event) => event.id === selectedEvent)?.title ?? nav.find((item) => item.id === view)?.label ?? "Overview";
     document.title = `${label} · QuickSort Intelligence`;
@@ -450,9 +429,6 @@ export default function App({ email = "" }: { email?: string }) {
       fit: updatedAccount.fit, case_studies: updatedAccount.caseStudies, opportunity_summary: updatedAccount.opportunitySummary || "", fit_score: updatedAccount.fitScore || "—", evidence: updatedAccount.evidence || [], intelligence: updatedIntel,
     }, { onConflict: "slug" });
       if (accountResult.error) { notify("Could not save account changes"); return; }
-      const links = updatedIntel.contacts.flatMap(contact => (contact.kanbanCardIds || []).map(cardId => ({ card_id: cardId, account_id: databaseId, contact_key: contact.id! }))).filter(link => link.contact_key);
-      const deleted = await db().from("kanban_card_contacts").delete().eq("account_id", databaseId);
-      if (!deleted.error && links.length) await db().from("kanban_card_contacts").insert(links);
     })();
     notify("Account changes saved");
   };
@@ -584,13 +560,12 @@ export default function App({ email = "" }: { email?: string }) {
         {view === "competitors" && <CompetitorAnalysis competitors={competitorRecords} onChange={saveCompetitors} notify={notify}/>}
         {view === "capabilities" && <Capabilities active={active} capabilities={capabilities} selected={selected} setSelected={setSelected}/>}
         {view === "accounts" && (selectedAccount && accountRecords.some((account) => account.id === selectedAccount)
-          ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount] ?? { leads: [], events: [], contacts: [] }} linkedStudies={businessCaseStudies.filter((study) => study.accountId === selectedAccount)} ownerOptions={ownerOptions} actorEmail={email} kanbanCards={kanbanCards.filter(card => kanbanBoardAccounts.some(link => link.board_id === card.board_id && link.account_id === accountRecords.find(account => account.id === selectedAccount)?.databaseId)).map(card => ({ ...card, boardName: kanbanBoards.find(board => board.id === card.board_id)?.name || "Board", columnName: kanbanColumns.find(column => column.id === card.column_id)?.name || "Status" }))} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
+          ? <AccountDetail account={accountRecords.find((account) => account.id === selectedAccount)!} intel={intelRecords[selectedAccount] ?? { leads: [], events: [], contacts: [] }} linkedStudies={businessCaseStudies.filter((study) => study.accountId === selectedAccount)} ownerOptions={ownerOptions} actorEmail={email} onSave={saveAccount} onBack={() => navigate("accounts")} notify={notify}/>
           : <Accounts query={query} setQuery={setQuery} accounts={filteredAccounts} allAccounts={accountRecords} openAccount={(id) => navigate("accounts", id)} onAdd={addManualAccount} createIntent={createIntent}/>)}
         {view === "events" && <Events events={eventRecords} selectedEventId={selectedEvent} onOpenEvent={openEvent} onBack={() => navigate("events")} onChange={saveEvents} onAddLead={addEventLead} onAddAccount={addEventAccount} notify={notify}/>}
         {view === "leads" && <Leads leads={leadRecords} events={eventRecords} onChange={saveLeads} notify={notify} createIntent={createIntent}/>}
         {view === "opportunities" && <PublicOpportunities notify={notify}/>}
         {view === "pipeline" && <Pipeline notify={notify}/>} 
-        {view === "kanban" && <BusinessKanban projects={kanbanProjects} boards={kanbanBoards} columns={kanbanColumns} cards={kanbanCards} boardAccounts={kanbanBoardAccounts} accounts={accountRecords} onRefresh={loadKanban} notify={notify}/>}
         {view === "doors" && <OpenDoors accounts={accountRecords} intel={intelRecords} ownerOptions={ownerOptions} actorEmail={email} onAdd={addOpenDoorRelationship} openAccount={(id) => navigate("accounts", id)} notify={notify}/>}
         {view === "guide" && <WorkspaceGuide go={go}/>}
       </main>
@@ -654,25 +629,6 @@ function Overview({ active, capabilities, selected, setSelected, go, notify, acc
       <div className="data-empty">No commercial activity has been recorded yet.</div>
     </section>
   </div>;
-}
-
-function BusinessKanban({ projects, boards, columns, cards, boardAccounts, accounts, onRefresh, notify }: { projects: KanbanProject[]; boards: KanbanBoard[]; columns: KanbanColumn[]; cards: KanbanCard[]; boardAccounts: KanbanBoardAccount[]; accounts: Account[]; onRefresh: () => Promise<void>; notify: (message: string) => void }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id || "");
-  const project = projects.find(item => item.id === projectId) || projects[0];
-  const projectBoards = boards.filter(item => item.project_id === project?.id);
-  const [boardId, setBoardId] = useState(projectBoards[0]?.id || "");
-  const board = projectBoards.find(item => item.id === boardId) || projectBoards[0];
-  const boardColumns = columns.filter(item => item.board_id === board?.id);
-  const boardCards = cards.filter(item => item.board_id === board?.id);
-  const linkedAccounts = accounts.filter(account => account.databaseId && boardAccounts.some(link => link.board_id === board?.id && link.account_id === account.databaseId));
-  useEffect(() => { if (!projectId && projects[0]) setProjectId(projects[0].id); }, [projects, projectId]);
-  useEffect(() => { if (!projectBoards.some(item => item.id === boardId)) setBoardId(projectBoards[0]?.id || ""); }, [project?.id, boards]);
-  const move = async (card: KanbanCard, columnId: string) => {
-    const result = await db().from("kanban_cards").update({ column_id: columnId }).eq("id", card.id);
-    if (result.error) { notify("Could not update this card"); return; }
-    await onRefresh(); notify(`CARD-${String(card.card_number).padStart(6, "0")} updated`);
-  };
-  return <div className="page business-kanban"><PageIntro title="Kanban workspace" text="The same projects, cards, owners and status updates used in Admin and Candidate." action={<button className="secondary" onClick={() => void onRefresh()}>Refresh</button>}/>{!projects.length ? <section className="surface data-empty">No Kanban projects have been created in Admin yet.</section> : <><nav className="business-kanban-projects">{projects.map(item => <button className={item.id === project?.id ? "active" : ""} key={item.id} onClick={() => { setProjectId(item.id); setBoardId(""); }}><small>PRJ-{String(item.project_number).padStart(4, "0")}</small><strong>{item.name}</strong></button>)}</nav><div className="business-kanban-toolbar"><label>Board<select value={board?.id || ""} onChange={event => setBoardId(event.target.value)}>{projectBoards.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><div><span>Linked accounts</span>{linkedAccounts.length ? linkedAccounts.map(account => <a href={`/accounts/${account.id}`} key={account.id}>{account.name}</a>) : <small>No account mapped in Admin</small>}</div></div>{board ? <div className="business-kanban-columns">{boardColumns.map(column => <section key={column.id}><header><strong>{column.name}</strong><span>{boardCards.filter(card => card.column_id === column.id).length}</span></header>{boardCards.filter(card => card.column_id === column.id).map(card => <article key={card.id}><small>CARD-{String(card.card_number).padStart(6, "0")}</small><h3>{card.title}</h3>{card.description && <p>{card.description}</p>}<label>Move to<select value={card.column_id} onChange={event => void move(card, event.target.value)}>{boardColumns.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label></article>)}</section>)}</div> : <section className="surface data-empty">This project has no board yet.</section>}</>}</div>;
 }
 
 function IntelligencePage({ workspace, notify }: { workspace: IntelligenceWorkspace; notify: (message: string) => void }) {
@@ -767,7 +723,7 @@ type Lead = { name: string; role: string; company: string; status: string; nextS
 type AccountEvent = { date: string; month: string; title: string; type: string; detail: string };
 type RelationshipComment = { id: string; text: string; author: string; createdAt: string };
 type KnownByConnection = { ownerId?: string; name: string; email?: string; relationship: string; strength: string; notes?: string; createdAt: string };
-type RelationshipContact = { id?: string; name: string; role: string; team?: string; department?: string; strength: string; owner: string; linkedin?: string; knownBy?: KnownByConnection[]; comments?: RelationshipComment[]; kanbanCardIds?: string[]; x?: number; y?: number };
+type RelationshipContact = { id?: string; name: string; role: string; team?: string; department?: string; strength: string; owner: string; linkedin?: string; knownBy?: KnownByConnection[]; comments?: RelationshipComment[]; x?: number; y?: number };
 type RelationshipTeam = { id: string; name: string; description?: string; memberIds?: string[]; departmentId?: string; x: number; y: number; width: number; height: number };
 type RelationshipCanvasNode = { id: string; type: "department" | "note"; title: string; body: string; x: number; y: number; width: number; height: number };
 type RelationshipEdge = { id: string; source: string; target: string; label: string; strength?: string; owner?: string; notes?: string; kind?: "manual" | "membership" };
@@ -776,11 +732,6 @@ type AccountIntel = { leads: Lead[]; events: AccountEvent[]; contacts: Relations
 type OwnerOption = { id: string; name: string; email: string; headline: string };
 type AuditLog = { id: string; section: string; action: string; changes: Record<string, unknown>; actor_email: string; created_at: string };
 type AuditChange = { field: string; before?: unknown; after?: unknown };
-type KanbanProject = { id: string; name: string; project_number: number };
-type KanbanBoard = { id: string; project_id: string; name: string };
-type KanbanColumn = { id: string; board_id: string; name: string; position: number };
-type KanbanCard = { id: string; board_id: string; column_id: string; title: string; description: string; card_number: number; due_at: string | null };
-type KanbanBoardAccount = { board_id: string; account_id: string };
 type OpenDoorInput = { company: string; sector: string; contactName: string; role: string; linkedin: string; connector: OwnerOption; relationship: string; strength: string; notes: string };
 
 const tpMappingVersion = "tp-relationship-map-2026-10-09-v1";
@@ -984,7 +935,7 @@ const auditChangeDetails = (log: AuditLog): AuditChange[] => {
   });
 };
 
-function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connections = [], accountPosition = { x: 445, y: 42 }, ownerOptions, kanbanCards, actorEmail, onRequestEdit, onChange }: {
+function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connections = [], accountPosition = { x: 445, y: 42 }, ownerOptions, actorEmail, onRequestEdit, onChange }: {
   account: Account;
   contacts: RelationshipContact[];
   teams?: RelationshipTeam[];
@@ -992,7 +943,6 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   connections?: RelationshipEdge[];
   accountPosition?: CanvasPoint;
   ownerOptions: OwnerOption[];
-  kanbanCards: (KanbanCard & { boardName: string; columnName: string })[];
   actorEmail: string;
   onRequestEdit: () => void;
   onChange: (contacts: RelationshipContact[], teams: RelationshipTeam[], nodes: RelationshipCanvasNode[], connections: RelationshipEdge[], accountPosition: CanvasPoint) => void;
@@ -1496,7 +1446,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
         </select>
         <button type="button" className="selection-clear" onClick={() => setSelectedContacts([])}>Clear</button>
       </div>}
-    </div>{selectedNode && <aside ref={inspectorRef} className="relationship-inspector"><div className="inspector-head"><div><small>Card inspector</small><strong>Edit details</strong></div><button onClick={() => setSelectedNode(null)} aria-label="Close inspector"><X size={15}/></button></div>{(() => { const contact = layoutContacts.find(item => item.id === selectedNode); if (contact) return <div className="inspector-fields"><label>Name<input value={contact.name} onChange={e => patchContact(contact.id!, { name: e.target.value })}/></label><label>Position<input value={contact.role} onChange={e => patchContact(contact.id!, { role: e.target.value })}/></label><label>Team<input value={contact.team || ""} onChange={e => patchContact(contact.id!, { team: e.target.value })}/></label><label>Department<input value={contact.department || ""} onChange={e => patchContact(contact.id!, { department: e.target.value })}/></label><label>Relationship<input value={contact.strength} onChange={e => patchContact(contact.id!, { strength: e.target.value })}/></label><label>QuickSort owner<select value={contact.owner} onChange={e => patchContact(contact.id!, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>LinkedIn<input value={contact.linkedin || ""} onChange={e => patchContact(contact.id!, { linkedin: e.target.value })}/></label><fieldset><legend>Known by at QuickSort</legend>{ownerOptions.length ? ownerOptions.map(owner => { const connection = (contact.knownBy || []).find(item => item.ownerId === owner.id || item.email === owner.email); return <label className="inspector-check" key={owner.id}><input type="checkbox" checked={Boolean(connection)} onChange={e => patchContact(contact.id!, { knownBy: e.target.checked ? [...(contact.knownBy || []), { ownerId: owner.id, name: owner.name, email: owner.email, relationship: "Known contact", strength: "Developing", createdAt: new Date().toISOString() }] : (contact.knownBy || []).filter(item => item.ownerId !== owner.id && item.email !== owner.email) })}/><span>{owner.name}<small>{connection ? `${connection.relationship} · ${connection.strength}` : owner.headline || "QuickSort teammate"}</small></span></label>; }) : <p>Add approved teammates in Admin before assigning internal connections.</p>}</fieldset><fieldset><legend>Linked Kanban cards</legend>{kanbanCards.length ? kanbanCards.map(card => <label className="inspector-check" key={card.id}><input type="checkbox" checked={(contact.kanbanCardIds || []).includes(card.id)} onChange={e => patchContact(contact.id!, { kanbanCardIds: e.target.checked ? [...(contact.kanbanCardIds || []), card.id] : (contact.kanbanCardIds || []).filter(id => id !== card.id) })}/><span>CARD-{String(card.card_number).padStart(6, "0")} · {card.title}<small>{card.boardName} · {card.columnName}</small></span></label>) : <p>No account boards are mapped yet.</p>}</fieldset><fieldset><legend>Comments</legend>{(contact.comments || []).map(item => <article className="contact-comment" key={item.id}><p>{item.text}</p><small>{item.author} · {new Date(item.createdAt).toLocaleString()}</small></article>)}<textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add context or a follow-up note"/><button className="secondary small" disabled={!comment.trim()} onClick={() => { patchContact(contact.id!, { comments: [...(contact.comments || []), { id: crypto.randomUUID(), text: comment.trim(), author: actorEmail || "Workspace admin", createdAt: new Date().toISOString() }] }); setComment(""); }}>Add comment</button></fieldset></div>; const teamId = selectedNode.startsWith("team:") ? selectedNode.slice(5) : ""; const team = layoutTeams.find(item => item.id === teamId); if (team) return <div className="inspector-fields"><label>Team name<input value={team.name} onChange={e => patchTeam(team.id, { name: e.target.value })}/></label><label>Description<textarea value={team.description || ""} onChange={e => patchTeam(team.id, { description: e.target.value })}/></label><fieldset><legend>People in this team</legend><p>Select people to place and align inside this team.</p>{layoutContacts.map(contactItem => <label className="inspector-check" key={contactItem.id}><input type="checkbox" checked={(team.memberIds || []).includes(contactItem.id!)} onChange={event => setTeamMembers(team, event.target.checked ? [...(team.memberIds || []), contactItem.id!] : (team.memberIds || []).filter(id => id !== contactItem.id))}/><span>{contactItem.name}<small>{contactItem.role || "Position not added"}</small></span></label>)}</fieldset></div>; const nodeId = selectedNode.startsWith("node:") ? selectedNode.slice(5) : ""; const node = layoutNodes.find(item => item.id === nodeId); return node ? <div className="inspector-fields"><label>Title<input value={node.title} onChange={e => patchNode(node.id, { title: e.target.value })}/></label><label>Details<textarea value={node.body} onChange={e => patchNode(node.id, { body: e.target.value })}/></label>{node.type === "department" && <fieldset><legend>Teams in this department</legend><p>Select teams to map beneath this department.</p>{layoutTeams.map(teamItem => <label className="inspector-check" key={teamItem.id}><input type="checkbox" checked={teamItem.departmentId === node.id} onChange={event => setDepartmentTeam(node, teamItem, event.target.checked)}/><span>{teamItem.name}<small>{teamItem.memberIds?.length || 0} people</small></span></label>)}</fieldset>}</div> : null; })()}</aside>}{selectedEdge && (() => { const edge = connections.find(item => item.id === selectedEdge); return edge ? <aside ref={inspectorRef} className="relationship-inspector"><div className="inspector-head"><div><small>Relationship mapping</small><strong>How are these connected?</strong></div><button onClick={() => setSelectedEdge(null)} aria-label="Close relationship editor"><X size={15}/></button></div><div className="inspector-fields"><p className="inspector-prompt">Name the relationship and add any context the team should know.</p><label>Relationship<input placeholder="Reports to, introduced by, works with…" value={edge.label} onChange={e => patchEdge(edge.id, { label: e.target.value })}/></label><label>Strength<select value={edge.strength || "Not assessed"} onChange={e => patchEdge(edge.id, { strength: e.target.value })}><option>Not assessed</option><option>Weak</option><option>Developing</option><option>Strong</option><option>Trusted</option></select></label><label>Owner<select value={edge.owner || ""} onChange={e => patchEdge(edge.id, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>Comment or context<textarea value={edge.notes || ""} placeholder="Add context about this relationship" onChange={e => patchEdge(edge.id, { notes: e.target.value })}/></label><button className="danger-link" onClick={() => { persist(layoutContacts, layoutTeams, layoutNodes, connections.filter(item => item.id !== edge.id)); setSelectedEdge(null); }}>Remove relationship</button></div></aside> : null; })()}</div>
+    </div>{selectedNode && <aside ref={inspectorRef} className="relationship-inspector"><div className="inspector-head"><div><small>Card inspector</small><strong>Edit details</strong></div><button onClick={() => setSelectedNode(null)} aria-label="Close inspector"><X size={15}/></button></div>{(() => { const contact = layoutContacts.find(item => item.id === selectedNode); if (contact) return <div className="inspector-fields"><label>Name<input value={contact.name} onChange={e => patchContact(contact.id!, { name: e.target.value })}/></label><label>Position<input value={contact.role} onChange={e => patchContact(contact.id!, { role: e.target.value })}/></label><label>Team<input value={contact.team || ""} onChange={e => patchContact(contact.id!, { team: e.target.value })}/></label><label>Department<input value={contact.department || ""} onChange={e => patchContact(contact.id!, { department: e.target.value })}/></label><label>Relationship<input value={contact.strength} onChange={e => patchContact(contact.id!, { strength: e.target.value })}/></label><label>QuickSort owner<select value={contact.owner} onChange={e => patchContact(contact.id!, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>LinkedIn<input value={contact.linkedin || ""} onChange={e => patchContact(contact.id!, { linkedin: e.target.value })}/></label><fieldset><legend>Known by at QuickSort</legend>{ownerOptions.length ? ownerOptions.map(owner => { const connection = (contact.knownBy || []).find(item => item.ownerId === owner.id || item.email === owner.email); return <label className="inspector-check" key={owner.id}><input type="checkbox" checked={Boolean(connection)} onChange={e => patchContact(contact.id!, { knownBy: e.target.checked ? [...(contact.knownBy || []), { ownerId: owner.id, name: owner.name, email: owner.email, relationship: "Known contact", strength: "Developing", createdAt: new Date().toISOString() }] : (contact.knownBy || []).filter(item => item.ownerId !== owner.id && item.email !== owner.email) })}/><span>{owner.name}<small>{connection ? `${connection.relationship} · ${connection.strength}` : owner.headline || "QuickSort teammate"}</small></span></label>; }) : <p>Add approved teammates in Admin before assigning internal connections.</p>}</fieldset><fieldset><legend>Comments</legend>{(contact.comments || []).map(item => <article className="contact-comment" key={item.id}><p>{item.text}</p><small>{item.author} · {new Date(item.createdAt).toLocaleString()}</small></article>)}<textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Add context or a follow-up note"/><button className="secondary small" disabled={!comment.trim()} onClick={() => { patchContact(contact.id!, { comments: [...(contact.comments || []), { id: crypto.randomUUID(), text: comment.trim(), author: actorEmail || "Workspace admin", createdAt: new Date().toISOString() }] }); setComment(""); }}>Add comment</button></fieldset></div>; const teamId = selectedNode.startsWith("team:") ? selectedNode.slice(5) : ""; const team = layoutTeams.find(item => item.id === teamId); if (team) return <div className="inspector-fields"><label>Team name<input value={team.name} onChange={e => patchTeam(team.id, { name: e.target.value })}/></label><label>Description<textarea value={team.description || ""} onChange={e => patchTeam(team.id, { description: e.target.value })}/></label><fieldset><legend>People in this team</legend><p>Select people to place and align inside this team.</p>{layoutContacts.map(contactItem => <label className="inspector-check" key={contactItem.id}><input type="checkbox" checked={(team.memberIds || []).includes(contactItem.id!)} onChange={event => setTeamMembers(team, event.target.checked ? [...(team.memberIds || []), contactItem.id!] : (team.memberIds || []).filter(id => id !== contactItem.id))}/><span>{contactItem.name}<small>{contactItem.role || "Position not added"}</small></span></label>)}</fieldset></div>; const nodeId = selectedNode.startsWith("node:") ? selectedNode.slice(5) : ""; const node = layoutNodes.find(item => item.id === nodeId); return node ? <div className="inspector-fields"><label>Title<input value={node.title} onChange={e => patchNode(node.id, { title: e.target.value })}/></label><label>Details<textarea value={node.body} onChange={e => patchNode(node.id, { body: e.target.value })}/></label>{node.type === "department" && <fieldset><legend>Teams in this department</legend><p>Select teams to map beneath this department.</p>{layoutTeams.map(teamItem => <label className="inspector-check" key={teamItem.id}><input type="checkbox" checked={teamItem.departmentId === node.id} onChange={event => setDepartmentTeam(node, teamItem, event.target.checked)}/><span>{teamItem.name}<small>{teamItem.memberIds?.length || 0} people</small></span></label>)}</fieldset>}</div> : null; })()}</aside>}{selectedEdge && (() => { const edge = connections.find(item => item.id === selectedEdge); return edge ? <aside ref={inspectorRef} className="relationship-inspector"><div className="inspector-head"><div><small>Relationship mapping</small><strong>How are these connected?</strong></div><button onClick={() => setSelectedEdge(null)} aria-label="Close relationship editor"><X size={15}/></button></div><div className="inspector-fields"><p className="inspector-prompt">Name the relationship and add any context the team should know.</p><label>Relationship<input placeholder="Reports to, introduced by, works with…" value={edge.label} onChange={e => patchEdge(edge.id, { label: e.target.value })}/></label><label>Strength<select value={edge.strength || "Not assessed"} onChange={e => patchEdge(edge.id, { strength: e.target.value })}><option>Not assessed</option><option>Weak</option><option>Developing</option><option>Strong</option><option>Trusted</option></select></label><label>Owner<select value={edge.owner || ""} onChange={e => patchEdge(edge.id, { owner: e.target.value })}><option value="">Unassigned</option>{ownerOptions.map(owner => <option key={owner.id} value={owner.name}>{owner.name}</option>)}</select></label><label>Comment or context<textarea value={edge.notes || ""} placeholder="Add context about this relationship" onChange={e => patchEdge(edge.id, { notes: e.target.value })}/></label><button className="danger-link" onClick={() => { persist(layoutContacts, layoutTeams, layoutNodes, connections.filter(item => item.id !== edge.id)); setSelectedEdge(null); }}>Remove relationship</button></div></aside> : null; })()}</div>
     {selectionMenu && <div className="relationship-context-menu" role="menu" aria-label="Selected people actions" style={{ left: selectionMenu.x, top: selectionMenu.y }} onPointerDown={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
       <header><strong>{selectedContacts.length} selected</strong><span>Group actions</span></header>
       <button type="button" role="menuitem" onClick={addTeam}><SquareDashed size={14}/> Create team</button>
@@ -1506,7 +1456,7 @@ function RelationshipCanvas({ account, contacts, teams = [], nodes = [], connect
   </div>;
 }
 
-function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCards, actorEmail, onSave, onBack, notify }: { account: Account; intel: AccountIntel; linkedStudies: BusinessCaseStudyRecord[]; ownerOptions: OwnerOption[]; kanbanCards: (KanbanCard & { boardName: string; columnName: string })[]; actorEmail: string; onSave: (account: Account, intel: AccountIntel) => void; onBack: () => void; notify: (message: string) => void }) {
+function AccountDetail({ account, intel, linkedStudies, ownerOptions, actorEmail, onSave, onBack, notify }: { account: Account; intel: AccountIntel; linkedStudies: BusinessCaseStudyRecord[]; ownerOptions: OwnerOption[]; actorEmail: string; onSave: (account: Account, intel: AccountIntel) => void; onBack: () => void; notify: (message: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [opportunityEditing, setOpportunityEditing] = useState(false);
   const [draft, setDraft] = useState(account);
@@ -1580,7 +1530,7 @@ function AccountDetail({ account, intel, linkedStudies, ownerOptions, kanbanCard
     <div className="account-detail-grid">
       <section className="surface org-surface">
         <div className="section-head"><div><h2>Relationship playground</h2><p>Arrange teams, map reporting lines, and show who can open the door.</p></div><span className="legend"><i/> Saved to this account</span></div>
-        <RelationshipCanvas account={draft} contacts={draftIntel.contacts} teams={draftIntel.teams} nodes={draftIntel.nodes} connections={draftIntel.connections} accountPosition={draftIntel.accountPosition} ownerOptions={ownerOptions} kanbanCards={kanbanCards} actorEmail={actorEmail} onRequestEdit={() => undefined} onChange={saveRelationshipMap}/>
+        <RelationshipCanvas account={draft} contacts={draftIntel.contacts} teams={draftIntel.teams} nodes={draftIntel.nodes} connections={draftIntel.connections} accountPosition={draftIntel.accountPosition} ownerOptions={ownerOptions} actorEmail={actorEmail} onRequestEdit={() => undefined} onChange={saveRelationshipMap}/>
       </section>
       <aside className="surface opportunity-panel editable-block" onClick={(event) => { if ((event.target as HTMLElement).closest("button, input, textarea, select, a")) return; if (!editingOpportunity) setOpportunityEditing(true); }}>
         <div className="opportunity-panel-head">

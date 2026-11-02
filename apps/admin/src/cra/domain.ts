@@ -7,6 +7,13 @@ export const statusLabels = {
   internal: 'Internal',
   client_project: 'Client Project',
 };
+// Freelancers accrue no CP/RTT: their only leave is an unpaid absence, stored
+// as 'unpaid_leave' and shown as “Absence”.
+export const freelanceStatusLabels = { ...statusLabels, unpaid_leave: 'Absence' };
+export type StatusLabels = typeof statusLabels;
+export function isFreelance(employee: { contract_type?: string | null }) {
+  return employee.contract_type === 'Freelance';
+}
 export const partSchema = z.enum(['full', 'am', 'pm']);
 export type Part = z.infer<typeof partSchema>;
 const dateSchema = z.iso.date();
@@ -16,13 +23,13 @@ export const entrySchema = z.discriminatedUnion('status', [
   z.object({ day: dateSchema, part: partSchema, status: z.literal('client_project'), project_id: z.uuid() }),
 ]);
 export const contextSchema = z.object({
-  employees: z.array(z.object({ id: z.uuid(), full_name: z.string(), role: z.string(), start_date: dateSchema, end_date: dateSchema.nullable() })),
+  employees: z.array(z.object({ id: z.uuid(), full_name: z.string(), role: z.string(), contract_type: z.string().nullable().default(null), start_date: dateSchema, end_date: dateSchema.nullable() })),
   assignments: z.array(z.object({ id: z.uuid(), employee_id: z.uuid(), project_id: z.uuid(), title: z.string(), client_name: z.string(), start_date: dateSchema, end_date: dateSchema.nullable(), status: z.string() })),
 });
 // Snapshots written before half-day support have no `part` — treat those
 // entries as full days so old months keep loading until the migration runs.
 const storedEntrySchema = z.preprocess(value => typeof value === 'object' && value !== null && !('part' in value) ? { part: 'full', ...value } : value, entrySchema);
-export const snapshotSchema = z.object({ version: z.number().int().nonnegative(), entries: z.array(storedEntrySchema), updated_at: z.string().nullable(), updated_by: z.string().nullable() });
+export const snapshotSchema = z.object({ version: z.number().int().nonnegative(), entries: z.array(storedEntrySchema), updated_at: z.string().nullable(), updated_by: z.string().nullable(), invoiced: z.boolean().default(false) });
 export type Entry = z.infer<typeof entrySchema>;
 export type Context = z.infer<typeof contextSchema>;
 export type Employee = Context['employees'][number];

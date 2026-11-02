@@ -108,6 +108,12 @@
   flex-direction: column;
   gap: 8px;
 }
+.pjs-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
 .pjs-row {
   display: flex;
   align-items: center;
@@ -165,6 +171,35 @@
   border-style: dashed;
   color: var(--qs-muted);
 }
+.pjs-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.pjs-edit {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--qs-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color var(--qs-dur-2) var(--qs-ease),
+    background var(--qs-dur-2) var(--qs-ease);
+}
+.pjs-edit:hover:not(:disabled) {
+  color: var(--qs-ink);
+  background: var(--qs-active);
+}
+.pjs-edit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .pjs-remove {
   width: 28px;
   height: 28px;
@@ -176,7 +211,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: auto;
   transition:
     color var(--qs-dur-2) var(--qs-ease),
     background var(--qs-dur-2) var(--qs-ease);
@@ -199,6 +233,25 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+.pjs-edit-form {
+  border-style: dashed;
+}
+.pjs-rationale {
+  width: 100%;
+  border-radius: var(--qs-radius-md, 10px);
+  border: 1px solid var(--qs-line);
+  background: var(--qs-bg-2);
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--qs-ink);
+  resize: vertical;
+}
+.pjs-rationale:focus {
+  outline: none;
+  border-color: var(--qs-accent);
+  box-shadow: 0 0 0 1px var(--qs-accent);
 }
 .pjs-field {
   display: flex;

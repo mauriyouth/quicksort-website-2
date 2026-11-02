@@ -3,6 +3,7 @@ export { blogCategories, validateBlogImage, type BlogRecord } from "./blog";
 export { capabilityVerticals, capabilityName, type CapabilityVerticalId } from "./capabilities";
 import type { Database } from "./database.types";
 export type { Database } from "./database.types";
+export type * from "./documents.types";
 export type Row<T extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][T]["Row"];
 export type Job = Row<"jobs">;

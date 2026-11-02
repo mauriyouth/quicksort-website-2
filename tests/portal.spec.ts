@@ -84,6 +84,8 @@ async function portalApi(page: Page, state: PortalFixture, failFirstCommand = fa
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' } });
     if (url.pathname.endsWith('/rpc/cra_context')) return reply({ employees: state.my_employment.map(employee => ({ id: employee.id, full_name: 'Alex Morgan', role: employee.role, start_date: employee.start_date, end_date: employee.end_date })), assignments: [] });
     if (url.pathname.endsWith('/rpc/cra_month_snapshot')) return reply({ version: 0, entries: [], updated_at: null, updated_by: null });
+    // Leave-balance strip on the CRA screen: no balances, default accrual rates.
+    if (url.pathname.endsWith('/rpc/employee_leave_balances') || url.pathname.endsWith('/leave_accrual_settings')) return reply([]);
     if (url.pathname.includes('/storage/')) return route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'application/pdf', body: '%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF' });
     if (url.pathname.endsWith('/rpc/hr_command')) {
       const parsed = z.object({ command: commandSchema }).parse(request.postDataJSON());
@@ -150,7 +152,8 @@ test('employees can open My CRA through portal navigation and a direct link', as
   await portalApi(page, state);
   await page.goto(new URL('/onboarding', harness.url).href);
   await page.getByRole('link', { name: 'My CRA', exact: true }).click();
-  await expect(page).toHaveURL(new URL('/cra', harness.url).href);
+  // CRA keeps the viewed month in the path: /cra lands on /cra/YYYY/MM.
+  await expect(page).toHaveURL(/\/cra\/\d{4}\/\d{2}$/);
   await expect(page.getByRole('heading', { name: 'Monthly CRA', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Employee', exact: true })).toHaveValue('Alex Morgan · Platform engineer');
   await page.reload();

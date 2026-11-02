@@ -151,11 +151,9 @@ test('a rehire record retains both application and employment histories', async 
   await expect(page.getByLabel('Employment period').locator('option')).toHaveCount(2);
   await expect(page.getByRole('heading', { name: 'Journey checklist' })).toBeVisible();
   await page.screenshot({ path: info.outputPath('rehire-employment.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Close record', exact: true }).click();
-  await page.goBack();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.keyboard.press('Escape');
+  // The record is a routed page now, not a modal: tabs live in the URL.
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/employments/);
 });
 
 test('failed task completion keeps its evidence and uses the same retry key', async ({ page }) => {
@@ -170,7 +168,7 @@ test('failed task completion keeps its evidence and uses the same retry key', as
   await expect(form.getByRole('alert')).toHaveText('Complete the prerequisite task first.');
   await expect(form.getByLabel('Completion evidence')).toHaveValue('Access verified with the employee.');
   await form.getByRole('button', { name: 'Complete task', exact: true }).click();
-  await expect(page.getByRole('dialog').getByText('Access verified with the employee.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Access verified with the employee.', { exact: true })).toBeVisible();
   const completions = requests.filter((request) => request.kind === 'complete_task');
   expect(completions).toHaveLength(2);
   expect(completions[1].request_id).toBe(completions[0].request_id);
@@ -180,7 +178,8 @@ test('staffing permissions expose assignments without opening confidential perso
   await mock(page, { staffingOnly: true });
   await page.goto(`${harness.url}?view=people`);
   // Staffing-only users land on the employee list and never see person records.
-  await expect(page.getByRole('tab', { name: 'Employees' })).toBeVisible();
+  // People are grouped by contract now; 'Everyone' is the default tab.
+  await expect(page.getByRole('tab', { name: /^Everyone/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add person', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Sam Rivera/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Assign project', exact: true }).first().click();

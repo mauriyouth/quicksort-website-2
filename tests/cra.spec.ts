@@ -7,10 +7,11 @@ test.use({ channel: 'chromium' });
 let harness: Awaited<ReturnType<typeof startComponentHarness>>;
 test.beforeAll(async () => {
   harness = await startComponentHarness(`
+    import { BrowserRouter } from '${process.cwd()}/apps/admin/node_modules/react-router-dom';
     import { CraScreen } from '@app/cra/CraScreen';
     const audience = new URLSearchParams(location.search).get('audience') || 'employee';
     // The portal mounts CRA at /cra, so the employee harness owns that base path too.
-    createRoot(document.getElementById('root')).render(<main style={{ padding: 16 }}><CraScreen audience={audience} draftOwner="employee@example.invalid" basePath={audience === 'employee' ? '/cra' : undefined} /></main>);
+    createRoot(document.getElementById('root')).render(<BrowserRouter><main style={{ padding: 16 }}><CraScreen audience={audience} draftOwner="employee@example.invalid" basePath={audience === 'employee' ? '/cra' : undefined} /></main></BrowserRouter>);
   `);
 });
 test.afterAll(async () => { await harness?.close(); });

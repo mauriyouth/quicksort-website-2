@@ -22,3 +22,43 @@
 .payslips-person-move { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--qs-line); border-radius: 8px; background: var(--qs-paper); }
 .payslips-person-move p { margin: 0; font-size: 13px; }
 .payslips-matricule { display: grid; gap: 10px; }
+
+/* HR → Payslips month view (src/payslips/PayslipsMonth.tsx). */
+.payslips-head { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.payslips-head .btn { display: inline-flex; align-items: center; gap: 6px; }
+.payslips-back { font-size: 13px; color: var(--qs-muted); text-decoration: none; }
+.payslips-back:hover { color: inherit; }
+.payslips-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.payslips-period { display: flex; align-items: center; gap: 6px; }
+.payslips-period select { font-size: 14px; }
+.payslips-filter { flex: 1 1 200px; min-width: 0; font-size: 13px; }
+.payslips-summary { margin: 0; font-size: 13px; color: var(--qs-muted); }
+.payslips-summary strong { color: inherit; font-weight: 600; }
+.payslips-missing { color: var(--qs-danger); }
+.payslips-page { container-type: inline-size; }
+.payslips-month { display: grid; gap: 16px; align-items: start; }
+.payslips-month-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--qs-line); border-radius: 12px; background: var(--qs-paper); }
+.payslips-month-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--qs-line); font-size: 14px; }
+.payslips-month-list li:first-child { border-top: 0; }
+.payslips-month-list li.is-missing { background: color-mix(in srgb, var(--qs-danger) 6%, transparent); }
+.payslips-month-person { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; text-decoration: none; }
+.payslips-month-person:hover { text-decoration: underline; }
+.payslips-month-matricule { font-variant-numeric: tabular-nums; color: var(--qs-muted); font-size: 12px; }
+.payslips-month-docs { display: flex; gap: 6px; justify-content: flex-end; }
+.payslips-month-open { padding: 4px 10px; border: 1px solid var(--qs-line); border-radius: 999px; background: transparent; color: inherit; font-size: 12px; cursor: pointer; }
+.payslips-month-open:hover, .payslips-month-open.on { border-color: var(--qs-lime); background: color-mix(in srgb, var(--qs-lime) 14%, transparent); }
+.payslips-empty { margin: 0; padding: 14px; color: var(--qs-muted); font-size: 13px; }
+.payslips-month-list li.payslips-empty { display: block; }
+.payslips-preview { top: 16px; display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--qs-line); border-radius: 12px; background: var(--qs-paper); overflow: hidden; }
+.payslips-preview-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--qs-line); }
+.payslips-preview-bar > div { display: grid; min-width: 0; font-size: 13px; }
+.payslips-preview-bar span { color: var(--qs-muted); }
+.payslips-preview-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.payslips-preview-stage { min-height: 0; }
+.payslips-preview-stage iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+/* Side by side only when the page itself is wide enough (the sidebar eats viewport width). */
+.payslips-preview { position: static; height: 75vh; }
+@container (min-width: 760px) {
+  .payslips-month.has-preview { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); }
+  .payslips-preview { position: sticky; height: min(80vh, 900px); }
+}

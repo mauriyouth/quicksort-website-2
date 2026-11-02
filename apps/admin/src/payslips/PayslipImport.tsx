@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type DragEvent } from "react";
+import { Link } from "react-router-dom";
 import { Upload } from "lucide-react";
 import { Notice } from "@quicksort/hr-ui";
 import { errorMessage } from "@quicksort/hr-db";
@@ -108,7 +109,8 @@ export function PayslipImport() {
   return (
     <div className="docs-page payslips-page">
       <header className="docs-head">
-        <h1>Payslips</h1>
+        <Link to="/hr/payslips" className="payslips-back">← All payslips</Link>
+        <h1>Import payslips</h1>
         <p className="projects-lede">Drop the Silae export. Each payslip is matched to its employee, then filed in their Documents.</p>
       </header>
       <Notice error>{error}</Notice>

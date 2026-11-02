@@ -56,6 +56,9 @@ const HrPortal = lazy(() =>
 const PayslipImport = lazy(() =>
   import("./payslips/PayslipImport").then((m) => ({ default: m.PayslipImport })),
 );
+const PayslipsMonth = lazy(() =>
+  import("./payslips/PayslipsMonth").then((m) => ({ default: m.PayslipsMonth })),
+);
 const BusinessPlan = lazy(() =>
   import("./ops/business-plan/BusinessPlan").then((m) => ({ default: m.BusinessPlan })),
 );
@@ -587,7 +590,8 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/hr/people/*" element={<HrWorkspace view="people" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/journeys" element={<HrWorkspace view="journeys" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/documents" element={<DocumentAlerts />} />
-        <Route path="/hr/payslips" element={<Suspense fallback={null}><PayslipImport /></Suspense>} />
+        <Route path="/hr/payslips" element={<Suspense fallback={null}><PayslipsMonth /></Suspense>} />
+        <Route path="/hr/payslips/import" element={<Suspense fallback={null}><PayslipImport /></Suspense>} />
         <Route path="/sales" element={<SalesDashboard actorEmail={email} onOpenClient={(id) => routerNavigate(`/sales/clients/${id}`)} />} />
         <Route path="/sales/pipeline" element={<PipelineBoard />} />
         <Route path="/sales/clients/*" element={<Clients actorEmail={email} />} />

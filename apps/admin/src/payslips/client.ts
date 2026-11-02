@@ -4,12 +4,38 @@ import { payslipTitle } from "./read.browser";
 import type { FiledPayslip, MatchEmployee, ReviewRow } from "./match";
 import type { ParsedPayslip } from "./read.browser";
 import { preferredEmployment, sameMatricule } from "./match";
+import type { FiledPayslipDoc, StaffEmployment } from "./month";
 
 const FREELANCE = "Freelance";
 const CHUNK = 100;
 
 /** Everything matching needs: staff (not freelancers) with their person's name, plus the payslips already filed. */
 export async function loadMatchContext(): Promise<{ employees: MatchEmployee[]; filed: FiledPayslip[] }> {
+  const [employees, { data: documents, error: filedError }] = await Promise.all([
+    loadStaff(),
+    db().from("documents").select("id,person_id,valid_from,title,sha256").eq("type_code", "PAYSLIP").eq("status", "active"),
+  ]);
+  if (filedError) throw filedError;
+  return {
+    employees,
+    filed: (documents ?? []).flatMap((d) => (d.person_id && d.valid_from ? [{ id: d.id, person_id: d.person_id, valid_from: d.valid_from, title: d.title, sha256: d.sha256 }] : [])),
+  };
+}
+
+/** HR → Payslips month view: staff employments and every active filed payslip. */
+export async function loadPayroll(): Promise<{ staff: StaffEmployment[]; payslips: FiledPayslipDoc[] }> {
+  const [staff, { data, error }] = await Promise.all([
+    loadStaff(),
+    db().from("documents").select("id,person_id,valid_from,title,file_name").eq("type_code", "PAYSLIP").eq("status", "active"),
+  ]);
+  if (error) throw error;
+  return {
+    staff,
+    payslips: (data ?? []).flatMap((d) => (d.person_id && d.valid_from ? [{ id: d.id, person_id: d.person_id, valid_from: d.valid_from, title: d.title, file_name: d.file_name }] : [])),
+  };
+}
+
+async function loadStaff(): Promise<MatchEmployee[]> {
   const { data: staff, error } = await db().from("employees")
     .select("id,person_id,matricule,status,end_date,start_date,contract_type")
     .neq("contract_type", FREELANCE);
@@ -23,19 +49,10 @@ export async function loadMatchContext(): Promise<{ employees: MatchEmployee[]; 
     if (nameError) throw nameError;
     for (const p of data ?? []) names.set(p.id, p.full_name);
   }
-
-  const { data: documents, error: filedError } = await db().from("documents")
-    .select("id,person_id,valid_from,title,sha256")
-    .eq("type_code", "PAYSLIP").eq("status", "active");
-  if (filedError) throw filedError;
-
-  return {
-    employees: rows.map((r) => ({
-      id: r.id, person_id: r.person_id, matricule: r.matricule, status: r.status,
-      end_date: r.end_date, start_date: r.start_date, full_name: names.get(r.person_id) ?? "",
-    })),
-    filed: (documents ?? []).flatMap((d) => (d.person_id && d.valid_from ? [{ id: d.id, person_id: d.person_id, valid_from: d.valid_from, title: d.title, sha256: d.sha256 }] : [])),
-  };
+  return rows.map((r) => ({
+    id: r.id, person_id: r.person_id, matricule: r.matricule, status: r.status,
+    end_date: r.end_date, start_date: r.start_date, full_name: names.get(r.person_id) ?? "",
+  }));
 }
 
 /** The real matricule HR would be overwriting by filing this payslip, or null (none held, QS- default, or the same). */

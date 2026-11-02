@@ -8,9 +8,10 @@ test.use({ channel: 'chromium' });
 let harness: Awaited<ReturnType<typeof startComponentHarness>>;
 test.beforeAll(async () => {
   harness = await startComponentHarness(`
+    import { BrowserRouter } from '${process.cwd()}/apps/admin/node_modules/react-router-dom';
     import { PayslipImport } from '@app/payslips/PayslipImport';
     createRoot(document.getElementById('root')).render(
-      <main style={{ padding: 24, maxWidth: 800, margin: 'auto' }}><PayslipImport /></main>
+      <BrowserRouter><main style={{ padding: 24, maxWidth: 800, margin: 'auto' }}><PayslipImport /></main></BrowserRouter>
     );
   `);
 });

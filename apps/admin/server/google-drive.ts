@@ -96,7 +96,56 @@ const actionSchema = z.discriminatedUnion("action", [
     action: z.literal("delete-file"),
     fileId: z.string().min(1).max(200),
   }),
+  z.object({
+    action: z.literal("archive-folder"),
+    projectId: z.string().uuid(),
+    /** true: move into archived/<year>; false: back to the contracts root. */
+    archived: z.boolean(),
+  }),
 ]);
+
+/** Archived contracts live under <root>/archived/<year of the contract's end>. */
+export const ARCHIVE_FOLDER_NAME = "archived";
+export function archiveYear(endDate: string | null | undefined, today = new Date()): string {
+  return /^\d{4}/.exec(endDate || "")?.[0] || String(today.getFullYear());
+}
+
+/**
+ * Moves an archived project's contract folder into archived/<year>, or back to
+ * the root on restore. Folders are cached by id, so links keep working. No
+ * folder yet (nothing filed): nothing to move.
+ */
+async function placeContractFolder(client: SupabaseClient, sa: DriveSettings, projectId: string, archived: boolean) {
+  const project = await client.from("sales_projects").select("id,end_date,drive_folder_id").eq("id", projectId).single();
+  if (project.error || !project.data) throw new Error("Project not found.");
+  const row = project.data as { id: string; end_date: string | null; drive_folder_id: string | null };
+  let folderId = row.drive_folder_id;
+  if (!folderId) {
+    const cached = await client
+      .from("document_folders")
+      .select("provider_folder_id")
+      .eq("storage_provider", "gdrive")
+      .eq("owner_kind", "project")
+      .eq("owner_id", projectId)
+      .eq("folder_code", "")
+      .maybeSingle();
+    if (cached.error) throw cached.error;
+    folderId = (cached.data as { provider_folder_id?: string } | null)?.provider_folder_id || null;
+  }
+  if (!folderId) return { moved: false, reason: "no-folder" as const };
+  const target = archived
+    ? (await ensureChildFolder(sa, (await ensureChildFolder(sa, sa.root_folder_id, ARCHIVE_FOLDER_NAME)).id, archiveYear(row.end_date))).id
+    : sa.root_folder_id;
+  const current = await driveApi<{ parents?: string[] }>(sa, `/files/${folderId}`, { query: { fields: "id,parents", supportsAllDrives: "true" } });
+  const parents = current.parents || [];
+  if (parents.length === 1 && parents[0] === target) return { moved: false, reason: "in-place" as const, folderId, parentId: target };
+  await driveApi(sa, `/files/${folderId}`, {
+    method: "PATCH",
+    query: { addParents: target, removeParents: parents.join(","), fields: "id,parents", supportsAllDrives: "true" },
+    body: {},
+  });
+  return { moved: true, folderId, parentId: target };
+}
 
 /** Loads the project and its client name, and links the contract folder when new. */
 async function projectContractFolder(
@@ -292,6 +341,9 @@ export function createGoogleDriveHandler(deps = { createClient }) {
         await driveApi(sa, `/files/${action.fileId}`, { method: "DELETE", query: { supportsAllDrives: "true" } });
         return res.status(200).json({ deleted: true });
       }
+
+      if (action.action === "archive-folder")
+        return res.status(200).json(await placeContractFolder(client, sa, action.projectId, action.archived));
 
       const { folder } = await projectContractFolder(client, sa, action.projectId);
 

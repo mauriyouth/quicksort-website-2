@@ -47,6 +47,7 @@ function makeClient(overrides = {}) {
       if (table === 'google_drive_settings') return chain(null, { maybeSingle: async () => ({ data: { encrypted_credentials: encrypted, updated_at: '2026-10-23T09:00:00Z' }, error: null }) });
       if (table === 'sales_projects') return chain({ data: { id: projectId, title: 'Refonte CRM', client_id: clientId, drive_folder_id: null, drive_folder_name: null, drive_folder_link: null }, error: null }, overrides);
       if (table === 'sales_clients') return chain({ data: { id: clientId, name: 'Teamwill' }, error: null });
+      if (table === 'document_folders') return chain({ data: null, error: null });
       throw new Error(`unexpected table ${table}`);
     },
   };
@@ -270,4 +271,84 @@ test('GET reports the connection without exposing the key', async t => {
   assert.equal(res.body.serviceAccountEmail, serviceAccount.client_email);
   assert.equal(res.body.rootFolderName, 'Contrats_Clients');
   assert.equal(JSON.stringify(res.body).includes('PRIVATE KEY'), false);
+});
+
+/** Drive mock for the archive moves: folders by name, parents per file. */
+function mockArchiveDrive(t, drive, { parents = [rootFolderId], existing = {} } = {}) {
+  let created = 0;
+  mockDrive(t, drive, {
+    files: async (target, init) => {
+      const u = new URL(target);
+      if (init.method === 'POST') {
+        const body = JSON.parse(init.body);
+        const id = `new-${body.name}-${++created}`;
+        existing[`${body.parents[0]}/${body.name}`] = id;
+        return { ok: true, status: 200, json: async () => ({ id, name: body.name }) };
+      }
+      if (init.method === 'PATCH') return { ok: true, status: 200, json: async () => ({ id: contractFolderId, parents: [u.searchParams.get('addParents')] }) };
+      if (u.pathname.endsWith(`/files/${contractFolderId}`)) return { ok: true, status: 200, json: async () => ({ id: contractFolderId, parents }) };
+      const q = u.searchParams.get('q') || '';
+      const parent = /'([^']+)' in parents/.exec(q)?.[1];
+      const name = /name='([^']+)'/.exec(q)?.[1];
+      const id = existing[`${parent}/${name}`];
+      return { ok: true, status: 200, json: async () => ({ files: id ? [{ id, name }] : [] }) };
+    },
+  });
+}
+
+const linkedProject = (over = {}) => ({ data: { id: projectId, title: 'Refonte CRM', client_id: clientId, end_date: '2026-06-30', drive_folder_id: contractFolderId, drive_folder_name: 'Teamwill/Refonte CRM', drive_folder_link: null, ...over }, error: null });
+
+test('archive-folder moves the contract folder into archived/<end year>', async t => {
+  const drive = [];
+  mockArchiveDrive(t, drive);
+  const res = makeRes();
+  await createGoogleDriveHandler({ createClient: () => makeClient({ single: async () => linkedProject() }) })(
+    { method: 'POST', headers: { authorization: 'Bearer actor' }, body: { action: 'archive-folder', projectId, archived: true } },
+    res,
+  );
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.equal(res.body.moved, true);
+  const creates = drive.filter(d => d.method === 'POST').map(d => [d.body.name, d.body.parents[0]]);
+  assert.deepEqual(creates, [['archived', rootFolderId], ['2026', 'new-archived-1']]);
+  const move = new URL(drive.find(d => d.method === 'PATCH').url);
+  assert.equal(move.pathname.endsWith(`/files/${contractFolderId}`), true);
+  assert.equal(move.searchParams.get('addParents'), 'new-2026-2');
+  assert.equal(move.searchParams.get('removeParents'), rootFolderId);
+});
+
+test('archive-folder restores to the root, and is a no-op when already in place or unlinked', async t => {
+  const drive = [];
+  mockArchiveDrive(t, drive, { parents: ['year-folder'] });
+  const res = makeRes();
+  await createGoogleDriveHandler({ createClient: () => makeClient({ single: async () => linkedProject() }) })(
+    { method: 'POST', headers: { authorization: 'Bearer actor' }, body: { action: 'archive-folder', projectId, archived: false } },
+    res,
+  );
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  const move = new URL(drive.find(d => d.method === 'PATCH').url);
+  assert.equal(move.searchParams.get('addParents'), rootFolderId);
+  assert.equal(move.searchParams.get('removeParents'), 'year-folder');
+
+  const again = [];
+  t.mock.restoreAll();
+  mockArchiveDrive(t, again);
+  const res2 = makeRes();
+  await createGoogleDriveHandler({ createClient: () => makeClient({ single: async () => linkedProject() }) })(
+    { method: 'POST', headers: { authorization: 'Bearer actor' }, body: { action: 'archive-folder', projectId, archived: false } },
+    res2,
+  );
+  assert.equal(res2.body.moved, false);
+  assert.equal(again.some(d => d.method === 'PATCH'), false);
+
+  const none = [];
+  t.mock.restoreAll();
+  mockArchiveDrive(t, none);
+  const res3 = makeRes();
+  await createGoogleDriveHandler({ createClient: () => makeClient({ single: async () => linkedProject({ drive_folder_id: null }), maybeSingle: async () => ({ data: null, error: null }) }) })(
+    { method: 'POST', headers: { authorization: 'Bearer actor' }, body: { action: 'archive-folder', projectId, archived: true } },
+    res3,
+  );
+  assert.equal(res3.code, 200, JSON.stringify(res3.body));
+  assert.equal(res3.body.moved, false);
+  assert.equal(none.some(d => d.method === 'PATCH' || d.method === 'POST'), false);
 });

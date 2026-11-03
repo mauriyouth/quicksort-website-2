@@ -72,6 +72,7 @@ import {
   type StaffingPerson,
 } from "./ProjectStaffing";
 import { ProjectInvoices } from "./invoicing/ProjectInvoices";
+import { placeContractFolder } from "./contract-folder";
 
 /**
  * Projects (sales.md §14 Phase 2) — the delivery continuation of won deals.
@@ -973,6 +974,8 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             .select("id")
             .single();
       if (result.error) throw result.error;
+      if (editing && isTerminalStatus(values.status) !== isTerminalStatus(editing.status))
+        await syncContractFolder(editing.id, isTerminalStatus(values.status));
       // Assignments reference their line by name: move the open ones onto
       // the renamed line (after the save, so the new name exists).
       for (const { from, to } of renames)
@@ -995,6 +998,21 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     closeProjectDialog();
   }
 
+  const isTerminalStatus = (key: string | null | undefined) =>
+    !!projectStatuses.find((s) => s.key === key)?.is_terminal;
+
+  /** Archiving files the Drive folder under archived/<year>; restoring brings it back. */
+  async function syncContractFolder(projectId: string, archived: boolean) {
+    try {
+      await placeContractFolder(projectId, archived);
+    } catch (e) {
+      void load();
+      throw new Error(
+        `Project ${archived ? "archived" : "restored"}, but its Drive folder could not be moved: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
   function setStatus(p: Project, status: string, success: string) {
     void action(async () => {
       const result = await db()
@@ -1004,6 +1022,8 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         .select("id")
         .single();
       if (result.error) throw result.error;
+      if (isTerminalStatus(status) !== isTerminalStatus(p.status))
+        await syncContractFolder(p.id, isTerminalStatus(status));
     }, success);
   }
 

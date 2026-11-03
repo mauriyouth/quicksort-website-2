@@ -5,9 +5,10 @@
  * the loaders below only fetch rows.
  *
  * Conventions (documented on the page footer too):
- * - A consultant is an employee who has ever had a non-cancelled
- *   assignment; other employees are structure staff (their loaded cost
- *   seeds the "Salaires structure" fixed charge).
+ * - Structure staff are an explicit list (business_plan_structure);
+ *   every other non-freelance employee is a consultant, in inter-contract
+ *   when unstaffed. "Salaires structure" = the listed staff employed in the
+ *   month × salary × CJM multiplier, measured or projected.
  * - Staffed = a confirmed / active / completed assignment overlapping the
  *   month. "Ventes" = such assignments starting in the month (there is no
  *   won date on deals, so first staffing stands in for the sale).
@@ -59,6 +60,8 @@ export type PlanSources = {
   /** Optional, for names in the drill-down panels. */
   people?: { id: string; full_name: string }[];
   clients?: { id: string; name: string }[];
+  /** Employments counted as structure staff, not consultants. */
+  structureIds: string[];
 };
 
 /** One invoice behind a closed month's revenue (drill-down). */
@@ -127,6 +130,10 @@ export type Aggregate = {
   currentFreelancers: FreelanceLine[];
   /** Invoices behind each closed month's revenue (null when open). */
   invoiceLines: (InvoiceLine[] | null)[];
+  /** Loaded structure salaries for every month (measured or projected). */
+  structure: number[];
+  /** Structure staff behind each month's figure. */
+  structureLines: SalaryLine[][];
 };
 
 const STAFFED = ["confirmed", "active", "completed"];
@@ -151,8 +158,8 @@ const cents = (v: number | string) => Math.round(Number(v) * 100);
 
 export function aggregateActuals(src: PlanSources, year: number, openFrom: number, today: Date): Aggregate {
   const isFree = new Map(src.employees.map((e) => [e.id, e.contract_type === "Freelance"]));
-  const live = src.assignments.filter((a) => a.status !== "cancelled");
-  const consultants = new Set(live.map((a) => a.employee_id));
+  const inStructure = new Set(src.structureIds);
+  const consultants = new Set(src.employees.filter((e) => !inStructure.has(e.id)).map((e) => e.id));
   const staffedRows = src.assignments.filter((a) => STAFFED.includes(a.status));
 
   // Invoices → revenue by period, collections by payment month (in cents).
@@ -300,6 +307,36 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     });
   }
 
+  // Structure staff, every month. Closed months use the salary on file for
+  // the month; open months the latest salary known, until the exit date.
+  const nowDay = isoDay(today);
+  const structureLines: SalaryLine[][] = [];
+  for (let m = 0; m < 12; m++) {
+    const from = monthStart(year, m), to = monthEnd(year, m);
+    const open = m >= openFrom;
+    const lines: SalaryLine[] = [];
+    for (const e of src.employees) {
+      if (!inStructure.has(e.id) || isFree.get(e.id)) continue;
+      const end = e.end_date ?? e.planned_exit_date;
+      if (!overlaps(e.start_date, end, from, to)) continue;
+      const s = salaryOn(src.salaries, e.id, to) ?? salaryOn(src.salaries, e.id, from)
+        ?? (open ? salaryOn(src.salaries, e.id, nowDay) : undefined);
+      const salary = s?.salary_monthly ?? null;
+      lines.push({
+        employeeId: e.id,
+        name: displayName(e),
+        contractType: e.contract_type || "",
+        salary,
+        cost: (salary ?? 0) * src.cjmMultiplier,
+        staffed: false,
+        exitDate: end,
+      });
+    }
+    lines.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name));
+    structureLines.push(lines);
+  }
+  const structure = structureLines.map((lines) => lines.reduce((t, l) => t + l.cost, 0));
+
   // Planned exits in open months (forecast departures seed).
   const plannedDeparts = Array.from({ length: 12 }, (_, m) => {
     if (m < openFrom) return 0;
@@ -347,10 +384,6 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     .filter((v) => v > 0);
   const salaire = avg(salaried);
   if (salaire !== null) seeds.salaire = Math.round((salaire * src.cjmMultiplier) / 100) * 100;
-  const structure = src.employees
-    .filter((e) => !consultants.has(e.id) && !isFree.get(e.id) && overlaps(e.start_date, e.end_date, now, now))
-    .reduce((s, e) => s + (salaryOn(src.salaries, e.id, now)?.salary_monthly ?? 0) * src.cjmMultiplier, 0);
-  if (structure > 0) seeds.fStructure = Math.round(structure / 100) * 100;
   const delays = src.invoices
     .filter((i) => !i.ignored && i.status === "paid" && i.paid_at && i.issue_date && i.paid_at.slice(0, 10) >= yearAgo)
     .map((i) => (Date.parse(i.paid_at!.slice(0, 10)) - Date.parse(i.issue_date!)) / 86400000)
@@ -391,7 +424,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
 
   const recentStarts = staffedRows.filter((a) => a.start_date > yearAgo && a.start_date <= now).length;
 
-  return { months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers, invoiceLines };
+  return { months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers, invoiceLines, structure, structureLines };
 }
 
 /* ── Loaders ────────────────────────────────────────────────────────── */
@@ -450,6 +483,20 @@ export function loadExtensions(client: SupabaseClient): Promise<ExtensionRow[]> 
       .eq("status", "signed")
       .range(from, to),
   );
+}
+
+/** Employment ids listed as structure staff (empty when the table is missing). */
+export async function loadStructureIds(client: SupabaseClient): Promise<string[]> {
+  const result = await client.from("business_plan_structure").select("employee_id");
+  if (result.error) throw result.error;
+  return ((result.data || []) as { employee_id: string }[]).map((r) => r.employee_id);
+}
+
+export async function setStructure(client: SupabaseClient, employeeId: string, on: boolean, actorEmail: string): Promise<void> {
+  const result = on
+    ? await client.from("business_plan_structure").upsert({ employee_id: employeeId, added_by: actorEmail })
+    : await client.from("business_plan_structure").delete().eq("employee_id", employeeId);
+  if (result.error) throw result.error;
 }
 
 /* ── Saved plan ─────────────────────────────────────────────────────── */

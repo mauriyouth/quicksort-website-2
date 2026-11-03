@@ -13,7 +13,9 @@ import {
   loadExtensions,
   loadInvoices,
   loadSavedPlan,
+  loadStructureIds,
   saveSavedPlan,
+  setStructure,
   type PlanSources,
   type SavedPlan,
 } from "./actuals";
@@ -58,7 +60,6 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     { key: "primeChasseur", label: "Prime chasseur par vente", unit: "€", step: 50 },
   ] },
   { title: "Charges fixes mensuelles", fields: [
-    { key: "fStructure", label: "Salaires structure + IK", unit: "€", step: 500 },
     { key: "fLoyer", label: "Loyer et locaux", unit: "€", step: 100 },
     { key: "fOutils", label: "Outils, cloud, licences IA", unit: "€", step: 100 },
     { key: "fMarketing", label: "Marketing et événements", unit: "€", step: 100 },
@@ -111,11 +112,12 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     let cancelled = false;
     (async () => {
       const client = untyped();
-      const [ws, invoices, extensions, cjm] = await Promise.all([
+      const [ws, invoices, extensions, cjm, structureIds] = await Promise.all([
         loadWorkspace(),
         loadInvoices(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
         loadExtensions(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
         loadCjmMultiplier(),
+        loadStructureIds(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
       ]);
       if (cancelled) return;
       setBase({
@@ -128,6 +130,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         cjmMultiplier: cjm.multiplier,
         people: ws.people.map((p) => ({ id: p.id, full_name: p.full_name })),
         clients: ws.clients,
+        structureIds,
         // The snapshot only returns salaries to HR operators.
         salariesVisible: ws.salaries.length > 0 || ws.employees.length === 0,
       });
@@ -204,7 +207,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     if (!agg || !draft || !H) return null;
     return computePlan(
       H,
-      agg.months.map((actual, m) => ({ actual, ventes: num(draft.ventes[m]), departs: num(draft.departs[m]) })),
+      agg.months.map((actual, m) => ({ actual, ventes: num(draft.ventes[m]), departs: num(draft.departs[m]), structure: agg.structure[m] })),
     );
   }, [agg, draft, H]);
 
@@ -215,6 +218,18 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   const setHyp = (k: HypothesisKey, v: string) => edit((d) => ({ ...d, hyp: { ...d.hyp, [k]: v } }));
   const setMonth = (which: "ventes" | "departs", m: number, v: string) =>
     edit((d) => ({ ...d, [which]: d[which].map((x, i) => (i === m ? v : x)) }));
+
+  async function toggleStructure(employeeId: string, on: boolean) {
+    setError("");
+    try {
+      await setStructure(untyped(), employeeId, on, actorEmail);
+      setBase((b) =>
+        b && { ...b, structureIds: on ? [...new Set([...b.structureIds, employeeId])] : b.structureIds.filter((id) => id !== employeeId) },
+      );
+    } catch (e) {
+      setError(isMissingRelationError(e) ? "La table business_plan_structure n’existe pas encore — appliquez la migration." : errorMessage(e));
+    }
+  }
 
   function changeYear(next: number) {
     if (dirty && !window.confirm("Modifications non enregistrées — changer d’année quand même ?")) return;
@@ -265,6 +280,19 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   const status =
     actualCount === 0 ? "Prévisionnel" : actualCount === 12 ? "Réel" : `Réel → ${MONTH_NAMES[actualCount - 1].toLowerCase()} · prévisionnel ensuite`;
   const maxCa = plan ? Math.max(1, ...plan.series.ca) : 1;
+  /** Salaried employments that can be listed as structure staff. */
+  const staffChoices = useMemo(() => {
+    if (!base) return [];
+    const names = new Map((base.people ?? []).map((p) => [p.id, p.full_name]));
+    return base.employees
+      .filter((e) => e.contract_type !== "Freelance")
+      .map((e) => ({
+        id: e.id,
+        name: names.get(e.person_id) || e.role || "Sans nom",
+        detail: [e.role, e.status === "ended" ? `sorti le ${e.end_date?.split("-").reverse().join("/")}` : e.status].filter(Boolean).join(" · "),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [base]);
 
   return (
     <div className="bp">
@@ -514,6 +542,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               agg={agg}
               hypotheses={H!}
               multiplier={base.cjmMultiplier}
+              structure={{ employees: staffChoices, ids: base.structureIds, onToggle: toggleStructure }}
             />
           )}
 
@@ -521,7 +550,8 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
             Mois réels : CA = factures finalisées ou payées par mois de prestation · encaissements = factures payées par date de paiement ·
             consultants = personnes avec une mission confirmée, active ou terminée sur le mois · ventes = missions démarrant dans le mois ·
             freelances = jours CRA × taux journalier · salaires = salaire mensuel × multiplicateur CJM ({base.cjmMultiplier}) · inter-contrat =
-            salariés sans mission sur le mois · départs = sorties d’employés. Charges variables et fixes : hypothèses.
+            salariés sans mission sur le mois · départs = sorties d’employés. Salaires structure : personnes listées en structure, chaque mois
+            (prévisionnel : dernier salaire connu jusqu’à la sortie). Autres charges variables et fixes : hypothèses.
             Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur l’EBITDA annuel positif ·
             encaissements décalés du délai client, les coûts sont payés le mois même.
           </footer>

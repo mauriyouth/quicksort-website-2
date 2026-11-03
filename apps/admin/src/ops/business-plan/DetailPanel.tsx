@@ -1,21 +1,29 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { Aggregate, SalaryLine } from "./actuals";
 import { fmt, MONTH_NAMES, pct, type Hypotheses, type PlanResult } from "./model";
 
 /**
  * Drill-down panel for the P&L rows "Chiffre d’affaires", "Salaires
- * consultants chargés" and "Freelances". Closed months list the invoices or
+ * consultants chargés", "Freelances" and "Salaires structure chargés". Closed months list the invoices or
  * named people behind the figure;
  * forecast months show the formula plus today's named team, the base the
  * forecast projects from.
  */
-export type DetailKind = "ca" | "sal" | "free";
+export type DetailKind = "ca" | "sal" | "free" | "fs";
 
 const TITLES: Record<DetailKind, string> = {
   ca: "Chiffre d’affaires",
   sal: "Salaires consultants chargés",
   free: "Freelances",
+  fs: "Salaires structure chargés",
+};
+
+/** Who can be listed as structure staff, and how to change the list. */
+export type StructureControl = {
+  employees: { id: string; name: string; detail: string }[];
+  ids: string[];
+  onToggle: (employeeId: string, on: boolean) => Promise<void>;
 };
 
 const eur = (v: number) => `${fmt(v)} €`;
@@ -30,6 +38,7 @@ type BodyProps = {
   agg: Aggregate;
   hypotheses: Hypotheses;
   multiplier: number;
+  structure: StructureControl;
 };
 
 export function DetailPanel({
@@ -91,7 +100,10 @@ export function DetailPanel({
           ))}
         </div>
 
-        {kind === "ca" ? <RevenueBody {...body} /> : kind === "sal" ? <SalaryBody {...body} /> : <FreelanceBody {...body} />}
+        {kind === "ca" ? <RevenueBody {...body} />
+          : kind === "sal" ? <SalaryBody {...body} />
+          : kind === "fs" ? <StructureBody {...body} />
+          : <FreelanceBody {...body} />}
       </div>
     </div>
   );
@@ -190,6 +202,118 @@ function RevenueBody({ month, plan, agg, hypotheses: H }: BodyProps) {
           </p>
         </div>
       )}
+    </>
+  );
+}
+
+/* ── Structure salaries ─────────────────────────────────────────────── */
+
+function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyProps) {
+  const [busy, setBusy] = useState(false);
+  const [pick, setPick] = useState("");
+  const actual = plan.actual[month];
+  const rows = agg.structureLines[month];
+  const total = plan.series.fs[month];
+  const missing = rows.filter((l) => l.salary === null).length;
+  const listed = new Set(structure.ids);
+  const members = structure.employees.filter((e) => listed.has(e.id));
+  const others = structure.employees.filter((e) => !listed.has(e.id));
+  const mult = String(multiplier).replace(".", ",");
+  const toggle = async (id: string, on: boolean) => {
+    setBusy(true);
+    try {
+      await structure.onToggle(id, on);
+      setPick("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="bp-drawer-stats">
+        <div><span>Total chargé</span><strong>{eur(total)}</strong></div>
+        <div><span>Personnes</span><strong>{rows.length}</strong></div>
+        <div><span>Multiplicateur CJM</span><strong>×{mult}</strong></div>
+      </div>
+      {missing > 0 && (
+        <p className="bp-warn">
+          {plural(missing, "personne")} sans salaire renseigné pour ce mois : compté{missing > 1 ? "s" : ""} à 0 €.
+        </p>
+      )}
+      {rows.length === 0 ? (
+        <p className="bp-meta">Aucune personne de structure en poste ce mois-ci.</p>
+      ) : (
+        <table className="bp-table">
+          <thead>
+            <tr>
+              <th scope="col">Personne</th>
+              <th scope="col" className="num">Brut / mois</th>
+              <th scope="col" className="num">Chargé ×{mult}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((l) => (
+              <tr key={l.employeeId}>
+                <td>
+                  <span className="bp-name">{l.name}</span>
+                  {l.contractType && <span className="bp-sub"> · {l.contractType}</span>}
+                  {l.exitDate && <div className="bp-sub">{l.exitDate < monthStartOf(year, month) ? "Sorti le " : "Sortie le "}{frDate(l.exitDate)}</div>}
+                </td>
+                <td className="num">{l.salary === null ? <span className="bp-sub">non renseigné</span> : eur(l.salary)}</td>
+                <td className="num">{eur(l.cost)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row" colSpan={2}>Total</th>
+              <td className="num">{eur(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      )}
+      <p className="bp-note">
+        {actual
+          ? "Mois réel : salaire mensuel brut en vigueur sur le mois × multiplicateur CJM, pour chaque personne de structure en poste."
+          : "Mois prévisionnel : dernier salaire connu × multiplicateur CJM, pour chaque personne de structure en poste ce mois-ci (jusqu’à sa sortie)."}{" "}
+        Les autres salariés comptent comme consultants (inter-contrat sans mission).
+      </p>
+
+      <h3 className="bp-drawer-sub">Personnes de structure</h3>
+      {members.length === 0 ? (
+        <p className="bp-meta">Personne n’est listé en structure.</p>
+      ) : (
+        <table className="bp-table">
+          <tbody>
+            {members.map((e) => (
+              <tr key={e.id}>
+                <td>
+                  <span className="bp-name">{e.name}</span>
+                  {e.detail && <div className="bp-sub">{e.detail}</div>}
+                </td>
+                <td className="num">
+                  <button type="button" className="btn secondary small" disabled={busy} onClick={() => toggle(e.id, false)}>
+                    Retirer
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div className="bp-structure-add">
+        <label className="bp-meta" htmlFor="bp-structure-pick">Ajouter en structure</label>
+        <select id="bp-structure-pick" className="bp-hin" value={pick} onChange={(e) => setPick(e.target.value)} disabled={busy}>
+          <option value="">Choisir un salarié…</option>
+          {others.map((e) => (
+            <option key={e.id} value={e.id}>{e.name}{e.detail ? ` — ${e.detail}` : ""}</option>
+          ))}
+        </select>
+        <button type="button" className="btn small" disabled={busy || !pick} onClick={() => toggle(pick, true)}>
+          Ajouter
+        </button>
+      </div>
     </>
   );
 }

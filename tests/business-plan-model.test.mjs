@@ -11,7 +11,8 @@ import {
 
 const VENTES = [2, 1, 2, 1, 1, 2, 1, 0, 2, 2, 1, 1];
 const DEPARTS = [0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0];
-const forecast = (i) => ({ actual: null, ventes: VENTES[i], departs: DEPARTS[i] });
+const STRUCTURE = 30000;
+const forecast = (i) => ({ actual: null, ventes: VENTES[i], departs: DEPARTS[i], structure: STRUCTURE });
 
 /** The design mockup's renderVals() math, kept verbatim as the oracle. */
 function mockup(P, ventes, departs) {
@@ -26,7 +27,7 @@ function mockup(P, ventes, departs) {
     const prod = nf * P.jours * P.coutFree + ns * P.salaire;
     const varr = ca * P.commFactor / 100 + ventes[i] * P.primeIC + ventes[i] * P.primeChasseur;
     const mb = ca - prod - varr;
-    const fix = P.fStructure + P.fLoyer + P.fOutils + P.fMarketing + P.fHonoraires + P.fDivers;
+    const fix = STRUCTURE + P.fLoyer + P.fOutils + P.fMarketing + P.fHonoraires + P.fDivers;
     R.cons.push(c); R.ca.push(ca); R.prod.push(prod); R.varr.push(varr); R.mb.push(mb); R.fix.push(fix); R.eb.push(mb - fix);
   }
   for (let i = 0; i < 12; i++) {
@@ -119,6 +120,7 @@ function sources(over = {}) {
     ],
     cra: [{ employee_id: "f", day: "2026-02-03", part: "full" }, { employee_id: "f", day: "2026-02-04", part: "am" }],
     cjmMultiplier: 2,
+    structureIds: ["boss"],
     ...over,
   };
 }
@@ -160,7 +162,7 @@ test("seeds hypotheses from current data", () => {
   assert.equal(seeds.tjm, 700);
   assert.equal(seeds.coutFree, 500);
   assert.equal(seeds.salaire, 8000);
-  assert.equal(seeds.fStructure, 12000);
+  assert.equal(seeds.fStructure, undefined);
   assert.equal(seeds.dso, 30);
 });
 
@@ -200,4 +202,36 @@ test("revenue drill-down lists the invoices behind each closed month", () => {
   assert.equal(jan.reduce((s, l) => s + l.amount, 0), months[0].ca);
   assert.equal(invoiceLines[1].length, 0);
   assert.equal(invoiceLines[10], null);
+});
+
+test("structure staff are an explicit list, costed every month", () => {
+  const people = [{ id: "pboss", full_name: "Boss" }];
+  const employees = sources().employees.map((e) => ({ ...e, person_id: `p${e.id}` }));
+  employees[3] = { ...employees[3], planned_exit_date: "2026-11-15" };
+  const { months, structure, structureLines } = aggregateActuals(sources({ employees, people }), 2026, 10, new Date(2026, 10, 1));
+  // Closed months: salary on file × multiplier.
+  assert.equal(structure[0], 6000 * 2);
+  assert.deepEqual(structureLines[0].map((l) => [l.name, l.salary, l.cost]), [["Boss", 6000, 12000]]);
+  // Forecast: employed in November, gone in December.
+  assert.equal(structure[10], 12000);
+  assert.equal(structure[11], 0);
+  assert.equal(structureLines[11].length, 0);
+  // Not a consultant: never in the salaried consultants line.
+  assert.equal(months[0].sal, (4000 + 5000) * 2);
+});
+
+test("a salaried employee without mission outside the structure list is inter-contrat", () => {
+  const employees = [...sources().employees, emp("new", { start_date: "2026-01-01" })];
+  const salaries = [...sources().salaries, sal("new", { salary_monthly: 3000 })];
+  const { months, salaryLines, structure } = aggregateActuals(sources({ employees, salaries }), 2026, 10, new Date(2026, 10, 1));
+  assert.equal(months[0].sal, (4000 + 5000 + 3000) * 2);
+  assert.equal(months[0].inter, (5000 + 3000) * 2);
+  assert.ok(salaryLines[0].some((l) => l.employeeId === "new" && !l.staffed));
+  assert.equal(structure[0], 12000);
+});
+
+test("forecast months carry the structure cost into the P&L", () => {
+  const r = computePlan(DEFAULT_HYPOTHESES, VENTES.map((_, i) => ({ ...forecast(i), structure: i * 1000 })));
+  assert.equal(r.series.fs[3], 3000);
+  assert.equal(r.series.fix[3], 3000 + DEFAULT_HYPOTHESES.fLoyer + DEFAULT_HYPOTHESES.fOutils + DEFAULT_HYPOTHESES.fMarketing + DEFAULT_HYPOTHESES.fHonoraires + DEFAULT_HYPOTHESES.fDivers);
 });

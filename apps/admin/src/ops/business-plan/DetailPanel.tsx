@@ -10,13 +10,14 @@ import { fmt, MONTH_NAMES, pct, type Hypotheses, type PlanResult } from "./model
  * forecast months show the formula plus today's named team, the base the
  * forecast projects from.
  */
-export type DetailKind = "ca" | "sal" | "free" | "fs";
+export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter";
 
 const TITLES: Record<DetailKind, string> = {
   ca: "Chiffre d’affaires",
   sal: "Salaires consultants chargés",
   free: "Freelances",
   fs: "Salaires structure chargés",
+  inter: "Inter-contrats",
 };
 
 /** Who can be listed as structure staff, and how to change the list. */
@@ -103,6 +104,7 @@ export function DetailPanel({
         {kind === "ca" ? <RevenueBody {...body} />
           : kind === "sal" ? <SalaryBody {...body} />
           : kind === "fs" ? <StructureBody {...body} />
+          : kind === "inter" ? <InterBody {...body} />
           : <FreelanceBody {...body} />}
       </div>
     </div>
@@ -387,6 +389,70 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
                 {currentWithSalary > 0 && <> · moyenne {eur(currentTotal / currentWithSalary)} (hypothèse : {eur(H.salaire)})</>}
               </p>
               <SalaryRoster rows={current} multiplier={multiplier} total={currentTotal} monthStart={monthStartOf(year, month)} />
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ── Inter-contracts ────────────────────────────────────────────────── */
+
+function InterBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyProps) {
+  const S = plan.series;
+  const actual = plan.actual[month];
+  const rows = agg.salaryLines[month]?.filter((l) => !l.staffed) ?? null;
+  const total = S.inter[month];
+  const missing = rows?.filter((l) => l.salary === null).length ?? 0;
+  const benched = agg.currentSalaried.filter((l) => !l.staffed);
+  const benchedTotal = benched.reduce((t, l) => t + l.cost, 0);
+  const share = S.sal[month] ? total / S.sal[month] : 0;
+
+  return (
+    <>
+      <div className="bp-drawer-stats">
+        <div><span>Coût inter-contrats</span><strong>{eur(total)}</strong></div>
+        <div><span>{actual ? "Salariés sans mission" : "Salariés sans mission (auj.)"}</span>
+          <strong>{actual ? rows?.length ?? 0 : benched.length}</strong>
+        </div>
+        <div><span>Part des salaires consultants</span><strong>{pct(share)}</strong></div>
+      </div>
+
+      {actual && rows ? (
+        <>
+          {missing > 0 && (
+            <p className="bp-warn">
+              {plural(missing, "consultant")} sans salaire renseigné pour ce mois : compté{missing > 1 ? "s" : ""} à 0 €.
+            </p>
+          )}
+          {rows.length === 0 ? (
+            <p className="bp-meta">Aucun consultant salarié en inter-contrat ce mois-ci.</p>
+          ) : (
+            <SalaryRoster rows={rows} multiplier={multiplier} total={total} />
+          )}
+          <p className="bp-note">
+            Inter-contrat = consultant salarié sans mission confirmée, active ou terminée sur le mois. Coût = salaire mensuel brut × multiplicateur
+            CJM. Les personnes de structure n’y figurent jamais.
+          </p>
+        </>
+      ) : (
+        <div className="bp-formula">
+          <div><span>Salaires consultants chargés</span><strong>{eur(S.sal[month])}</strong></div>
+          <div><span>× (1 − occupation {pct(H.occ / 100)})</span><strong>{pct(1 - H.occ / 100)}</strong></div>
+          <div className="is-total"><span>= Inter-contrats</span><strong>{eur(total)}</strong></div>
+          <p className="bp-note">
+            Mois prévisionnel : part non occupée des salariés, d’après l’hypothèse « Taux d’occupation des salariés ».
+          </p>
+          <h3 className="bp-drawer-sub">Salariés sans mission aujourd’hui</h3>
+          {benched.length === 0 ? (
+            <p className="bp-meta">Aucun consultant salarié sans mission aujourd’hui.</p>
+          ) : (
+            <>
+              <p className="bp-note">
+                {plural(benched.length, "consultant")} sans mission aujourd’hui · coût chargé réel {eur(benchedTotal)} / mois
+              </p>
+              <SalaryRoster rows={benched} multiplier={multiplier} total={benchedTotal} monthStart={monthStartOf(year, month)} />
             </>
           )}
         </div>

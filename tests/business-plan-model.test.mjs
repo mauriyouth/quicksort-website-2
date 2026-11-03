@@ -248,3 +248,8 @@ test("structure cost is prorated on working days in arrival and exit months", ()
   // A full month has no prorata.
   assert.equal(structureLines[3].find((l) => l.employeeId === "s2").days, undefined);
 });
+
+test("inter-contract row opens a drill-down", () => {
+  const r = computePlan(DEFAULT_HYPOTHESES, VENTES.map((_, i) => forecast(i)));
+  assert.equal(planRows(r).find((row) => row.label === "— dont inter-contrats").key, "inter");
+});

@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { encryptApiKey, decryptApiKey, settingsReady } from "./ai-settings.ts";
 import { contractFolderName } from "./documents/folders.ts";
+import { ARCHIVE_FOLDER_NAME, archiveYear, archivedProjectPrefix } from "./documents/archive.ts";
 import { MAX_UPLOAD_BYTES } from "./documents/storage/types.ts";
 import {
   FOLDER_MIME,
@@ -104,11 +105,6 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
-/** Archived contracts live under <root>/archived/<year of the contract's end>. */
-export const ARCHIVE_FOLDER_NAME = "archived";
-export function archiveYear(endDate: string | null | undefined, today = new Date()): string {
-  return /^\d{4}/.exec(endDate || "")?.[0] || String(today.getFullYear());
-}
 
 /**
  * Moves an archived project's contract folder into archived/<year>, or back to
@@ -166,7 +162,10 @@ async function projectContractFolder(
   if (!folder) {
     const clientRow = await client.from("sales_clients").select("id,name").eq("id", row.client_id).single();
     const clientName = clientRow.data?.name || "Client";
-    folder = await ensureChildFolder(sa, sa.root_folder_id, contractFolderName(clientName, row.title));
+    // An archived project's first contract opens its folder under archived/<year>.
+    let parentId = sa.root_folder_id;
+    for (const name of await archivedProjectPrefix(client, row.id)) parentId = (await ensureChildFolder(sa, parentId, name)).id;
+    folder = await ensureChildFolder(sa, parentId, contractFolderName(clientName, row.title));
     const patch = {
       drive_folder_id: folder.id,
       drive_folder_name: folder.name,

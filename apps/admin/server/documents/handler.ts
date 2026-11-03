@@ -5,6 +5,7 @@ import { FOLDER_LABELS, datedSubfolder, documentFileName, folderPath, type Folde
 import { createDriveStorage, driveStorageFromEncrypted, loadDriveSettings } from "./storage/google-drive.ts";
 import { MAX_UPLOAD_BYTES, type DocumentStorage, type StorageFolder, type StoredFile } from "./storage/types.ts";
 import { browserOrigin } from "./storage/origin.ts";
+import { archivedProjectPrefix } from "./archive.ts";
 
 /**
  * Document registry API. Only what needs storage credentials lives here;
@@ -189,7 +190,9 @@ async function resolveFolder(client: SupabaseClient, storage: DocumentStorage, o
     let base = await existingBaseFolder(client, storage, owner);
     if (!base) {
       const { root, path } = folderPath(names, "");
-      base = await storage.ensureFolder(root, path);
+      // An archived project's first document opens its folder under archived/<year>.
+      const prefix = owner.kind === "project" ? await archivedProjectPrefix(client, owner.id) : [];
+      base = await storage.ensureFolder(root, [...prefix, ...path]);
     }
     base = await cacheFolder(client, storage, owner, "", base);
     folder = await cacheFolder(client, storage, owner, leafCode, await storage.ensureChild(base, folderPath(names, leafCode).path.at(-1)!));

@@ -28,6 +28,7 @@ function fakeSupabase({ role = 'admin', tables = {}, rpc = {} } = {}) {
     sales_clients: [{ id: clientId, name: 'Teamwill' }],
     sales_projects: [{ id: projectId, title: 'Refonte CRM', client_id: clientId, drive_folder_id: null }],
     document_folders: [],
+    admin_statuses: [],
     hr_events: [],
     documents: [],
     ...tables,
@@ -390,4 +391,20 @@ test('move-payslip refuses other document types, archived payslips and employees
   ctx = setup({ role: 'employee' });
   res = await call(ctx.handler, { action: 'move-payslip', documentId, toPersonId: personB });
   assert.equal(res.code, 403);
+});
+
+test('first upload on an archived project creates its folder under archived/<end year>', async () => {
+  const archived = { id: projectId, title: 'Refonte CRM', client_id: clientId, drive_folder_id: null, status: 'archive', end_date: '2026-06-30' };
+  const { storage, handler } = setup({ tables: { sales_projects: [archived], admin_statuses: [{ kind: 'project', key: 'archive', is_terminal: true }] } });
+  const res = await call(handler, { action: 'prepare-upload', owner: { kind: 'project', id: projectId }, typeCode: 'CLIENT_CONTRACT', title: 'Contrat signé', fileName: 'c.pdf', size: 10 });
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.deepEqual(storage.log[0], ['ensureFolder', 'clients', ['archived', '2026', 'Teamwill/Refonte CRM']]);
+
+  // Without saved statuses, the built-in "archive" status is terminal too; an open project stays at the root.
+  const builtin = setup({ tables: { sales_projects: [archived] } });
+  await call(builtin.handler, { action: 'prepare-upload', owner: { kind: 'project', id: projectId }, typeCode: 'CLIENT_CONTRACT', title: 'Contrat signé', fileName: 'c.pdf', size: 10 });
+  assert.deepEqual(builtin.storage.log[0], ['ensureFolder', 'clients', ['archived', '2026', 'Teamwill/Refonte CRM']]);
+  const open = setup({ tables: { sales_projects: [{ ...archived, status: 'en_cours' }] } });
+  await call(open.handler, { action: 'prepare-upload', owner: { kind: 'project', id: projectId }, typeCode: 'CLIENT_CONTRACT', title: 'Contrat signé', fileName: 'c.pdf', size: 10 });
+  assert.deepEqual(open.storage.log[0], ['ensureFolder', 'clients', ['Teamwill/Refonte CRM']]);
 });

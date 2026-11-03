@@ -261,7 +261,10 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
                   {l.exitDate && <div className="bp-sub">{l.exitDate < monthStartOf(year, month) ? "Sorti le " : "Sortie le "}{frDate(l.exitDate)}</div>}
                 </td>
                 <td className="num">{l.salary === null ? <span className="bp-sub">non renseigné</span> : eur(l.salary)}</td>
-                <td className="num">{eur(l.cost)}</td>
+                <td className="num">
+                  {eur(l.cost)}
+                  {l.days && <div className="bp-sub">prorata {l.days[0]}/{l.days[1]} j ouvrés</div>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -277,6 +280,7 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
         {actual
           ? "Mois réel : salaire mensuel brut en vigueur sur le mois × multiplicateur CJM, pour chaque personne de structure en poste."
           : "Mois prévisionnel : dernier salaire connu × multiplicateur CJM, pour chaque personne de structure en poste ce mois-ci (jusqu’à sa sortie)."}{" "}
+        Mois d’arrivée ou de départ : au prorata des jours ouvrés travaillés.{" "}
         Les autres salariés comptent comme consultants (inter-contrat sans mission).
       </p>
 

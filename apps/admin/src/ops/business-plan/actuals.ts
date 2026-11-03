@@ -8,7 +8,8 @@
  * - Structure staff are an explicit list (business_plan_structure);
  *   every other non-freelance employee is a consultant, in inter-contract
  *   when unstaffed. "Salaires structure" = the listed staff employed in the
- *   month × salary × CJM multiplier, measured or projected.
+ *   month × salary × CJM multiplier, measured or projected, prorated on
+ *   working days in arrival and exit months.
  * - Staffed = a confirmed / active / completed assignment overlapping the
  *   month. "Ventes" = such assignments starting in the month (there is no
  *   won date on deals, so first staffing stands in for the sale).
@@ -92,6 +93,8 @@ export type SalaryLine = {
   staffed: boolean;
   /** Planned or recorded exit date, if any. */
   exitDate: string | null;
+  /** Structure lines only: [worked, total] working days when the month is partial. */
+  days?: [number, number];
 };
 
 /** One freelancer's line in a closed month (drill-down). */
@@ -322,14 +325,21 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
       const s = salaryOn(src.salaries, e.id, to) ?? salaryOn(src.salaries, e.id, from)
         ?? (open ? salaryOn(src.salaries, e.id, nowDay) : undefined);
       const salary = s?.salary_monthly ?? null;
+      // Arrival or exit during the month: prorate on working days.
+      const first = e.start_date > from ? e.start_date : from;
+      const last = end && end < to ? end : to;
+      const total = openDaysBetween(from, to);
+      const worked = first === from && last === to ? total : openDaysBetween(first, last);
+      const share = total > 0 ? worked / total : 1;
       lines.push({
         employeeId: e.id,
         name: displayName(e),
         contractType: e.contract_type || "",
         salary,
-        cost: (salary ?? 0) * src.cjmMultiplier,
+        cost: (salary ?? 0) * src.cjmMultiplier * share,
         staffed: false,
         exitDate: end,
+        ...(worked < total ? { days: [worked, total] as [number, number] } : {}),
       });
     }
     lines.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name));

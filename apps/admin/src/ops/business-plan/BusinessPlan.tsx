@@ -81,7 +81,8 @@ const str = (v: number) => String(v);
 
 export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   const today = useMemo(() => new Date(), []);
-  const [year, setYear] = useState(today.getFullYear() + 1);
+  // Current year by default, so the months already elapsed show measured figures.
+  const [year, setYear] = useState(today.getFullYear());
   // Plan (P&L + chart) or Hypothèses, kept in the URL so the tab is linkable.
   const [params, setParams] = useSearchParams();
   const view: "plan" | "hyp" = params.get("vue") === "hypotheses" ? "hyp" : "plan";

@@ -212,8 +212,8 @@ test("structure staff are an explicit list, costed every month", () => {
   // Closed months: salary on file × multiplier.
   assert.equal(structure[0], 6000 * 2);
   assert.deepEqual(structureLines[0].map((l) => [l.name, l.salary, l.cost]), [["Boss", 6000, 12000]]);
-  // Forecast: employed in November, gone in December.
-  assert.equal(structure[10], 12000);
+  // Forecast: leaves on 15 November (10 of 21 working days), gone in December.
+  assert.ok(Math.abs(structure[10] - (12000 * 10) / 21) < 1e-6);
   assert.equal(structure[11], 0);
   assert.equal(structureLines[11].length, 0);
   // Not a consultant: never in the salaried consultants line.
@@ -234,4 +234,17 @@ test("forecast months carry the structure cost into the P&L", () => {
   const r = computePlan(DEFAULT_HYPOTHESES, VENTES.map((_, i) => ({ ...forecast(i), structure: i * 1000 })));
   assert.equal(r.series.fs[3], 3000);
   assert.equal(r.series.fix[3], 3000 + DEFAULT_HYPOTHESES.fLoyer + DEFAULT_HYPOTHESES.fOutils + DEFAULT_HYPOTHESES.fMarketing + DEFAULT_HYPOTHESES.fHonoraires + DEFAULT_HYPOTHESES.fDivers);
+});
+
+test("structure cost is prorated on working days in arrival and exit months", () => {
+  const employees = [...sources().employees, emp("s2", { start_date: "2026-03-16" })];
+  const salaries = [...sources().salaries, sal("s2", { salary_monthly: 3000 })];
+  const { structure, structureLines } = aggregateActuals(sources({ employees, salaries, structureIds: ["boss", "s2"] }), 2026, 10, new Date(2026, 10, 1));
+  // March 2026: 22 working days, 12 from the 16th.
+  const line = structureLines[2].find((l) => l.employeeId === "s2");
+  assert.deepEqual(line.days, [12, 22]);
+  assert.ok(Math.abs(line.cost - (3000 * 2 * 12) / 22) < 1e-6);
+  assert.ok(Math.abs(structure[2] - (12000 + (6000 * 12) / 22)) < 1e-6);
+  // A full month has no prorata.
+  assert.equal(structureLines[3].find((l) => l.employeeId === "s2").days, undefined);
 });

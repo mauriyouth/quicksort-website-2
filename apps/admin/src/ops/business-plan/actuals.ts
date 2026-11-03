@@ -30,6 +30,13 @@ export type InvoiceRow = {
   paid_at: string | null;
   total_ht: number | string;
   ignored?: boolean | null;
+  /** Optional, for the revenue drill-down. */
+  id?: string;
+  number?: string | null;
+  project_id?: string | null;
+  billed_client_id?: string | null;
+  employee_id?: string | null;
+  invoice_url?: string | null;
 };
 export type CraRow = { employee_id: string; day: string; part?: string | null };
 export type ExtensionRow = {
@@ -51,6 +58,23 @@ export type PlanSources = {
   cjmMultiplier: number;
   /** Optional, for names in the drill-down panels. */
   people?: { id: string; full_name: string }[];
+  clients?: { id: string; name: string }[];
+};
+
+/** One invoice behind a closed month's revenue (drill-down). */
+export type InvoiceLine = {
+  id: string;
+  number: string;
+  client: string;
+  project: string;
+  consultant: string;
+  status: string;
+  issueDate: string | null;
+  paidAt: string | null;
+  amount: number;
+  /** True when the invoice has no period month and is counted by issue date. */
+  byIssueDate: boolean;
+  url: string | null;
 };
 
 /** One salaried consultant's line in a closed month (drill-down). */
@@ -101,6 +125,8 @@ export type Aggregate = {
   freelanceLines: (FreelanceLine[] | null)[];
   /** Freelancers on the books today — the base the forecast projects from. */
   currentFreelancers: FreelanceLine[];
+  /** Invoices behind each closed month's revenue (null when open). */
+  invoiceLines: (InvoiceLine[] | null)[];
 };
 
 const STAFFED = ["confirmed", "active", "completed"];
@@ -132,11 +158,15 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   // Invoices → revenue by period, collections by payment month (in cents).
   const caByMonth = new Map<string, number>();
   const encByMonth = new Map<string, number>();
+  const invByMonth = new Map<string, InvoiceRow[]>();
   for (const inv of src.invoices) {
     if (inv.ignored) continue;
     if (inv.status === "finalized" || inv.status === "paid") {
       const key = (inv.period_month || inv.issue_date || "").slice(0, 7);
-      if (key) caByMonth.set(key, (caByMonth.get(key) || 0) + cents(inv.total_ht));
+      if (key) {
+        caByMonth.set(key, (caByMonth.get(key) || 0) + cents(inv.total_ht));
+        invByMonth.set(key, [...(invByMonth.get(key) || []), inv]);
+      }
     }
     if (inv.status === "paid" && inv.paid_at) {
       const key = inv.paid_at.slice(0, 7);
@@ -156,13 +186,35 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   const nameOf = new Map((src.people ?? []).map((p) => [p.id, p.full_name]));
   const displayName = (e: Employee) =>
     nameOf.get(e.person_id) || [e.role, e.matricule].filter(Boolean).join(" · ") || "Consultant sans nom";
+  const employeeById = new Map(src.employees.map((e) => [e.id, e]));
+  const clientName = new Map((src.clients ?? []).map((c) => [c.id, c.name]));
+  const projectTitle = new Map(src.projects.map((p) => [p.id, p]));
+  const invoiceLine = (inv: InvoiceRow, i: number): InvoiceLine => {
+    const project = inv.project_id ? projectTitle.get(inv.project_id) : undefined;
+    const clientId = inv.billed_client_id ?? project?.client_id ?? null;
+    const e = inv.employee_id ? employeeById.get(inv.employee_id) : undefined;
+    return {
+      id: inv.id ?? `${i}`,
+      number: inv.number || "",
+      client: (clientId && clientName.get(clientId)) || "",
+      project: project?.title || "",
+      consultant: e ? displayName(e) : "",
+      status: inv.status,
+      issueDate: inv.issue_date,
+      paidAt: inv.paid_at ? inv.paid_at.slice(0, 10) : null,
+      amount: cents(inv.total_ht) / 100,
+      byIssueDate: !inv.period_month,
+      url: inv.invoice_url ?? null,
+    };
+  };
   const months: (ActualMonth | null)[] = [];
+  const invoiceLines: (InvoiceLine[] | null)[] = [];
   const salaryLines: (SalaryLine[] | null)[] = [];
   const freelanceLines: (FreelanceLine[] | null)[] = [];
-  const employeeById = new Map(src.employees.map((e) => [e.id, e]));
   for (let m = 0; m < 12; m++) {
     if (m >= openFrom) {
       months.push(null);
+      invoiceLines.push(null);
       salaryLines.push(null);
       freelanceLines.push(null);
       continue;
@@ -170,6 +222,9 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     const key = monthKey(year, m), from = monthStart(year, m), to = monthEnd(year, m);
     const inMonth = staffedRows.filter((a) => overlaps(a.start_date, a.end_date, from, to));
     const staffed = new Set(inMonth.map((a) => a.employee_id));
+    invoiceLines.push(
+      (invByMonth.get(key) || []).map(invoiceLine).sort((a, b) => b.amount - a.amount || a.number.localeCompare(b.number)),
+    );
 
     let free = 0;
     const days = craDays.get(key);
@@ -336,7 +391,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
 
   const recentStarts = staffedRows.filter((a) => a.start_date > yearAgo && a.start_date <= now).length;
 
-  return { months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers };
+  return { months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers, invoiceLines };
 }
 
 /* ── Loaders ────────────────────────────────────────────────────────── */
@@ -361,7 +416,7 @@ export function loadInvoices(client: SupabaseClient): Promise<InvoiceRow[]> {
   return paged<InvoiceRow>((from, to) =>
     client
       .from("invoices")
-      .select("status, period_month, issue_date, paid_at, total_ht, ignored")
+      .select("id, number, status, period_month, issue_date, paid_at, total_ht, ignored, project_id, billed_client_id, employee_id, invoice_url")
       .in("status", ["finalized", "paid"])
       .range(from, to),
   );

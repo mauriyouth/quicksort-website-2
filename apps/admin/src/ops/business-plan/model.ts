@@ -172,7 +172,7 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
 export type RowKind = "line" | "sub" | "total" | "key" | "pct" | "section";
 export type PlanRow = {
   /** Set on rows that open a drill-down panel. */
-  key?: "sal" | "free";
+  key?: "ca" | "sal" | "free";
   kind: RowKind;
   label: string;
   values: number[];
@@ -189,7 +189,7 @@ export function planRows(r: PlanResult): PlanRow[] {
   return [
     line("line", "Nb de consultants staffés", S.cons, S.cons[last] ?? 0),
     sec("Revenus"),
-    line("key", "Chiffre d’affaires", S.ca),
+    { ...line("key", "Chiffre d’affaires", S.ca), key: "ca" },
     sec("Coûts de production"),
     { ...line("line", "Freelances", S.free), key: "free" },
     { ...line("line", "Salaires consultants chargés", S.sal), key: "sal" },

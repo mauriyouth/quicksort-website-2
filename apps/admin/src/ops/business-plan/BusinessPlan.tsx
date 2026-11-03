@@ -127,6 +127,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         invoices,
         cjmMultiplier: cjm.multiplier,
         people: ws.people.map((p) => ({ id: p.id, full_name: p.full_name })),
+        clients: ws.clients,
         // The snapshot only returns salaries to HR operators.
         salariesVisible: ws.salaries.length > 0 || ws.employees.length === 0,
       });
@@ -446,7 +447,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                         type="button"
                         className="bp-cell lab bp-drill"
                         onClick={() => setDetail({ kind: r.key!, month: Math.max(0, Math.min(11, actualCount > 0 ? actualCount - 1 : 0)) })}
-                        title="Voir le détail par personne"
+                        title={r.key === "ca" ? "Voir le détail des factures" : "Voir le détail par personne"}
                       >
                         {r.label} <span className="bp-drill-hint" aria-hidden="true">›</span>
                       </button>

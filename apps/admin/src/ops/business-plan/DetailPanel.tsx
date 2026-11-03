@@ -4,14 +4,16 @@ import type { Aggregate, SalaryLine } from "./actuals";
 import { fmt, MONTH_NAMES, pct, type Hypotheses, type PlanResult } from "./model";
 
 /**
- * Drill-down panel for the P&L rows "Salaires consultants chargés" and
- * "Freelances". Closed months list the named people behind the figure;
+ * Drill-down panel for the P&L rows "Chiffre d’affaires", "Salaires
+ * consultants chargés" and "Freelances". Closed months list the invoices or
+ * named people behind the figure;
  * forecast months show the formula plus today's named team, the base the
  * forecast projects from.
  */
-export type DetailKind = "sal" | "free";
+export type DetailKind = "ca" | "sal" | "free";
 
 const TITLES: Record<DetailKind, string> = {
+  ca: "Chiffre d’affaires",
   sal: "Salaires consultants chargés",
   free: "Freelances",
 };
@@ -89,13 +91,108 @@ export function DetailPanel({
           ))}
         </div>
 
-        {kind === "sal" ? <SalaryBody {...body} /> : <FreelanceBody {...body} />}
+        {kind === "ca" ? <RevenueBody {...body} /> : kind === "sal" ? <SalaryBody {...body} /> : <FreelanceBody {...body} />}
       </div>
     </div>
   );
 }
 
 const monthStartOf = (year: number, month: number) => `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
+/* ── Revenue ────────────────────────────────────────────────────────── */
+
+const STATUS: Record<string, string> = { paid: "Payée", finalized: "Émise" };
+
+function RevenueBody({ month, plan, agg, hypotheses: H }: BodyProps) {
+  const S = plan.series;
+  const actual = plan.actual[month];
+  const rows = agg.invoiceLines[month];
+  const total = S.ca[month];
+  const paid = rows?.filter((l) => l.status === "paid").reduce((t, l) => t + l.amount, 0) ?? 0;
+  const byIssue = rows?.filter((l) => l.byIssueDate).length ?? 0;
+  const nf = S.cons[month] * (H.pctFree / 100);
+  const ns = S.cons[month] - nf;
+
+  return (
+    <>
+      <div className="bp-drawer-stats">
+        <div><span>CA HT</span><strong>{eur(total)}</strong></div>
+        {actual ? (
+          <>
+            <div><span>Factures</span><strong>{rows?.length ?? 0}</strong></div>
+            <div><span>dont payées</span><strong>{eur(paid)}</strong></div>
+          </>
+        ) : (
+          <>
+            <div><span>Consultants staffés</span><strong>{fmt(S.cons[month])}</strong></div>
+            <div><span>TJM moyen (hypothèse)</span><strong>{eur(H.tjm)}</strong></div>
+          </>
+        )}
+      </div>
+
+      {actual && rows ? (
+        <>
+          {rows.length === 0 ? (
+            <p className="bp-meta">Aucune facture émise ou payée pour ce mois.</p>
+          ) : (
+            <table className="bp-table">
+              <thead>
+                <tr>
+                  <th scope="col">Facture</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col" className="num">Montant HT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((l) => (
+                  <tr key={l.id}>
+                    <td>
+                      <span className="bp-name">
+                        {l.url ? <a href={l.url} target="_blank" rel="noreferrer">{l.number || "Sans numéro"}</a> : l.number || "Sans numéro"}
+                      </span>
+                      {l.client && <span className="bp-sub"> · {l.client}</span>}
+                      {(l.project || l.consultant) && (
+                        <div className="bp-sub">{[l.project, l.consultant].filter(Boolean).join(" · ")}</div>
+                      )}
+                      {l.byIssueDate && l.issueDate && <div className="bp-sub">Sans mois de prestation : émise le {frDate(l.issueDate)}</div>}
+                    </td>
+                    <td>
+                      <span className={`bp-tag${l.status === "paid" ? " is-on" : ""}`}>{STATUS[l.status] ?? l.status}</span>
+                      {l.status === "paid" && l.paidAt && <div className="bp-sub">le {frDate(l.paidAt)}</div>}
+                    </td>
+                    <td className="num">{eur(l.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row" colSpan={2}>Total</th>
+                  <td className="num">{eur(total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+          <p className="bp-note">
+            Factures finalisées ou payées (hors factures ignorées), rattachées à leur mois de prestation
+            {byIssue > 0 && ` ; sans mois de prestation, à leur mois d’émission (${plural(byIssue, "facture")})`}. Montants hors taxes.
+          </p>
+        </>
+      ) : (
+        <div className="bp-formula">
+          <div><span>Freelances staffés ({pct(H.pctFree / 100)})</span><strong>{dec(nf)}</strong></div>
+          <div><span>× jours facturables × TJM</span><strong>{eur(nf * H.jours * H.tjm)}</strong></div>
+          <div><span>Salariés staffés</span><strong>{dec(ns)}</strong></div>
+          <div><span>× jours × occupation {pct(H.occ / 100)} × TJM</span><strong>{eur(ns * H.jours * (H.occ / 100) * H.tjm)}</strong></div>
+          <div className="is-total"><span>= Chiffre d’affaires</span><strong>{eur(total)}</strong></div>
+          <p className="bp-note">
+            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « TJM moyen facturé », « Jours ouvrés facturables », « Taux d’occupation des salariés »
+            ou les ventes / départs pour ajuster.
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
 
 /* ── Salaries ───────────────────────────────────────────────────────── */
 

@@ -184,3 +184,20 @@ test("freelance drill-down lines add up and flag estimated days", () => {
   assert.equal(freelanceLines[0].length, 0);
   assert.deepEqual(currentFreelancers.map((l) => [l.name, l.rate, l.staffed]), [["Fanny", 500, true]]);
 });
+
+test("revenue drill-down lists the invoices behind each closed month", () => {
+  const invoices = sources().invoices.map((inv, i) => ({ ...inv, id: `i${i}`, number: `F-${i}`, project_id: "p1", billed_client_id: "c1", employee_id: "a" }));
+  const projects = sources().projects.map((p) => ({ ...p, title: "Mission Data", client_id: "c1" }));
+  const people = [{ id: "pa", full_name: "Alice" }];
+  const employees = sources().employees.map((e) => ({ ...e, person_id: `p${e.id}` }));
+  const clients = [{ id: "c1", name: "Acme" }];
+  const { months, invoiceLines } = aggregateActuals(sources({ invoices, projects, people, employees, clients }), 2026, 10, new Date(2026, 10, 1));
+  const jan = invoiceLines[0];
+  assert.deepEqual(jan.map((l) => [l.number, l.client, l.project, l.consultant, l.status, l.amount, l.byIssueDate]), [
+    ["F-0", "Acme", "Mission Data", "Alice", "paid", 1000.1, false],
+    ["F-1", "Acme", "Mission Data", "Alice", "finalized", 500, true],
+  ]);
+  assert.equal(jan.reduce((s, l) => s + l.amount, 0), months[0].ca);
+  assert.equal(invoiceLines[1].length, 0);
+  assert.equal(invoiceLines[10], null);
+});

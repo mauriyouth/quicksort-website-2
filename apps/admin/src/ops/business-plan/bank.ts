@@ -71,6 +71,8 @@ export function useBankApi() {
     transactions: async (year: number) =>
       (await request<{ transactions: BankRow[] }>("GET", `?resource=transactions&year=${year}`)).transactions,
     sync: () => request<BankSyncResult>("POST", "", { action: "sync" }),
+    saveClassifier: (model: string, apiKey?: string) =>
+      request<{ saved: true }>("POST", "", { action: "save_classifier", model, ...(apiKey ? { apiKey } : {}) }),
     classify: (id: string, line: FixedChargeLine) => request<{ saved: true }>("POST", "", { action: "classify", id, line }),
   }), [request]);
 }

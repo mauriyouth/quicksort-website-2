@@ -25,6 +25,7 @@ import {
 } from "./referentials";
 import { useLeaveRates, type LeaveKind } from "./cra/balances";
 import { useEconomicsSettings } from "./hr/economics";
+import { BankError, useBankApi, type BankStatus } from "./ops/business-plan/bank";
 import "./admin-settings.css";
 
 /**
@@ -374,6 +375,7 @@ export function AdminSettings() {
       {section === "economics" && (
         <div className="settings-columns">
           <EconomicsPanel />
+          <ClassifierPanel />
         </div>
       )}
     </div>
@@ -880,6 +882,87 @@ function EconomicsPanel() {
           onSave={(next) => save(row.key, next)}
         />
       ))}
+    </ReferentialCard>
+  );
+}
+
+function ClassifierPanel() {
+  const bank = useBankApi();
+  const [classifier, setClassifier] = useState<BankStatus["classifier"] | null>(null);
+  const [model, setModel] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const load = () =>
+    bank
+      .status()
+      .then((status) => {
+        setClassifier(status.classifier);
+        setModel(status.classifier.model);
+      })
+      .catch((e) => setError(errorMessage(e)));
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bank]);
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await bank.saveClassifier(model.trim(), apiKey.trim() || undefined);
+      setApiKey("");
+      setSaved(true);
+      await load();
+    } catch (e) {
+      setError(e instanceof BankError && e.status === 400 ? e.message : "Only portal owners can change this key.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const source = classifier?.source === "settings" ? "saved here" : classifier?.source === "environment" ? "server environment" : "none";
+  return (
+    <ReferentialCard title="Transaction classification (Kimi)" count={classifier?.configured ? 1 : 0}>
+      <p className="muted small-text settings-card-hint">
+        Expense labels, counterparties and amounts are sent to Moonshot (Kimi) for classification.
+      </p>
+      <p className="muted small-text">
+        {classifier
+          ? classifier.configured
+            ? `Configured — key source: ${source}, model: ${classifier.model}.`
+            : "Not configured — no API key set."
+          : "Loading…"}
+      </p>
+      <Notice error>{error}</Notice>
+      <Notice>{saved ? "Saved." : null}</Notice>
+      <div className="settings-row" style={{ display: "grid", gap: 10 }}>
+        <label>
+          <span className="muted small-text">API key (leave empty to keep the current key)</span>
+          <input
+            className="qs-input"
+            type="password"
+            autoComplete="off"
+            value={apiKey}
+            disabled={saving}
+            aria-label="Moonshot API key"
+            onChange={(e) => setApiKey(e.target.value)}
+          />
+        </label>
+        <label>
+          <span className="muted small-text">Model</span>
+          <input
+            className="qs-input"
+            value={model}
+            disabled={saving}
+            aria-label="Kimi model"
+            onChange={(e) => setModel(e.target.value)}
+          />
+        </label>
+        <button className="settings-add" onClick={() => void save()} disabled={saving || !model.trim()}>
+          Save
+        </button>
+      </div>
     </ReferentialCard>
   );
 }

@@ -319,12 +319,13 @@ export function createDocumentsHandler(deps: {
       if (action.action === "download") {
         const { data: doc, error } = await client
           .from("documents")
-          .select("id,owner_kind,storage_provider,provider_file_id,file_name,mime_type,size_bytes")
+          .select("id,owner_kind,type_code,storage_provider,provider_file_id,file_name,mime_type,size_bytes")
           .eq("id", action.documentId)
           .maybeSingle();
         if (error) throw error;
         if (!doc) return res.status(404).json({ error: "Document not found." });
-        if (doc.owner_kind === "person") {
+        // The photo loads on every visit to the person page; logging it would bury real accesses.
+        if (doc.owner_kind === "person" && doc.type_code !== "PHOTO") {
           const logged = await client.rpc("log_document_access", { document_id: doc.id });
           if (logged.error) throw logged.error;
         }
@@ -390,7 +391,7 @@ export function createDocumentsHandler(deps: {
         const folder = await resolveFolder(client, storage, action.owner, type.folder, datedSubfolder(type.code, action));
         const names = await folderOwner(client, action.owner);
         const ownerName = names.kind === "person" ? names.fullName : names.kind === "client" ? names.clientName : names.projectTitle;
-        const fileName = documentFileName(type.code, ownerName, action.fileName, action.title);
+        const fileName = documentFileName(type.code, ownerName, action.fileName, action.title, action.validFrom);
         const upload = await storage.prepareUpload(folder, { name: fileName, mimeType: action.mimeType, size: action.size }, browserOrigin(req));
         return res.status(200).json({ upload, folder, fileName });
       }

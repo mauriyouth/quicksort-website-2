@@ -217,16 +217,22 @@ export type Database = {
         Row: {
           id: boolean
           cjm_multiplier: number
+          bp_multiplier_optimistic: number
+          bp_multiplier_pessimistic: number
           updated_at: string
         }
         Insert: {
           id?: boolean
           cjm_multiplier: number
+          bp_multiplier_optimistic?: number
+          bp_multiplier_pessimistic?: number
           updated_at?: string
         }
         Update: {
           id?: boolean
           cjm_multiplier?: number
+          bp_multiplier_optimistic?: number
+          bp_multiplier_pessimistic?: number
           updated_at?: string
         }
         Relationships: []

@@ -49,6 +49,8 @@
 }
 .bp-icon:hover { background: var(--qs-hover); color: var(--qs-fg-1); }
 .bp-meta { font-size: 13px; color: var(--qs-fg-4); }
+.bp-scenario { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--qs-fg-4); }
+.bp-scenario select { width: auto; min-height: 32px; padding-block: 4px; font-size: 13px; }
 .bp .btn.small { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ── KPI cards ───────────────────────────────────────────────────── */
@@ -450,3 +452,34 @@
 .bp-structure-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .bp-structure-add label { flex-basis: 100%; }
 .bp-structure-add select { flex: 1 1 220px; width: auto; text-align: left; }
+.bp-structure-period { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.bp-structure-period label { display: inline-flex; align-items: center; gap: 6px; }
+.bp-structure-period input { width: auto; text-align: left; }
+
+/* Formula tooltips on the KPI cards. */
+.bp-kpi { position: relative; }
+.bp-kpi.has-tip { cursor: help; }
+.bp-kpi.has-tip:focus-visible { outline: 2px solid var(--qs-accent); outline-offset: 2px; }
+.bp-tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 5;
+  width: max(100%, 320px);
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--qs-bg-dark);
+  color: var(--qs-fg-inv);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 17px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  pointer-events: none;
+}
+.bp-tip > div + div { margin-top: 4px; }
+.bp-kpi.tip-left .bp-tip { left: auto; right: 0; }
+.bp-kpi.has-tip:hover .bp-tip,
+.bp-kpi.has-tip:focus-visible .bp-tip { display: block; }
+[data-theme="dark"] .bp-tip { background: var(--qs-bg-2); color: var(--qs-fg-1); border: 1px solid var(--qs-border); }

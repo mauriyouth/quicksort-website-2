@@ -65,6 +65,7 @@ import "./project-form.css";
 import { executeCommand, loadWorkspace, type Assignment } from "../hr/data";
 import {
   isOpenAssignment,
+  isStaffedAssignment,
   lineStaffing,
   LineStaffingPanel,
   ProjectTeamCard,
@@ -465,7 +466,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
           );
           setCanEngage(staffing.capabilities.recruit);
           setStaffingAssignments(
-            staffing.assignments.filter((a) => isOpenAssignment(a)),
+            staffing.assignments.filter((a) => isStaffedAssignment(a)),
           );
           setCraDaysByProject(craDays);
           setCraLineYearDaysByProject(craLineYearDays);
@@ -580,7 +581,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     }
     return map;
   }, [extensions]);
-  /** Open assignments per employee, every project — availability readout
+  /** Staffed assignments per employee, every project — availability readout
       and the capacity pre-check on the contract page's assign panel. */
   const assignmentsByEmployee = useMemo(() => {
     const map = new Map<string, Assignment[]>();
@@ -980,7 +981,10 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       // the renamed line (after the save, so the new name exists).
       for (const { from, to } of renames)
         for (const a of staffingAssignments.filter(
-          (a) => a.project_id === editing?.id && a.pricing_line === from,
+          (a) =>
+            a.project_id === editing?.id &&
+            a.pricing_line === from &&
+            isOpenAssignment(a),
         ))
           await executeCommand({
             kind: "update_assignment",

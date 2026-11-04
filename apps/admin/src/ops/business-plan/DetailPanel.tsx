@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import type { Aggregate, SalaryLine } from "./actuals";
+import type { Aggregate, SalaryLine, StructureEntry } from "./actuals";
 import { fmt, MONTH_NAMES, pct, type Hypotheses, type PlanResult } from "./model";
 
 /**
  * Drill-down panel for the P&L rows "Chiffre d’affaires", "Salaires
- * consultants chargés", "Freelances" and "Salaires structure chargés". Closed months list the invoices or
+ * consultants chargés", "Freelances", "Salaires structure chargés",
+ * "Inter-contrats" and "Encaissements clients". Closed months list the invoices or
  * named people behind the figure;
  * forecast months show the formula plus today's named team, the base the
  * forecast projects from.
  */
-export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter";
+export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc";
 
 const TITLES: Record<DetailKind, string> = {
   ca: "Chiffre d’affaires",
@@ -18,13 +19,15 @@ const TITLES: Record<DetailKind, string> = {
   free: "Freelances",
   fs: "Salaires structure chargés",
   inter: "Inter-contrats",
+  enc: "Encaissements clients",
 };
 
-/** Who can be listed as structure staff, and how to change the list. */
+/** Who can be listed as structure staff, their periods, and how to change them. */
 export type StructureControl = {
-  employees: { id: string; name: string; detail: string }[];
-  ids: string[];
-  onToggle: (employeeId: string, on: boolean) => Promise<void>;
+  employees: { id: string; name: string; detail: string; hired: string; exit: string | null }[];
+  entries: StructureEntry[];
+  /** Adds or updates a listing (entry) or removes it (null). */
+  onSave: (employeeId: string, entry: StructureEntry | null) => Promise<void>;
 };
 
 const eur = (v: number) => `${fmt(v)} €`;
@@ -105,6 +108,7 @@ export function DetailPanel({
           : kind === "sal" ? <SalaryBody {...body} />
           : kind === "fs" ? <StructureBody {...body} />
           : kind === "inter" ? <InterBody {...body} />
+          : kind === "enc" ? <CollectionBody {...body} />
           : <FreelanceBody {...body} />}
       </div>
     </div>
@@ -208,6 +212,114 @@ function RevenueBody({ month, plan, agg, hypotheses: H }: BodyProps) {
   );
 }
 
+/* ── Collections ────────────────────────────────────────────────────── */
+
+const monthLabel = (iso: string) => {
+  const [y, m] = iso.split("-").map(Number);
+  return `${MONTH_NAMES[m - 1]} ${y}`;
+};
+
+function CollectionBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
+  const S = plan.series;
+  const actual = plan.actual[month];
+  const rows = agg.encLines[month];
+  const total = S.enc[month];
+  const delays = (rows ?? [])
+    .filter((l) => l.paidAt && l.issueDate)
+    .map((l) => (Date.parse(l.paidAt!) - Date.parse(l.issueDate!)) / 86400000)
+    .filter((d) => d >= 0);
+  const avgDelay = delays.length ? Math.round(delays.reduce((a, b) => a + b, 0) / delays.length) : null;
+  const lag = Math.max(0, Math.round(H.dso / 30));
+  const source = month - lag;
+
+  return (
+    <>
+      <div className="bp-drawer-stats">
+        <div><span>Encaissé HT</span><strong>{eur(total)}</strong></div>
+        {actual ? (
+          <>
+            <div><span>Factures payées</span><strong>{rows?.length ?? 0}</strong></div>
+            <div><span>Délai moyen de paiement</span><strong>{avgDelay === null ? "—" : `${avgDelay} j`}</strong></div>
+          </>
+        ) : (
+          <>
+            <div><span>Délai client (hypothèse)</span><strong>{fmt(H.dso)} j</strong></div>
+            <div><span>Décalage</span><strong>{`${lag} mois`}</strong></div>
+          </>
+        )}
+      </div>
+
+      {actual && rows ? (
+        <>
+          {rows.length === 0 ? (
+            <p className="bp-meta">Aucune facture payée ce mois-ci.</p>
+          ) : (
+            <table className="bp-table">
+              <thead>
+                <tr>
+                  <th scope="col">Facture</th>
+                  <th scope="col">Payée le</th>
+                  <th scope="col" className="num">Montant HT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((l) => (
+                  <tr key={l.id}>
+                    <td>
+                      <span className="bp-name">
+                        {l.url ? <a href={l.url} target="_blank" rel="noreferrer">{l.number || "Sans numéro"}</a> : l.number || "Sans numéro"}
+                      </span>
+                      {l.client && <span className="bp-sub"> · {l.client}</span>}
+                      {(l.project || l.consultant) && (
+                        <div className="bp-sub">{[l.project, l.consultant].filter(Boolean).join(" · ")}</div>
+                      )}
+                      <div className="bp-sub">
+                        {[
+                          l.periodMonth && `Prestation ${monthLabel(l.periodMonth)}`,
+                          l.issueDate && `émise le ${frDate(l.issueDate)}`,
+                        ].filter(Boolean).join(" · ")}
+                      </div>
+                    </td>
+                    <td>
+                      {l.paidAt ? frDate(l.paidAt) : "—"}
+                      {l.paidAt && l.issueDate && Date.parse(l.paidAt) >= Date.parse(l.issueDate) && (
+                        <div className="bp-sub">{Math.round((Date.parse(l.paidAt) - Date.parse(l.issueDate)) / 86400000)} j</div>
+                      )}
+                    </td>
+                    <td className="num">{eur(l.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row" colSpan={2}>Total</th>
+                  <td className="num">{eur(total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+          <p className="bp-note">
+            Factures payées (hors factures ignorées), rattachées à leur mois de paiement quel que soit le mois de prestation. Montants hors taxes.
+          </p>
+        </>
+      ) : (
+        <div className="bp-formula">
+          {source >= 0 ? (
+            <div><span>CA de {MONTH_NAMES[source]} {year} ({plan.actual[source] ? "réel" : "prévisionnel"})</span><strong>{eur(S.ca[source])}</strong></div>
+          ) : (
+            <div><span>CA de {MONTH_NAMES[0]} {year} (mois source antérieur à l’année)</span><strong>{eur(S.ca[0] ?? 0)}</strong></div>
+          )}
+          <div className="is-total"><span>= Encaissements</span><strong>{eur(total)}</strong></div>
+          <p className="bp-note">
+            Mois prévisionnel : le CA est encaissé {`${lag} mois`} après le mois de prestation (délai client {fmt(H.dso)} j ÷ 30, arrondi).
+            {source < 0 && " Le mois source tombant l’année précédente, on reprend le CA de janvier."} Modifiez « Délai de paiement clients » pour ajuster.
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ── Structure salaries ─────────────────────────────────────────────── */
 
 function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyProps) {
@@ -215,16 +327,18 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
   const [pick, setPick] = useState("");
   const actual = plan.actual[month];
   const rows = agg.structureLines[month];
+  const counted = rows.filter((l) => !l.staffed);
+  const onMission = rows.filter((l) => l.missionDays).length;
   const total = plan.series.fs[month];
-  const missing = rows.filter((l) => l.salary === null).length;
-  const listed = new Set(structure.ids);
+  const missing = counted.filter((l) => l.salary === null).length;
+  const listed = new Map(structure.entries.map((s) => [s.employee_id, s]));
   const members = structure.employees.filter((e) => listed.has(e.id));
   const others = structure.employees.filter((e) => !listed.has(e.id));
   const mult = String(multiplier).replace(".", ",");
-  const toggle = async (id: string, on: boolean) => {
+  const save = async (id: string, entry: StructureEntry | null) => {
     setBusy(true);
     try {
-      await structure.onToggle(id, on);
+      await structure.onSave(id, entry);
       setPick("");
     } finally {
       setBusy(false);
@@ -235,8 +349,9 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
     <>
       <div className="bp-drawer-stats">
         <div><span>Total chargé</span><strong>{eur(total)}</strong></div>
-        <div><span>Personnes</span><strong>{rows.length}</strong></div>
-        <div><span>Multiplicateur CJM</span><strong>×{mult}</strong></div>
+        <div><span>Personnes</span><strong>{counted.length}</strong></div>
+        {onMission > 0 && <div><span>En mission</span><strong>{onMission}</strong></div>}
+        <div><span>Multiplicateur de charges</span><strong>×{mult}</strong></div>
       </div>
       {missing > 0 && (
         <p className="bp-warn">
@@ -256,16 +371,22 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
           </thead>
           <tbody>
             {rows.map((l) => (
-              <tr key={l.employeeId}>
+              <tr key={l.employeeId} className={l.staffed ? "is-gone" : undefined}>
                 <td>
                   <span className="bp-name">{l.name}</span>
                   {l.contractType && <span className="bp-sub"> · {l.contractType}</span>}
+                  {l.missionDays && (
+                    <div>
+                      <span className="bp-tag is-on">En mission</span>{" "}
+                      <span className="bp-sub">{dec(l.missionDays)} j ouvrés en salaires consultants</span>
+                    </div>
+                  )}
                   {l.exitDate && <div className="bp-sub">{l.exitDate < monthStartOf(year, month) ? "Sorti le " : "Sortie le "}{frDate(l.exitDate)}</div>}
                 </td>
                 <td className="num">{l.salary === null ? <span className="bp-sub">non renseigné</span> : eur(l.salary)}</td>
                 <td className="num">
                   {eur(l.cost)}
-                  {l.days && <div className="bp-sub">prorata {l.days[0]}/{l.days[1]} j ouvrés</div>}
+                  {l.days && <div className="bp-sub">prorata {dec(l.days[0])}/{l.days[1]} j ouvrés</div>}
                 </td>
               </tr>
             ))}
@@ -280,10 +401,11 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
       )}
       <p className="bp-note">
         {actual
-          ? "Mois réel : salaire mensuel brut en vigueur sur le mois × multiplicateur CJM, pour chaque personne de structure en poste."
-          : "Mois prévisionnel : dernier salaire connu × multiplicateur CJM, pour chaque personne de structure en poste ce mois-ci (jusqu’à sa sortie)."}{" "}
-        Mois d’arrivée ou de départ : au prorata des jours ouvrés travaillés.{" "}
-        Les autres salariés comptent comme consultants (inter-contrat sans mission).
+          ? "Mois réel : salaire mensuel brut en vigueur sur le mois × multiplicateur de charges, pour chaque personne de structure en poste."
+          : "Mois prévisionnel : dernier salaire connu × multiplicateur de charges, pour chaque personne de structure en poste ce mois-ci (jusqu’à sa sortie)."}{" "}
+        Période commençant ou finissant en cours de mois : au prorata des jours ouvrés. Stagiaires : coût = salaire × 1,4 (charges patronales très faibles).{" "}
+        Les jours ouvrés en mission (confirmée, active ou terminée, au prorata de l’allocation) basculent en salaires consultants.
+        Hors période, et pour les autres salariés : consultant (inter-contrat sans mission).
       </p>
 
       <h3 className="bp-drawer-sub">Personnes de structure</h3>
@@ -293,17 +415,7 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
         <table className="bp-table">
           <tbody>
             {members.map((e) => (
-              <tr key={e.id}>
-                <td>
-                  <span className="bp-name">{e.name}</span>
-                  {e.detail && <div className="bp-sub">{e.detail}</div>}
-                </td>
-                <td className="num">
-                  <button type="button" className="btn secondary small" disabled={busy} onClick={() => toggle(e.id, false)}>
-                    Retirer
-                  </button>
-                </td>
-              </tr>
+              <StructureMember key={e.id} employee={e} entry={listed.get(e.id)!} busy={busy} onSave={(entry) => save(e.id, entry)} />
             ))}
           </tbody>
         </table>
@@ -316,11 +428,71 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
             <option key={e.id} value={e.id}>{e.name}{e.detail ? ` — ${e.detail}` : ""}</option>
           ))}
         </select>
-        <button type="button" className="btn small" disabled={busy || !pick} onClick={() => toggle(pick, true)}>
+        <button type="button" className="btn small" disabled={busy || !pick} onClick={() => save(pick, { employee_id: pick })}>
           Ajouter
         </button>
       </div>
     </>
+  );
+}
+
+/** One structure member: period (empty = hire date / exit date) and removal. */
+function StructureMember({
+  employee: e,
+  entry,
+  busy,
+  onSave,
+}: {
+  employee: StructureControl["employees"][number];
+  entry: StructureEntry;
+  busy: boolean;
+  onSave: (entry: StructureEntry | null) => Promise<void>;
+}) {
+  const [start, setStart] = useState(entry.start_date ?? "");
+  const [end, setEnd] = useState(entry.end_date ?? "");
+  useEffect(() => {
+    setStart(entry.start_date ?? "");
+    setEnd(entry.end_date ?? "");
+  }, [entry.start_date, entry.end_date]);
+  const changed = start !== (entry.start_date ?? "") || end !== (entry.end_date ?? "");
+  const invalid = !!start && !!end && end < start;
+  return (
+    <tr>
+      <td>
+        <span className="bp-name">{e.name}</span>
+        {e.detail && <div className="bp-sub">{e.detail}</div>}
+        <div className="bp-structure-period">
+          <label>
+            <span className="bp-sub">Du</span>
+            <input type="date" className="bp-hin" value={start} min={e.hired} onChange={(ev) => setStart(ev.target.value)} disabled={busy} />
+          </label>
+          <label>
+            <span className="bp-sub">au</span>
+            <input type="date" className="bp-hin" value={end} min={start || e.hired} onChange={(ev) => setEnd(ev.target.value)} disabled={busy} />
+          </label>
+        </div>
+        <div className="bp-sub">
+          {invalid
+            ? "La fin doit suivre le début."
+            : `${start ? `Du ${frDate(start)}` : `Depuis l’embauche (${frDate(e.hired)})`} ${end ? `au ${frDate(end)}` : e.exit ? `jusqu’à la sortie (${frDate(e.exit)})` : "sans fin"}`}
+        </div>
+      </td>
+      <td className="num">
+        {changed && (
+          <button
+            type="button"
+            className="btn small"
+            disabled={busy || invalid}
+            onClick={() => onSave({ employee_id: entry.employee_id, start_date: start || null, end_date: end || null })}
+          >
+            Enregistrer
+          </button>
+        )}{" "}
+        <button type="button" className="btn secondary small" disabled={busy} onClick={() => onSave(null)}>
+          Retirer
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -362,7 +534,7 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
             <SalaryRoster rows={rows} multiplier={multiplier} total={total} />
           )}
           <p className="bp-note">
-            Salaire mensuel brut en vigueur sur le mois × multiplicateur CJM ({mult}, réglage RH) pour estimer le coût employeur.
+            Salaire mensuel brut en vigueur sur le mois × multiplicateur de charges ({mult}, scénario choisi) pour estimer le coût employeur ; stagiaires × 1,4.
             Inter-contrat = salarié sans mission confirmée, active ou terminée sur le mois. Les freelances sont comptés dans la ligne
             « Freelances », les salariés sans aucune mission dans les charges de structure.
           </p>
@@ -433,7 +605,7 @@ function InterBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyPr
           )}
           <p className="bp-note">
             Inter-contrat = consultant salarié sans mission confirmée, active ou terminée sur le mois. Coût = salaire mensuel brut × multiplicateur
-            CJM. Les personnes de structure n’y figurent jamais.
+            de charges. Les personnes de structure n’y figurent jamais.
           </p>
         </>
       ) : (
@@ -626,9 +798,14 @@ function SalaryRoster({
               </td>
               <td>
                 <span className={`bp-tag${l.staffed ? " is-on" : ""}`}>{l.staffed ? "Staffé" : "Inter-contrat"}</span>
+                {l.missionDays && <div className="bp-sub">structure, {dec(l.missionDays)} j en mission</div>}
               </td>
               <td className="num">{l.salary === null ? <span className="bp-sub">non renseigné</span> : eur(l.salary)}</td>
-              <td className="num">{eur(l.cost)}</td>
+              <td className="num">
+                {eur(l.cost)}
+                {l.contractType === "Internship" && <span className="bp-sub"> ×1,4</span>}
+                {l.days && <div className="bp-sub">prorata {dec(l.days[0])}/{dec(l.days[1])} j ouvrés hors structure</div>}
+              </td>
             </tr>
           );
         })}

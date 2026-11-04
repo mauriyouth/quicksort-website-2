@@ -95,13 +95,15 @@ const GENERIC_TYPES = new Set(["OTHER", "JUSTIF_OTHER"]);
 /**
  * "<owner>_<what>.<ext>" so a file's name says whose it is and what it is,
  * whatever folder it sits in: amadou_ngam_carte_vitale.pdf, or for an "Autre"
- * document aicha_bouzid_attestation_employeur_26_10_2026.pdf.
+ * document aicha_bouzid_attestation_employeur_26_10_2026.pdf. Payslips lead with
+ * their month so a year folder sorts January → December: 03_amadou_ngam_payslip.pdf.
  */
-export function documentFileName(typeCode: string, ownerName: string, originalName: string, title?: string) {
+export function documentFileName(typeCode: string, ownerName: string, originalName: string, title?: string, validFrom?: string | null) {
   const ext = /\.([A-Za-z0-9]{1,8})$/.exec(originalName)?.[1]?.toLowerCase();
   const owner = slugify(ownerName, 80);
   const described = GENERIC_TYPES.has(typeCode)
     ? slugify(title || "", 60) || slugify(originalName.replace(/\.[^.]*$/, ""), 60)
     : "";
-  return `${owner || "document"}_${described || typeCode.toLowerCase()}${ext ? `.${ext}` : ""}`;
+  const month = typeCode === "PAYSLIP" ? /^\d{4}-(\d{2})/.exec(validFrom ?? "")?.[1] : undefined;
+  return `${month ? `${month}_` : ""}${owner || "document"}_${described || typeCode.toLowerCase()}${ext ? `.${ext}` : ""}`;
 }

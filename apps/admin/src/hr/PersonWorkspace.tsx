@@ -1127,7 +1127,10 @@ export function EmploymentDetail({
         hideFiledTypeCodes={['PAYSLIP']}
       />
     </EmpSection>}
-    {workspace.capabilities.recruit && !freelance && <EmpSection title="Payslips" detail="Silae payslips filed for this person. Visible to HR only; every view and download is logged.">
+    {workspace.capabilities.recruit && !freelance && <EmpSection title="Payslips" detail="Silae payslips filed for this person, newest first." rail={<div className="payslips-callout">
+      <Lock size={20} strokeWidth={1.5} aria-hidden="true" />
+      <div><strong>Visible to HR only</strong><span>Every view and download is logged against your name.</span></div>
+    </div>}>
       <PersonPayslips personId={employee.person_id} personName={person.full_name} onChanged={reload} />
     </EmpSection>}
     <EmpSection title={freelance ? 'Daily rate (TJM)' : 'Salary'} detail={freelance ? 'Dated daily-rate history. A new entry closes the previous one the day before it starts; freelance engagements and hires seed the first entry.' : 'Dated monthly salary history. A new entry closes the previous one the day before it starts; hiring seeds the first entry from the accepted offer.'}>

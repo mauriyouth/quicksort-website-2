@@ -313,7 +313,8 @@ test('the Payslips section lists the newest period first and the Documents panel
   await openSamEmployment(page);
   const section = page.locator('section.hr-emp-section').filter({ has: page.getByRole('heading', { name: 'Payslips' }) });
   const titles = section.locator('.payslips-person-title');
-  await expect(titles).toHaveText(['Bulletin de paie Octobre 2026', 'Bulletin de paie Septembre 2026']);
+  // Rows show the period; the 'Bulletin de paie' document type moves to the meta line.
+  await expect(titles).toHaveText(['Octobre 2026', 'Septembre 2026']);
   const documents = page.locator('section.hr-emp-section').filter({ has: page.getByRole('heading', { name: 'Documents' }) });
   await expect(documents.getByText('Bulletin de paie')).toHaveCount(0);
   await section.screenshot({ path: info.outputPath('person-payslips.png') });
@@ -334,7 +335,9 @@ test('editing a matricule another person holds shows the server error inline', a
 test('moving a payslip confirms the target, calls the API with toPersonId and offers the matricule reset', async ({ page }) => {
   const { moves, rpcs } = await mock(page, { payslips: true });
   await openSamEmployment(page);
-  await page.getByRole('button', { name: 'Move to another person…' }).first().click();
+  // Moving is a rare correction, so it sits in the row's More actions menu.
+  await page.getByRole('button', { name: 'More actions for Octobre 2026' }).click();
+  await page.getByRole('menuitem', { name: 'Move to another person…' }).click();
   await page.getByLabel('Move payslip to').selectOption({ label: 'Imported Person renamed' });
   await expect(page.getByText('Move Bulletin de paie Octobre 2026 from Sam Rivera to Imported Person renamed?')).toBeVisible();
   await page.getByRole('button', { name: 'Confirm move' }).click();

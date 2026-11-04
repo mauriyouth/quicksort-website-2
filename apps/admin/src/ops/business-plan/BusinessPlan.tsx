@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
@@ -6,18 +6,19 @@ import { DetailPanel, type DetailKind } from "./DetailPanel";
 import { db, errorMessage, isMissingRelationError } from "@quicksort/hr-db";
 import { Notice } from "@quicksort/hr-ui";
 import { loadWorkspace } from "../../hr/data";
-import { loadCjmMultiplier } from "../../hr/economics";
+import { loadPlanMultipliers, type PlanMultipliers, type PlanScenario } from "../../hr/economics";
 import {
   aggregateActuals,
   loadCra,
   loadExtensions,
   loadInvoices,
   loadSavedPlan,
-  loadStructureIds,
+  loadStructureStaff,
   saveSavedPlan,
   setStructure,
   type PlanSources,
   type SavedPlan,
+  type StructureEntry,
 } from "./actuals";
 import {
   computePlan,
@@ -65,6 +66,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     { key: "fMarketing", label: "Marketing et événements", unit: "€", step: 100 },
     { key: "fHonoraires", label: "Honoraires", unit: "€", step: 100 },
     { key: "fDivers", label: "Divers", unit: "€", step: 100 },
+    { key: "fAmort", label: "Dotations aux amortissements et provisions", unit: "€", step: 100 },
   ] },
   { title: "Trésorerie et impôt", fields: [
     { key: "tresoDebut", label: "Trésorerie au 1er janvier", unit: "€", step: 1000 },
@@ -73,7 +75,13 @@ const GROUPS: { title: string; fields: Field[] }[] = [
   ] },
 ];
 
-type Loaded = Omit<PlanSources, "cra"> & { salariesVisible: boolean };
+type Loaded = Omit<PlanSources, "cra" | "cjmMultiplier"> & { salariesVisible: boolean; multipliers: PlanMultipliers };
+
+const SCENARIOS: { id: PlanScenario; param: string; label: string }[] = [
+  { id: "pessimistic", param: "pessimiste", label: "Pessimiste" },
+  { id: "optimistic", param: "optimiste", label: "Optimiste" },
+];
+const multLabel = (v: number) => `×${String(v).replace(".", ",")}`;
 type Draft = { hyp: Record<HypothesisKey, string>; ventes: string[]; departs: string[] };
 
 const untyped = () => db() as unknown as SupabaseClient;
@@ -96,6 +104,18 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
       },
       { replace: true },
     );
+  // Employer-cost scenario (salary multiplier), also kept in the URL.
+  const scenario: PlanScenario = SCENARIOS.find((s) => s.param === params.get("charges"))?.id ?? "pessimistic";
+  const setScenario = (id: PlanScenario) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (id === "pessimistic") next.delete("charges");
+        else next.set("charges", SCENARIOS.find((s) => s.id === id)!.param);
+        return next;
+      },
+      { replace: true },
+    );
   const [base, setBase] = useState<Loaded | null>(null);
   const [cra, setCra] = useState<PlanSources["cra"] | null>(null);
   const [saved, setSaved] = useState<SavedPlan | null>(null);
@@ -113,12 +133,12 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     let cancelled = false;
     (async () => {
       const client = untyped();
-      const [ws, invoices, extensions, cjm, structureIds] = await Promise.all([
+      const [ws, invoices, extensions, mult, structureStaff] = await Promise.all([
         loadWorkspace(),
         loadInvoices(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
         loadExtensions(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
-        loadCjmMultiplier(),
-        loadStructureIds(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
+        loadPlanMultipliers(),
+        loadStructureStaff(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
       ]);
       if (cancelled) return;
       setBase({
@@ -128,10 +148,10 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         projects: ws.projects,
         extensions,
         invoices,
-        cjmMultiplier: cjm.multiplier,
+        multipliers: mult.multipliers,
         people: ws.people.map((p) => ({ id: p.id, full_name: p.full_name })),
         clients: ws.clients,
-        structureIds,
+        structureStaff,
         // The snapshot only returns salaries to HR operators.
         salariesVisible: ws.salaries.length > 0 || ws.employees.length === 0,
       });
@@ -170,10 +190,20 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   }, [year]);
 
   const openFrom = firstOpenMonth(year, today);
+  const multiplier = base ? base.multipliers[scenario] : 0;
   const agg = useMemo(
-    () => (base && cra ? aggregateActuals({ ...base, cra }, year, openFrom, today) : null),
-    [base, cra, year, openFrom, today],
+    () => (base && cra ? aggregateActuals({ ...base, cjmMultiplier: multiplier, cra }, year, openFrom, today) : null),
+    [base, cra, year, openFrom, today, multiplier],
   );
+  // Switching scenario re-seeds the forecast loaded salary, unless it was edited.
+  const seededSalaire = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const next = agg?.seeds.salaire;
+    const prev = seededSalaire.current;
+    seededSalaire.current = next;
+    if (next === undefined || prev === undefined || prev === next || saved?.hypotheses?.salaire !== undefined) return;
+    setDraft((d) => (d && num(d.hyp.salaire) === prev ? { ...d, hyp: { ...d.hyp, salaire: str(next) } } : d));
+  }, [agg, saved]);
 
   /** Draft as it would be with no edits: saved values, else data seeds, else mockup defaults. */
   const initialDraft = useCallback((): Draft | null => {
@@ -220,13 +250,15 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   const setMonth = (which: "ventes" | "departs", m: number, v: string) =>
     edit((d) => ({ ...d, [which]: d[which].map((x, i) => (i === m ? v : x)) }));
 
-  async function toggleStructure(employeeId: string, on: boolean) {
+  async function saveStructure(employeeId: string, entry: StructureEntry | null) {
     setError("");
     try {
-      await setStructure(untyped(), employeeId, on, actorEmail);
-      setBase((b) =>
-        b && { ...b, structureIds: on ? [...new Set([...b.structureIds, employeeId])] : b.structureIds.filter((id) => id !== employeeId) },
-      );
+      await setStructure(untyped(), employeeId, entry, actorEmail);
+      setBase((b) => {
+        if (!b) return b;
+        const rest = b.structureStaff.filter((s) => s.employee_id !== employeeId);
+        return { ...b, structureStaff: entry ? [...rest, { ...entry, employee_id: employeeId }] : rest };
+      });
     } catch (e) {
       setError(isMissingRelationError(e) ? "La table business_plan_structure n’existe pas encore — appliquez la migration." : errorMessage(e));
     }
@@ -290,6 +322,8 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
       .map((e) => ({
         id: e.id,
         name: names.get(e.person_id) || e.role || "Sans nom",
+        hired: e.start_date,
+        exit: e.end_date ?? e.planned_exit_date,
         detail: [e.role, e.status === "ended" ? `sorti le ${e.end_date?.split("-").reverse().join("/")}` : e.status].filter(Boolean).join(" · "),
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -314,6 +348,23 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
           </button>
         </div>
         <span className="bp-meta">{status} · montants en € HT</span>
+        <label className="bp-scenario">
+          <span>Charges salariales</span>
+          <select
+            className="qs-input"
+            value={scenario}
+            onChange={(e) => setScenario(e.target.value as PlanScenario)}
+            disabled={!base}
+            title="Coût employeur = salaire brut × multiplicateur (réglages globaux → Unit economics)"
+          >
+            {SCENARIOS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+                {base ? ` (${multLabel(base.multipliers[s.id])})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <span className="bp-spacer" />
         <div className="bp-actions">
         <span className="bp-meta">
@@ -341,12 +392,76 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
           )}
 
           <section aria-label="Indicateurs clés" className="bp-kpis">
-            <Kpi label="Chiffre d’affaires" value={kEur(plan.totals.ca)} hint={`${kEur(plan.totals.ca / 12)} / mois en moyenne`} />
-            <Kpi label="Marge brute" value={kEur(plan.totals.mb)} hint={`${pct(plan.totals.mbPct)} du CA`} />
-            <Kpi label="EBITDA" value={kEur(plan.totals.eb)} hint={`${pct(plan.totals.ebPct)} du CA`} />
-            <Kpi label="Résultat net estimé" value={kEur(plan.totals.rn)} hint={`après IS de ${kEur(plan.totals.is)}`} accent />
-            <Kpi label="Consultants fin d’année" value={fmt(plan.totals.consFin)} hint={`${fmt(plan.totals.ventes)} ventes · ${fmt(plan.totals.departs)} départs`} />
-            <Kpi label="Trésorerie fin d’année" value={kEur(plan.totals.treso)} hint={`point bas : ${kEur(plan.totals.tresoMin)}`} />
+            <Kpi
+              label="Chiffre d’affaires"
+              value={kEur(plan.totals.ca)}
+              hint={`${kEur(plan.totals.ca / 12)} / mois en moyenne`}
+              formula={[
+                "Somme des 12 mois.",
+                "Réel : factures finalisées ou payées, par mois de prestation.",
+                "Prévisionnel : consultants × jours facturables × TJM (salariés × taux d’occupation).",
+              ]}
+            />
+            <Kpi
+              label="Gross margin (marge brute)"
+              value={kEur(plan.totals.mb)}
+              hint={`${pct(plan.totals.mbPct)} du CA`}
+              formula={[
+                "= CA − coûts de production − charges variables",
+                `= ${kEur(plan.totals.ca)} − ${kEur(sumOf(plan.series.prod))} − ${kEur(sumOf(plan.series.varr))}`,
+                "Ce que rapportent les missions une fois payés ceux qui les réalisent.",
+              ]}
+            />
+            <Kpi
+              label="EBITDA (EBE)"
+              value={kEur(plan.totals.eb)}
+              hint={`${pct(plan.totals.ebPct)} du CA`}
+              formula={[
+                "= Marge brute − charges fixes",
+                `= ${kEur(plan.totals.mb)} − ${kEur(sumOf(plan.series.fix))}`,
+                "Excédent brut d’exploitation : avant amortissements, intérêts et IS.",
+              ]}
+            />
+            <Kpi
+              label="EBIT (résultat d’exploitation)"
+              value={kEur(plan.totals.ex)}
+              hint={`${pct(plan.totals.exPct)} du CA`}
+              formula={[
+                "= EBITDA − dotations aux amortissements et provisions",
+                `= ${kEur(plan.totals.eb)} − ${kEur(sumOf(plan.series.da))}`,
+                "Résultat de l’activité courante, avant intérêts et IS.",
+              ]}
+            />
+            <Kpi
+              label="Résultat net estimé"
+              value={kEur(plan.totals.rn)}
+              hint={`résultat d’exploitation ${kEur(plan.totals.ex)} − IS ${kEur(plan.totals.is)}`}
+              accent
+              formula={[
+                "= Résultat d’exploitation − IS",
+                `Résultat d’exploitation = EBE − dotations = ${kEur(plan.totals.eb)} − ${kEur(sumOf(plan.series.da))} = ${kEur(plan.totals.ex)}`,
+                `IS = ${fmt(H!.tauxIS)} % du résultat d’exploitation s’il est positif = ${kEur(plan.totals.is)}`,
+              ]}
+            />
+            <Kpi
+              label="Consultants fin d’année"
+              value={fmt(plan.totals.consFin)}
+              hint={`${fmt(plan.totals.ventes)} ventes · ${fmt(plan.totals.departs)} départs`}
+              formula={[
+                "Consultants staffés en décembre.",
+                "Réel : personnes avec une mission sur le mois. Prévisionnel : mois précédent + ventes − départs.",
+              ]}
+            />
+            <Kpi
+              label="Trésorerie fin d’année"
+              value={kEur(plan.totals.treso)}
+              hint={`point bas : ${kEur(plan.totals.tresoMin)}`}
+              formula={[
+                "= trésorerie au 1er janvier + encaissements − coûts de production − charges variables − charges fixes",
+                `= ${kEur(H!.tresoDebut)} + ${kEur(sumOf(plan.series.enc))} − ${kEur(sumOf(plan.series.prod))} − ${kEur(sumOf(plan.series.varr))} − ${kEur(sumOf(plan.series.fix))}`,
+                "Les dotations aux amortissements ne sortent pas de trésorerie.",
+              ]}
+            />
           </section>
 
           <div className="bp-tabs" role="tablist" aria-label="Vues du business plan">
@@ -476,7 +591,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                         type="button"
                         className="bp-cell lab bp-drill"
                         onClick={() => setDetail({ kind: r.key!, month: Math.max(0, Math.min(11, actualCount > 0 ? actualCount - 1 : 0)) })}
-                        title={r.key === "ca" ? "Voir le détail des factures" : "Voir le détail par personne"}
+                        title={r.key === "ca" || r.key === "enc" ? "Voir le détail des factures" : "Voir le détail par personne"}
                       >
                         {r.label} <span className="bp-drill-hint" aria-hidden="true">›</span>
                       </button>
@@ -509,10 +624,10 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
 
           <section aria-labelledby="bp-chart" className="bp-section">
             <div className="bp-heading is-row">
-              <h2 id="bp-chart">CA et EBITDA par mois</h2>
+              <h2 id="bp-chart">CA et EBITDA (EBE) par mois</h2>
               <div className="bp-legend">
                 <span><i className="bp-swatch is-ca" aria-hidden="true" />Chiffre d’affaires</span>
-                <span><i className="bp-swatch is-eb" aria-hidden="true" />EBITDA</span>
+                <span><i className="bp-swatch is-eb" aria-hidden="true" />EBITDA (EBE)</span>
                 {actualCount > 0 && actualCount < 12 && <span><i className="bp-swatch is-forecast" aria-hidden="true" />Prévisionnel</span>}
               </div>
             </div>
@@ -542,18 +657,19 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               plan={plan}
               agg={agg}
               hypotheses={H!}
-              multiplier={base.cjmMultiplier}
-              structure={{ employees: staffChoices, ids: base.structureIds, onToggle: toggleStructure }}
+              multiplier={multiplier}
+              structure={{ employees: staffChoices, entries: base.structureStaff, onSave: saveStructure }}
             />
           )}
 
           <footer className="bp-footer">
             Mois réels : CA = factures finalisées ou payées par mois de prestation · encaissements = factures payées par date de paiement ·
             consultants = personnes avec une mission confirmée, active ou terminée sur le mois · ventes = missions démarrant dans le mois ·
-            freelances = jours CRA × taux journalier · salaires = salaire mensuel × multiplicateur CJM ({base.cjmMultiplier}) · inter-contrat =
-            salariés sans mission sur le mois · départs = sorties d’employés. Salaires structure : personnes listées en structure, chaque mois
-            (prévisionnel : dernier salaire connu jusqu’à la sortie). Autres charges variables et fixes : hypothèses.
-            Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur l’EBITDA annuel positif ·
+            freelances = jours CRA × taux journalier · salaires = salaire mensuel brut × multiplicateur de charges (scénario {SCENARIOS.find((s) => s.id === scenario)!.label.toLowerCase()} : {multLabel(multiplier)}, × 1,4 pour les stagiaires) · inter-contrat =
+            salariés sans mission sur le mois · départs = sorties d’employés. Salaires structure : personnes listées en structure, sur leur période
+            (par défaut de l’embauche à la sortie ; prévisionnel : dernier salaire connu), hors jours ouvrés en mission —
+            comptés en salaires consultants, au prorata de l’allocation. Autres charges variables et fixes : hypothèses.
+            Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur le résultat d’exploitation annuel positif (EBE − dotations) ·
             encaissements décalés du délai client, les coûts sont payés le mois même.
           </footer>
           </div>
@@ -564,12 +680,29 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   );
 }
 
-function Kpi({ label, value, hint, accent }: { label: string; value: string; hint: string; accent?: boolean }) {
+const sumOf = (a: number[]) => a.reduce((t, v) => t + v, 0);
+
+function Kpi({ label, value, hint, accent, formula }: { label: string; value: string; hint: string; accent?: boolean; formula?: string[] }) {
+  const tipId = useId();
+  // Cards near the right edge open their tooltip leftwards so it stays on screen.
+  const [flip, setFlip] = useState(false);
+  const place = (el: HTMLElement) => setFlip(el.getBoundingClientRect().left + 420 > window.innerWidth - 16);
   return (
-    <div className={`bp-kpi${accent ? " is-accent" : ""}`}>
+    <div
+      className={`bp-kpi${accent ? " is-accent" : ""}${formula ? " has-tip" : ""}${flip ? " tip-left" : ""}`}
+      tabIndex={formula ? 0 : undefined}
+      aria-describedby={formula ? tipId : undefined}
+      onMouseEnter={formula ? (e) => place(e.currentTarget) : undefined}
+      onFocus={formula ? (e) => place(e.currentTarget) : undefined}
+    >
       <div className="bp-kpi-label">{label}</div>
       <div className="bp-kpi-value">{value}</div>
       <div className="bp-kpi-hint">{hint}</div>
+      {formula && (
+        <div role="tooltip" id={tipId} className="bp-tip">
+          {formula.map((f, i) => <div key={i}>{f}</div>)}
+        </div>
+      )}
     </div>
   );
 }

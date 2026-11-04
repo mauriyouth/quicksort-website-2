@@ -5,11 +5,13 @@
  * the loaders below only fetch rows.
  *
  * Conventions (documented on the page footer too):
- * - Structure staff are an explicit list (business_plan_structure);
- *   every other non-freelance employee is a consultant, in inter-contract
- *   when unstaffed. "Salaires structure" = the listed staff employed in the
- *   month × salary × CJM multiplier, measured or projected, prorated on
- *   working days in arrival and exit months.
+ * - Structure staff are an explicit list (business_plan_structure), each
+ *   with a period (empty start = hire date, empty end = exit date). Outside
+ *   that period the person is a consultant; inside it, working days on a
+ *   mission (weighted by allocation) are consultant days, the rest structure.
+ *   Every other non-freelance employee is a consultant, in inter-contract
+ *   when unstaffed. "Salaires structure" = salary × CJM multiplier × share of
+ *   the month's working days spent in structure, measured or projected.
  * - Staffed = a confirmed / active / completed assignment overlapping the
  *   month. "Ventes" = such assignments starting in the month (there is no
  *   won date on deals, so first staffing stands in for the sale).
@@ -32,7 +34,7 @@ export type InvoiceRow = {
   paid_at: string | null;
   total_ht: number | string;
   ignored?: boolean | null;
-  /** Optional, for the revenue drill-down. */
+  /** Optional, for the revenue and collections drill-downs. */
   id?: string;
   number?: string | null;
   project_id?: string | null;
@@ -61,9 +63,12 @@ export type PlanSources = {
   /** Optional, for names in the drill-down panels. */
   people?: { id: string; full_name: string }[];
   clients?: { id: string; name: string }[];
-  /** Employments counted as structure staff, not consultants. */
-  structureIds: string[];
+  /** Employments counted as structure staff, not consultants, over a period. */
+  structureStaff: StructureEntry[];
 };
+
+/** A structure listing: null start = hire date, null end = exit date. */
+export type StructureEntry = { employee_id: string; start_date?: string | null; end_date?: string | null };
 
 /** One invoice behind a closed month's revenue (drill-down). */
 export type InvoiceLine = {
@@ -78,6 +83,8 @@ export type InvoiceLine = {
   amount: number;
   /** True when the invoice has no period month and is counted by issue date. */
   byIssueDate: boolean;
+  /** Service month (YYYY-MM-01), null when the invoice has none. */
+  periodMonth: string | null;
   url: string | null;
 };
 
@@ -93,8 +100,10 @@ export type SalaryLine = {
   staffed: boolean;
   /** Planned or recorded exit date, if any. */
   exitDate: string | null;
-  /** Structure lines only: [worked, total] working days when the month is partial. */
+  /** [counted, total] working days when only part of the month is counted. */
   days?: [number, number];
+  /** Listed in structure: working days of the period spent on a mission this month. */
+  missionDays?: number;
 };
 
 /** One freelancer's line in a closed month (drill-down). */
@@ -133,6 +142,8 @@ export type Aggregate = {
   currentFreelancers: FreelanceLine[];
   /** Invoices behind each closed month's revenue (null when open). */
   invoiceLines: (InvoiceLine[] | null)[];
+  /** Paid invoices behind each closed month's collections, by payment month (null when open). */
+  encLines: (InvoiceLine[] | null)[];
   /** Loaded structure salaries for every month (measured or projected). */
   structure: number[];
   /** Structure staff behind each month's figure. */
@@ -161,14 +172,64 @@ const cents = (v: number | string) => Math.round(Number(v) * 100);
 
 export function aggregateActuals(src: PlanSources, year: number, openFrom: number, today: Date): Aggregate {
   const isFree = new Map(src.employees.map((e) => [e.id, e.contract_type === "Freelance"]));
-  const inStructure = new Set(src.structureIds);
-  const consultants = new Set(src.employees.filter((e) => !inStructure.has(e.id)).map((e) => e.id));
+  // Interns cost far less than salaried staff (gratification + very low employer
+  // charges), so they get their own employer-cost ratio instead of the CJM multiplier.
+  const multFor = (e: { contract_type: string | null }) =>
+    e.contract_type === "Internship" ? 1.4 : src.cjmMultiplier;
   const staffedRows = src.assignments.filter((a) => STAFFED.includes(a.status));
+  const staffedIn = (id: string, from: string, to: string) =>
+    staffedRows.some((a) => a.employee_id === id && overlaps(a.start_date, a.end_date, from, to));
+
+  // Structure periods, bounded by the employment.
+  const listing = new Map(src.structureStaff.map((s) => [s.employee_id, s]));
+  const exitOf = (e: Employee) => e.end_date ?? e.planned_exit_date;
+  const structureWindow = (e: Employee): [string, string | null] | null => {
+    const s = listing.get(e.id);
+    if (!s || isFree.get(e.id)) return null;
+    const start = s.start_date && s.start_date > e.start_date ? s.start_date : e.start_date;
+    const exit = exitOf(e);
+    return [start, s.end_date && (!exit || s.end_date < exit) ? s.end_date : exit];
+  };
+  const inStructureOn = (e: Employee, day: string) => {
+    const w = structureWindow(e);
+    return !!w && overlaps(w[0], w[1], day, day);
+  };
+  /** Working days of [start, end] on a mission, each capped at 100 % allocation. */
+  const missionDays = (id: string, start: string, end: string) => {
+    const rows = staffedRows.filter((a) => a.employee_id === id && overlaps(a.start_date, a.end_date, start, end));
+    if (!rows.length) return 0;
+    let total = 0;
+    for (const d = new Date(`${start}T12:00:00`), last = new Date(`${end}T12:00:00`); d <= last; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() === 0 || d.getDay() === 6) continue;
+      const day = isoDay(d);
+      const pct = rows
+        .filter((a) => overlaps(a.start_date, a.end_date, day, day))
+        .reduce((t, a) => t + (a.allocation_pct || 100), 0);
+      total += Math.min(100, pct) / 100;
+    }
+    return total;
+  };
+  /** Structure and mission working days of an employment in [from, to]. */
+  const structureSplit = (e: Employee, from: string, to: string) => {
+    const w = structureWindow(e);
+    if (!w || !overlaps(w[0], w[1], from, to)) return null;
+    const first = w[0] > from ? w[0] : from;
+    const last = w[1] && w[1] < to ? w[1] : to;
+    const inPeriod = openDaysBetween(first, last);
+    const mission = Math.min(inPeriod, missionDays(e.id, first, last));
+    return { inPeriod, mission, full: first === from && last === to };
+  };
+  /** Working days of [start, end] ∩ [from, to] (0 when disjoint). */
+  const daysWithin = (start: string, end: string | null, from: string, to: string) => {
+    if (!overlaps(start, end, from, to)) return 0;
+    return openDaysBetween(start > from ? start : from, end && end < to ? end : to);
+  };
 
   // Invoices → revenue by period, collections by payment month (in cents).
   const caByMonth = new Map<string, number>();
   const encByMonth = new Map<string, number>();
   const invByMonth = new Map<string, InvoiceRow[]>();
+  const paidByMonth = new Map<string, InvoiceRow[]>();
   for (const inv of src.invoices) {
     if (inv.ignored) continue;
     if (inv.status === "finalized" || inv.status === "paid") {
@@ -181,6 +242,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     if (inv.status === "paid" && inv.paid_at) {
       const key = inv.paid_at.slice(0, 7);
       encByMonth.set(key, (encByMonth.get(key) || 0) + cents(inv.total_ht));
+      paidByMonth.set(key, [...(paidByMonth.get(key) || []), inv]);
     }
   }
 
@@ -214,17 +276,20 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
       paidAt: inv.paid_at ? inv.paid_at.slice(0, 10) : null,
       amount: cents(inv.total_ht) / 100,
       byIssueDate: !inv.period_month,
+      periodMonth: inv.period_month ? inv.period_month.slice(0, 10) : null,
       url: inv.invoice_url ?? null,
     };
   };
   const months: (ActualMonth | null)[] = [];
   const invoiceLines: (InvoiceLine[] | null)[] = [];
+  const encLines: (InvoiceLine[] | null)[] = [];
   const salaryLines: (SalaryLine[] | null)[] = [];
   const freelanceLines: (FreelanceLine[] | null)[] = [];
   for (let m = 0; m < 12; m++) {
     if (m >= openFrom) {
       months.push(null);
       invoiceLines.push(null);
+      encLines.push(null);
       salaryLines.push(null);
       freelanceLines.push(null);
       continue;
@@ -234,6 +299,9 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     const staffed = new Set(inMonth.map((a) => a.employee_id));
     invoiceLines.push(
       (invByMonth.get(key) || []).map(invoiceLine).sort((a, b) => b.amount - a.amount || a.number.localeCompare(b.number)),
+    );
+    encLines.push(
+      (paidByMonth.get(key) || []).map(invoiceLine).sort((a, b) => (a.paidAt ?? "").localeCompare(b.paidAt ?? "") || b.amount - a.amount),
     );
 
     let free = 0;
@@ -272,11 +340,20 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     let sal = 0, inter = 0;
     const lines: SalaryLine[] = [];
     for (const e of src.employees) {
-      if (isFree.get(e.id) || !consultants.has(e.id)) continue;
+      if (isFree.get(e.id)) continue;
       if (!overlaps(e.start_date, e.end_date, from, to)) continue;
+      // Structure staff count here for their mission days and outside their period.
+      const split = structureSplit(e, from, to);
+      let days: [number, number] | undefined;
+      if (split) {
+        const employed = daysWithin(e.start_date, exitOf(e), from, to);
+        const consultant = employed - split.inPeriod + split.mission;
+        if (consultant <= 0) continue;
+        if (consultant < employed) days = [consultant, employed];
+      }
       const s = salaryOn(src.salaries, e.id, to) ?? salaryOn(src.salaries, e.id, from);
       const salary = s?.salary_monthly ?? null;
-      const cost = (salary ?? 0) * src.cjmMultiplier;
+      const cost = (salary ?? 0) * multFor(e) * (days ? days[0] / days[1] : 1);
       sal += cost;
       if (!staffed.has(e.id)) inter += cost;
       lines.push({
@@ -287,6 +364,8 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
         cost,
         staffed: staffed.has(e.id),
         exitDate: e.end_date ?? e.planned_exit_date,
+        ...(days ? { days } : {}),
+        ...(split?.mission ? { missionDays: split.mission } : {}),
       });
     }
     lines.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name));
@@ -295,7 +374,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     const ventes = staffedRows.filter((a) => a.start_date >= from && a.start_date <= to).length;
     const departs = src.employees.filter((e) => {
       const exit = e.end_date ?? e.planned_exit_date;
-      return consultants.has(e.id) && !!exit && exit >= from && exit <= to;
+      return !!exit && exit >= from && exit <= to && (isFree.get(e.id) || !inStructureOn(e, exit) || staffedIn(e.id, from, to));
     }).length;
 
     months.push({
@@ -310,8 +389,9 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     });
   }
 
-  // Structure staff, every month. Closed months use the salary on file for
-  // the month; open months the latest salary known, until the exit date.
+  // Structure staff, every month of their period. Closed months use the
+  // salary on file for the month; open months the latest salary known.
+  // Mission days (known or planned) go to the consultants instead.
   const nowDay = isoDay(today);
   const structureLines: SalaryLine[][] = [];
   for (let m = 0; m < 12; m++) {
@@ -319,27 +399,25 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     const open = m >= openFrom;
     const lines: SalaryLine[] = [];
     for (const e of src.employees) {
-      if (!inStructure.has(e.id) || isFree.get(e.id)) continue;
-      const end = e.end_date ?? e.planned_exit_date;
-      if (!overlaps(e.start_date, end, from, to)) continue;
+      const split = structureSplit(e, from, to);
+      if (!split) continue;
       const s = salaryOn(src.salaries, e.id, to) ?? salaryOn(src.salaries, e.id, from)
         ?? (open ? salaryOn(src.salaries, e.id, nowDay) : undefined);
       const salary = s?.salary_monthly ?? null;
-      // Arrival or exit during the month: prorate on working days.
-      const first = e.start_date > from ? e.start_date : from;
-      const last = end && end < to ? end : to;
+      // Prorate on working days: period starting or ending mid-month, mission days.
       const total = openDaysBetween(from, to);
-      const worked = first === from && last === to ? total : openDaysBetween(first, last);
+      const worked = (split.full ? total : split.inPeriod) - split.mission;
       const share = total > 0 ? worked / total : 1;
       lines.push({
         employeeId: e.id,
         name: displayName(e),
         contractType: e.contract_type || "",
         salary,
-        cost: (salary ?? 0) * src.cjmMultiplier * share,
-        staffed: false,
-        exitDate: end,
+        cost: (salary ?? 0) * multFor(e) * share,
+        staffed: worked <= 0,
+        exitDate: exitOf(e),
         ...(worked < total ? { days: [worked, total] as [number, number] } : {}),
+        ...(split.mission ? { missionDays: split.mission } : {}),
       });
     }
     lines.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name));
@@ -353,7 +431,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     const from = monthStart(year, m), to = monthEnd(year, m);
     return src.employees.filter((e) => {
       const exit = e.planned_exit_date ?? e.end_date;
-      return consultants.has(e.id) && e.status !== "ended" && !!exit && exit >= from && exit <= to;
+      return e.status !== "ended" && !!exit && exit >= from && exit <= to && (isFree.get(e.id) || !inStructureOn(e, exit) || staffedIn(e.id, from, to));
     }).length;
   });
 
@@ -402,8 +480,9 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   if (dso !== null) seeds.dso = Math.round(dso);
 
   const staffedToday = new Set(staffedNow);
+  const consultantNow = (e: Employee) => !inStructureOn(e, now) || staffedToday.has(e.id);
   const currentSalaried: SalaryLine[] = src.employees
-    .filter((e) => !isFree.get(e.id) && consultants.has(e.id) && e.status !== "ended" && overlaps(e.start_date, e.end_date, now, now))
+    .filter((e) => !isFree.get(e.id) && consultantNow(e) && e.status !== "ended" && overlaps(e.start_date, e.end_date, now, now))
     .map((e) => {
       const salary = salaryOn(src.salaries, e.id, now)?.salary_monthly ?? null;
       return {
@@ -411,7 +490,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
         name: displayName(e),
         contractType: e.contract_type || "",
         salary,
-        cost: (salary ?? 0) * src.cjmMultiplier,
+        cost: (salary ?? 0) * multFor(e),
         staffed: staffedToday.has(e.id),
         exitDate: e.end_date ?? e.planned_exit_date,
       };
@@ -419,7 +498,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     .sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name));
 
   const currentFreelancers: FreelanceLine[] = src.employees
-    .filter((e) => isFree.get(e.id) && consultants.has(e.id) && e.status !== "ended" && overlaps(e.start_date, e.end_date, now, now))
+    .filter((e) => isFree.get(e.id) && e.status !== "ended" && overlaps(e.start_date, e.end_date, now, now))
     .map((e) => ({
       employeeId: e.id,
       name: displayName(e),
@@ -434,7 +513,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
 
   const recentStarts = staffedRows.filter((a) => a.start_date > yearAgo && a.start_date <= now).length;
 
-  return { months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers, invoiceLines, structure, structureLines };
+  return { months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers, invoiceLines, encLines, structure, structureLines };
 }
 
 /* ── Loaders ────────────────────────────────────────────────────────── */
@@ -495,16 +574,30 @@ export function loadExtensions(client: SupabaseClient): Promise<ExtensionRow[]> 
   );
 }
 
-/** Employment ids listed as structure staff (empty when the table is missing). */
-export async function loadStructureIds(client: SupabaseClient): Promise<string[]> {
-  const result = await client.from("business_plan_structure").select("employee_id");
-  if (result.error) throw result.error;
-  return ((result.data || []) as { employee_id: string }[]).map((r) => r.employee_id);
+/** Structure staff and their periods (empty when the table is missing). */
+export async function loadStructureStaff(client: SupabaseClient): Promise<StructureEntry[]> {
+  const result = await client.from("business_plan_structure").select("employee_id, start_date, end_date");
+  if (!result.error) return (result.data || []) as StructureEntry[];
+  // Databases without the period migration: whole employment.
+  const fallback = await client.from("business_plan_structure").select("employee_id");
+  if (fallback.error) throw result.error;
+  return (fallback.data || []) as StructureEntry[];
 }
 
-export async function setStructure(client: SupabaseClient, employeeId: string, on: boolean, actorEmail: string): Promise<void> {
-  const result = on
-    ? await client.from("business_plan_structure").upsert({ employee_id: employeeId, added_by: actorEmail })
+/** Adds, updates (entry) or removes (null) a structure listing. */
+export async function setStructure(
+  client: SupabaseClient,
+  employeeId: string,
+  entry: StructureEntry | null,
+  actorEmail: string,
+): Promise<void> {
+  const result = entry
+    ? await client.from("business_plan_structure").upsert({
+        employee_id: employeeId,
+        start_date: entry.start_date || null,
+        end_date: entry.end_date || null,
+        added_by: actorEmail,
+      })
     : await client.from("business_plan_structure").delete().eq("employee_id", employeeId);
   if (result.error) throw result.error;
 }

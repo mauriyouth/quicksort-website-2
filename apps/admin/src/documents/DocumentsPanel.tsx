@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Archive, Check, ChevronLeft, ChevronRight, Clock, Download, ExternalLink, Eye, FileText, Loader2, RefreshCw, Upload, X } from "lucide-react";
 import { Notice } from "@quicksort/hr-ui";
 import { errorMessage, type DocumentAlert, type DocumentRecord, type DocumentTypeRecord } from "@quicksort/hr-db";
@@ -19,6 +19,7 @@ import {
   loadOwnerDocuments,
   extractDocumentDates,
   loadOwnerFolderLink,
+  notifyDocumentsChanged,
   previewDocument,
   suggestedExpiry,
   updateDocument,
@@ -241,6 +242,7 @@ export function DocumentsPanel({
       setMessage(label);
       await refresh();
       onChanged?.();
+      notifyDocumentsChanged(owner);
     } catch (e) {
       // A cancelled upload is not an error — the row simply disappears.
       if (e instanceof DOMException && e.name === "AbortError") setMessage("Upload cancelled.");
@@ -1058,10 +1060,24 @@ function DocumentForm({
     return () => { alive = false; };
   }, [uploadFile]);
 
-  function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const data = new FormData(e.currentTarget);
-    const value = (name: string) => String(data.get(name) || "").trim();
+  // Not a <form>: the panel is rendered inside other forms (the project
+  // editor's #pj-form), and a nested <form> makes the browser submit natively
+  // — a full-page GET reload that loses the upload. Fields are read from the
+  // root through data-field (no `name`, so they stay out of the host form's
+  // FormData) and Enter is handled here instead of by implicit submission.
+  const rootRef = useRef<HTMLDivElement>(null);
+  function submit() {
+    const root = rootRef.current;
+    if (!root || busy || (type?.requires_expiry && !expiresOn)) return;
+    const field = (name: string) =>
+      root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-field="${name}"]`);
+    const value = (name: string) => String(field(name)?.value || "").trim();
+    const titleInput = field("title") as HTMLInputElement | null;
+    if (titleInput && !value("title")) {
+      titleInput.setCustomValidity("Give the document a title.");
+      titleInput.reportValidity();
+      return;
+    }
     onSubmit({
       typeCode,
       title: value("title"),
@@ -1075,7 +1091,19 @@ function DocumentForm({
   }
 
   return (
-    <form className="doc-form" onSubmit={submit}>
+    <div
+      ref={rootRef}
+      className="doc-form"
+      role="group"
+      aria-label="Document details"
+      onKeyDown={e => {
+        if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+          // Keep Enter from submitting the host form (e.g. saving the project).
+          e.preventDefault();
+          submit();
+        }
+      }}
+    >
       <p className="doc-form-file">
         <FileText size={14} aria-hidden="true" />
         <span title={draft.file.name}>{draft.file.name}</span>
@@ -1087,13 +1115,14 @@ function DocumentForm({
       </label>
       <label className="doc-field">
         <span>Title</span>
-        <input name="title" required maxLength={200}
+        <input data-field="title" aria-required="true" maxLength={200}
+          onInput={e => e.currentTarget.setCustomValidity("")}
           defaultValue={draft.supersedes?.title || (draft.mode === "classify" && !draft.doc.title.includes("à classer") ? draft.doc.title : baseName(draft.file.name))} />
       </label>
       {linked && !!contracts.length && (
         <label className="doc-field">
           <span>Attached to</span>
-          <select name="parent" defaultValue={draft.supersedes?.parent_document_id || mainContract?.id || ""}>
+          <select data-field="parent"defaultValue={draft.supersedes?.parent_document_id || mainContract?.id || ""}>
             <option value="">Not attached</option>
             {contracts.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
           </select>
@@ -1102,7 +1131,7 @@ function DocumentForm({
       {typeCode === "AVENANT" && !!extensions.length && (
         <label className="doc-field">
           <span>Extension</span>
-          <select name="extension" defaultValue={draft.extensionId || draft.supersedes?.extension_id || ""}>
+          <select data-field="extension"defaultValue={draft.extensionId || draft.supersedes?.extension_id || ""}>
             <option value="">None</option>
             {extensions.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
           </select>
@@ -1126,14 +1155,14 @@ function DocumentForm({
       )}
       <label className="doc-field">
         <span>Notes</span>
-        <input name="notes" maxLength={2000} />
+        <input data-field="notes" maxLength={2000} />
       </label>
       <div className="doc-form-actions">
         <button type="button" className="doc-text-button" onClick={onCancel} disabled={busy}>Cancel</button>
-        <button type="submit" className="doc-primary" disabled={busy || (type?.requires_expiry && !expiresOn)}>
+        <button type="button" onClick={submit} className="doc-primary"disabled={busy || (type?.requires_expiry && !expiresOn)}>
           {busy ? "Saving…" : draft.mode === "classify" ? "Save type" : draft.mode === "existing" ? "File document" : draft.supersedes ? "Upload renewal" : "Upload"}
         </button>
       </div>
-    </form>
+    </div>
   );
 }

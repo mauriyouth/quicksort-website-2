@@ -65,6 +65,9 @@ test('document file names read "<owner>_<type>.<ext>" and drop accents', () => {
   assert.equal(documentFileName('CARTE_VITALE', 'Amadou Ngam', 'scan.PDF'), 'amadou_ngam_carte_vitale.pdf');
   assert.equal(documentFileName('CNI', 'Élodie O’Neil', 'photo.jpg'), 'elodie_o_neil_cni.jpg');
   assert.equal(documentFileName('RIB', '', 'rib'), 'document_rib');
+  assert.equal(documentFileName('PAYSLIP', 'Amadou Ngam', 'NGAM_03_2026_1.pdf', 'Bulletin de paie Mars 2026', '2026-03-01'), '03_amadou_ngam_payslip.pdf');
+  assert.equal(documentFileName('PAYSLIP', 'Amadou Ngam', 'NGAM_03_2026_1.pdf'), 'amadou_ngam_payslip.pdf');
+  assert.equal(documentFileName('CNI', 'Amadou Ngam', 'id.pdf', '', '2026-03-01'), 'amadou_ngam_cni.pdf');
 });
 
 test('ensureFolder walks the path, reusing existing folders and creating the rest', async t => {

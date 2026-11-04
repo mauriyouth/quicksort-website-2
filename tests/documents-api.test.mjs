@@ -249,6 +249,15 @@ test('download logs person documents and streams Drive and Supabase files', asyn
   assert.equal(res.body.toString(), 'contracts:offers/contract.pdf');
 });
 
+test('person photos stream without an access log entry', async () => {
+  const doc = { id: documentId, owner_kind: 'person', type_code: 'PHOTO', storage_provider: 'gdrive', provider_file_id: 'file-1', file_name: 'ada_lovelace_photo.jpg', mime_type: 'image/jpeg', size_bytes: 10 };
+  const { supa, handler } = setup({ role: 'hr', tables: { documents: [doc] } });
+  const res = await call(handler, { action: 'download', documentId, preview: true });
+  assert.equal(res.code, 200);
+  assert.equal(res.headers['content-type'], 'image/jpeg');
+  assert.ok(!supa.calls.some(([name]) => name === 'log_document_access'), 'The header photo is not an audited access');
+});
+
 test('download of a large file answers a link, and unknown documents are 404', async () => {
   const doc = { id: documentId, owner_kind: 'project', storage_provider: 'gdrive', provider_file_id: 'file-1', file_name: 'big.pdf', mime_type: 'application/pdf', size_bytes: 50 * 1024 * 1024 };
   const { supa, storage, handler } = setup({ tables: { documents: [doc] } });

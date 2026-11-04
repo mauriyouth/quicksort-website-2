@@ -35,6 +35,8 @@ export type Hypotheses = {
   fMarketing: number;
   fHonoraires: number;
   fDivers: number;
+  /** Monthly depreciation, amortisation and provisions (non-cash), €. */
+  fAmort: number;
   tresoDebut: number;
   /** Client payment delay, days. */
   dso: number;
@@ -49,7 +51,7 @@ export const DEFAULT_HYPOTHESES: Hypotheses = {
   consDebut: 18, tjm: 650, jours: 18, occ: 90, pctFree: 40,
   coutFree: 480, salaire: 7000,
   commFactor: 0, primeIC: 500, primeChasseur: 800,
-  fLoyer: 4000, fOutils: 3000, fMarketing: 2500, fHonoraires: 1500, fDivers: 1000,
+  fLoyer: 4000, fOutils: 3000, fMarketing: 2500, fHonoraires: 1500, fDivers: 1000, fAmort: 0,
   tresoDebut: 250000, dso: 60, tauxIS: 25,
 };
 
@@ -87,7 +89,7 @@ export type Series = {
   cons: number[]; ca: number[]; free: number[]; sal: number[]; inter: number[]; prod: number[];
   fac: number[]; ic: number[]; ch: number[]; varr: number[]; mb: number[]; mbp: number[];
   fs: number[]; fl: number[]; fo: number[]; fm: number[]; fh: number[]; fd: number[]; fix: number[];
-  eb: number[]; ebp: number[]; enc: number[]; treso: number[];
+  eb: number[]; ebp: number[]; da: number[]; ex: number[]; exp: number[]; enc: number[]; treso: number[];
   ventes: number[]; departs: number[];
 };
 
@@ -95,8 +97,8 @@ export type PlanResult = {
   series: Series;
   actual: boolean[];
   totals: {
-    ca: number; mb: number; eb: number; is: number; rn: number;
-    mbPct: number; ebPct: number;
+    ca: number; mb: number; eb: number; ex: number; is: number; rn: number;
+    mbPct: number; ebPct: number; exPct: number;
     consFin: number; ventes: number; departs: number;
     treso: number; tresoMin: number;
   };
@@ -110,7 +112,7 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
   const fixOther = h.fLoyer + h.fOutils + h.fMarketing + h.fHonoraires + h.fDivers;
   const S: Series = {
     cons: [], ca: [], free: [], sal: [], inter: [], prod: [], fac: [], ic: [], ch: [], varr: [], mb: [], mbp: [],
-    fs: [], fl: [], fo: [], fm: [], fh: [], fd: [], fix: [], eb: [], ebp: [], enc: [], treso: [],
+    fs: [], fl: [], fo: [], fm: [], fh: [], fd: [], fix: [], eb: [], ebp: [], da: [], ex: [], exp: [], enc: [], treso: [],
     ventes: [], departs: [],
   };
   let c = h.consDebut;
@@ -140,6 +142,9 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
     S.fac.push(fac); S.ic.push(ic); S.ch.push(ch); S.varr.push(varr); S.mb.push(mb); S.mbp.push(ca ? mb / ca : 0);
     S.fs.push(fStructure); S.fl.push(h.fLoyer); S.fo.push(h.fOutils); S.fm.push(h.fMarketing); S.fh.push(h.fHonoraires); S.fd.push(h.fDivers);
     S.fix.push(fixMonth); S.eb.push(eb); S.ebp.push(ca ? eb / ca : 0);
+    // Operating result: EBITDA less depreciation (non-cash, so cash is unchanged).
+    const ex = eb - h.fAmort;
+    S.da.push(h.fAmort); S.ex.push(ex); S.exp.push(ca ? ex / ca : 0);
     S.ventes.push(ventes); S.departs.push(departs);
   }
   // Cash: closed months use what was really collected; forecast months
@@ -154,16 +159,18 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
     S.treso.push(cash);
   });
 
-  const ca = sum(S.ca), mb = sum(S.mb), eb = sum(S.eb);
-  const is = (Math.max(0, eb) * h.tauxIS) / 100;
+  const ca = sum(S.ca), mb = sum(S.mb), eb = sum(S.eb), ex = sum(S.ex);
+  // Simplified tax on the positive yearly operating result (no financial items modelled).
+  const is = (Math.max(0, ex) * h.tauxIS) / 100;
   const last = months.length - 1;
   return {
     series: S,
     actual: months.map((m) => !!m.actual),
     totals: {
-      ca, mb, eb, is, rn: eb - is,
+      ca, mb, eb, ex, is, rn: ex - is,
       mbPct: ca ? mb / ca : 0,
       ebPct: ca ? eb / ca : 0,
+      exPct: ca ? ex / ca : 0,
       consFin: last >= 0 ? S.cons[last] : 0,
       ventes: sum(S.ventes),
       departs: sum(S.departs),
@@ -176,7 +183,7 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
 export type RowKind = "line" | "sub" | "total" | "key" | "pct" | "section";
 export type PlanRow = {
   /** Set on rows that open a drill-down panel. */
-  key?: "ca" | "sal" | "free" | "fs" | "inter";
+  key?: "ca" | "sal" | "free" | "fs" | "inter" | "enc";
   kind: RowKind;
   label: string;
   values: number[];
@@ -204,7 +211,7 @@ export function planRows(r: PlanResult): PlanRow[] {
     line("line", "Primes IC", S.ic),
     line("line", "Primes chasseurs", S.ch),
     line("total", "Total charges variables", S.varr),
-    line("key", "Marge brute", S.mb),
+    line("key", "Gross margin (marge brute)", S.mb),
     line("pct", "Taux de marge brute", S.mbp, T.mbPct),
     sec("Charges fixes"),
     { ...line("line", "Salaires structure chargés", S.fs), key: "fs" },
@@ -214,10 +221,13 @@ export function planRows(r: PlanResult): PlanRow[] {
     line("line", "Honoraires (comptable, juridique)", S.fh),
     line("line", "Divers", S.fd),
     line("total", "Total charges fixes", S.fix),
-    line("key", "EBITDA", S.eb),
-    line("pct", "EBITDA / CA", S.ebp, T.ebPct),
+    line("key", "EBITDA (EBE)", S.eb),
+    line("pct", "Taux d’EBITDA (EBE / CA)", S.ebp, T.ebPct),
+    line("line", "Dotations aux amortissements et provisions", S.da),
+    line("key", "EBIT (résultat d’exploitation)", S.ex),
+    line("pct", "Marge d’exploitation (EBIT / CA)", S.exp, T.exPct),
     sec("Trésorerie"),
-    line("line", "Encaissements clients", S.enc),
+    { ...line("line", "Encaissements clients", S.enc), key: "enc" },
     line("total", "Trésorerie fin de mois", S.treso, S.treso[last] ?? 0),
   ];
 }

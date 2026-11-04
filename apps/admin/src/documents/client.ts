@@ -183,6 +183,27 @@ export async function loadOwnerDocuments(owner: DocumentOwner) {
   return (data || []) as DocumentRecord[];
 }
 
+/** Fired on window after any upload, renewal or archive; detail is the owner. */
+export const DOCUMENTS_CHANGED = "qs:documents-changed";
+
+export function notifyDocumentsChanged(owner: DocumentOwner) {
+  window.dispatchEvent(new CustomEvent<DocumentOwner>(DOCUMENTS_CHANGED, { detail: owner }));
+}
+
+/** The person's photo: their newest active PHOTO document, or null. */
+export async function loadPersonPhoto(personId: string) {
+  const { data, error } = await db()
+    .from("documents")
+    .select("id,file_name,mime_type")
+    .eq("person_id", personId)
+    .eq("type_code", "PHOTO")
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return ((data || [])[0] ?? null) as Pick<DocumentRecord, "id" | "file_name" | "mime_type"> | null;
+}
+
 export async function loadAlerts(filter?: { kind: DocumentOwnerKind; id?: string }) {
   let query = db().from("document_alerts").select("*");
   if (filter) {

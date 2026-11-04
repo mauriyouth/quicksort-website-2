@@ -24,6 +24,7 @@ import {
   type StatusKind,
 } from "./referentials";
 import { useLeaveRates, type LeaveKind } from "./cra/balances";
+import { useEconomicsSettings } from "./hr/economics";
 import "./admin-settings.css";
 
 /**
@@ -63,6 +64,7 @@ const SECTIONS = [
   { id: "needs", label: "Needs / projects" },
   { id: "hr", label: "HR data" },
   { id: "leave", label: "Leave accrual" },
+  { id: "economics", label: "Unit economics" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -366,6 +368,12 @@ export function AdminSettings() {
       {section === "leave" && (
         <div className="settings-columns">
           <LeaveAccrualPanel />
+        </div>
+      )}
+
+      {section === "economics" && (
+        <div className="settings-columns">
+          <EconomicsPanel />
         </div>
       )}
     </div>
@@ -820,6 +828,114 @@ function LeaveRateRow({
         }}
       />
       <span className="muted small-text">days / month</span>
+      <span />
+    </div>
+  );
+}
+
+/** Salary multipliers: the CJM one prices offers; the two business plan ones
+ *  turn gross salaries into employer cost, one per scenario picked on the
+ *  Business plan page. */
+const ECONOMICS_ROWS = [
+  { key: "cjm", label: "CJM multiplier", sub: "Offers: CJM = gross monthly salary × multiplier ÷ 21.7" },
+  { key: "optimistic", label: "Business plan — optimistic", sub: "Employer cost = gross × multiplier (real payroll ≈ ×1.4)" },
+  { key: "pessimistic", label: "Business plan — pessimistic", sub: "Employer cost = gross × multiplier (CJM-like, ×2)" },
+] as const;
+
+function EconomicsPanel() {
+  const { values, missing, saving, error, save } = useEconomicsSettings();
+  return (
+    <ReferentialCard title="Unit economics" count={ECONOMICS_ROWS.length}>
+      <p className="muted small-text settings-card-hint">
+        Multipliers applied to gross monthly salaries. The business plan
+        scenarios are chosen from the dropdown on Operations → Business plan;
+        interns stay at ×1.4 in both.
+      </p>
+      {missing && (
+        <Notice error>
+          Some unit-economics settings are missing — apply
+          supabase/migrations/20261206090000_business_plan_charge_multipliers.sql.
+          The values below show built-in defaults until then.
+        </Notice>
+      )}
+      <Notice error>{error}</Notice>
+      <div className="settings-grid settings-grid-type" aria-hidden="true">
+        <span />
+        <span>ID</span>
+        <span className="settings-label-col">Setting</span>
+        <span>Multiplier</span>
+        <span />
+        <span />
+      </div>
+      {ECONOMICS_ROWS.map((row, index) => (
+        <NumberSettingRow
+          key={row.key}
+          index={index}
+          label={row.label}
+          sub={row.sub}
+          unit="× gross"
+          step="0.05"
+          value={values[row.key]}
+          busy={saving}
+          onSave={(next) => save(row.key, next)}
+        />
+      ))}
+    </ReferentialCard>
+  );
+}
+
+function NumberSettingRow({
+  index,
+  label,
+  sub,
+  unit,
+  step,
+  value: stored,
+  busy,
+  onSave,
+}: {
+  index: number;
+  label: string;
+  sub: string;
+  unit: string;
+  step: string;
+  value: number;
+  busy: boolean;
+  onSave: (value: number) => Promise<void>;
+}) {
+  const [value, setValue] = useState(String(stored));
+  useEffect(() => {
+    setValue(String(stored));
+  }, [stored]);
+  const commit = () => {
+    const next = Number(value.replace(",", "."));
+    if (!value.trim() || !Number.isFinite(next) || next <= 0) {
+      setValue(String(stored));
+      return;
+    }
+    if (next !== stored) void onSave(next);
+  };
+  return (
+    <div className="settings-grid settings-grid-type settings-row">
+      <span />
+      <span className="settings-id">{index}</span>
+      <span title={sub}>{label}</span>
+      <input
+        className="qs-input"
+        type="number"
+        min={0}
+        step={step}
+        value={value}
+        disabled={busy}
+        aria-label={label}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") setValue(String(stored));
+        }}
+      />
+      <span className="muted small-text">{unit}</span>
       <span />
     </div>
   );

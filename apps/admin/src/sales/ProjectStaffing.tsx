@@ -56,6 +56,13 @@ export function isOpenAssignment(a: Assignment) {
   return (STAFF_OPEN_STATUSES as readonly string[]).includes(a.status);
 }
 
+/** Assignments that belong on the project's staffing record: the open ones
+    plus completed ones — work already delivered (e.g. by someone who has
+    since left) still covers its days. Only cancelled assignments drop out. */
+export function isStaffedAssignment(a: Assignment) {
+  return isOpenAssignment(a) || a.status === "completed";
+}
+
 /** Allocation-weighted days one assignment covers inside a line window. */
 export function assignmentLineDays(
   a: Assignment,
@@ -80,7 +87,7 @@ export type LineStaffing = {
   /** True when the line carries a yearly billable cap and the window had
       more open days than the cap allows — `days` is the capped figure. */
   capped: boolean;
-  /** Open assignments staffed on this line. */
+  /** Assignments staffed on this line — open ones and completed history. */
   staff: Assignment[];
   staffedDays: number;
   coverPct: number;
@@ -114,7 +121,7 @@ export function lineStaffing(
       end || null,
     );
     const staff = assignments.filter(
-      (a) => a.pricing_line === line.name && isOpenAssignment(a),
+      (a) => a.pricing_line === line.name && isStaffedAssignment(a),
     );
     const staffed = staff.reduce(
       (sum, a) => sum + (start && end ? assignmentLineDays(a, start, end) : 0),
@@ -148,6 +155,7 @@ const STATUS_LABEL: Record<string, string> = {
   reserved: "Tentative",
   confirmed: "Confirmed",
   active: "Active",
+  completed: "Completed",
 };
 
 /** Statuses an assignment can hold — update_assignment accepts the same set. */
@@ -236,7 +244,7 @@ export function LineStaffingPanel({
       .filter((p) => !q || p.name.toLowerCase().includes(q))
       .map((p) => {
         const onLine = staffing.staff.some(
-          (a) => a.employee_id === p.employeeId,
+          (a) => a.employee_id === p.employeeId && isOpenAssignment(a),
         );
         const free = Math.max(0, 100 - bookedOn(p.employeeId, today));
         return { ...p, onLine, free };
@@ -458,6 +466,7 @@ export function LineStaffingPanel({
                   >
                     {STATUS_LABEL[a.status] || a.status}
                   </span>
+                  {isOpenAssignment(a) && (
                   <span className="pjs-row-actions">
                     <button
                       type="button"
@@ -485,8 +494,9 @@ export function LineStaffingPanel({
                       <X size={14} />
                     </button>
                   </span>
+                  )}
                 </div>
-              {editId === a.id && (
+              {editId === a.id && isOpenAssignment(a) && (
                 <AssignmentEditForm
                   assignment={a}
                   windowStart={staffing.start}
@@ -1038,7 +1048,7 @@ function AssignmentEditForm({
 }
 
 /**
- * Sidebar card — everyone staffed on the contract, one row per open
+ * Sidebar card — everyone staffed on the contract, one row per open or completed
  * assignment, plus the days no one covers yet.
  */
 export function ProjectTeamCard({

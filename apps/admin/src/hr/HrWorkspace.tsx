@@ -15,6 +15,7 @@ import { balanceFor, fmtDays, useLeaveBalances } from '../cra/balances';
 import { monthDays } from '../cra/domain';
 import './workspace.css';
 import { DocumentAlertsQueue } from '../documents/DocumentAlerts';
+import { PersonPhoto } from '../documents/PersonPhoto';
 export type HrView = 'overview' | 'recruiting' | 'people' | 'journeys';
 const viewCopy: Record<HrView, {
   title: string;
@@ -340,7 +341,7 @@ function PersonPage({
         {/* Person header: breadcrumb and title merged, name shown once */}
         <section className="hr-person-head">
           <div className="hr-person-lead">
-            <span className="hr-person-avatar" aria-hidden="true">{initials(person.full_name)}</span>
+            <PersonPhoto personId={person.id} name={person.full_name} fallback={initials(person.full_name)} className="hr-person-avatar" />
             <div className="hr-person-id">
               <h1>{person.full_name}</h1>
               <div className="hr-person-meta">

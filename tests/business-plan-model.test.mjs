@@ -46,7 +46,7 @@ test("all-forecast year reproduces the design mockup", () => {
   assert.equal(r.totals.consFin, 18 + 16 - 6);
   assert.equal(r.totals.ventes, 16);
   assert.equal(r.totals.departs, 6);
-  assert.equal(planRows(r).length, 28);
+  assert.equal(planRows(r).length, 31);
 });
 
 test("actual months override the forecast and headcount carries forward", () => {
@@ -79,11 +79,11 @@ test("cash uses actual collections, then the DSO lag", () => {
   assert.equal(r.series.treso[0], h.tresoDebut + 12345 - fix);
 });
 
-test("corporate tax only on positive EBITDA", () => {
+test("corporate tax only on a positive operating result", () => {
   const loss = computePlan({ ...DEFAULT_HYPOTHESES, tjm: 0 }, VENTES.map((_, i) => forecast(i)));
   assert.ok(loss.totals.eb < 0);
   assert.equal(loss.totals.is, 0);
-  assert.equal(loss.totals.rn, loss.totals.eb);
+  assert.equal(loss.totals.rn, loss.totals.ex);
   const win = computePlan(DEFAULT_HYPOTHESES, VENTES.map((_, i) => forecast(i)));
   assert.ok(win.totals.eb > 0);
   assert.ok(Math.abs(win.totals.is - win.totals.eb * 0.25) < 1e-6);
@@ -120,7 +120,7 @@ function sources(over = {}) {
     ],
     cra: [{ employee_id: "f", day: "2026-02-03", part: "full" }, { employee_id: "f", day: "2026-02-04", part: "am" }],
     cjmMultiplier: 2,
-    structureIds: ["boss"],
+    structureStaff: [{ employee_id: "boss" }],
     ...over,
   };
 }
@@ -204,6 +204,16 @@ test("revenue drill-down lists the invoices behind each closed month", () => {
   assert.equal(invoiceLines[10], null);
 });
 
+test("collections drill-down lists paid invoices by payment month", () => {
+  const invoices = sources().invoices.map((inv, i) => ({ ...inv, id: `i${i}`, number: `F-${i}` }));
+  const { months, encLines } = aggregateActuals(sources({ invoices }), 2026, 10, new Date(2026, 10, 1));
+  // Paid on 3 March for January's service: listed under March, not January.
+  assert.deepEqual(encLines[2].map((l) => [l.number, l.paidAt, l.periodMonth, l.amount]), [["F-0", "2026-03-03", "2026-01-01", 1000.1]]);
+  assert.equal(encLines[2].reduce((s, l) => s + l.amount, 0), months[2].enc);
+  assert.equal(encLines[0].length, 0);
+  assert.equal(encLines[10], null);
+});
+
 test("structure staff are an explicit list, costed every month", () => {
   const people = [{ id: "pboss", full_name: "Boss" }];
   const employees = sources().employees.map((e) => ({ ...e, person_id: `p${e.id}` }));
@@ -239,7 +249,7 @@ test("forecast months carry the structure cost into the P&L", () => {
 test("structure cost is prorated on working days in arrival and exit months", () => {
   const employees = [...sources().employees, emp("s2", { start_date: "2026-03-16" })];
   const salaries = [...sources().salaries, sal("s2", { salary_monthly: 3000 })];
-  const { structure, structureLines } = aggregateActuals(sources({ employees, salaries, structureIds: ["boss", "s2"] }), 2026, 10, new Date(2026, 10, 1));
+  const { structure, structureLines } = aggregateActuals(sources({ employees, salaries, structureStaff: [{ employee_id: "boss" }, { employee_id: "s2" }] }), 2026, 10, new Date(2026, 10, 1));
   // March 2026: 22 working days, 12 from the 16th.
   const line = structureLines[2].find((l) => l.employeeId === "s2");
   assert.deepEqual(line.days, [12, 22]);
@@ -249,7 +259,72 @@ test("structure cost is prorated on working days in arrival and exit months", ()
   assert.equal(structureLines[3].find((l) => l.employeeId === "s2").days, undefined);
 });
 
+test("structure period: from the hire date by default, consultant outside it", () => {
+  // boss: structure from 1 April to 15 June 2026 only.
+  const structureStaff = [{ employee_id: "boss", start_date: "2026-04-01", end_date: "2026-06-15" }];
+  const { months, structure, structureLines, salaryLines } = aggregateActuals(sources({ structureStaff }), 2026, 10, new Date(2026, 10, 1));
+  // Before the period: consultant in inter-contract.
+  assert.equal(structure[0], 0);
+  assert.equal(months[0].inter, (5000 + 6000) * 2);
+  // Inside: structure, not a consultant.
+  assert.equal(structure[3], 12000);
+  assert.ok(!salaryLines[3].some((l) => l.employeeId === "boss"));
+  // June 2026: 22 working days, 11 in structure (1–15), 11 as consultant.
+  assert.deepEqual(structureLines[5][0].days, [11, 22]);
+  assert.ok(Math.abs(structure[5] - (12000 * 11) / 22) < 1e-6);
+  const june = salaryLines[5].find((l) => l.employeeId === "boss");
+  assert.deepEqual(june.days, [11, 22]);
+  assert.ok(Math.abs(june.cost - (12000 * 11) / 22) < 1e-6);
+  // After: consultant again; a planned exit then counts as a consultant departure.
+  assert.equal(structure[7], 0);
+  assert.ok(salaryLines[7].some((l) => l.employeeId === "boss" && !l.staffed));
+});
+
+test("structure staff on a mission: mission working days go to consultants", () => {
+  // May 2026: 21 working days; mission 4–29 May = 20 days, so 1 day stays in structure.
+  const assignments = [...sources().assignments, asg("boss", "p1", "2026-05-04", "2026-05-29", { status: "completed" })];
+  const { months, structure, structureLines, salaryLines, currentSalaried } = aggregateActuals(
+    sources({ assignments }), 2026, 10, new Date(2026, 10, 1),
+  );
+  assert.equal(structure[3], 12000);
+  const s = structureLines[4][0];
+  assert.deepEqual([s.employeeId, s.days, s.missionDays, s.staffed], ["boss", [1, 21], 20, false]);
+  assert.ok(Math.abs(structure[4] - 12000 / 21) < 1e-6);
+  const may = salaryLines[4].find((l) => l.employeeId === "boss");
+  assert.deepEqual([may.days, may.missionDays, may.staffed], [[20, 21], 20, true]);
+  assert.ok(Math.abs(may.cost - (12000 * 20) / 21) < 1e-6);
+  // Nothing lost or double-counted.
+  assert.ok(Math.abs(structure[4] + may.cost - 12000) < 1e-6);
+  assert.equal(months[4].cons, 3); // a, f and boss
+  // Back in structure in June; not in today's consultant base.
+  assert.equal(structure[5], 12000);
+  assert.ok(!currentSalaried.some((l) => l.employeeId === "boss"));
+});
+
+test("structure mission days are weighted by allocation", () => {
+  // Whole of April 2026 (22 working days) at 50 %: half structure, half consultant.
+  const assignments = [...sources().assignments, asg("boss", "p1", "2026-04-01", "2026-04-30", { allocation_pct: 50 })];
+  const { structure, structureLines, salaryLines } = aggregateActuals(sources({ assignments }), 2026, 10, new Date(2026, 10, 1));
+  assert.equal(structureLines[3][0].missionDays, 11);
+  assert.ok(Math.abs(structure[3] - 6000) < 1e-6);
+  assert.ok(Math.abs(salaryLines[3].find((l) => l.employeeId === "boss").cost - 6000) < 1e-6);
+});
+
 test("inter-contract row opens a drill-down", () => {
   const r = computePlan(DEFAULT_HYPOTHESES, VENTES.map((_, i) => forecast(i)));
   assert.equal(planRows(r).find((row) => row.label === "— dont inter-contrats").key, "inter");
+});
+
+test("operating result = EBITDA − depreciation, taxed instead of EBITDA, cash unchanged", () => {
+  const months = VENTES.map((_, i) => forecast(i));
+  const base = computePlan(DEFAULT_HYPOTHESES, months);
+  assert.deepEqual(base.series.ex, base.series.eb); // no depreciation by default
+  const r = computePlan({ ...DEFAULT_HYPOTHESES, fAmort: 2000 }, months);
+  r.series.ex.forEach((v, i) => assert.ok(Math.abs(v - (r.series.eb[i] - 2000)) < 1e-6));
+  assert.ok(Math.abs(r.totals.ex - (base.totals.eb - 24000)) < 1e-6);
+  assert.ok(Math.abs(r.totals.is - r.totals.ex * 0.25) < 1e-6);
+  assert.ok(Math.abs(r.totals.rn - (r.totals.ex - r.totals.is)) < 1e-6);
+  assert.ok(Math.abs(r.totals.exPct - r.totals.ex / r.totals.ca) < 1e-9);
+  assert.deepEqual(r.series.treso, base.series.treso);
+  assert.deepEqual(planRows(r).find((x) => x.label === "EBIT (résultat d’exploitation)").values, r.series.ex);
 });

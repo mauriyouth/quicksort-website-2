@@ -152,6 +152,10 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   const bankApi = useBankApi();
   const [bankStatus, setBankStatus] = useState<BankStatus | null>(null);
   const [bankRows, setBankRows] = useState<BankRow[]>([]);
+  /** Year whose transactions are in bankRows (null = none loaded): other years stay on hypotheses. */
+  const [rowsYear, setRowsYear] = useState<number | null>(null);
+  /** Manual lines saved (or being saved) here, re-applied over any reload that started before them. */
+  const manualLines = useRef(new Map<string, FixedChargeLine>());
   const [loadNote, setLoadNote] = useState("");
   const [syncNote, setSyncNote] = useState("");
   const bankNote = syncNote || loadNote;
@@ -166,7 +170,6 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    setBankRows([]);
     setLoadNote("");
     (async () => {
       const status = await bankApi.status();
@@ -174,9 +177,15 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
       setBankStatus(status);
       const rows = await bankApi.transactions(year);
       if (cancelled) return;
-      setBankRows(rows);
+      const local = manualLines.current;
+      setBankRows(rows.map((r) => {
+        const line = local.get(r.id);
+        return line && r.manual_line !== line ? { ...r, manual_line: line, line, needs_review: false } : r;
+      }));
+      setRowsYear(year);
     })().catch((e) => {
       if (cancelled) return;
+      setRowsYear(null);
       setLoadNote(bankError(e));
     });
     return () => {
@@ -220,11 +229,16 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     const before = bankRows.find((r) => r.id === id);
     if (!before) return;
     const patch = (r: BankRow) => (r.id === id ? { ...r, manual_line: line, line, needs_review: false } : r);
+    manualLines.current.set(id, line);
     setBankRows((rows) => rows.map(patch));
     if (before.needs_review) setBankStatus((s) => s && { ...s, reviewCount: Math.max(0, s.reviewCount - 1) });
     try {
       await bankApi.classify(id, line);
     } catch (e) {
+      if (manualLines.current.get(id) === line) {
+        if (before.manual_line) manualLines.current.set(id, before.manual_line as FixedChargeLine);
+        else manualLines.current.delete(id);
+      }
       setBankRows((rows) => rows.map((r) => (r.id === id ? before : r)));
       if (before.needs_review) setBankStatus((s) => s && { ...s, reviewCount: s.reviewCount + 1 });
       throw new Error(bankError(e));
@@ -294,7 +308,8 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
 
   const openFrom = firstOpenMonth(year, today);
   // Real fixed charges only once the first full sync is done.
-  const coverageStart = bankStatus?.state.backfillDone ? bankStatus.state.coverageStart : null;
+  // Only for the year whose rows are loaded: no rows must never read as 0 € real.
+  const coverageStart = rowsYear === year && bankStatus?.state.backfillDone ? bankStatus.state.coverageStart : null;
   const bank = useMemo(
     () => aggregateFixedCharges(bankRows, year, openFrom, coverageStart),
     [bankRows, year, openFrom, coverageStart],

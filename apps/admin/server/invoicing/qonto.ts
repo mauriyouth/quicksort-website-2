@@ -88,7 +88,7 @@ function mapInvoice(inv: Json): ProviderInvoice {
   };
 }
 
-export function createQontoProvider(config: QontoConfig, fetchImpl: typeof fetch = fetch): InvoicingProvider {
+export function qontoRequest(config: QontoConfig, fetchImpl: typeof fetch = fetch) {
   const base = config.stagingToken ? SANDBOX_URL : PROD_URL;
 
   async function request(method: string, path: string, body?: unknown): Promise<Json> {
@@ -116,6 +116,12 @@ export function createQontoProvider(config: QontoConfig, fetchImpl: typeof fetch
     }
     return data;
   }
+
+  return request;
+}
+
+export function createQontoProvider(config: QontoConfig, fetchImpl: typeof fetch = fetch): InvoicingProvider {
+  const request = qontoRequest(config, fetchImpl);
 
   async function paged(path: string, key: string): Promise<Json[]> {
     const out: Json[] = [];

@@ -483,3 +483,39 @@
 .bp-kpi.has-tip:hover .bp-tip,
 .bp-kpi.has-tip:focus-visible .bp-tip { display: block; }
 [data-theme="dark"] .bp-tip { background: var(--qs-bg-2); color: var(--qs-fg-1); border: 1px solid var(--qs-border); }
+
+/* ── Qonto fixed charges (refresh button, review dots, drill-down) ── */
+.bp-bank { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
+.bp-bank .bp-meta { display: inline-flex; align-items: center; gap: 8px; }
+.bp-bank-col { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-left: auto; }
+.bp-spin { animation: bp-spin 1s linear infinite; }
+@keyframes bp-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .bp-spin { animation: none; } }
+.bp-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--qs-danger);
+}
+.bp-tag.is-warn { background: transparent; color: var(--qs-danger); box-shadow: inset 0 0 0 1px var(--qs-danger); }
+.bp-bank-switch { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.bp-bank-switch .bp-drawer-sub { margin: 0; }
+.bp-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--qs-fg-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.bp-link:hover { color: var(--qs-fg-1); }
+.bp-bank-table td { vertical-align: top; }
+.bp-bank-date { white-space: nowrap; color: var(--qs-fg-2); font-variant-numeric: tabular-nums; }
+.bp-bank-classify { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.bp-bank-classify select { width: auto; max-width: 100%; text-align: left; }

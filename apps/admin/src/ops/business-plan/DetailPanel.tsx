@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import type { Aggregate, SalaryLine, StructureEntry } from "./actuals";
-import { fmt, MONTH_NAMES, pct, type FixedLineKey, type Hypotheses, type PlanResult } from "./model";
+import type { Aggregate, BankRow, SalaryLine, StructureEntry } from "./actuals";
+import { fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type FixedLineKey, type Hypotheses, type PlanResult } from "./model";
 
 /**
  * Drill-down panel for the P&L rows "Chiffre d’affaires", "Salaires
  * consultants chargés", "Freelances", "Salaires structure chargés",
- * "Inter-contrats" and "Encaissements clients". Closed months list the invoices or
- * named people behind the figure;
+ * "Inter-contrats", "Encaissements clients" and the five fixed-charge lines.
+ * Closed months list the invoices, named people or Qonto transactions behind
+ * the figure;
  * forecast months show the formula plus today's named team, the base the
  * forecast projects from.
  */
@@ -25,6 +26,15 @@ const TITLES: Record<DetailKind, string> = {
   marketing: "Marketing et événements",
   honoraires: "Honoraires (comptable, juridique)",
   divers: "Divers",
+};
+
+/** Classified Qonto debits per month (null = month not covered) and how to reclassify one. */
+export type BankControl = {
+  lines: (BankRow[] | null)[];
+  unclassified: (BankRow[] | null)[];
+  fixed: (FixedActuals | null)[];
+  /** Saves a manual line; rejects with a displayable message (the change is then undone). */
+  onClassify: (id: string, line: FixedChargeLine) => Promise<void>;
 };
 
 /** Who can be listed as structure staff, their periods, and how to change them. */
@@ -48,6 +58,7 @@ type BodyProps = {
   hypotheses: Hypotheses;
   multiplier: number;
   structure: StructureControl;
+  bank: BankControl;
 };
 
 export function DetailPanel({
@@ -114,7 +125,8 @@ export function DetailPanel({
           : kind === "fs" ? <StructureBody {...body} />
           : kind === "inter" ? <InterBody {...body} />
           : kind === "enc" ? <CollectionBody {...body} />
-          : <FreelanceBody {...body} />}
+          : kind === "free" ? <FreelanceBody {...body} />
+          : <FixedBody key={kind} line={kind} {...body} />}
       </div>
     </div>
   );
@@ -762,6 +774,147 @@ function FreelanceBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
           )}
         </div>
       )}
+    </>
+  );
+}
+
+/* ── Fixed charges (Qonto) ─────────────────────────────────────────── */
+
+const LINE_OPTIONS: { value: FixedChargeLine; label: string }[] = [
+  ...(["loyer", "outils", "marketing", "honoraires", "divers"] as const).map((k) => ({ value: k, label: TITLES[k] })),
+  { value: "hors_charges_fixes", label: "Hors charges fixes" },
+];
+const HYPOTHESIS_OF: Record<FixedLineKey, keyof Hypotheses> = {
+  loyer: "fLoyer", outils: "fOutils", marketing: "fMarketing", honoraires: "fHonoraires", divers: "fDivers",
+};
+const SERIES_OF: Record<FixedLineKey, "fl" | "fo" | "fm" | "fh" | "fd"> = {
+  loyer: "fl", outils: "fo", marketing: "fm", honoraires: "fh", divers: "fd",
+};
+const cents = (c: number) => eur(c / 100);
+const bankDay = (r: BankRow) => (r.settled_at ?? r.emitted_at ?? "").slice(0, 10);
+
+function FixedBody({ line, month, plan, hypotheses: H, bank }: BodyProps & { line: FixedLineKey }) {
+  const [others, setOthers] = useState(false);
+  const [error, setError] = useState("");
+  const actual = plan.actual[month];
+  const total = plan.series[SERIES_OF[line]][month];
+  const hypothesis = H[HYPOTHESIS_OF[line]];
+  const monthRows = bank.lines[month];
+  const covered = actual && monthRows !== null;
+  useEffect(() => {
+    setOthers(false);
+    setError("");
+  }, [month]);
+
+  if (!covered) {
+    // Mean of the last three covered closed months of the year, if any.
+    const recent = bank.fixed.filter((f): f is FixedActuals => f !== null).slice(-3);
+    const mean = recent.length ? recent.reduce((t, f) => t + f[line], 0) / recent.length : null;
+    const months = recent.length > 1 ? `${recent.length} derniers mois clôturés` : "dernier mois clôturé";
+    return (
+      <>
+        <div className="bp-drawer-stats">
+          <div><span>Montant HT (hypothèse)</span><strong>{eur(total)}</strong></div>
+          <div><span>{mean === null ? "Moyenne réelle" : `Moyenne réelle (${months})`}</span><strong>{mean === null ? "—" : eur(mean)}</strong></div>
+        </div>
+        <p className="bp-note">
+          {actual
+            ? "Pas de données Qonto pour ce mois : hypothèse affichée."
+            : `Mois prévisionnel : hypothèse « ${TITLES[line]} » (${eur(hypothesis)} / mois), modifiable dans l’onglet Hypothèses.`}{" "}
+          {mean === null
+            ? "Aucun mois clôturé de l’année n’est encore couvert par Qonto."
+            : `Moyenne réelle : transactions Qonto HT classées sur ${recent.length > 1 ? `les ${recent.length} derniers mois clôturés couverts` : "le dernier mois clôturé couvert"}.`}
+        </p>
+      </>
+    );
+  }
+
+  const mine = monthRows.filter((r) => r.status === "completed" && r.line === line);
+  const rows = others ? bank.unclassified[month] ?? [] : mine;
+  const toReview = mine.filter((r) => r.needs_review).length;
+  const classify = async (id: string, next: FixedChargeLine) => {
+    setError("");
+    try {
+      await bank.onClassify(id, next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Le reclassement a échoué.");
+    }
+  };
+
+  return (
+    <>
+      <div className="bp-drawer-stats">
+        <div><span>Total HT</span><strong>{eur(total)}</strong></div>
+        <div><span>Transactions</span><strong>{mine.length}</strong></div>
+        <div><span>À vérifier</span><strong>{toReview}</strong></div>
+      </div>
+      {error && <p className="bp-warn">{error}</p>}
+      <div className="bp-bank-switch">
+        <h3 className="bp-drawer-sub">{others ? "Hors charges fixes et non classées" : TITLES[line]}</h3>
+        <button type="button" className="bp-link" onClick={() => setOthers(!others)}>
+          {others ? `Revenir à « ${TITLES[line]} »` : "Voir les transactions hors charges fixes et non classées"}
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <p className="bp-meta">{others ? "Aucune transaction hors charges fixes ce mois-ci." : "Aucune transaction classée sur cette ligne ce mois-ci."}</p>
+      ) : (
+        <table className="bp-table bp-bank-table">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Transaction</th>
+              <th scope="col" className="num">Montant HT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td className="bp-bank-date">{bankDay(r) ? frDate(bankDay(r)) : "—"}</td>
+                <td>
+                  <span className="bp-name">{r.counterparty || "Sans contrepartie"}</span>
+                  {r.needs_review && <> <span className="bp-tag is-warn">à vérifier</span></>}
+                  {r.manual_line && <> <span className="bp-tag">corrigé</span></>}
+                  {r.label && r.label !== r.counterparty && <div className="bp-sub">{r.label}</div>}
+                  <div className="bp-bank-classify">
+                    <select
+                      className="bp-tin"
+                      aria-label={`Ligne de ${r.counterparty || "la transaction"}`}
+                      value={r.line ?? ""}
+                      onChange={(e) => e.target.value && void classify(r.id, e.target.value as FixedChargeLine)}
+                    >
+                      {r.line === null && <option value="">Non classée</option>}
+                      {LINE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    {r.needs_review && r.line && (
+                      <button type="button" className="btn secondary small" onClick={() => void classify(r.id, r.line!)}>
+                        Valider
+                      </button>
+                    )}
+                  </div>
+                </td>
+                <td className="num">
+                  {cents(r.amount_ht_cents)}
+                  {r.amount_cents !== r.amount_ht_cents && <div className="bp-sub">{cents(r.amount_cents)} TTC</div>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          {!others && (
+            <tfoot>
+              <tr>
+                <th scope="row" colSpan={2}>Total</th>
+                <td className="num">{eur(total)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      )}
+      <p className="bp-note">
+        Débits Qonto réglés, classés par l’IA (Kimi) ou corrigés à la main, montants hors taxes (TTC − TVA ; sans TVA connue, HT = TTC).
+        Changer la ligne d’une transaction recalcule le plan ; la correction sert d’exemple aux prochains classements.
+      </p>
     </>
   );
 }

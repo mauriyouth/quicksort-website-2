@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
 import { DetailPanel, type DetailKind } from "./DetailPanel";
 import { db, errorMessage, isMissingRelationError } from "@quicksort/hr-db";
 import { Notice } from "@quicksort/hr-ui";
 import { loadWorkspace } from "../../hr/data";
 import { loadPlanMultipliers, type PlanMultipliers, type PlanScenario } from "../../hr/economics";
+import { BankError, useBankApi, type BankStatus } from "./bank";
 import {
   aggregateActuals,
+  aggregateFixedCharges,
   loadCra,
   loadExtensions,
   loadInvoices,
@@ -16,6 +18,7 @@ import {
   loadStructureStaff,
   saveSavedPlan,
   setStructure,
+  type BankRow,
   type PlanSources,
   type SavedPlan,
   type StructureEntry,
@@ -31,6 +34,8 @@ import {
   num,
   pct,
   planRows,
+  type FixedChargeLine,
+  type FixedLineKey,
   type HypothesisKey,
   type Hypotheses,
 } from "./model";
@@ -85,6 +90,21 @@ const multLabel = (v: number) => `×${String(v).replace(".", ",")}`;
 type Draft = { hyp: Record<HypothesisKey, string>; ventes: string[]; departs: string[] };
 
 const untyped = () => db() as unknown as SupabaseClient;
+const FIXED_KEYS: readonly string[] = ["loyer", "outils", "marketing", "honoraires", "divers"] satisfies FixedLineKey[];
+const isFixedKey = (k: string): k is FixedLineKey => FIXED_KEYS.includes(k);
+/** Background sync on page open when the last run is older than this. */
+const SYNC_STALE_MS = 12 * 3600_000;
+/** Follow-up runs while a partial sync still has work left. */
+const MAX_SYNC_RELAUNCHES = 10;
+
+/** "à l’instant", "12 min", "3 h", "2 j". */
+function ago(iso: string, now: number): string {
+  const min = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
+  if (min < 1) return "à l’instant";
+  if (min < 60) return `il y a ${min} min`;
+  const h = Math.round(min / 60);
+  return h < 24 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
+}
 const str = (v: number) => String(v);
 
 export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
@@ -127,6 +147,89 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   const [message, setMessage] = useState("");
   /** Open drill-down panel: which P&L row and month (null = closed). */
   const [detail, setDetail] = useState<{ kind: DetailKind; month: number } | null>(null);
+
+  // Qonto debits behind the fixed-charge rows. Any failure leaves the plan on hypotheses.
+  const bankApi = useBankApi();
+  const [bankStatus, setBankStatus] = useState<BankStatus | null>(null);
+  const [bankRows, setBankRows] = useState<BankRow[]>([]);
+  const [loadNote, setLoadNote] = useState("");
+  const [syncNote, setSyncNote] = useState("");
+  const bankNote = syncNote || loadNote;
+  const [syncing, setSyncing] = useState(false);
+  const [bankVersion, setBankVersion] = useState(0);
+  const autoSynced = useRef(false);
+
+  const bankError = (e: unknown) =>
+    e instanceof BankError && e.status === 409 ? "Connectez Qonto dans les réglages de facturation."
+      : e instanceof BankError && e.status !== 0 ? e.message
+        : "Données Qonto indisponibles.";
+
+  useEffect(() => {
+    let cancelled = false;
+    setBankRows([]);
+    setLoadNote("");
+    (async () => {
+      const status = await bankApi.status();
+      if (cancelled) return;
+      setBankStatus(status);
+      const rows = await bankApi.transactions(year);
+      if (cancelled) return;
+      setBankRows(rows);
+    })().catch((e) => {
+      if (cancelled) return;
+      setLoadNote(bankError(e));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bankApi, year, bankVersion]);
+
+  const syncQonto = useCallback(async () => {
+    setSyncing(true);
+    setSyncNote("");
+    try {
+      for (let run = 0; run <= MAX_SYNC_RELAUNCHES; run++) {
+        const result = await bankApi.sync();
+        const status = await bankApi.status();
+        setBankStatus(status);
+        if (result.status === "locked") {
+          setSyncNote("Une synchronisation est déjà en cours.");
+          break;
+        }
+        // Relaunch only for work left by the time budget, not after a Qonto error.
+        const more = result.status === "partial" && !status.state.lastError && (result.remaining > 0 || !status.state.backfillDone);
+        if (!more) break;
+      }
+    } catch (e) {
+      setSyncNote(bankError(e));
+    } finally {
+      setSyncing(false);
+      setBankVersion((v) => v + 1);
+    }
+  }, [bankApi]);
+
+  // Background refresh on page open when the last run is stale.
+  useEffect(() => {
+    if (!bankStatus || autoSynced.current) return;
+    autoSynced.current = true;
+    const last = bankStatus.state.lastRunAt;
+    if (!last || Date.now() - Date.parse(last) > SYNC_STALE_MS) void syncQonto();
+  }, [bankStatus, syncQonto]);
+
+  async function classifyBank(id: string, line: FixedChargeLine) {
+    const before = bankRows.find((r) => r.id === id);
+    if (!before) return;
+    const patch = (r: BankRow) => (r.id === id ? { ...r, manual_line: line, line, needs_review: false } : r);
+    setBankRows((rows) => rows.map(patch));
+    if (before.needs_review) setBankStatus((s) => s && { ...s, reviewCount: Math.max(0, s.reviewCount - 1) });
+    try {
+      await bankApi.classify(id, line);
+    } catch (e) {
+      setBankRows((rows) => rows.map((r) => (r.id === id ? before : r)));
+      if (before.needs_review) setBankStatus((s) => s && { ...s, reviewCount: s.reviewCount + 1 });
+      throw new Error(bankError(e));
+    }
+  }
 
   // Year-independent sources, loaded once.
   useEffect(() => {
@@ -190,6 +293,12 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   }, [year]);
 
   const openFrom = firstOpenMonth(year, today);
+  // Real fixed charges only once the first full sync is done.
+  const coverageStart = bankStatus?.state.backfillDone ? bankStatus.state.coverageStart : null;
+  const bank = useMemo(
+    () => aggregateFixedCharges(bankRows, year, openFrom, coverageStart),
+    [bankRows, year, openFrom, coverageStart],
+  );
   const multiplier = base ? base.multipliers[scenario] : 0;
   const agg = useMemo(
     () => (base && cra ? aggregateActuals({ ...base, cjmMultiplier: multiplier, cra }, year, openFrom, today) : null),
@@ -238,9 +347,15 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     if (!agg || !draft || !H) return null;
     return computePlan(
       H,
-      agg.months.map((actual, m) => ({ actual, ventes: num(draft.ventes[m]), departs: num(draft.departs[m]), structure: agg.structure[m] })),
+      agg.months.map((actual, m) => ({
+        actual,
+        ventes: num(draft.ventes[m]),
+        departs: num(draft.departs[m]),
+        structure: agg.structure[m],
+        fixed: bank.fixed[m] ?? undefined,
+      })),
     );
-  }, [agg, draft, H]);
+  }, [agg, draft, H, bank]);
 
   const edit = (fn: (d: Draft) => Draft) => {
     setDraft((d) => (d ? fn(d) : d));
@@ -536,9 +651,28 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
             <div className="bp-heading is-row">
               <div>
                 <h2 id="bp-pl">Compte de résultat mensuel</h2>
-                <p>Les mois « Réel » sont calculés depuis la facturation, le staffing, les CRA et les salaires. Saisissez les ventes et départs des mois prévisionnels.</p>
+                <p>Les mois « Réel » sont calculés depuis la facturation, le staffing, les CRA, les salaires et les transactions Qonto. Saisissez les ventes et départs des mois prévisionnels.</p>
+              </div>
+              <div className="bp-bank-col">
+              <div className="bp-bank">
+                <span className="bp-meta" role="status">
+                  {syncing
+                    ? "Synchronisation…"
+                    : bankNote
+                      ? bankNote
+                      : bankStatus?.state.lastRunAt
+                        ? `Synchronisé ${ago(bankStatus.state.lastRunAt, Date.now())}${bankStatus.reviewCount > 0 ? ` · ${bankStatus.reviewCount} à vérifier` : ""}`
+                        : bankStatus
+                          ? "Jamais synchronisé"
+                          : ""}
+                  {bankStatus && !bankStatus.state.backfillDone && !bankNote && <span className="bp-tag">Rattrapage en cours</span>}
+                </span>
+                <button type="button" className="btn secondary small" onClick={() => void syncQonto()} disabled={syncing}>
+                  <RefreshCw size={14} className={syncing ? "bp-spin" : undefined} /> Actualiser Qonto
+                </button>
               </div>
               <span className="bp-meta">Faites défiler horizontalement →</span>
+              </div>
             </div>
             <div className="bp-card bp-scroll">
               <div className="bp-grid">
@@ -591,28 +725,37 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                         type="button"
                         className="bp-cell lab bp-drill"
                         onClick={() => setDetail({ kind: r.key!, month: Math.max(0, Math.min(11, actualCount > 0 ? actualCount - 1 : 0)) })}
-                        title={r.key === "ca" || r.key === "enc" ? "Voir le détail des factures" : "Voir le détail par personne"}
+                        title={
+                          r.key === "ca" || r.key === "enc" ? "Voir le détail des factures"
+                            : isFixedKey(r.key) ? "Voir le détail des transactions"
+                              : "Voir le détail par personne"
+                        }
                       >
                         {r.label} <span className="bp-drill-hint" aria-hidden="true">›</span>
                       </button>
                     ) : (
                       <div className="bp-cell lab">{r.label}</div>
                     )}
-                    {r.values.map((v, m) =>
-                      r.key ? (
+                    {r.values.map((v, m) => {
+                      const toReview = r.key && isFixedKey(r.key)
+                        ? (bank.lines[m] ?? []).filter((t) => t.needs_review && t.line === r.key).length
+                        : 0;
+                      return r.key ? (
                         <button
                           key={m}
                           type="button"
                           className={`bp-cell bp-drill${plan.actual[m] ? " is-actual" : ""}`}
                           onClick={() => setDetail({ kind: r.key!, month: m })}
-                          aria-label={`${r.label} — détail ${MONTH_NAMES[m]}`}
+                          aria-label={`${r.label} — détail ${MONTH_NAMES[m]}${toReview ? ` · ${toReview} à vérifier` : ""}`}
+                          title={toReview ? `${toReview} transaction${toReview > 1 ? "s" : ""} à vérifier` : undefined}
                         >
+                          {toReview > 0 && <span className="bp-dot" aria-hidden="true" />}
                           {fmt(v)}
                         </button>
                       ) : (
                         <div key={m} className={`bp-cell${plan.actual[m] ? " is-actual" : ""}`}>{r.kind === "pct" ? pct(v) : fmt(v)}</div>
-                      ),
-                    )}
+                      );
+                    })}
                     {r.kind !== "section" && (
                       <div className="bp-cell tot">{r.total === null ? "" : r.kind === "pct" ? pct(r.total) : fmt(r.total)}</div>
                     )}
@@ -659,6 +802,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               hypotheses={H!}
               multiplier={multiplier}
               structure={{ employees: staffChoices, entries: base.structureStaff, onSave: saveStructure }}
+              bank={{ lines: bank.lines, unclassified: bank.unclassified, fixed: bank.fixed, onClassify: classifyBank }}
             />
           )}
 
@@ -668,7 +812,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
             freelances = jours CRA × taux journalier · salaires = salaire mensuel brut × multiplicateur de charges (scénario {SCENARIOS.find((s) => s.id === scenario)!.label.toLowerCase()} : {multLabel(multiplier)}, × 1,4 pour les stagiaires) · inter-contrat =
             salariés sans mission sur le mois · départs = sorties d’employés. Salaires structure : personnes listées en structure, sur leur période
             (par défaut de l’embauche à la sortie ; prévisionnel : dernier salaire connu), hors jours ouvrés en mission —
-            comptés en salaires consultants, au prorata de l’allocation. Autres charges variables et fixes : hypothèses.
+            comptés en salaires consultants, au prorata de l’allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses.
             Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur le résultat d’exploitation annuel positif (EBE − dotations) ·
             encaissements décalés du délai client, les coûts sont payés le mois même.
           </footer>

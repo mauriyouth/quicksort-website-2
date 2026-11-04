@@ -180,6 +180,9 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
   };
 }
 
+export type FixedLineKey = "loyer" | "outils" | "marketing" | "honoraires" | "divers";
+export type FixedChargeLine = FixedLineKey | "hors_charges_fixes";
+
 export type RowKind = "line" | "sub" | "total" | "key" | "pct" | "section";
 export type PlanRow = {
   /** Set on rows that open a drill-down panel. */

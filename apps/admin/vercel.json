@@ -11,6 +11,12 @@
       "destination": "/index.html"
     }
   ],
+  "crons": [
+    {
+      "path": "/api/bank-transactions-cron",
+      "schedule": "0 5 * * *"
+    }
+  ],
   "functions": {
     "api/team-photo.mjs": {
       "includeFiles": "private/team-photos/**"

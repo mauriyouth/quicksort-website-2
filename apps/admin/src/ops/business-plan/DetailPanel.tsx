@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { Aggregate, SalaryLine, StructureEntry } from "./actuals";
-import { fmt, MONTH_NAMES, pct, type Hypotheses, type PlanResult } from "./model";
+import { fmt, MONTH_NAMES, pct, type FixedLineKey, type Hypotheses, type PlanResult } from "./model";
 
 /**
  * Drill-down panel for the P&L rows "Chiffre d’affaires", "Salaires
@@ -11,7 +11,7 @@ import { fmt, MONTH_NAMES, pct, type Hypotheses, type PlanResult } from "./model
  * forecast months show the formula plus today's named team, the base the
  * forecast projects from.
  */
-export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc";
+export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc" | FixedLineKey;
 
 const TITLES: Record<DetailKind, string> = {
   ca: "Chiffre d’affaires",
@@ -20,6 +20,11 @@ const TITLES: Record<DetailKind, string> = {
   fs: "Salaires structure chargés",
   inter: "Inter-contrats",
   enc: "Encaissements clients",
+  loyer: "Loyer et locaux",
+  outils: "Outils, cloud et licences IA",
+  marketing: "Marketing et événements",
+  honoraires: "Honoraires (comptable, juridique)",
+  divers: "Divers",
 };
 
 /** Who can be listed as structure staff, their periods, and how to change them. */

@@ -8,6 +8,7 @@ import {
   kEur,
   pct,
 } from "../apps/admin/src/ops/business-plan/model.ts";
+import { aggregateFixedCharges } from "../apps/admin/src/ops/business-plan/actuals.ts";
 
 const VENTES = [2, 1, 2, 1, 1, 2, 1, 0, 2, 2, 1, 1];
 const DEPARTS = [0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0];
@@ -327,4 +328,75 @@ test("operating result = EBITDA − depreciation, taxed instead of EBITDA, cash 
   assert.ok(Math.abs(r.totals.exPct - r.totals.ex / r.totals.ca) < 1e-9);
   assert.deepEqual(r.series.treso, base.series.treso);
   assert.deepEqual(planRows(r).find((x) => x.label === "EBIT (résultat d’exploitation)").values, r.series.ex);
+});
+
+const bank = (o) => ({
+  id: String(Math.random()), month: "2027-03-01", line: "loyer", amount_ht_cents: 100000, status: "completed",
+  needs_review: false, label: "", counterparty: "", settled_at: "2027-03-05", emitted_at: null, amount_cents: 120000,
+  ai_line: null, manual_line: null, ai_confidence: null, ...o,
+});
+
+test("aggregateFixedCharges sums HT completed debits per month and line", () => {
+  const r = aggregateFixedCharges([
+    bank({ settled_at: "2027-03-20" }), bank({ amount_ht_cents: 50050, settled_at: "2027-03-02" }),
+    bank({ status: "declined" }), bank({ line: "hors_charges_fixes", amount_ht_cents: 999 }),
+    bank({ line: null, amount_ht_cents: 777 }), bank({ line: "outils", amount_ht_cents: 2000 }),
+  ], 2027, 6, "2027-01-01");
+  assert.deepEqual(r.fixed[2], { loyer: 1500.5, outils: 20, marketing: 0, honoraires: 0, divers: 0 });
+  assert.equal(r.lines[2].length, 5);
+  assert.equal(r.lines[2][0].settled_at, "2027-03-02");
+  assert.equal(r.unclassified[2].length, 2);
+});
+
+test("covered closed month with no transaction is all zeros", () => {
+  const r = aggregateFixedCharges([], 2027, 6, "2027-01-01");
+  assert.deepEqual(r.fixed[0], { loyer: 0, outils: 0, marketing: 0, honoraires: 0, divers: 0 });
+  assert.deepEqual(r.lines[0], []);
+});
+
+test("month before coverageStart is null", () => {
+  const r = aggregateFixedCharges([], 2027, 6, "2027-03-01");
+  assert.equal(r.fixed[1], null);
+  assert.equal(r.lines[1], null);
+  assert.notEqual(r.fixed[2], null);
+});
+
+test("coverageStart null gives all null", () => {
+  const r = aggregateFixedCharges([bank({})], 2027, 6, null);
+  assert.ok(r.fixed.every((x) => x === null));
+  assert.ok(r.unclassified.every((x) => x === null));
+});
+
+test("open month is null", () => {
+  const r = aggregateFixedCharges([bank({})], 2027, 2, "2027-01-01");
+  assert.equal(r.fixed[2], null);
+  assert.equal(r.review[2], 0);
+});
+
+test("review counts needs_review per month", () => {
+  const r = aggregateFixedCharges([bank({ needs_review: true }), bank({ needs_review: true }), bank({}), bank({ needs_review: true, status: "declined" })], 2027, 6, "2027-01-01");
+  assert.equal(r.review[2], 2);
+  assert.equal(r.review[0], 0);
+});
+
+test("computePlan uses fixed actuals on closed months and hypotheses on open months", () => {
+  const h = DEFAULT_HYPOTHESES;
+  const closed = { cons: 3, ca: 50000, free: 10000, sal: 10000, inter: 0, ventes: 0, departs: 0 };
+  const fixed = { loyer: 1000, outils: 200, marketing: 300, honoraires: 400, divers: 100 };
+  const base = computePlan(h, [{ actual: closed, ventes: 0, departs: 0, structure: 5000 }]);
+  const real = computePlan(h, [{ actual: closed, ventes: 0, departs: 0, structure: 5000, fixed }]);
+  assert.equal(real.series.fl[0], 1000);
+  assert.equal(real.series.fd[0], 100);
+  assert.equal(real.series.fix[0], 5000 + 2000);
+  assert.equal(real.series.eb[0], real.series.mb[0] - 7000);
+  assert.equal(real.series.treso[0], h.tresoDebut + real.series.enc[0] - 0 - real.series.prod[0] - real.series.varr[0] - 7000);
+  const open = computePlan(h, [{ actual: null, ventes: 0, departs: 0, structure: 5000, fixed }]);
+  assert.equal(open.series.fl[0], h.fLoyer);
+});
+
+test("planRows tags the five fixed lines with drill keys", () => {
+  const h = DEFAULT_HYPOTHESES;
+  const rows = planRows(computePlan(h, [forecast(0)]));
+  const keys = rows.filter((r) => ["loyer", "outils", "marketing", "honoraires", "divers"].includes(r.key)).map((r) => r.key);
+  assert.deepEqual(keys, ["loyer", "outils", "marketing", "honoraires", "divers"]);
 });

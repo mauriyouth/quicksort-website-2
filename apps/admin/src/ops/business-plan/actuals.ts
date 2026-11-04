@@ -25,7 +25,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Assignment, Employee, Salary, StaffingProject } from "../../hr/domain.ts";
 import { storedPricingLines, openDaysBetween } from "../../sales/pricing-lines.ts";
-import type { ActualMonth, Hypotheses } from "./model.ts";
+import type { ActualMonth, FixedActuals, FixedChargeLine, Hypotheses } from "./model.ts";
 
 export type InvoiceRow = {
   status: string;
@@ -630,4 +630,61 @@ export async function saveSavedPlan(
   const result = await client.from("business_plans").upsert({ ...plan, updated_at });
   if (result.error) throw result.error;
   return updated_at;
+}
+
+export type BankRow = {
+  id: string;
+  /** First day of the month, YYYY-MM-01. */
+  month: string;
+  line: FixedChargeLine | null;
+  amount_ht_cents: number;
+  status: string;
+  needs_review: boolean;
+  label: string;
+  counterparty: string;
+  settled_at: string | null;
+  emitted_at: string | null;
+  amount_cents: number;
+  ai_line: string | null;
+  manual_line: string | null;
+  ai_confidence: number | null;
+};
+
+const bankDate = (r: BankRow) => r.settled_at ?? r.emitted_at ?? "";
+
+/**
+ * Fixed charges per month from classified Qonto debits (completed only).
+ * A month is covered when it is closed (< openFrom) and not before
+ * `coverageStart`; other months are null (the plan falls back to hypotheses).
+ */
+export function aggregateFixedCharges(
+  rows: BankRow[],
+  year: number,
+  openFrom: number,
+  coverageStart: string | null,
+): { fixed: (FixedActuals | null)[]; lines: (BankRow[] | null)[]; review: number[]; unclassified: (BankRow[] | null)[] } {
+  const fixed: (FixedActuals | null)[] = [];
+  const lines: (BankRow[] | null)[] = [];
+  const review: number[] = [];
+  const unclassified: (BankRow[] | null)[] = [];
+  for (let m = 0; m < 12; m++) {
+    const month = `${year}-${pad(m + 1)}-01`;
+    if (!(m < openFrom && coverageStart != null && month >= coverageStart)) {
+      fixed.push(null); lines.push(null); unclassified.push(null); review.push(0);
+      continue;
+    }
+    const mine = rows
+      .filter((r) => r.status === "completed" && r.month === month)
+      .sort((a, b) => bankDate(a).localeCompare(bankDate(b)));
+    const cents = { loyer: 0, outils: 0, marketing: 0, honoraires: 0, divers: 0 };
+    for (const r of mine) if (r.line && r.line !== "hors_charges_fixes") cents[r.line] += r.amount_ht_cents;
+    fixed.push({
+      loyer: cents.loyer / 100, outils: cents.outils / 100, marketing: cents.marketing / 100,
+      honoraires: cents.honoraires / 100, divers: cents.divers / 100,
+    });
+    lines.push(mine);
+    unclassified.push(mine.filter((r) => r.line == null || r.line === "hors_charges_fixes"));
+    review.push(mine.filter((r) => r.needs_review).length);
+  }
+  return { fixed, lines, review, unclassified };
 }

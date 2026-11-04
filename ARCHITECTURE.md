@@ -169,9 +169,11 @@ consuming app's Vite build compiles them, and no package has a build step.
    Supabase client with the caller's bearer token and the *publishable* key.
    RLS therefore applies to them too. `server/portal-auth.ts`
    (`requirePortalOwner`) gates owner-only operations. No service-role key is
-   used anywhere.
+   used anywhere except by the bank cron (item 7), which has no caller
+   identity.
 6. **Third-party secrets** (OpenAI key, Qonto credentials, Google
-   service-account JSON) are stored encrypted in settings tables.
+   service-account JSON, Kimi key in `ai_settings` id `bank-classifier`) are
+   stored encrypted in settings tables.
    `AI_SETTINGS_ENCRYPTION_KEY` (server env only) encrypts and decrypts them.
    `OPENAI_API_KEY` and `TREG_TOKEN` env vars act as fallbacks. Never prefix
    a secret with `VITE_`.

@@ -77,6 +77,14 @@ The existing website Vercel project is configured to build from `apps/web`, with
 
 All three Vercel projects have `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` configured for production, preview and development. Use the public publishable key, never a secret/service-role key. Environment changes require a new Vite build.
 
+The admin project also needs these server-only variables for the Qonto bank sync (never prefix them with `VITE_`):
+
+- `CRON_SECRET`: bearer Vercel cron sends to `/api/bank-transactions-cron`.
+- `SUPABASE_SERVICE_ROLE_KEY`: used only by that cron, which has no caller identity (without it the cron returns 503).
+- `MOONSHOT_API_KEY`: optional fallback for the Kimi classifier; the key is normally saved in Settings → Transaction classification.
+
+Deploy order: apply `supabase/migrations/20261207090000_bank_transactions.sql` (`pnpm exec supabase db push --linked`) before deploying the admin app that uses it.
+
 Coordinate changing the existing website Root Directory with merging the monorepo commit. The old website revision cannot build from `apps/web`, and the monorepo revision should not build as the old root app. The local `.vercel` website link lives in `apps/web/.vercel`.
 
 The portals use SPA rewrites and no-index headers. The website has narrow rewrites for `/career/:slug` and `/fr/career/:slug`, retaining 404 responses for unrelated unknown routes. Job detail pages return an app shell and mark unavailable jobs noindex after loading; they are not server-rendered job pages.

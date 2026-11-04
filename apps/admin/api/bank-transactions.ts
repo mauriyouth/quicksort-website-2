@@ -1,14 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { FIXED_CHARGE_LINES } from "../server/bank/classifier.ts";
+import { FIXED_CHARGE_LINES, REQUEST_TIMEOUT_MS } from "../server/bank/classifier.ts";
 import { NotConfiguredError, syncWithSettings } from "../server/bank/run.ts";
 import type { RunDeps } from "../server/bank/run.ts";
-import { loadClassifierSettings, saveClassifierSettings } from "../server/bank/settings.ts";
+import { ClassifierForbiddenError, loadClassifierSettings, saveClassifierSettings } from "../server/bank/settings.ts";
 import { createSupabaseBankStore } from "../server/bank/store.ts";
 import { HttpError } from "../server/invoicing/lifecycle.ts";
 import { settingsReady } from "../server/ai-settings.ts";
 
+export const config = { maxDuration: 120 };
 type Request = { method?: string; query?: Record<string, string | string[] | undefined>; headers: Record<string, string | string[] | undefined>; body: unknown };
 type Response = { setHeader(name: string, value: string): void; status(code: number): Response; json(body: unknown): void };
 type Deps = RunDeps & { createClient: typeof createClient };
@@ -69,7 +70,7 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
 };
 
 async function moonshotAcceptsKey(apiKey: string, fetchImpl: typeof fetch): Promise<boolean> {
-  const res = await fetchImpl(MODELS_URL, { headers: { authorization: `Bearer ${apiKey}` } });
+  const res = await fetchImpl(MODELS_URL, { headers: { authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   return res.ok;
 }
 
@@ -94,7 +95,12 @@ const actions: Record<string, (ctx: Ctx, input: any) => Promise<Result>> = {
     } else if (!(await loadClassifierSettings(client)).apiKey) {
       return { status: 400, body: { error: "Ajoutez d'abord une clé API Kimi." } };
     }
-    await saveClassifierSettings(client, input, deps.now?.());
+    try {
+      await saveClassifierSettings(client, input, deps.now?.());
+    } catch (e) {
+      if (e instanceof ClassifierForbiddenError) return { status: 403, body: { error: e.message } };
+      throw e;
+    }
     return { status: 200, body: { saved: true } };
   },
 };

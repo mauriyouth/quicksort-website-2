@@ -86,6 +86,9 @@ function parseResults(content: unknown, items: ClassifyInput[]): Classification[
   return out;
 }
 
+/** A Moonshot call may not eat the whole function budget. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+
 export function createKimiClassifier(cfg: { apiKey: string; model: string }, fetchImpl: typeof fetch = fetch) {
   return {
     async classify(items: ClassifyInput[], corrections: Correction[]): Promise<Classification[]> {
@@ -99,6 +102,7 @@ export function createKimiClassifier(cfg: { apiKey: string; model: string }, fet
           response_format: { type: "json_object" },
           messages: buildMessages(items, corrections),
         }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");

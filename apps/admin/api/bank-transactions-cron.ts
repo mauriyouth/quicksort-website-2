@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NotConfiguredError, syncWithSettings } from "../server/bank/run.ts";
 import type { RunDeps } from "../server/bank/run.ts";
 
+export const config = { maxDuration: 120 };
 type Request = { method?: string; headers: Record<string, string | string[] | undefined> };
 type Response = { setHeader(name: string, value: string): void; status(code: number): Response; json(body: unknown): void };
 type Deps = RunDeps & { createClient: typeof createClient };

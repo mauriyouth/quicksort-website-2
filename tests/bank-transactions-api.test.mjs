@@ -13,7 +13,7 @@ process.env.CRON_SECRET = "cron-secret";
 delete process.env.MOONSHOT_API_KEY;
 const KIMI = "sk-kimi-super-secret";
 
-function memoryClient(tables, ops) {
+function memoryClient(tables, ops, faults = {}) {
   return {
     rpc: async () => ({ data: "user-1", error: null }),
     from(table) {
@@ -38,9 +38,10 @@ function memoryClient(tables, ops) {
         let list = rows.filter(match);
         if (mode === "update") { for (const r of list) Object.assign(r, payload); if (!returning) return { data: null, error: null }; }
         if (mode === "upsert") {
+          if (faults.upsert) return { data: null, error: faults.upsert };
           const found = rows.find((r) => r[options?.onConflict ?? "id"] === payload[options?.onConflict ?? "id"]);
           if (found) Object.assign(found, payload); else rows.push({ ...payload });
-          return { data: null, error: null };
+          return { data: returning ? [{ ...payload }] : null, error: null };
         }
         for (const [c, asc] of [...orderBy].reverse()) list.sort((a, b) => ((a[c] ?? "") < (b[c] ?? "") ? -1 : (a[c] ?? "") > (b[c] ?? "") ? 1 : 0) * (asc ? 1 : -1));
         if (span) list = list.slice(span[0], span[1] + 1);
@@ -71,14 +72,15 @@ function fixture({ admin = true, qonto = true, kimi = false, extra = {} } = {}) 
     ...extra,
   };
   const ops = [];
-  const client = memoryClient(tables, ops);
+  const faults = {};
+  const client = memoryClient(tables, ops, faults);
   const fetchCalls = [];
   const state = { moonshotOk: true, syncCalls: 0 };
   const deps = {
     createClient: () => client,
     now: () => new Date("2026-11-04T05:00:00Z"),
     fetch: async (url, init) => { fetchCalls.push({ url, init }); return { ok: state.moonshotOk, status: state.moonshotOk ? 200 : 401 }; },
-    runBankSync: async () => { state.syncCalls++; return { status: "ok", fetched: 1, classified: 1, remaining: 0 }; },
+    runBankSync: async (args) => { state.syncCalls++; state.syncArgs = args; return { status: "ok", fetched: 1, classified: 1, remaining: 0 }; },
   };
   const bank = createBankHandler(deps);
   const cron = createBankCronHandler(deps);
@@ -89,7 +91,7 @@ function fixture({ admin = true, qonto = true, kimi = false, extra = {} } = {}) 
   };
   const auth = { authorization: "Bearer t" };
   return {
-    tables, ops, fetchCalls, state,
+    tables, ops, faults, fetchCalls, state,
     get: (query) => call(bank)({ method: "GET", query, headers: auth }),
     post: (body) => call(bank)({ method: "POST", body, headers: auth }),
     raw: call(bank),
@@ -215,4 +217,32 @@ test("sync runs runBankSync when connected", async () => {
   const res = await f.post({ action: "sync" });
   assert.equal(res.code, 200);
   assert.equal(res.body.fetched, 1);
+});
+
+test("unreadable stored Kimi key: status 200 (source invalid) and sync runs without classifier", async () => {
+  const f = fixture({ extra: { ai_settings: [{ id: "bank-classifier", encrypted_key: "not-a-valid-ciphertext", model: "kimi-x" }] } });
+  const status = await f.get({ resource: "status" });
+  assert.equal(status.code, 200);
+  assert.deepEqual(status.body.classifier, { configured: false, model: "kimi-x", source: "invalid" });
+  const sync = await f.post({ action: "sync" });
+  assert.equal(sync.code, 200);
+  assert.equal(f.state.syncCalls, 1);
+  assert.equal(f.state.syncArgs.classifier, null);
+  assert.ok(f.state.syncArgs.qonto);
+});
+
+test("save_classifier blocked by ai_settings RLS -> 403 with owner message", async () => {
+  for (const fault of [
+    { code: "42501", message: "new row violates row-level security policy for table \"ai_settings\"" },
+    { code: "PGRST301", message: "permission denied for table ai_settings" },
+  ]) {
+    const f = fixture();
+    f.faults.upsert = fault;
+    const res = await f.post({ action: "save_classifier", apiKey: KIMI, model: "kimi-a" });
+    assert.equal(res.code, 403);
+    assert.equal(res.body.error, "Seuls les propriétaires du portail peuvent modifier cette clé.");
+  }
+  const other = fixture();
+  other.faults.upsert = { code: "08006", message: "connection failure" };
+  assert.equal((await other.post({ action: "save_classifier", apiKey: KIMI, model: "kimi-a" })).code, 502);
 });

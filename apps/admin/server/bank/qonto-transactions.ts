@@ -71,8 +71,11 @@ export function mapTransaction(t: unknown): BankTransaction {
   };
 }
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export function createQontoTransactions(config: QontoConfig, fetchImpl: typeof fetch = fetch) {
-  const request = qontoRequest(config, fetchImpl);
+  // Bounded per request so a stalled Qonto call cannot overrun the function.
+  const request = qontoRequest(config, (url, init) => fetchImpl(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }));
   return {
     async listDebitsSince(since: string, page: number): Promise<TransactionPage> {
       const qs = new URLSearchParams({

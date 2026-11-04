@@ -916,7 +916,11 @@ function ClassifierPanel() {
       setSaved(true);
       await load();
     } catch (e) {
-      setError(e instanceof BankError && e.status === 400 ? e.message : "Only portal owners can change this key.");
+      setError(
+        e instanceof BankError
+          ? e.status === 403 ? "Only portal owners can change this key." : e.message
+          : errorMessage(e),
+      );
     } finally {
       setSaving(false);
     }
@@ -931,7 +935,9 @@ function ClassifierPanel() {
         {classifier
           ? classifier.configured
             ? `Configured — key source: ${source}, model: ${classifier.model}.`
-            : "Not configured — no API key set."
+            : classifier.source === "invalid"
+              ? "Stored key unreadable — save it again."
+              : "Not configured — no API key set."
           : "Loading…"}
       </p>
       <Notice error>{error}</Notice>

@@ -348,6 +348,18 @@ test("aggregateFixedCharges sums HT completed debits per month and line", () => 
   assert.equal(r.unclassified[2].length, 2);
 });
 
+test("aggregateFixedCharges counts completed debits not yet classified per covered month", () => {
+  const r = aggregateFixedCharges([
+    bank({ line: null }), bank({ line: null, settled_at: "2027-03-02" }),
+    bank({ line: null, status: "declined" }), bank({ line: "hors_charges_fixes" }),
+    bank({ line: null, month: "2027-08-01", settled_at: "2027-08-10" }),
+  ], 2027, 6, "2027-01-01");
+  assert.equal(r.unclassifiedCount.length, 12);
+  assert.equal(r.unclassifiedCount[2], 2);
+  assert.equal(r.unclassifiedCount[0], 0);
+  assert.equal(r.unclassifiedCount[7], 0); // open month: stays on hypotheses
+});
+
 test("covered closed month with no transaction is all zeros", () => {
   const r = aggregateFixedCharges([], 2027, 6, "2027-01-01");
   assert.deepEqual(r.fixed[0], { loyer: 0, outils: 0, marketing: 0, honoraires: 0, divers: 0 });

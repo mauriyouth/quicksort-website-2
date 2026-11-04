@@ -662,15 +662,23 @@ export function aggregateFixedCharges(
   year: number,
   openFrom: number,
   coverageStart: string | null,
-): { fixed: (FixedActuals | null)[]; lines: (BankRow[] | null)[]; review: number[]; unclassified: (BankRow[] | null)[] } {
+): {
+  fixed: (FixedActuals | null)[];
+  lines: (BankRow[] | null)[];
+  review: number[];
+  unclassified: (BankRow[] | null)[];
+  /** Completed debits Kimi has not classified yet (line null), per covered month; 0 elsewhere. */
+  unclassifiedCount: number[];
+} {
   const fixed: (FixedActuals | null)[] = [];
+  const unclassifiedCount: number[] = [];
   const lines: (BankRow[] | null)[] = [];
   const review: number[] = [];
   const unclassified: (BankRow[] | null)[] = [];
   for (let m = 0; m < 12; m++) {
     const month = `${year}-${pad(m + 1)}-01`;
     if (!(m < openFrom && coverageStart != null && month >= coverageStart)) {
-      fixed.push(null); lines.push(null); unclassified.push(null); review.push(0);
+      fixed.push(null); lines.push(null); unclassified.push(null); review.push(0); unclassifiedCount.push(0);
       continue;
     }
     const mine = rows
@@ -685,6 +693,7 @@ export function aggregateFixedCharges(
     lines.push(mine);
     unclassified.push(mine.filter((r) => r.line == null || r.line === "hors_charges_fixes"));
     review.push(mine.filter((r) => r.needs_review).length);
+    unclassifiedCount.push(mine.filter((r) => r.line == null).length);
   }
-  return { fixed, lines, review, unclassified };
+  return { fixed, lines, review, unclassified, unclassifiedCount };
 }

@@ -314,6 +314,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     () => aggregateFixedCharges(bankRows, year, openFrom, coverageStart),
     [bankRows, year, openFrom, coverageStart],
   );
+  const unclassifiedTotal = bank.unclassifiedCount.reduce((a, b) => a + b, 0);
   const multiplier = base ? base.multipliers[scenario] : 0;
   const agg = useMemo(
     () => (base && cra ? aggregateActuals({ ...base, cjmMultiplier: multiplier, cra }, year, openFrom, today) : null),
@@ -670,13 +671,13 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               </div>
               <div className="bp-bank-col">
               <div className="bp-bank">
-                <span className="bp-meta" role="status">
+                <span className="bp-meta" role="status" title={!syncing && !bankNote && bankStatus?.state.lastError ? bankStatus.state.lastError : undefined}>
                   {syncing
                     ? "Synchronisation…"
                     : bankNote
                       ? bankNote
                       : bankStatus?.state.lastRunAt
-                        ? `Synchronisé ${ago(bankStatus.state.lastRunAt, Date.now())}${bankStatus.reviewCount > 0 ? ` · ${bankStatus.reviewCount} à vérifier` : ""}`
+                        ? `${bankStatus.state.lastError ? "Dernière synchro Qonto en erreur" : `Synchronisé ${ago(bankStatus.state.lastRunAt, Date.now())}`}${bankStatus.reviewCount > 0 ? ` · ${bankStatus.reviewCount} à vérifier` : ""}${unclassifiedTotal > 0 ? ` · ${unclassifiedTotal} non classée${unclassifiedTotal > 1 ? "s" : ""}` : ""}`
                         : bankStatus
                           ? "Jamais synchronisé"
                           : ""}
@@ -755,16 +756,22 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                       const toReview = r.key && isFixedKey(r.key)
                         ? (bank.lines[m] ?? []).filter((t) => t.needs_review && t.line === r.key).length
                         : 0;
+                      const pending = r.key && isFixedKey(r.key) ? bank.unclassifiedCount[m] : 0;
+                      const hint = [
+                        toReview ? `${toReview} transaction${toReview > 1 ? "s" : ""} à vérifier` : "",
+                        pending ? `${pending} transaction${pending > 1 ? "s" : ""} non classée${pending > 1 ? "s" : ""}` : "",
+                      ].filter(Boolean).join(" · ");
                       return r.key ? (
                         <button
                           key={m}
                           type="button"
                           className={`bp-cell bp-drill${plan.actual[m] ? " is-actual" : ""}`}
                           onClick={() => setDetail({ kind: r.key!, month: m })}
-                          aria-label={`${r.label} — détail ${MONTH_NAMES[m]}${toReview ? ` · ${toReview} à vérifier` : ""}`}
-                          title={toReview ? `${toReview} transaction${toReview > 1 ? "s" : ""} à vérifier` : undefined}
+                          aria-label={`${r.label} — détail ${MONTH_NAMES[m]}${hint ? ` · ${hint}` : ""}`}
+                          title={hint || undefined}
                         >
                           {toReview > 0 && <span className="bp-dot" aria-hidden="true" />}
+                          {pending > 0 && <span className="bp-dot is-pending" aria-hidden="true" />}
                           {fmt(v)}
                         </button>
                       ) : (

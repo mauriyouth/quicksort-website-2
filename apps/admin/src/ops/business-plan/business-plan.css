@@ -500,6 +500,7 @@
   border-radius: 50%;
   background: var(--qs-danger);
 }
+.bp-dot.is-pending { background: transparent; box-shadow: inset 0 0 0 1.5px var(--qs-fg-2); }
 .bp-tag.is-warn { background: transparent; color: var(--qs-danger); box-shadow: inset 0 0 0 1px var(--qs-danger); }
 .bp-bank-switch { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
 .bp-bank-switch .bp-drawer-sub { margin: 0; }

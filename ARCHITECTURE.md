@@ -175,6 +175,12 @@ consuming app's Vite build compiles them, and no package has a build step.
    `AI_SETTINGS_ENCRYPTION_KEY` (server env only) encrypts and decrypts them.
    `OPENAI_API_KEY` and `TREG_TOKEN` env vars act as fallbacks. Never prefix
    a secret with `VITE_`.
+7. **Bank sync env vars** (admin app, server only): `CRON_SECRET` is the
+   bearer Vercel cron sends to `/api/bank-transactions-cron`.
+   `MOONSHOT_API_KEY` is a fallback; the Kimi key is normally set in
+   Settings → Transaction classification (`ai_settings`, id
+   `bank-classifier`). The cron has no caller identity, so it is the one
+   path that needs `SUPABASE_SERVICE_ROLE_KEY` (without it, it returns 503).
 
 ## Data layer (Supabase)
 
@@ -227,6 +233,12 @@ consuming app's Vite build compiles them, and no package has a build step.
   the bytes straight to Drive, then calls `register`. A file that cannot be
   registered goes to the trash. Listing and alerts query Supabase directly
   under RLS.
+- **Bank transactions → business-plan fixed charges:** `apps/admin/server/bank/`
+  syncs Qonto transactions incrementally into Supabase and classifies them
+  with Kimi (Moonshot). `api/bank-transactions.ts` serves the admin UI
+  (list, refresh, drill-down); `api/bank-transactions-cron.ts` runs daily at
+  05:00 UTC. Closed months in the business plan read their fixed charges
+  from these rows, and a month with no Qonto rows is never shown as 0 €.
 
 ## Deployment
 

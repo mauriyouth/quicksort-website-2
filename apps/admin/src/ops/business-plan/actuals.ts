@@ -695,11 +695,11 @@ export function aggregateFixedCharges(
     const mine = rows
       .filter((r) => r.status === "completed" && r.month === month)
       .sort((a, b) => bankDate(a).localeCompare(bankDate(b)));
-    const cents = { loyer: 0, outils: 0, marketing: 0, honoraires: 0, divers: 0 };
+    const cents = { loyer: 0, outils: 0, marketing: 0, honoraires: 0, deplacements: 0, divers: 0 };
     for (const r of mine) if (r.line && r.line !== "hors_charges_fixes" && !isVatRemittance(r)) cents[r.line] += r.amount_ht_cents;
     fixed.push({
       loyer: cents.loyer / 100, outils: cents.outils / 100, marketing: cents.marketing / 100,
-      honoraires: cents.honoraires / 100, divers: cents.divers / 100,
+      honoraires: cents.honoraires / 100, deplacements: cents.deplacements / 100, divers: cents.divers / 100,
     });
     lines.push(mine);
     unclassified.push(mine.filter((r) => r.line == null || r.line === "hors_charges_fixes"));

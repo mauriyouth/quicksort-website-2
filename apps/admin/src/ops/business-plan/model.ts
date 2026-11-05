@@ -35,6 +35,8 @@ export type Hypotheses = {
   fOutils: number;
   fMarketing: number;
   fHonoraires: number;
+  /** Travel: trains, flights, hotels, taxis, fuel, tolls, parking. */
+  fDeplacements: number;
   fDivers: number;
   /** Monthly depreciation, amortisation and provisions (non-cash), €. */
   fAmort: number;
@@ -52,7 +54,7 @@ export const DEFAULT_HYPOTHESES: Hypotheses = {
   consDebut: 18, tjm: 650, jours: 18, occ: 90, pctFree: 40,
   coutFree: 480, salaire: 7000,
   commFactor: 0, primeIC: 500, primeChasseur: 800,
-  fLoyer: 4000, fOutils: 3000, fMarketing: 2500, fHonoraires: 1500, fDivers: 1000, fAmort: 0,
+  fLoyer: 4000, fOutils: 3000, fMarketing: 2500, fHonoraires: 1500, fDeplacements: 2000, fDivers: 1000, fAmort: 0,
   tresoDebut: 250000, dso: 60, tauxIS: 25,
 };
 
@@ -93,7 +95,7 @@ export type MonthInput = {
 export type Series = {
   cons: number[]; ca: number[]; free: number[]; sal: number[]; inter: number[]; prod: number[];
   fac: number[]; ic: number[]; ch: number[]; varr: number[]; mb: number[]; mbp: number[];
-  fs: number[]; fl: number[]; fo: number[]; fm: number[]; fh: number[]; fd: number[]; fix: number[];
+  fs: number[]; fl: number[]; fo: number[]; fm: number[]; fh: number[]; fdp: number[]; fd: number[]; fix: number[];
   eb: number[]; ebp: number[]; da: number[]; ex: number[]; exp: number[]; enc: number[]; treso: number[];
   /** VAT cash effect: collected on collections, paid to suppliers, remitted to the state, net. */
   tvaCol: number[]; tvaDed: number[]; tvaRem: number[]; tva: number[];
@@ -118,7 +120,7 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
   const pf = h.pctFree / 100;
   const S: Series = {
     cons: [], ca: [], free: [], sal: [], inter: [], prod: [], fac: [], ic: [], ch: [], varr: [], mb: [], mbp: [],
-    fs: [], fl: [], fo: [], fm: [], fh: [], fd: [], fix: [], eb: [], ebp: [], da: [], ex: [], exp: [], enc: [], treso: [],
+    fs: [], fl: [], fo: [], fm: [], fh: [], fdp: [], fd: [], fix: [], eb: [], ebp: [], da: [], ex: [], exp: [], enc: [], treso: [],
     tvaCol: [], tvaDed: [], tvaRem: [], tva: [],
     ventes: [], departs: [],
   };
@@ -145,12 +147,12 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
     const fStructure = m.structure ?? 0;
     const fx = m.actual && m.fixed
       ? m.fixed
-      : { loyer: h.fLoyer, outils: h.fOutils, marketing: h.fMarketing, honoraires: h.fHonoraires, divers: h.fDivers };
-    const fixMonth = fStructure + fx.loyer + fx.outils + fx.marketing + fx.honoraires + fx.divers;
+      : { loyer: h.fLoyer, outils: h.fOutils, marketing: h.fMarketing, honoraires: h.fHonoraires, deplacements: h.fDeplacements, divers: h.fDivers };
+    const fixMonth = fStructure + fx.loyer + fx.outils + fx.marketing + fx.honoraires + fx.deplacements + fx.divers;
     const eb = mb - fixMonth;
     S.cons.push(c); S.ca.push(ca); S.free.push(free); S.sal.push(sal); S.inter.push(inter); S.prod.push(prod);
     S.fac.push(fac); S.ic.push(ic); S.ch.push(ch); S.varr.push(varr); S.mb.push(mb); S.mbp.push(ca ? mb / ca : 0);
-    S.fs.push(fStructure); S.fl.push(fx.loyer); S.fo.push(fx.outils); S.fm.push(fx.marketing); S.fh.push(fx.honoraires); S.fd.push(fx.divers);
+    S.fs.push(fStructure); S.fl.push(fx.loyer); S.fo.push(fx.outils); S.fm.push(fx.marketing); S.fh.push(fx.honoraires); S.fdp.push(fx.deplacements); S.fd.push(fx.divers);
     S.fix.push(fixMonth); S.eb.push(eb); S.ebp.push(ca ? eb / ca : 0);
     // Operating result: EBITDA less depreciation (non-cash, so cash is unchanged).
     const ex = eb - h.fAmort;
@@ -171,7 +173,7 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
     if (m.actual && m.vat) ({ collected: col, deductible: ded, remitted: rem } = m.vat);
     else {
       col = VAT_RATE * enc;
-      ded = VAT_RATE * (S.free[i] + S.fl[i] + S.fo[i] + S.fm[i] + S.fh[i] + S.fd[i]);
+      ded = VAT_RATE * (S.free[i] + S.fl[i] + S.fo[i] + S.fm[i] + S.fh[i] + S.fdp[i] + S.fd[i]);
       rem = Math.max(0, i > 0 ? S.tvaCol[i - 1] - S.tvaDed[i - 1] : col - ded);
     }
     const tva = col - ded - rem;
@@ -202,7 +204,7 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
   };
 }
 
-export type FixedLineKey = "loyer" | "outils" | "marketing" | "honoraires" | "divers";
+export type FixedLineKey = "loyer" | "outils" | "marketing" | "honoraires" | "deplacements" | "divers";
 export type FixedChargeLine = FixedLineKey | "hors_charges_fixes";
 /** Real fixed charges of a month per line, € HT. */
 export type FixedActuals = Record<FixedLineKey, number>;
@@ -251,6 +253,7 @@ export function planRows(r: PlanResult): PlanRow[] {
     { ...line("line", "Outils, cloud et licences IA", S.fo), key: "outils" },
     { ...line("line", "Marketing et événements", S.fm), key: "marketing" },
     { ...line("line", "Honoraires (comptable, juridique)", S.fh), key: "honoraires" },
+    { ...line("line", "Frais de déplacement", S.fdp), key: "deplacements" },
     { ...line("line", "Divers", S.fd), key: "divers" },
     line("total", "Total charges fixes", S.fix),
     line("key", "EBITDA (EBE)", S.eb),

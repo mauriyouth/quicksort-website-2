@@ -71,6 +71,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     { key: "fOutils", label: "Outils, cloud, licences IA", unit: "€", step: 100 },
     { key: "fMarketing", label: "Marketing et événements", unit: "€", step: 100 },
     { key: "fHonoraires", label: "Honoraires", unit: "€", step: 100 },
+    { key: "fDeplacements", label: "Frais de déplacement", unit: "€", step: 100 },
     { key: "fDivers", label: "Divers", unit: "€", step: 100 },
     { key: "fAmort", label: "Dotations aux amortissements et provisions", unit: "€", step: 100 },
   ] },
@@ -91,7 +92,7 @@ const multLabel = (v: number) => `×${String(v).replace(".", ",")}`;
 type Draft = { hyp: Record<HypothesisKey, string>; ventes: string[]; departs: string[] };
 
 const untyped = () => db() as unknown as SupabaseClient;
-const FIXED_KEYS: readonly string[] = ["loyer", "outils", "marketing", "honoraires", "divers"] satisfies FixedLineKey[];
+const FIXED_KEYS: readonly string[] = ["loyer", "outils", "marketing", "honoraires", "deplacements", "divers"] satisfies FixedLineKey[];
 const isFixedKey = (k: string): k is FixedLineKey => FIXED_KEYS.includes(k);
 /** Background sync on page open when the last run is older than this. */
 const SYNC_STALE_MS = 12 * 3600_000;

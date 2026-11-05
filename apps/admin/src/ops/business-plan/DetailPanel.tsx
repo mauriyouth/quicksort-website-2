@@ -27,6 +27,7 @@ const TITLES: Record<DetailKind, string> = {
   outils: "Outils, cloud et licences IA",
   marketing: "Marketing et événements",
   honoraires: "Honoraires (comptable, juridique)",
+  deplacements: "Frais de déplacement",
   divers: "Divers",
 };
 
@@ -845,14 +846,14 @@ function FreelanceBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
 /* ── Fixed charges (Qonto) ─────────────────────────────────────────── */
 
 const LINE_OPTIONS: { value: FixedChargeLine; label: string }[] = [
-  ...(["loyer", "outils", "marketing", "honoraires", "divers"] as const).map((k) => ({ value: k, label: TITLES[k] })),
+  ...(["loyer", "outils", "marketing", "honoraires", "deplacements", "divers"] as const).map((k) => ({ value: k, label: TITLES[k] })),
   { value: "hors_charges_fixes", label: "Hors charges fixes" },
 ];
 const HYPOTHESIS_OF: Record<FixedLineKey, keyof Hypotheses> = {
-  loyer: "fLoyer", outils: "fOutils", marketing: "fMarketing", honoraires: "fHonoraires", divers: "fDivers",
+  loyer: "fLoyer", outils: "fOutils", marketing: "fMarketing", honoraires: "fHonoraires", deplacements: "fDeplacements", divers: "fDivers",
 };
-const SERIES_OF: Record<FixedLineKey, "fl" | "fo" | "fm" | "fh" | "fd"> = {
-  loyer: "fl", outils: "fo", marketing: "fm", honoraires: "fh", divers: "fd",
+const SERIES_OF: Record<FixedLineKey, "fl" | "fo" | "fm" | "fh" | "fdp" | "fd"> = {
+  loyer: "fl", outils: "fo", marketing: "fm", honoraires: "fh", deplacements: "fdp", divers: "fd",
 };
 const cents = (c: number) => eur(c / 100);
 const bankDay = (r: BankRow) => (r.settled_at ?? r.emitted_at ?? "").slice(0, 10);

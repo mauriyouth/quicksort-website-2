@@ -29,7 +29,7 @@ function mockup(P, ventes, departs) {
     const prod = nf * P.jours * P.coutFree + ns * P.salaire;
     const varr = ca * P.commFactor / 100 + ventes[i] * P.primeIC + ventes[i] * P.primeChasseur;
     const mb = ca - prod - varr;
-    const fix = STRUCTURE + P.fLoyer + P.fOutils + P.fMarketing + P.fHonoraires + P.fDivers;
+    const fix = STRUCTURE + P.fLoyer + P.fOutils + P.fMarketing + P.fHonoraires + P.fDeplacements + P.fDivers;
     R.cons.push(c); R.ca.push(ca); R.prod.push(prod); R.varr.push(varr); R.mb.push(mb); R.fix.push(fix); R.eb.push(mb - fix);
   }
   for (let i = 0; i < 12; i++) {
@@ -51,7 +51,7 @@ test("all-forecast year reproduces the design mockup", () => {
   assert.equal(r.totals.consFin, 18 + 16 - 6);
   assert.equal(r.totals.ventes, 16);
   assert.equal(r.totals.departs, 6);
-  assert.equal(planRows(r).length, 32);
+  assert.equal(planRows(r).length, 33);
 });
 
 test("actual months override the forecast and headcount carries forward", () => {
@@ -248,7 +248,7 @@ test("a salaried employee without mission outside the structure list is inter-co
 test("forecast months carry the structure cost into the P&L", () => {
   const r = computePlan(DEFAULT_HYPOTHESES, VENTES.map((_, i) => ({ ...forecast(i), structure: i * 1000 })));
   assert.equal(r.series.fs[3], 3000);
-  assert.equal(r.series.fix[3], 3000 + DEFAULT_HYPOTHESES.fLoyer + DEFAULT_HYPOTHESES.fOutils + DEFAULT_HYPOTHESES.fMarketing + DEFAULT_HYPOTHESES.fHonoraires + DEFAULT_HYPOTHESES.fDivers);
+  assert.equal(r.series.fix[3], 3000 + DEFAULT_HYPOTHESES.fLoyer + DEFAULT_HYPOTHESES.fOutils + DEFAULT_HYPOTHESES.fMarketing + DEFAULT_HYPOTHESES.fHonoraires + DEFAULT_HYPOTHESES.fDeplacements + DEFAULT_HYPOTHESES.fDivers);
 });
 
 test("structure cost is prorated on working days in arrival and exit months", () => {
@@ -346,7 +346,7 @@ test("aggregateFixedCharges sums HT completed debits per month and line", () => 
     bank({ status: "declined" }), bank({ line: "hors_charges_fixes", amount_ht_cents: 999 }),
     bank({ line: null, amount_ht_cents: 777 }), bank({ line: "outils", amount_ht_cents: 2000 }),
   ], 2027, 6, "2027-01-01");
-  assert.deepEqual(r.fixed[2], { loyer: 1500.5, outils: 20, marketing: 0, honoraires: 0, divers: 0 });
+  assert.deepEqual(r.fixed[2], { loyer: 1500.5, outils: 20, marketing: 0, honoraires: 0, deplacements: 0, divers: 0 });
   assert.equal(r.lines[2].length, 5);
   assert.equal(r.lines[2][0].settled_at, "2027-03-02");
   assert.equal(r.unclassified[2].length, 2);
@@ -366,7 +366,7 @@ test("aggregateFixedCharges counts completed debits not yet classified per cover
 
 test("covered closed month with no transaction is all zeros", () => {
   const r = aggregateFixedCharges([], 2027, 6, "2027-01-01");
-  assert.deepEqual(r.fixed[0], { loyer: 0, outils: 0, marketing: 0, honoraires: 0, divers: 0 });
+  assert.deepEqual(r.fixed[0], { loyer: 0, outils: 0, marketing: 0, honoraires: 0, deplacements: 0, divers: 0 });
   assert.deepEqual(r.lines[0], []);
 });
 
@@ -398,14 +398,14 @@ test("review counts needs_review per month", () => {
 test("computePlan uses fixed actuals on closed months and hypotheses on open months", () => {
   const h = DEFAULT_HYPOTHESES;
   const closed = { cons: 3, ca: 50000, free: 10000, sal: 10000, inter: 0, ventes: 0, departs: 0 };
-  const fixed = { loyer: 1000, outils: 200, marketing: 300, honoraires: 400, divers: 100 };
+  const fixed = { loyer: 1000, outils: 200, marketing: 300, honoraires: 400, deplacements: 500, divers: 100 };
   const base = computePlan(h, [{ actual: closed, ventes: 0, departs: 0, structure: 5000 }]);
   const real = computePlan(h, [{ actual: closed, ventes: 0, departs: 0, structure: 5000, fixed }]);
   assert.equal(real.series.fl[0], 1000);
   assert.equal(real.series.fd[0], 100);
-  assert.equal(real.series.fix[0], 5000 + 2000);
-  assert.equal(real.series.eb[0], real.series.mb[0] - 7000);
-  assert.equal(real.series.treso[0], h.tresoDebut + real.series.enc[0] - 0 - real.series.prod[0] - real.series.varr[0] - 7000 + real.series.tva[0]);
+  assert.equal(real.series.fix[0], 5000 + 2500);
+  assert.equal(real.series.eb[0], real.series.mb[0] - 7500);
+  assert.equal(real.series.treso[0], h.tresoDebut + real.series.enc[0] - 0 - real.series.prod[0] - real.series.varr[0] - 7500 + real.series.tva[0]);
   const open = computePlan(h, [{ actual: null, ventes: 0, departs: 0, structure: 5000, fixed }]);
   assert.equal(open.series.fl[0], h.fLoyer);
 });
@@ -413,8 +413,9 @@ test("computePlan uses fixed actuals on closed months and hypotheses on open mon
 test("planRows tags the five fixed lines with drill keys", () => {
   const h = DEFAULT_HYPOTHESES;
   const rows = planRows(computePlan(h, [forecast(0)]));
-  const keys = rows.filter((r) => ["loyer", "outils", "marketing", "honoraires", "divers"].includes(r.key)).map((r) => r.key);
-  assert.deepEqual(keys, ["loyer", "outils", "marketing", "honoraires", "divers"]);
+  const keys = rows.filter((r) => ["loyer", "outils", "marketing", "honoraires", "deplacements", "divers"].includes(r.key)).map((r) => r.key);
+  assert.deepEqual(keys, ["loyer", "outils", "marketing", "honoraires", "deplacements", "divers"]);
+  assert.equal(rows.find((r) => r.key === "deplacements").label, "Frais de déplacement");
 });
 
 /* ── VAT cash effect ───────────────────────────────────────────────── */
@@ -476,7 +477,7 @@ test("computePlan: forecast VAT collects on collections, deducts on purchases, r
   ]);
   const S = r.series;
   assert.ok(Math.abs(S.tvaCol[1] - VAT_RATE * S.enc[1]) < 1e-6);
-  assert.ok(Math.abs(S.tvaDed[1] - VAT_RATE * (S.free[1] + S.fl[1] + S.fo[1] + S.fm[1] + S.fh[1] + S.fd[1])) < 1e-6);
+  assert.ok(Math.abs(S.tvaDed[1] - VAT_RATE * (S.free[1] + S.fl[1] + S.fo[1] + S.fm[1] + S.fh[1] + S.fdp[1] + S.fd[1])) < 1e-6);
   assert.equal(S.tvaRem[1], 8000 - 1500); // last month's real net
   assert.ok(Math.abs(S.tva[1] - (S.tvaCol[1] - S.tvaDed[1] - S.tvaRem[1])) < 1e-6);
 });
@@ -495,4 +496,17 @@ test("planRows shows the VAT line in the cash section with a drill key", () => {
   assert.equal(rows[i].label, "TVA (effet trésorerie)");
   assert.equal(rows[i - 1].key, "enc");
   assert.equal(rows[i + 1].label, "Trésorerie fin de mois");
+});
+
+test("travel costs: own fixed line, real on closed months, hypothesis otherwise, VAT-deductible", () => {
+  const h = { ...DEFAULT_HYPOTHESES, fDeplacements: 2000 };
+  const r = aggregateFixedCharges([bank({ line: "deplacements", amount_ht_cents: 123400 })], 2027, 6, "2027-01-01");
+  assert.equal(r.fixed[2].deplacements, 1234);
+  const closed = { cons: 3, ca: 50000, free: 0, sal: 10000, inter: 0, ventes: 0, departs: 0, enc: 0 };
+  const p = computePlan(h, [{ actual: closed, ventes: 0, departs: 0, structure: 0, fixed: r.fixed[2] }, forecast(1)]);
+  assert.equal(p.series.fdp[0], 1234);
+  assert.equal(p.series.fdp[1], 2000);
+  assert.ok(Math.abs(p.series.fix[1] - (STRUCTURE + h.fLoyer + h.fOutils + h.fMarketing + h.fHonoraires + 2000 + h.fDivers)) < 1e-6);
+  const S = p.series;
+  assert.ok(Math.abs(S.tvaDed[1] - VAT_RATE * (S.free[1] + S.fl[1] + S.fo[1] + S.fm[1] + S.fh[1] + S.fdp[1] + S.fd[1])) < 1e-6);
 });

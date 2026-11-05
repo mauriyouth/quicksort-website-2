@@ -37,7 +37,8 @@ const cfg = { apiKey: "k", model: "m1" };
 
 test("constants", () => {
   assert.equal(REVIEW_THRESHOLD, 0.7);
-  assert.equal(FIXED_CHARGE_LINES.length, 6);
+  assert.equal(FIXED_CHARGE_LINES.length, 7);
+  assert.ok(FIXED_CHARGE_LINES.includes("deplacements"));
 });
 
 test("default model is a current Kimi model", () => {

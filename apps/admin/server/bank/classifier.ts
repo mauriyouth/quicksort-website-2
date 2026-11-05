@@ -9,7 +9,7 @@ export const FIXED_CHARGE_LINES: FixedChargeLine[] = [
   "hors_charges_fixes",
 ];
 export const REVIEW_THRESHOLD = 0.7;
-export const DEFAULT_KIMI_MODEL = "kimi-k2-turbo-preview";
+export const DEFAULT_KIMI_MODEL = "kimi-k2.6";
 
 const ENDPOINT = "https://api.moonshot.ai/v1/chat/completions";
 const MAX_CORRECTIONS = 30;
@@ -98,7 +98,9 @@ export function createKimiClassifier(cfg: { apiKey: string; model: string }, fet
         headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },
         body: JSON.stringify({
           model: cfg.model,
-          temperature: 0,
+          // No temperature: current Kimi models only accept their default (1).
+          // Reasoning off: with it, a 20-item batch exceeds the 30 s timeout.
+          thinking: { type: "disabled" },
           response_format: { type: "json_object" },
           messages: buildMessages(items, corrections),
         }),

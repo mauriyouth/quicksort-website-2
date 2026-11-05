@@ -159,7 +159,7 @@ test("status never leaks the Kimi key and counts reviews", async () => {
   assert.equal(res.body.state.backfillDone, false);
   assert.ok(!JSON.stringify(res.body).includes(KIMI));
   const none = await fixture().get({ resource: "status" });
-  assert.deepEqual(none.body.classifier, { configured: false, model: "kimi-k2-turbo-preview", source: "none" });
+  assert.deepEqual(none.body.classifier, { configured: false, model: "kimi-k2.6", source: "none" });
 });
 
 test("transactions require a year, filter by it and coerce needs_review", async () => {

@@ -5,6 +5,7 @@ import {
   buildMessages,
   FIXED_CHARGE_LINES,
   REVIEW_THRESHOLD,
+  DEFAULT_KIMI_MODEL,
 } from "../apps/admin/server/bank/classifier.ts";
 
 const item = (id, extra = {}) => ({
@@ -39,6 +40,10 @@ test("constants", () => {
   assert.equal(FIXED_CHARGE_LINES.length, 6);
 });
 
+test("default model is a current Kimi model", () => {
+  assert.equal(DEFAULT_KIMI_MODEL, "kimi-k2.6");
+});
+
 test("classify posts to Moonshot chat completions", async () => {
   const { impl, calls } = fakeFetch([completion('{"results":[]}')]);
   await createKimiClassifier(cfg, impl).classify([item("a")], []);
@@ -46,7 +51,10 @@ test("classify posts to Moonshot chat completions", async () => {
   assert.equal(calls[0].init.method, "POST");
   assert.equal(calls[0].init.headers.authorization, "Bearer k");
   assert.equal(calls[0].body.model, "m1");
-  assert.equal(calls[0].body.temperature, 0);
+  // Current Kimi models reject any temperature other than their default.
+  assert.equal("temperature" in calls[0].body, false);
+  // Reasoning off: a 20-item batch must answer well under the 30 s timeout.
+  assert.deepEqual(calls[0].body.thinking, { type: "disabled" });
   assert.deepEqual(calls[0].body.response_format, { type: "json_object" });
 });
 

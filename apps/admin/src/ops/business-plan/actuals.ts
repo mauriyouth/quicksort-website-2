@@ -25,7 +25,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Assignment, Employee, Salary, StaffingProject } from "../../hr/domain.ts";
 import { storedPricingLines, openDaysBetween } from "../../sales/pricing-lines.ts";
-import type { ActualMonth, FixedActuals, FixedChargeLine, Hypotheses } from "./model.ts";
+import type { ActualMonth, FixedActuals, FixedChargeLine, Hypotheses, VatActual } from "./model.ts";
 
 export type InvoiceRow = {
   status: string;
@@ -33,6 +33,8 @@ export type InvoiceRow = {
   issue_date: string | null;
   paid_at: string | null;
   total_ht: number | string;
+  /** VAT of the invoice, € — for the VAT cash line (collected when paid). */
+  total_vat?: number | string | null;
   ignored?: boolean | null;
   /** Optional, for the revenue and collections drill-downs. */
   id?: string;
@@ -538,7 +540,7 @@ export function loadInvoices(client: SupabaseClient): Promise<InvoiceRow[]> {
   return paged<InvoiceRow>((from, to) =>
     client
       .from("invoices")
-      .select("id, number, status, period_month, issue_date, paid_at, total_ht, ignored, project_id, billed_client_id, employee_id, invoice_url")
+      .select("id, number, status, period_month, issue_date, paid_at, total_ht, total_vat, ignored, project_id, billed_client_id, employee_id, invoice_url")
       .in("status", ["finalized", "paid"])
       .range(from, to),
   );
@@ -648,7 +650,16 @@ export type BankRow = {
   ai_line: string | null;
   manual_line: string | null;
   ai_confidence: number | null;
+  /** Qonto reference — VAT remittances read "TVA-<période>-3310CA3". */
+  reference?: string | null;
+  /** VAT on the debit, cents (0 when Qonto has none). */
+  vat_cents?: number;
 };
+
+/** A VAT payment to the state (CA3/CA12 return), recognised by its Qonto reference. */
+export function isVatRemittance(r: Pick<BankRow, "reference">): boolean {
+  return /^TVA-/i.test(r.reference ?? "");
+}
 
 const bankDate = (r: BankRow) => r.settled_at ?? r.emitted_at ?? "";
 
@@ -685,7 +696,7 @@ export function aggregateFixedCharges(
       .filter((r) => r.status === "completed" && r.month === month)
       .sort((a, b) => bankDate(a).localeCompare(bankDate(b)));
     const cents = { loyer: 0, outils: 0, marketing: 0, honoraires: 0, divers: 0 };
-    for (const r of mine) if (r.line && r.line !== "hors_charges_fixes") cents[r.line] += r.amount_ht_cents;
+    for (const r of mine) if (r.line && r.line !== "hors_charges_fixes" && !isVatRemittance(r)) cents[r.line] += r.amount_ht_cents;
     fixed.push({
       loyer: cents.loyer / 100, outils: cents.outils / 100, marketing: cents.marketing / 100,
       honoraires: cents.honoraires / 100, divers: cents.divers / 100,
@@ -696,4 +707,39 @@ export function aggregateFixedCharges(
     unclassifiedCount.push(mine.filter((r) => r.line == null).length);
   }
   return { fixed, lines, review, unclassified, unclassifiedCount };
+}
+
+/**
+ * Real VAT cash flows per closed month covered by Qonto (same coverage rule
+ * as aggregateFixedCharges; other months are null and get estimated):
+ * collected = VAT of invoices paid in the month, deductible = VAT on the
+ * month's completed debits, remitted = VAT payments to the state.
+ */
+export function aggregateVat(
+  invoices: InvoiceRow[],
+  rows: BankRow[],
+  year: number,
+  openFrom: number,
+  coverageStart: string | null,
+): { vat: (VatActual | null)[]; remittances: (BankRow[] | null)[] } {
+  const vat: (VatActual | null)[] = [];
+  const remittances: (BankRow[] | null)[] = [];
+  for (let m = 0; m < 12; m++) {
+    const month = `${year}-${pad(m + 1)}-01`;
+    if (!(m < openFrom && coverageStart != null && month >= coverageStart)) {
+      vat.push(null); remittances.push(null);
+      continue;
+    }
+    const key = month.slice(0, 7);
+    let collected = 0;
+    for (const inv of invoices)
+      if (!inv.ignored && inv.status === "paid" && inv.paid_at?.slice(0, 7) === key) collected += cents(inv.total_vat ?? 0);
+    const mine = rows.filter((r) => r.status === "completed" && r.month === month);
+    const paid = mine.filter(isVatRemittance).sort((a, b) => bankDate(a).localeCompare(bankDate(b)));
+    let deductible = 0;
+    for (const r of mine) if (!isVatRemittance(r)) deductible += r.vat_cents ?? 0;
+    vat.push({ collected: collected / 100, deductible: deductible / 100, remitted: paid.reduce((t, r) => t + r.amount_cents, 0) / 100 });
+    remittances.push(paid);
+  }
+  return { vat, remittances };
 }

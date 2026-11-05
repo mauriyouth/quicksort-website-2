@@ -18,7 +18,7 @@ type Result = { status: number; body: unknown };
 
 const MODELS_URL = "https://api.moonshot.ai/v1/models";
 const PAGE = 1000;
-const COLUMNS = "id, month, settled_at, emitted_at, label, counterparty, amount_cents, amount_ht_cents, status, line, ai_line, ai_confidence, manual_line, needs_review";
+const COLUMNS = "id, month, settled_at, emitted_at, label, counterparty, amount_cents, amount_ht_cents, status, line, ai_line, ai_confidence, manual_line, needs_review, reference, vat_cents";
 
 const line = z.enum(FIXED_CHARGE_LINES as [string, ...string[]]);
 const actionSchema = z.discriminatedUnion("action", [

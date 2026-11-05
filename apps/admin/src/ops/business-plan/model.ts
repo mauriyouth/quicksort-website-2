@@ -86,6 +86,8 @@ export type MonthInput = {
   structure?: number;
   /** Closed months only: real fixed charges per line (€ HT, from Qonto). */
   fixed?: FixedActuals;
+  /** Closed months covered by Qonto: real VAT cash flows (€). Otherwise estimated. */
+  vat?: VatActual;
 };
 
 export type Series = {
@@ -93,6 +95,8 @@ export type Series = {
   fac: number[]; ic: number[]; ch: number[]; varr: number[]; mb: number[]; mbp: number[];
   fs: number[]; fl: number[]; fo: number[]; fm: number[]; fh: number[]; fd: number[]; fix: number[];
   eb: number[]; ebp: number[]; da: number[]; ex: number[]; exp: number[]; enc: number[]; treso: number[];
+  /** VAT cash effect: collected on collections, paid to suppliers, remitted to the state, net. */
+  tvaCol: number[]; tvaDed: number[]; tvaRem: number[]; tva: number[];
   ventes: number[]; departs: number[];
 };
 
@@ -115,6 +119,7 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
   const S: Series = {
     cons: [], ca: [], free: [], sal: [], inter: [], prod: [], fac: [], ic: [], ch: [], varr: [], mb: [], mbp: [],
     fs: [], fl: [], fo: [], fm: [], fh: [], fd: [], fix: [], eb: [], ebp: [], da: [], ex: [], exp: [], enc: [], treso: [],
+    tvaCol: [], tvaDed: [], tvaRem: [], tva: [],
     ventes: [], departs: [],
   };
   let c = h.consDebut;
@@ -159,7 +164,19 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
   let cash = h.tresoDebut;
   months.forEach((m, i) => {
     const enc = m.actual ? m.actual.enc : i - lag >= 0 ? S.ca[i - lag] : S.ca[0] ?? 0;
-    cash = cash + enc - S.prod[i] - S.varr[i] - S.fix[i];
+    // VAT: real flows when known, else VAT_RATE on collections and on
+    // VAT-bearing purchases (freelances + fixed charges other than salaries),
+    // the net being remitted the following month (never a negative remittance).
+    let col: number, ded: number, rem: number;
+    if (m.actual && m.vat) ({ collected: col, deductible: ded, remitted: rem } = m.vat);
+    else {
+      col = VAT_RATE * enc;
+      ded = VAT_RATE * (S.free[i] + S.fl[i] + S.fo[i] + S.fm[i] + S.fh[i] + S.fd[i]);
+      rem = Math.max(0, i > 0 ? S.tvaCol[i - 1] - S.tvaDed[i - 1] : col - ded);
+    }
+    const tva = col - ded - rem;
+    S.tvaCol.push(col); S.tvaDed.push(ded); S.tvaRem.push(rem); S.tva.push(tva);
+    cash = cash + enc - S.prod[i] - S.varr[i] - S.fix[i] + tva;
     S.enc.push(enc);
     S.treso.push(cash);
   });
@@ -190,10 +207,15 @@ export type FixedChargeLine = FixedLineKey | "hors_charges_fixes";
 /** Real fixed charges of a month per line, € HT. */
 export type FixedActuals = Record<FixedLineKey, number>;
 
+/** Standard French VAT rate, used to estimate VAT on forecast months. */
+export const VAT_RATE = 0.2;
+/** Real VAT cash flows of a closed month, € (all positive amounts). */
+export type VatActual = { collected: number; deductible: number; remitted: number };
+
 export type RowKind = "line" | "sub" | "total" | "key" | "pct" | "section";
 export type PlanRow = {
   /** Set on rows that open a drill-down panel. */
-  key?: "ca" | "sal" | "free" | "fs" | "inter" | "enc" | FixedLineKey;
+  key?: "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | FixedLineKey;
   kind: RowKind;
   label: string;
   values: number[];
@@ -238,6 +260,7 @@ export function planRows(r: PlanResult): PlanRow[] {
     line("pct", "Marge d’exploitation (EBIT / CA)", S.exp, T.exPct),
     sec("Trésorerie"),
     { ...line("line", "Encaissements clients", S.enc), key: "enc" },
+    { ...line("line", "TVA (effet trésorerie)", S.tva), key: "tva" },
     line("total", "Trésorerie fin de mois", S.treso, S.treso[last] ?? 0),
   ];
 }

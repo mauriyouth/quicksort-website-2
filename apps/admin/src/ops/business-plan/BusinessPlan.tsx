@@ -11,6 +11,7 @@ import { BankError, useBankApi, type BankStatus } from "./bank";
 import {
   aggregateActuals,
   aggregateFixedCharges,
+  aggregateVat,
   loadCra,
   loadExtensions,
   loadInvoices,
@@ -314,6 +315,10 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     () => aggregateFixedCharges(bankRows, year, openFrom, coverageStart),
     [bankRows, year, openFrom, coverageStart],
   );
+  const vat = useMemo(
+    () => aggregateVat(base?.invoices ?? [], bankRows, year, openFrom, coverageStart),
+    [base, bankRows, year, openFrom, coverageStart],
+  );
   const unclassifiedTotal = bank.unclassifiedCount.reduce((a, b) => a + b, 0);
   const multiplier = base ? base.multipliers[scenario] : 0;
   const agg = useMemo(
@@ -369,9 +374,10 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         departs: num(draft.departs[m]),
         structure: agg.structure[m],
         fixed: bank.fixed[m] ?? undefined,
+        vat: vat.vat[m] ?? undefined,
       })),
     );
-  }, [agg, draft, H, bank]);
+  }, [agg, draft, H, bank, vat]);
 
   const edit = (fn: (d: Draft) => Draft) => {
     setDraft((d) => (d ? fn(d) : d));
@@ -743,6 +749,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                         onClick={() => setDetail({ kind: r.key!, month: Math.max(0, Math.min(11, actualCount > 0 ? actualCount - 1 : 0)) })}
                         title={
                           r.key === "ca" || r.key === "enc" ? "Voir le détail des factures"
+                            : r.key === "tva" ? "Voir le détail de la TVA"
                             : isFixedKey(r.key) ? "Voir le détail des transactions"
                               : "Voir le détail par personne"
                         }
@@ -825,6 +832,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               multiplier={multiplier}
               structure={{ employees: staffChoices, entries: base.structureStaff, onSave: saveStructure }}
               bank={{ lines: bank.lines, unclassified: bank.unclassified, fixed: bank.fixed, onClassify: classifyBank }}
+              vat={vat}
             />
           )}
 
@@ -834,7 +842,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
             freelances = jours CRA × taux journalier · salaires = salaire mensuel brut × multiplicateur de charges (scénario {SCENARIOS.find((s) => s.id === scenario)!.label.toLowerCase()} : {multLabel(multiplier)}, × 1,4 pour les stagiaires) · inter-contrat =
             salariés sans mission sur le mois · départs = sorties d’employés. Salaires structure : personnes listées en structure, sur leur période
             (par défaut de l’embauche à la sortie ; prévisionnel : dernier salaire connu), hors jours ouvrés en mission —
-            comptés en salaires consultants, au prorata de l’allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses.
+            comptés en salaires consultants, au prorata de l’allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses. TVA (trésorerie seulement) : mois clôturés couverts par Qonto = TVA des factures payées − TVA des dépenses − paiements DGFIP ; sinon 20 % des encaissements − 20 % des freelances et charges fixes hors salaires, solde reversé le mois suivant.
             Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur le résultat d’exploitation annuel positif (EBE − dotations) ·
             encaissements décalés du délai client, les coûts sont payés le mois même.
           </footer>

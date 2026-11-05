@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { Aggregate, BankRow, SalaryLine, StructureEntry } from "./actuals";
-import { fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type FixedLineKey, type Hypotheses, type PlanResult } from "./model";
+import { fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type FixedLineKey, type Hypotheses, type PlanResult, type VatActual, VAT_RATE } from "./model";
 
 /**
  * Drill-down panel for the P&L rows "Chiffre d’affaires", "Salaires
  * consultants chargés", "Freelances", "Salaires structure chargés",
- * "Inter-contrats", "Encaissements clients" and the five fixed-charge lines.
+ * "Inter-contrats", "Encaissements clients", "TVA (effet trésorerie)" and the
+ * five fixed-charge lines.
  * Closed months list the invoices, named people or Qonto transactions behind
  * the figure;
  * forecast months show the formula plus today's named team, the base the
  * forecast projects from.
  */
-export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc" | FixedLineKey;
+export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | FixedLineKey;
 
 const TITLES: Record<DetailKind, string> = {
   ca: "Chiffre d’affaires",
@@ -21,6 +22,7 @@ const TITLES: Record<DetailKind, string> = {
   fs: "Salaires structure chargés",
   inter: "Inter-contrats",
   enc: "Encaissements clients",
+  tva: "TVA (effet trésorerie)",
   loyer: "Loyer et locaux",
   outils: "Outils, cloud et licences IA",
   marketing: "Marketing et événements",
@@ -59,6 +61,8 @@ type BodyProps = {
   multiplier: number;
   structure: StructureControl;
   bank: BankControl;
+  /** Real VAT flows and the VAT payments behind them, per covered closed month. */
+  vat: { vat: (VatActual | null)[]; remittances: (BankRow[] | null)[] };
 };
 
 export function DetailPanel({
@@ -125,6 +129,7 @@ export function DetailPanel({
           : kind === "fs" ? <StructureBody {...body} />
           : kind === "inter" ? <InterBody {...body} />
           : kind === "enc" ? <CollectionBody {...body} />
+          : kind === "tva" ? <VatBody {...body} />
           : kind === "free" ? <FreelanceBody {...body} />
           : <FixedBody key={kind} line={kind} {...body} />}
       </div>
@@ -333,6 +338,65 @@ function CollectionBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
           </p>
         </div>
       )}
+    </>
+  );
+}
+
+/* ── VAT cash effect ────────────────────────────────────────────────── */
+
+const signed = (v: number) => `${v < 0 ? "−" : "+"} ${eur(Math.abs(v))}`;
+
+function VatBody({ month, plan, vat }: BodyProps) {
+  const S = plan.series;
+  const real = vat.vat[month];
+  const paid = vat.remittances[month];
+  const rate = `${fmt(VAT_RATE * 100)} %`;
+  return (
+    <>
+      <div className="bp-drawer-stats">
+        <div><span>Effet sur la trésorerie</span><strong>{signed(S.tva[month])}</strong></div>
+        <div><span>TVA encaissée</span><strong>{eur(S.tvaCol[month])}</strong></div>
+        <div><span>TVA reversée à l’État</span><strong>{eur(S.tvaRem[month])}</strong></div>
+      </div>
+
+      <div className="bp-formula">
+        <div><span>TVA encaissée{real ? " (factures payées ce mois)" : ` (${rate} des encaissements)`}</span><strong>{signed(S.tvaCol[month])}</strong></div>
+        <div><span>TVA payée aux fournisseurs{real ? " (dépenses Qonto du mois)" : ` (${rate} des freelances et charges fixes hors salaires)`}</span><strong>{signed(-S.tvaDed[month])}</strong></div>
+        <div><span>TVA reversée à l’État{real ? " (paiements DGFIP du mois)" : " (solde du mois précédent)"}</span><strong>{signed(-S.tvaRem[month])}</strong></div>
+        <div className="is-total"><span>= Effet TVA sur la trésorerie</span><strong>{signed(S.tva[month])}</strong></div>
+      </div>
+
+      {real && paid ? (
+        paid.length === 0 ? (
+          <p className="bp-meta">Aucun paiement de TVA à l’État ce mois-ci.</p>
+        ) : (
+          <table className="bp-table">
+            <thead>
+              <tr>
+                <th scope="col">Paiement DGFIP</th>
+                <th scope="col">Date</th>
+                <th scope="col" className="num">Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paid.map((r) => (
+                <tr key={r.id}>
+                  <td><span className="bp-name">{r.label || r.counterparty || "DGFIP"}</span><div className="bp-sub">{r.reference}</div></td>
+                  <td>{frDate((r.settled_at ?? r.emitted_at ?? "").slice(0, 10))}</td>
+                  <td className="num">{eur(r.amount_cents / 100)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      ) : null}
+
+      <p className="bp-note">
+        {real
+          ? "Mois réel : TVA des factures clients payées ce mois, TVA indiquée par Qonto sur les dépenses du mois, et paiements de TVA à la DGFIP (référence « TVA-… CA3 »)."
+          : `Estimation : ${rate} sur les encaissements et sur les achats soumis à TVA (freelances et charges fixes hors salaires) ; le solde est reversé le mois suivant, jamais négatif (un crédit de TVA n’est pas remboursé ici).`}
+        {" "}Le compte de résultat reste hors taxes : seule la trésorerie est concernée.
+      </p>
     </>
   );
 }

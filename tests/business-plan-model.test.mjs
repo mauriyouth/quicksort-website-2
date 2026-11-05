@@ -4,11 +4,12 @@ import {
   computePlan,
   planRows,
   DEFAULT_HYPOTHESES,
+  VAT_RATE,
   firstOpenMonth,
   kEur,
   pct,
 } from "../apps/admin/src/ops/business-plan/model.ts";
-import { aggregateFixedCharges } from "../apps/admin/src/ops/business-plan/actuals.ts";
+import { aggregateFixedCharges, aggregateVat, isVatRemittance } from "../apps/admin/src/ops/business-plan/actuals.ts";
 
 const VENTES = [2, 1, 2, 1, 1, 2, 1, 0, 2, 2, 1, 1];
 const DEPARTS = [0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0];
@@ -42,12 +43,15 @@ function mockup(P, ventes, departs) {
 test("all-forecast year reproduces the design mockup", () => {
   const r = computePlan(DEFAULT_HYPOTHESES, VENTES.map((_, i) => forecast(i)));
   const o = mockup(DEFAULT_HYPOTHESES, VENTES, DEPARTS);
-  for (const key of ["cons", "ca", "prod", "varr", "mb", "eb", "treso"])
+  for (const key of ["cons", "ca", "prod", "varr", "mb", "eb"])
     o[key].forEach((v, i) => assert.ok(Math.abs(r.series[key][i] - v) < 1e-6, `${key}[${i}]`));
+  // Cash = the mockup's HT cash plus the cumulative VAT cash effect (not in the mockup).
+  let vat = 0;
+  o.treso.forEach((v, i) => { vat += r.series.tva[i]; assert.ok(Math.abs(r.series.treso[i] - (v + vat)) < 1e-6, `treso[${i}]`); });
   assert.equal(r.totals.consFin, 18 + 16 - 6);
   assert.equal(r.totals.ventes, 16);
   assert.equal(r.totals.departs, 6);
-  assert.equal(planRows(r).length, 31);
+  assert.equal(planRows(r).length, 32);
 });
 
 test("actual months override the forecast and headcount carries forward", () => {
@@ -77,7 +81,7 @@ test("cash uses actual collections, then the DSO lag", () => {
   assert.equal(r.series.enc[2], 50000);
   assert.equal(r.series.enc[3], 50001);
   const fix = r.series.fix[0];
-  assert.equal(r.series.treso[0], h.tresoDebut + 12345 - fix);
+  assert.equal(r.series.treso[0], h.tresoDebut + 12345 - fix + r.series.tva[0]);
 });
 
 test("corporate tax only on a positive operating result", () => {
@@ -401,7 +405,7 @@ test("computePlan uses fixed actuals on closed months and hypotheses on open mon
   assert.equal(real.series.fd[0], 100);
   assert.equal(real.series.fix[0], 5000 + 2000);
   assert.equal(real.series.eb[0], real.series.mb[0] - 7000);
-  assert.equal(real.series.treso[0], h.tresoDebut + real.series.enc[0] - 0 - real.series.prod[0] - real.series.varr[0] - 7000);
+  assert.equal(real.series.treso[0], h.tresoDebut + real.series.enc[0] - 0 - real.series.prod[0] - real.series.varr[0] - 7000 + real.series.tva[0]);
   const open = computePlan(h, [{ actual: null, ventes: 0, departs: 0, structure: 5000, fixed }]);
   assert.equal(open.series.fl[0], h.fLoyer);
 });
@@ -411,4 +415,84 @@ test("planRows tags the five fixed lines with drill keys", () => {
   const rows = planRows(computePlan(h, [forecast(0)]));
   const keys = rows.filter((r) => ["loyer", "outils", "marketing", "honoraires", "divers"].includes(r.key)).map((r) => r.key);
   assert.deepEqual(keys, ["loyer", "outils", "marketing", "honoraires", "divers"]);
+});
+
+/* ── VAT cash effect ───────────────────────────────────────────────── */
+
+test("VAT remittances are recognised by their Qonto reference", () => {
+  assert.equal(isVatRemittance(bank({ reference: "TVA-092022-3310CA3" })), true);
+  assert.equal(isVatRemittance(bank({ reference: "PASDSN15092022-082022-87819833200016" })), false);
+  assert.equal(isVatRemittance(bank({ reference: "IS-122022-2571" })), false);
+  assert.equal(isVatRemittance(bank({ reference: null })), false);
+});
+
+test("a VAT remittance never counts as a fixed charge, even if misclassified", () => {
+  const r = aggregateFixedCharges([bank({ line: "divers", reference: "TVA-022027-3310CA3", amount_ht_cents: 500000 })], 2027, 6, "2027-01-01");
+  assert.equal(r.fixed[2].divers, 0);
+});
+
+const inv = (o) => ({ status: "paid", period_month: "2027-02-01", issue_date: "2027-02-28", paid_at: "2027-03-15T10:00:00Z", total_ht: 10000, total_vat: 2000, ...o });
+
+test("aggregateVat: collected from paid invoices, deductible from debits, remitted from VAT payments", () => {
+  const r = aggregateVat(
+    [inv({}), inv({ total_vat: "500.50" }), inv({ ignored: true }), inv({ status: "finalized", paid_at: null })],
+    [
+      bank({ vat_cents: 20000 }), bank({ line: "hors_charges_fixes", vat_cents: 5000 }),
+      bank({ vat_cents: 9999, status: "declined" }),
+      bank({ line: "hors_charges_fixes", reference: "TVA-022027-3310CA3", amount_cents: 300000, vat_cents: 0 }),
+    ],
+    2027, 6, "2027-01-01",
+  );
+  assert.deepEqual(r.vat[2], { collected: 2500.5, deductible: 250, remitted: 3000 });
+  assert.equal(r.remittances[2].length, 1);
+  assert.deepEqual(r.vat[0], { collected: 0, deductible: 0, remitted: 0 });
+  assert.equal(r.vat[6], null); // open month
+});
+
+test("aggregateVat: months not covered by Qonto are null", () => {
+  const r = aggregateVat([inv({})], [], 2027, 6, null);
+  assert.ok(r.vat.every((x) => x === null));
+  const later = aggregateVat([inv({})], [], 2027, 6, "2027-04-01");
+  assert.equal(later.vat[2], null);
+});
+
+test("computePlan: real VAT parts on covered closed months", () => {
+  const h = DEFAULT_HYPOTHESES;
+  const closed = { cons: 3, ca: 50000, free: 10000, sal: 10000, inter: 0, ventes: 0, departs: 0, enc: 40000 };
+  const r = computePlan(h, [{ actual: closed, ventes: 0, departs: 0, structure: 0, vat: { collected: 8000, deductible: 1500, remitted: 6000 } }]);
+  assert.equal(r.series.tvaCol[0], 8000);
+  assert.equal(r.series.tvaDed[0], 1500);
+  assert.equal(r.series.tvaRem[0], 6000);
+  assert.equal(r.series.tva[0], 500);
+  assert.equal(r.series.treso[0], h.tresoDebut + 40000 - r.series.prod[0] - r.series.varr[0] - r.series.fix[0] + 500);
+});
+
+test("computePlan: forecast VAT collects on collections, deducts on purchases, remits last month's net", () => {
+  const h = { ...DEFAULT_HYPOTHESES, dso: 0 };
+  const closed = { cons: 3, ca: 50000, free: 10000, sal: 10000, inter: 0, ventes: 0, departs: 0, enc: 40000 };
+  const r = computePlan(h, [
+    { actual: closed, ventes: 0, departs: 0, structure: 0, vat: { collected: 8000, deductible: 1500, remitted: 6000 } },
+    forecast(1),
+  ]);
+  const S = r.series;
+  assert.ok(Math.abs(S.tvaCol[1] - VAT_RATE * S.enc[1]) < 1e-6);
+  assert.ok(Math.abs(S.tvaDed[1] - VAT_RATE * (S.free[1] + S.fl[1] + S.fo[1] + S.fm[1] + S.fh[1] + S.fd[1])) < 1e-6);
+  assert.equal(S.tvaRem[1], 8000 - 1500); // last month's real net
+  assert.ok(Math.abs(S.tva[1] - (S.tvaCol[1] - S.tvaDed[1] - S.tvaRem[1])) < 1e-6);
+});
+
+test("computePlan: first month of an all-forecast year remits its own net, never a negative amount", () => {
+  const r = computePlan(DEFAULT_HYPOTHESES, [forecast(0)]);
+  const S = r.series;
+  assert.ok(Math.abs(S.tvaRem[0] - Math.max(0, S.tvaCol[0] - S.tvaDed[0])) < 1e-6);
+  const credit = computePlan({ ...DEFAULT_HYPOTHESES, consDebut: 0 }, [{ actual: null, ventes: 0, departs: 0, structure: 0 }]);
+  assert.equal(credit.series.tvaRem[0], 0);
+});
+
+test("planRows shows the VAT line in the cash section with a drill key", () => {
+  const rows = planRows(computePlan(DEFAULT_HYPOTHESES, [forecast(0)]));
+  const i = rows.findIndex((r) => r.key === "tva");
+  assert.equal(rows[i].label, "TVA (effet trésorerie)");
+  assert.equal(rows[i - 1].key, "enc");
+  assert.equal(rows[i + 1].label, "Trésorerie fin de mois");
 });

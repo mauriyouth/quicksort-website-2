@@ -116,7 +116,7 @@ export async function runBankSync(deps: BankSyncDeps): Promise<BankSyncResult> {
       lastError = message(e);
     }
 
-    // Classify: batches of 20, oldest first. Items the model skipped stay
+    // Classify: batches of 20, newest first. Items the model skipped stay
     // unclassified for the next run but are not retried within this one.
     if (classifier) {
       try {

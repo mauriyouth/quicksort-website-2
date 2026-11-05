@@ -107,7 +107,8 @@ export function createSupabaseBankStore(client: SupabaseClient): BankStore {
         .eq("status", "completed")
         .is("ai_line", null)
         .is("manual_line", null)
-        .order("emitted_at", { ascending: true, nullsFirst: false })
+        // Newest first: the current year's figures fill in before old history.
+        .order("emitted_at", { ascending: false, nullsFirst: false })
         .order("id", { ascending: true })
         .limit(limit);
       check(error, "list unclassified transactions");

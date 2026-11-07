@@ -82,7 +82,9 @@ export function AdminShell({
           <div className="min-w-0 flex-1 self-stretch">{header}</div>
           <ThemeSwitch />
         </header>
-        <main className="content admin-content w-full">
+        {/* my-0: legacy .content uses `margin: auto`, which would centre short
+            pages vertically inside the flex-column inset. */}
+        <main className="content admin-content my-0 w-full">
           {current === "not-found" ? (
             <Empty title="Page not found" action={<a href={nav[0].href}>Return to your workspace</a>}>
               Choose a section from the navigation.

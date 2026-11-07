@@ -40,3 +40,7 @@ supabase/.temp/
 # Local credentials and agent session state
 key.json
 .superpowers/
+
+# Claude Code: personal settings and agent worktrees
+.claude/settings.local.json
+.claude/worktrees/

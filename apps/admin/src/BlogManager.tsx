@@ -190,14 +190,14 @@ function BlogEditor({post,busy,onCancel,onSave}: {post:BlogRecord|null;busy:bool
           </div>
           <Field className={preview ? "sr-only" : undefined}>
             <FieldLabel htmlFor="blog-article">Article</FieldLabel>
-            <Textarea id="blog-article" required maxLength={100000} rows={18} value={body} onChange={e => setBody(e.target.value)} className="min-h-96 font-mono text-xs"/>
+            <Textarea id="blog-article" required maxLength={100000} rows={18} value={body} onChange={e => setBody(e.target.value)} className="min-h-96 font-mono text-xs md:text-xs"/>
           </Field>
           {preview && <article className="blog-preview"><h1>{title}</h1><ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown></article>}
           <details className="group rounded-sm border border-border px-4 py-3">
             <summary className="cursor-pointer text-sm font-medium">French article (optional)</summary>
             <Field className="mt-3">
               <FieldLabel htmlFor="blog-content-fr">French content</FieldLabel>
-              <Textarea id="blog-content-fr" name="content_fr" rows={12} maxLength={100000} defaultValue={post?.content_fr} className="min-h-64 font-mono text-xs"/>
+              <Textarea id="blog-content-fr" name="content_fr" rows={12} maxLength={100000} defaultValue={post?.content_fr} className="min-h-64 font-mono text-xs md:text-xs"/>
               <FieldDescription>The original article is shown when no French version is provided.</FieldDescription>
             </Field>
           </details>

@@ -1,18 +1,25 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight,
   Briefcase,
   FolderKanban,
   GraduationCap,
-  Search,
   Target,
   UserCheck,
   Users,
   Wrench,
-  X,
   type LucideIcon,
 } from "lucide-react";
-import "./spotlight.css";
+import {
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+  Kbd,
+} from "@quicksort-sas/ui";
 
 /* Loose structural shapes — real rows from @quicksort/hr-db satisfy these. */
 export type SpotlightNavItem = {
@@ -91,10 +98,11 @@ const norm = (s: string) =>
   s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 /**
- * Spotlight-style command palette for the admin workspace.
- * Opens with ⌘P (or ⌘K), like the macOS Spotlight bar: a centered modal
- * over a blurred backdrop, unified results across pages and records,
- * full keyboard navigation (↑↓ move, ↵ open, esc close).
+ * Spotlight-style command palette for the admin workspace, on the
+ * @quicksort-sas/ui Command (cmdk) dialog. Opens with ⌘P (or ⌘K): unified
+ * results across pages and records, full keyboard navigation (↑↓ move,
+ * ↵ open, esc close). Ranking stays ours (accent-insensitive, title prefix
+ * first), so cmdk's own filtering is turned off.
  */
 export function SpotlightSearch({
   open,
@@ -122,9 +130,6 @@ export function SpotlightSearch({
   projects?: SpotlightProject[];
 }) {
   const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
   const openRef = useRef(open);
   openRef.current = open;
 
@@ -140,26 +145,15 @@ export function SpotlightSearch({
       ) {
         e.preventDefault();
         onOpenChange(!openRef.current);
-      } else if (e.key === "Escape" && openRef.current) {
-        onOpenChange(false);
       }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onOpenChange]);
 
-  // Fresh palette on every open, and lock body scroll while it is up.
+  // Fresh palette on every open (the dialog handles focus and scroll lock).
   useEffect(() => {
-    if (!open) return;
-    setQuery("");
-    setActive(0);
-    const raf = requestAnimationFrame(() => inputRef.current?.focus());
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      cancelAnimationFrame(raf);
-      document.body.style.overflow = previous;
-    };
+    if (open) setQuery("");
   }, [open]);
 
   const items = useMemo<Item[]>(() => {
@@ -311,134 +305,59 @@ export function SpotlightSearch({
       .map((r) => r.item);
   }, [items, query]);
 
-  useEffect(() => {
-    setActive(0);
-  }, [query]);
-
-  // Keep the highlighted row visible while arrowing through the list.
-  useEffect(() => {
-    const list = listRef.current;
-    const el = list?.querySelector(`[data-idx="${active}"]`);
-    if (list && el instanceof HTMLElement) {
-      if (el.offsetTop < list.scrollTop)
-        list.scrollTop = el.offsetTop - 4;
-      else if (el.offsetTop + el.offsetHeight > list.scrollTop + list.clientHeight)
-        list.scrollTop = el.offsetTop + el.offsetHeight - list.clientHeight + 4;
-    }
-  }, [active, results]);
-
-  if (!open) return null;
-
   const pick = (item: Item) => {
     onOpenChange(false);
     onNavigate(item.target, item.params);
   };
-  const hasQuery = query.trim().length > 0;
 
-  function onInputKey(e: React.KeyboardEvent<HTMLInputElement>) {
-    const n = results.length;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive(n ? (active + 1) % n : 0);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive(n ? (active - 1 + n) % n : 0);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (results[active]) pick(results[active]);
-    } else if (e.key === "Tab") {
-      // Keep focus in the field — the palette is a single-focus dialog.
-      e.preventDefault();
-    }
+  // Consecutive runs of the same group, in result order.
+  const groups: { name: string; items: Item[] }[] = [];
+  for (const item of results) {
+    const last = groups[groups.length - 1];
+    if (last?.name === item.group) last.items.push(item);
+    else groups.push({ name: item.group, items: [item] });
   }
 
-  let lastGroup = "";
   return (
-    <div
-      className="spotlight-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onOpenChange(false);
-      }}
-    >
-      <div className="spotlight" role="dialog" aria-modal="true" aria-label="Search workspace">
-        <div className="spotlight-field">
-          <Search size={18} />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={onInputKey}
-            placeholder="Search pages, contacts, candidates, opportunities, projects…"
-            spellCheck={false}
-          />
-          {hasQuery ? (
-            <button
-              type="button"
-              className="spotlight-clear"
-              aria-label="Clear search"
-              onClick={() => {
-                setQuery("");
-                inputRef.current?.focus();
-              }}
-            >
-              <X size={15} />
-            </button>
-          ) : (
-            <kbd>⌘P</kbd>
-          )}
-        </div>
-
-        <div className="spotlight-list" ref={listRef}>
-          {results.map((item, i) => {
-            const header =
-              item.group !== lastGroup ? (
-                <div className="spotlight-group">{item.group}</div>
-              ) : null;
-            lastGroup = item.group;
-            return (
-              <Fragment key={item.key}>
-                {header}
-                <button
-                  type="button"
-                  key={item.key}
-                  data-idx={i}
-                  className={`spotlight-item${i === active ? " active" : ""}`}
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => pick(item)}
-                >
-                  <span className="tile">
-                    <item.icon size={16} />
-                  </span>
-                  <span className="text">
-                    <span className="title">{item.title}</span>
-                    {item.sub && <span className="sub">{item.sub}</span>}
-                  </span>
-                  {item.meta && <span className="meta">{item.meta}</span>}
-                  <ArrowRight size={14} className="enter" />
-                </button>
-              </Fragment>
-            );
-          })}
-          {results.length === 0 && (
-            <div className="spotlight-empty">
-              <strong>No results for “{query.trim()}”</strong>
+    <CommandDialog open={open} onOpenChange={onOpenChange} title="Search workspace" description="Search pages, contacts, candidates, opportunities and projects.">
+      <Command shouldFilter={false} loop>
+        <CommandInput
+          value={query}
+          onValueChange={setQuery}
+          placeholder="Search pages, contacts, candidates, opportunities, projects…"
+          spellCheck={false}
+          // The legacy global input:focus-visible rule (hr-ui styles) would
+          // draw a lime border + ring on this borderless field.
+          className="border-0 shadow-none focus-visible:border-0 focus-visible:shadow-none"
+        />
+        <CommandList className="max-h-[min(60vh,28rem)]">
+          <CommandEmpty>
+            <div className="flex flex-col gap-1">
+              <span className="font-medium text-foreground">No results for “{query.trim()}”</span>
               <span>Check the spelling or search for a page, name or title</span>
             </div>
-          )}
+          </CommandEmpty>
+          {groups.map((group, g) => (
+            <CommandGroup key={`${group.name}-${g}`} heading={group.name}>
+              {group.items.map((item) => (
+                <CommandItem key={item.key} value={item.key} onSelect={() => pick(item)}>
+                  <item.icon />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate">{item.title}</span>
+                    {item.sub && <span className="truncate text-xs text-muted-foreground">{item.sub}</span>}
+                  </span>
+                  {item.meta && <CommandShortcut className="normal-case">{item.meta}</CommandShortcut>}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ))}
+        </CommandList>
+        <div className="flex items-center gap-4 border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5"><Kbd>↑↓</Kbd> Navigate</span>
+          <span className="flex items-center gap-1.5"><Kbd>↵</Kbd> Open</span>
+          <span className="flex items-center gap-1.5"><Kbd>esc</Kbd> Close</span>
         </div>
-
-        <div className="spotlight-footer">
-          <span className="spotlight-hint">
-            <kbd>↑↓</kbd> Navigate
-          </span>
-          <span className="spotlight-hint">
-            <kbd>↵</kbd> Open
-          </span>
-          <span className="spotlight-hint">
-            <kbd>esc</kbd> Close
-          </span>
-        </div>
-      </div>
-    </div>
+      </Command>
+    </CommandDialog>
   );
 }

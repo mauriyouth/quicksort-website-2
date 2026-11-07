@@ -9,10 +9,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
   Item,
   ItemActions,
   ItemContent,
@@ -36,6 +32,7 @@ import {
   useSales,
   type SalesOpportunity,
 } from "./data";
+import { EmptyState } from "../ui";
 
 /**
  * Sales dashboard (sales.md §8.1): the command center. Open pipeline,
@@ -248,17 +245,6 @@ function DealRow({ title, detail, badge, action, onAction }: {
         </ItemActions>
       )}
     </Item>
-  );
-}
-
-function EmptyState({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Empty className="border border-dashed border-border py-8">
-      <EmptyHeader>
-        <EmptyTitle>{title}</EmptyTitle>
-        <EmptyDescription>{children}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
   );
 }
 

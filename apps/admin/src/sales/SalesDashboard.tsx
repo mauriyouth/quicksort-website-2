@@ -1,8 +1,33 @@
-import { ArrowUpRight, CalendarClock, HeartPulse, Target, Users } from "lucide-react";
-import { Empty, Notice } from "@quicksort/hr-ui";
+import type { ReactNode } from "react";
+import { ArrowUpRight, CalendarClock, HeartPulse, Target, Users, type LucideIcon } from "lucide-react";
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+  Progress,
+  Stat,
+  StatGroup,
+  StatLabel,
+  StatUnit,
+  StatValue,
+} from "@quicksort-sas/ui";
 import {
   HEALTH_META,
-  STAGE_COLORS,
   amountDetail,
   isOpen,
   isStaleDeal,
@@ -11,13 +36,15 @@ import {
   useSales,
   type SalesOpportunity,
 } from "./data";
-import "./sales.css";
 
 /**
  * Sales dashboard (sales.md §8.1): the command center. Open pipeline,
  * weighted forecast, the régie/forfait split, deals closing soon, stale
  * deals, the stage funnel and the latest activity — every number derived
  * from the opportunity records, régie priced as TJM × days.
+ *
+ * Built on @quicksort-sas/ui: the lime pivot marks the weighted forecast,
+ * the one number that matters on this view.
  */
 export function SalesDashboard({ actorEmail, onOpenClient }: {
   actorEmail: string;
@@ -54,142 +81,184 @@ export function SalesDashboard({ actorEmail, onOpenClient }: {
   const riskClients = clients.filter((c) => c.health !== "good").slice(0, 5);
 
   return (
-    <>
-      <Notice error>{error}</Notice>
-      <Notice>{message}</Notice>
-      <div className="stats stats-head">
-        <div className="stat">
-          <span className="stat-label">Open pipeline</span>
-          <strong className="stat-value">{money(openTotal)}</strong>
-        </div>
-        <div className="stat">
-          <span className="stat-label">Weighted forecast</span>
-          <strong className="stat-value">{money(weightedTotal)}</strong>
-        </div>
-        <div className="stat">
-          <span className="stat-label">Régie</span>
-          <strong className="stat-value">{money(regieTotal)}</strong>
-        </div>
-      </div>
-      <div className="grid-two">
-        <section className="panel">
-          <div className="panel-head">
-            <h2>
-              <CalendarClock size={16} /> Closing in the next 30 days
-            </h2>
-          </div>
+    <div className="flex flex-col gap-6">
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {message && (
+        <Alert>
+          <AlertDescription>{message}</AlertDescription>
+        </Alert>
+      )}
+      <Card>
+        <CardContent>
+          <StatGroup>
+            <Stat>
+              <StatValue>{figure(openTotal)}<StatUnit>€</StatUnit></StatValue>
+              <StatLabel>Open pipeline</StatLabel>
+            </Stat>
+            <Stat pivot>
+              <StatValue>{figure(weightedTotal)}<StatUnit>€</StatUnit></StatValue>
+              <StatLabel>Weighted forecast</StatLabel>
+            </Stat>
+            <Stat>
+              <StatValue>{figure(regieTotal)}<StatUnit>€</StatUnit></StatValue>
+              <StatLabel>Régie</StatLabel>
+            </Stat>
+          </StatGroup>
+        </CardContent>
+      </Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel icon={CalendarClock} title="Closing in the next 30 days">
           {closingSoon.length ? (
-            closingSoon.map((o) => (
-              <div className="list-row" key={o.id}>
-                <div>
-                  <h3>{o.title}</h3>
-                  <p className="muted small-text">
-                    {clientName(o.client_id)} · closes {o.expected_close} ·{" "}
-                    {money(Number(o.amount), o.currency)} ({o.pricing_model === "regie" ? "Régie" : "Forfait"})
-                  </p>
-                </div>
-                <button className="btn secondary small" onClick={() => onOpenClient(o.client_id)}>
-                  Client
-                  <ArrowUpRight size={14} />
-                </button>
-              </div>
-            ))
+            <ItemGroup>
+              {closingSoon.map((o) => (
+                <DealRow
+                  key={o.id}
+                  title={o.title}
+                  detail={`${clientName(o.client_id)} · closes ${o.expected_close} · ${money(Number(o.amount), o.currency)} (${o.pricing_model === "regie" ? "Régie" : "Forfait"})`}
+                  action="Client"
+                  onAction={() => onOpenClient(o.client_id)}
+                />
+              ))}
+            </ItemGroup>
           ) : (
-            <Empty title="Nothing closing soon">
-              Expected-close dates on open deals will line up here.
-            </Empty>
+            <EmptyState title="Nothing closing soon">Expected-close dates on open deals will line up here.</EmptyState>
           )}
-        </section>
-        <section className="panel">
-          <div className="panel-head">
-            <h2>
-              <HeartPulse size={16} /> Needs attention
-            </h2>
-          </div>
+        </Panel>
+        <Panel icon={HeartPulse} title="Needs attention">
           {stale.length ? (
-            stale.map((o) => <StaleRow key={o.id} o={o} clientName={clientName(o.client_id)} onOpenClient={onOpenClient} />)
+            <ItemGroup>
+              {stale.map((o) => (
+                <StaleRow key={o.id} o={o} clientName={clientName(o.client_id)} onOpenClient={onOpenClient} />
+              ))}
+            </ItemGroup>
           ) : (
-            <Empty title="No stale deals">
-              Open deals untouched for 21 days show up here.
-            </Empty>
+            <EmptyState title="No stale deals">Open deals untouched for 21 days show up here.</EmptyState>
           )}
           {!!riskClients.length && (
-            <>
-              <h2 className="section-subhead">Clients to watch</h2>
-              {riskClients.map((c) => (
-                <div className="list-row" key={c.id}>
-                  <div>
-                    <h3>{c.name}</h3>
-                    <p className="muted small-text">
-                      {c.industry || "—"} ·{" "}
-                      <span style={{ color: HEALTH_META[c.health]?.color }}>
+            <div className="mt-2 flex flex-col gap-2">
+              <h3 className="label-mono pt-2">Clients to watch</h3>
+              <ItemGroup>
+                {riskClients.map((c) => (
+                  <DealRow
+                    key={c.id}
+                    title={c.name}
+                    detail={c.industry || "—"}
+                    badge={
+                      <Badge variant={c.health === "risk" ? "destructive" : "warning"}>
                         {HEALTH_META[c.health]?.label || c.health}
-                      </span>
-                    </p>
+                      </Badge>
+                    }
+                    action="Open"
+                    onAction={() => onOpenClient(c.id)}
+                  />
+                ))}
+              </ItemGroup>
+            </div>
+          )}
+        </Panel>
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel icon={Target} title="Stage funnel">
+          {open.length || loading ? (
+            <ol className="flex flex-col gap-4">
+              {stageCounts.map((s) => (
+                <li key={s.key} className="grid grid-cols-[2.5rem_1fr] items-start gap-3">
+                  <span className="num pt-0.5 text-2xl leading-none">{s.count}</span>
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <div className="flex items-baseline justify-between gap-3 text-sm">
+                      <span className="font-medium">{stageLabel(s.key)}</span>
+                      <span className="num text-muted-foreground">{money(s.total)}</span>
+                    </div>
+                    <Progress
+                      aria-label={`${stageLabel(s.key)} share of open pipeline`}
+                      value={openTotal ? Math.round((s.total / openTotal) * 100) : 0}
+                    />
                   </div>
-                  <button className="btn secondary small" onClick={() => onOpenClient(c.id)}>
-                    Open
-                    <ArrowUpRight size={14} />
-                  </button>
-                </div>
+                </li>
               ))}
-            </>
-          )}
-        </section>
-      </div>
-      <div className="grid-two">
-        <section className="panel">
-          <h2>
-            <Target size={16} /> Stage funnel
-          </h2>
-          {stageCounts.map((s) => {
-            const width = Math.max(
-              4,
-              (s.total / Math.max(1, openTotal || 1)) * 100,
-            );
-            return (
-              <div className="step" key={s.key}>
-                <span className="step-num">{s.count}</span>
-                <div style={{ flex: 1 }}>
-                  <h3>{stageLabel(s.key)}</h3>
-                  <div className="meter" aria-hidden="true">
-                    <span style={{ width: `${width}%`, background: STAGE_COLORS[s.key] }} />
-                  </div>
-                  <p className="muted small-text">{money(s.total)}</p>
-                </div>
-              </div>
-            );
-          })}
-          {!open.length && !loading && (
-            <Empty title="No open opportunities">
-              Deals entered on the pipeline fill this funnel.
-            </Empty>
-          )}
-        </section>
-        <section className="panel">
-          <h2>
-            <Users size={16} /> Recent activity
-          </h2>
-          {activities.length ? (
-            activities.slice(0, 8).map((a) => (
-              <div className="list-row" key={a.id}>
-                <div>
-                  <h3>{a.text}</h3>
-                  <p className="muted small-text">
-                    {a.type.replace("_", " ")} · {a.author_email} ·{" "}
-                    {new Date(a.created_at).toLocaleDateString("fr-FR")}
-                  </p>
-                </div>
-              </div>
-            ))
+            </ol>
           ) : (
-            <Empty title="No activity yet">
-              Calls, emails, meetings and stage changes will appear here.
-            </Empty>
+            <EmptyState title="No open opportunities">Deals entered on the pipeline fill this funnel.</EmptyState>
           )}
-        </section>
+        </Panel>
+        <Panel icon={Users} title="Recent activity">
+          {activities.length ? (
+            <ItemGroup>
+              {activities.slice(0, 8).map((a) => (
+                <DealRow
+                  key={a.id}
+                  title={a.text}
+                  detail={`${a.type.replace("_", " ")} · ${a.author_email} · ${new Date(a.created_at).toLocaleDateString("fr-FR")}`}
+                />
+              ))}
+            </ItemGroup>
+          ) : (
+            <EmptyState title="No activity yet">Calls, emails, meetings and stage changes will appear here.</EmptyState>
+          )}
+        </Panel>
       </div>
-    </>
+    </div>
+  );
+}
+
+/** KPI figure without the currency sign — StatUnit sets the € apart. */
+const figure = (value: number) =>
+  new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(value || 0);
+
+function Panel({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">{children}</CardContent>
+    </Card>
+  );
+}
+
+function DealRow({ title, detail, badge, action, onAction }: {
+  title: string;
+  detail: string;
+  badge?: ReactNode;
+  action?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <Item variant="outline" size="sm">
+      <ItemContent className="min-w-0">
+        <ItemTitle>{title}</ItemTitle>
+        <ItemDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>{detail}</span>
+          {badge}
+        </ItemDescription>
+      </ItemContent>
+      {action && onAction && (
+        <ItemActions>
+          <Button variant="outline" size="sm" onClick={onAction}>
+            {action}
+            <ArrowUpRight data-icon="inline-end" />
+          </Button>
+        </ItemActions>
+      )}
+    </Item>
+  );
+}
+
+function EmptyState({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Empty className="border border-dashed border-border py-8">
+      <EmptyHeader>
+        <EmptyTitle>{title}</EmptyTitle>
+        <EmptyDescription>{children}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }
 
@@ -202,18 +271,11 @@ function StaleRow({ o, clientName, onOpenClient }: {
     (Date.now() - new Date(o.updated_at).getTime()) / 86400000,
   );
   return (
-    <div className="list-row">
-      <div>
-        <h3>{o.title}</h3>
-        <p className="muted small-text">
-          {clientName} · {money(Number(o.amount), o.currency)} ({amountDetail(o)}) ·
-          untouched {days}d
-        </p>
-      </div>
-      <button className="btn secondary small" onClick={() => onOpenClient(o.client_id)}>
-        Client
-        <ArrowUpRight size={14} />
-      </button>
-    </div>
+    <DealRow
+      title={o.title}
+      detail={`${clientName} · ${money(Number(o.amount), o.currency)} (${amountDetail(o)}) · untouched ${days}d`}
+      action="Client"
+      onAction={() => onOpenClient(o.client_id)}
+    />
   );
 }

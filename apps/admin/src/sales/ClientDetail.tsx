@@ -1,12 +1,49 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { ArrowLeft, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { db } from "@quicksort/hr-db";
-import { Empty, Notice } from "@quicksort/hr-ui";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  Input,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+  NativeSelect,
+  NativeSelectOption,
+  Textarea,
+} from "@quicksort-sas/ui";
+import { EmptyState, PageAlerts } from "../ui";
 import {
   ACTIVITY_TYPES,
   HEALTH_META,
   INFLUENCE_META,
-  STAGE_COLORS,
   amountDetail,
   daysSince,
   money,
@@ -40,19 +77,9 @@ export function ClientDetail({
   const [showPerson, setShowPerson] = useState(false);
   const [showOpportunity, setShowOpportunity] = useState(false);
   const [pricingModel, setPricingModel] = useState("regie");
-
-  /** Close the open modal with Escape, like the backdrop click. */
-  useEffect(() => {
-    if (!showPerson && !showOpportunity) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setShowPerson(false);
-        setShowOpportunity(false);
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [showPerson, showOpportunity]);
+  const [newDecisionMaker, setNewDecisionMaker] = useState(false);
+  const [opportunityError, setOpportunityError] = useState("");
+  const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
 
   const people = data.people.filter((p) => p.client_id === client.id);
   const opportunities = data.opportunities.filter((o) => o.client_id === client.id);
@@ -105,7 +132,7 @@ export function ClientDetail({
           email: String(f.get("email")).trim(),
           phone: String(f.get("phone")).trim(),
           linkedin: String(f.get("linkedin")).trim(),
-          is_decision_maker: f.get("is_decision_maker") === "on",
+          is_decision_maker: newDecisionMaker,
         })
         .select("id")
         .single();
@@ -120,6 +147,7 @@ export function ClientDetail({
         });
       if (note.error) throw note.error;
       setShowPerson(false);
+      setNewDecisionMaker(false);
     }, `${name} added to ${client.name}.`);
   }
 
@@ -140,13 +168,14 @@ export function ClientDetail({
       updated_at: new Date().toISOString(),
     };
     if (pricingModel === "regie" && (!values.tjm || !values.estimated_days)) {
-      window.alert("A régie opportunity needs a TJM and an estimated number of days.");
+      setOpportunityError("A régie opportunity needs a TJM and an estimated number of days.");
       return;
     }
     if (pricingModel === "forfait" && !values.fixed_price) {
-      window.alert("A forfait opportunity needs a fixed price.");
+      setOpportunityError("A forfait opportunity needs a fixed price.");
       return;
     }
+    setOpportunityError("");
     void action(async () => {
       const result = await db().from("sales_opportunities").insert(values).select("id").single();
       if (result.error) throw result.error;
@@ -166,7 +195,9 @@ export function ClientDetail({
 
   function log(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
+    // Keep the element: React clears e.currentTarget once the handler returns.
+    const form = e.currentTarget;
+    const f = new FormData(form);
     const text = String(f.get("text")).trim();
     if (!text) return;
     void logActivity(
@@ -178,478 +209,407 @@ export function ClientDetail({
         text,
       },
       "Activity logged.",
-    ).then(() => e.currentTarget.reset());
+    ).then(() => form.reset());
   }
 
   const idle = daysSince(client.last_activity_at);
+  const health = HEALTH_META[client.health];
+  const healthTone = client.health === "risk" ? "text-destructive" : client.health === "warning" ? "text-warning" : "text-success";
 
   return (
-    <>
-      <div className="detail-nav">
-        <button className="btn secondary small" onClick={onBack}>
-          <ArrowLeft size={14} />
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          <ArrowLeft data-icon="inline-start" />
           Clients
-        </button>
-        <button className="btn secondary small" onClick={() => setEditing((v) => !v)}>
-          <Pencil size={14} />
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)}>
+          <Pencil data-icon="inline-start" />
           {editing ? "Close editor" : "Edit"}
-        </button>
+        </Button>
       </div>
-      <div className="client-head">
-        <div>
-          <div className="eyebrow">Client 360</div>
-          <h1>{client.name}</h1>
-          <p className="muted">
-            {[client.industry, client.size, client.location].filter(Boolean).join(" · ") || "—"}
-            {" · "}
-            <span style={{ color: HEALTH_META[client.health]?.color }}>
-              {HEALTH_META[client.health]?.label || client.health}
-            </span>
-            {idle !== null && ` · last activity ${idle}d ago`}
-          </p>
-        </div>
-      </div>
-      <Notice error={!!sales.error}>{sales.error}</Notice>
-      <Notice>{sales.message}</Notice>
+      <header className="flex flex-col gap-2">
+        <span className="label-mono">Client 360</span>
+        <h1 className="m-0 text-3xl font-medium tracking-tight">{client.name}</h1>
+        <p className="m-0 text-sm text-muted-foreground">
+          {[client.industry, client.size, client.location].filter(Boolean).join(" · ") || "—"}
+          {" · "}
+          <span className={healthTone}>{health?.label || client.health}</span>
+          {idle !== null && ` · last activity ${idle}d ago`}
+        </p>
+      </header>
+      <PageAlerts error={sales.error} message={sales.message} />
 
-      {editing ? (
-        <section className="panel">
-          <h2>Company information</h2>
-          <form className="form" onSubmit={saveClient}>
-            <div className="form-columns">
-              <label>
-                Company name
-                <input name="name" defaultValue={client.name} required maxLength={200} />
-              </label>
-              <label>
-                Industry
-                <input name="industry" defaultValue={client.industry} maxLength={200} />
-              </label>
-              <label>
-                Size
-                <select name="size" defaultValue={client.size}>
-                  <option value="">Unknown</option>
-                  {["1-50", "51-200", "201-1000", "1000+"].map((s) => (
-                    <option key={s}>{s}</option>
+      <AlertDialog open={!!removing} onOpenChange={(open) => { if (!open) setRemoving(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {removing?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>They will also be removed from opportunity sponsors.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                const target = removing;
+                setRemoving(null);
+                if (!target) return;
+                void action(async () => {
+                  const result = await db().from("sales_contacts").delete().eq("id", target.id);
+                  if (result.error) throw result.error;
+                }, `${target.name} removed.`);
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Company information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {editing ? (
+            <form onSubmit={saveClient}>
+              <FieldGroup>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <TextField id="cd-name" name="name" label="Company name" defaultValue={client.name} required maxLength={200} />
+                  <TextField id="cd-industry" name="industry" label="Industry" defaultValue={client.industry} maxLength={200} />
+                  <Field>
+                    <FieldLabel htmlFor="cd-size">Size</FieldLabel>
+                    <NativeSelect id="cd-size" name="size" defaultValue={client.size}>
+                      <NativeSelectOption value="">Unknown</NativeSelectOption>
+                      {["1-50", "51-200", "201-1000", "1000+"].map((v) => (
+                        <NativeSelectOption key={v} value={v}>{v}</NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  </Field>
+                  <TextField id="cd-location" name="location" label="Location" defaultValue={client.location} maxLength={200} />
+                  <TextField id="cd-website" name="website" label="Website" type="url" defaultValue={client.website} maxLength={300} />
+                  <TextField id="cd-revenue" name="revenue" label="Revenue" defaultValue={client.revenue} maxLength={100} />
+                  <Field>
+                    <FieldLabel htmlFor="cd-health">Health</FieldLabel>
+                    <NativeSelect id="cd-health" name="health" defaultValue={client.health}>
+                      <NativeSelectOption value="good">Good</NativeSelectOption>
+                      <NativeSelectOption value="warning">Warning</NativeSelectOption>
+                      <NativeSelectOption value="risk">At risk</NativeSelectOption>
+                    </NativeSelect>
+                  </Field>
+                  <TextField id="cd-owner" name="owner_email" label="Owner" type="email" defaultValue={client.owner_email} maxLength={200} />
+                </div>
+                <TextField id="cd-tags" name="tags" label="Tags (comma-separated)" defaultValue={(client.tags || []).join(", ")} maxLength={300} />
+                <Field>
+                  <FieldLabel htmlFor="cd-notes">Notes</FieldLabel>
+                  <Textarea id="cd-notes" name="notes" defaultValue={client.notes} rows={3} maxLength={5000} />
+                </Field>
+                <div>
+                  <Button type="submit" disabled={busy}>Save client</Button>
+                </div>
+              </FieldGroup>
+            </form>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <dl className="m-0 grid gap-x-6 gap-y-4 [grid-template-columns:repeat(auto-fill,minmax(10rem,1fr))]">
+                <Info label="Industry" value={client.industry} />
+                <Info label="Size" value={client.size} />
+                <Info label="Location" value={client.location} />
+                <Info
+                  label="Website"
+                  value={
+                    client.website ? (
+                      <a className="underline underline-offset-4" href={client.website} target="_blank" rel="noopener noreferrer">
+                        {client.website.replace(/^https?:\/\//, "")}
+                      </a>
+                    ) : (
+                      ""
+                    )
+                  }
+                />
+                <Info label="Revenue" value={client.revenue} />
+                <Info label="Owner" value={client.owner_email} />
+                <Info label="Last activity" value={idle === null ? "—" : `${idle} days ago`} />
+              </dl>
+              {!!client.tags?.length && (
+                <div className="flex flex-wrap gap-1">
+                  {client.tags.map((t) => (
+                    <Badge key={t} variant="secondary" className="normal-case">{t}</Badge>
                   ))}
-                </select>
-              </label>
-              <label>
-                Location
-                <input name="location" defaultValue={client.location} maxLength={200} />
-              </label>
-              <label>
-                Website
-                <input name="website" type="url" defaultValue={client.website} maxLength={300} />
-              </label>
-              <label>
-                Revenue
-                <input name="revenue" defaultValue={client.revenue} maxLength={100} />
-              </label>
-              <label>
-                Health
-                <select name="health" defaultValue={client.health}>
-                  <option value="good">Good</option>
-                  <option value="warning">Warning</option>
-                  <option value="risk">At risk</option>
-                </select>
-              </label>
-              <label>
-                Owner
-                <input name="owner_email" type="email" defaultValue={client.owner_email} maxLength={200} />
-              </label>
+                </div>
+              )}
+              {client.notes && <p className="m-0 text-sm whitespace-pre-wrap">{client.notes}</p>}
             </div>
-            <label>
-              Tags (comma-separated)
-              <input name="tags" defaultValue={(client.tags || []).join(", ")} maxLength={300} />
-            </label>
-            <label>
-              Notes
-              <textarea name="notes" defaultValue={client.notes} rows={3} maxLength={5000} />
-            </label>
-            <div className="actions">
-              <button className="btn" disabled={busy}>
-                Save client
-              </button>
-            </div>
-          </form>
-        </section>
-      ) : (
-        <section className="panel">
-          <h2>Company information</h2>
-          <div className="info-grid">
-            <Info label="Industry" value={client.industry} />
-            <Info label="Size" value={client.size} />
-            <Info label="Location" value={client.location} />
-            <Info
-              label="Website"
-              value={
-                client.website ? (
-                  <a href={client.website} target="_blank" rel="noopener noreferrer">
-                    {client.website.replace(/^https?:\/\//, "")}
-                  </a>
-                ) : (
-                  ""
-                )
-              }
-            />
-            <Info label="Revenue" value={client.revenue} />
-            <Info label="Owner" value={client.owner_email} />
-            <Info label="Last activity" value={idle === null ? "—" : `${idle} days ago`} />
-          </div>
-          {!!client.tags?.length && (
-            <p className="small-text">
-              {client.tags.map((t) => (
-                <span className="pill tag" key={t}>{t}</span>
-              ))}
-            </p>
           )}
-          {client.notes && <p className="wrap">{client.notes}</p>}
-        </section>
-      )}
+        </CardContent>
+      </Card>
 
-      <div className="grid-two">
-        <section className="panel">
-          <div className="panel-head">
-            <h2>People ({people.length})</h2>
-            <button className="btn secondary small" onClick={() => setShowPerson(true)}>
-              <Plus size={14} />
-              Add
-            </button>
-          </div>
-          {showPerson && (
-            <div
-              className="modal-backdrop"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) setShowPerson(false);
-              }}
-            >
-              <section className="modal" role="dialog" aria-modal="true">
-                <div className="modal-head">
-                  <h2>Add a person</h2>
-                  <button
-                    type="button"
-                    className="btn secondary small"
-                    aria-label="Close"
-                    onClick={() => setShowPerson(false)}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <form className="form" onSubmit={addPerson}>
-                  <div className="form-columns">
-                    <label>
-                      Name
-                      <input name="name" required maxLength={200} />
-                    </label>
-                    <label>
-                      Role
-                      <input name="role" maxLength={200} placeholder="e.g. CTO" />
-                    </label>
-                    <label>
-                      Email
-                      <input name="email" type="email" maxLength={200} />
-                    </label>
-                    <label>
-                      Phone
-                      <input name="phone" maxLength={40} />
-                    </label>
-                    <label>
-                      LinkedIn
-                      <input name="linkedin" type="url" maxLength={300} placeholder="https://linkedin.com/in/…" />
-                    </label>
-                  </div>
-                  <label className="check">
-                    <input type="checkbox" name="is_decision_maker" />
-                    Decision-maker
-                  </label>
-                  <div className="actions">
-                    <button className="btn small" disabled={busy}>
-                      Add
-                    </button>
-                  </div>
-                </form>
-              </section>
-            </div>
-          )}
-          {people.length ? (
-            people.map((p) => {
-              const sponsorLinks = data.sponsors.filter((s) => s.person_id === p.id);
-              return (
-                <div className="list-row" key={p.id}>
-                  <div>
-                    <h3>
-                      {p.name}
-                      {p.is_decision_maker && (
-                        <span className="pill" style={{ background: "#7c3aed", marginLeft: 8 }}>
-                          Decision-maker
-                        </span>
-                      )}
-                    </h3>
-                    <p className="muted small-text">
-                      {[p.role, p.email].filter(Boolean).join(" · ") || "—"}
-                      {daysSince(p.last_contact_at) !== null &&
-                        ` · last contact ${daysSince(p.last_contact_at)}d ago`}
-                    </p>
-                    {p.linkedin && (
-                      <p className="small-text">
-                        <a href={p.linkedin} target="_blank" rel="noopener noreferrer">
-                          {p.linkedin.replace(/^https?:\/\//, "")}
-                        </a>
-                      </p>
-                    )}
-                    {!!sponsorLinks.length && (
-                      <p className="small-text">
-                        {sponsorLinks.map((s) => {
-                          const opp = data.opportunities.find((o) => o.id === s.opportunity_id);
-                          return (
-                            <span
-                              className="pill"
-                              key={s.opportunity_id}
-                              style={{
-                                background: INFLUENCE_META[s.influence]?.color,
-                                marginRight: 4,
-                              }}
-                              title={opp?.title}
-                            >
-                              {s.is_primary ? "★ " : ""}
-                              {opp?.title || "Opportunity"} · {INFLUENCE_META[s.influence]?.label}
-                            </span>
-                          );
-                        })}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    className="btn danger small"
-                    disabled={busy}
-                    title={`Remove ${p.name}`}
-                    onClick={() => {
-                      if (!confirm(`Remove ${p.name}? They will also be removed from opportunity sponsors.`)) return;
-                      void action(async () => {
-                        const result = await db().from("sales_contacts").delete().eq("id", p.id);
-                        if (result.error) throw result.error;
-                      }, `${p.name} removed.`);
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              );
-            })
-          ) : (
-            <Empty title="No people yet">
-              Add the contacts inside {client.name} to build the relationship map.
-            </Empty>
-          )}
-        </section>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>People ({people.length})</CardTitle>
+            <CardAction>
+              <Button variant="outline" size="sm" onClick={() => setShowPerson(true)}>
+                <Plus data-icon="inline-start" />
+                Add
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {people.length ? (
+              <ItemGroup>
+                {people.map((p) => {
+                  const sponsorLinks = data.sponsors.filter((s) => s.person_id === p.id);
+                  const contacted = daysSince(p.last_contact_at);
+                  return (
+                    <Item key={p.id} variant="outline" size="sm" className="items-start">
+                      <ItemContent className="min-w-0 gap-1.5">
+                        <ItemTitle className="flex-wrap">
+                          {p.name}
+                          {p.is_decision_maker && <Badge variant="outline">Decision-maker</Badge>}
+                        </ItemTitle>
+                        <ItemDescription>
+                          {[p.role, p.email].filter(Boolean).join(" · ") || "—"}
+                          {contacted !== null && ` · last contact ${contacted}d ago`}
+                        </ItemDescription>
+                        {p.linkedin && (
+                          <a className="truncate text-xs text-muted-foreground underline underline-offset-4" href={p.linkedin} target="_blank" rel="noopener noreferrer">
+                            {p.linkedin.replace(/^https?:\/\//, "")}
+                          </a>
+                        )}
+                        {!!sponsorLinks.length && (
+                          <div className="flex flex-wrap gap-1">
+                            {sponsorLinks.map((s) => {
+                              const opp = data.opportunities.find((o) => o.id === s.opportunity_id);
+                              return (
+                                <InfluenceBadge key={s.opportunity_id} influence={s.influence} primary={s.is_primary} title={opp?.title}>
+                                  {opp?.title || "Opportunity"} · {INFLUENCE_META[s.influence]?.label}
+                                </InfluenceBadge>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </ItemContent>
+                      <ItemActions>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive"
+                          disabled={busy}
+                          aria-label={`Remove ${p.name}`}
+                          title={`Remove ${p.name}`}
+                          onClick={() => setRemoving({ id: p.id, name: p.name })}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </ItemActions>
+                    </Item>
+                  );
+                })}
+              </ItemGroup>
+            ) : (
+              <EmptyState title="No people yet">Add the contacts inside {client.name} to build the relationship map.</EmptyState>
+            )}
+          </CardContent>
+        </Card>
 
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Opportunities ({opportunities.length})</h2>
-            <button className="btn secondary small" onClick={() => setShowOpportunity(true)}>
-              <Plus size={14} />
-              Add
-            </button>
-          </div>
-          {showOpportunity && (
-            <div
-              className="modal-backdrop"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) setShowOpportunity(false);
-              }}
-            >
-              <section className="modal" role="dialog" aria-modal="true">
-                <div className="modal-head">
-                  <h2>Add an opportunity</h2>
-                  <button
-                    type="button"
-                    className="btn secondary small"
-                    aria-label="Close"
-                    onClick={() => setShowOpportunity(false)}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <form className="form" onSubmit={addOpportunity}>
-                  <div className="form-columns">
-                    <label>
-                      Title
-                      <input name="title" required maxLength={200} />
-                    </label>
-                    <label>
-                      Pricing model
-                      <select
-                        name="pricing_model"
-                        value={pricingModel}
-                        onChange={(e) => setPricingModel(e.target.value)}
-                      >
-                        <option value="regie">Régie</option>
-                        <option value="forfait">Forfait</option>
-                      </select>
-                    </label>
-                    {pricingModel === "regie" && (
-                      <>
-                        <label>
-                          TJM (€ / day)
-                          <input name="tjm" type="number" min="0" step="10" />
-                        </label>
-                        <label>
-                          Estimated days
-                          <input name="estimated_days" type="number" min="0" step="1" />
-                        </label>
-                      </>
-                    )}
-                    {pricingModel === "forfait" && (
-                      <label>
-                        Forfait (€)
-                        <input name="fixed_price" type="number" min="0" step="100" />
-                      </label>
-                    )}
-                    <label>
-                      Expected close
-                      <DateField name="expected_close" />
-                    </label>
-                    <label>
-                      Owner
-                      <input name="owner_email" type="email" defaultValue={actorEmail} maxLength={200} />
-                    </label>
-                  </div>
-                  <p className="small-text muted">
-                    {pricingModel === "regie"
-                      ? "Régie is priced as TJM × estimated days."
-                      : "Forfait is a lump-sum price."}{" "}
-                    The amount is derived automatically.
-                  </p>
-                  <div className="actions">
-                    <button className="btn small" disabled={busy}>
-                      Add
-                    </button>
-                  </div>
-                </form>
-              </section>
-            </div>
-          )}
-          {opportunities.length ? (
-            opportunities.map((o) => {
-              const sponsors = data.sponsors.filter((s) => s.opportunity_id === o.id);
-              return (
-                <div className="list-row" key={o.id}>
-                  <div>
-                    <h3>
-                      {o.title}
-                      <span
-                        className="pill"
-                        style={{
-                          background: o.pricing_model === "regie" ? "#0ea5e9" : "#a855f7",
-                          marginLeft: 8,
-                        }}
-                      >
-                        {o.pricing_model === "regie" ? "Régie" : "Forfait"}
-                      </span>
-                      <span
-                        className="pill"
-                        style={{ background: STAGE_COLORS[o.stage], marginLeft: 4 }}
-                      >
-                        {stageLabel(o.stage)}
-                      </span>
-                    </h3>
-                    <p className="muted small-text">
-                      {money(Number(o.amount), o.currency)} ({amountDetail(o)}) · {o.probability}%
-                      {o.expected_close ? ` · closes ${o.expected_close}` : ""}
-                      {o.owner_email ? ` · ${o.owner_email}` : ""}
-                    </p>
-                    {!!sponsors.length && (
-                      <p className="small-text">
-                        {sponsors.map((s) => {
-                          const person = data.people.find((p) => p.id === s.person_id);
-                          return (
-                            <span
-                              className="pill"
-                              key={s.person_id}
-                              style={{
-                                background: INFLUENCE_META[s.influence]?.color,
-                                marginRight: 4,
-                              }}
-                              title={`${INFLUENCE_META[s.influence]?.label} on “${o.title}”`}
-                            >
-                              {s.is_primary ? "★ " : ""}
-                              {person?.name || "?"} · {INFLUENCE_META[s.influence]?.label}
-                            </span>
-                          );
-                        })}
-                      </p>
-                    )}
-                    {o.lost_reason && <p className="small-text muted">Lost: {o.lost_reason}</p>}
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <Empty title="No opportunities yet">
-              Create the first opportunity for {client.name} to start the funnel.
-            </Empty>
-          )}
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Opportunities ({opportunities.length})</CardTitle>
+            <CardAction>
+              <Button variant="outline" size="sm" onClick={() => { setOpportunityError(""); setShowOpportunity(true); }}>
+                <Plus data-icon="inline-start" />
+                Add
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {opportunities.length ? (
+              <ItemGroup>
+                {opportunities.map((o) => {
+                  const sponsors = data.sponsors.filter((s) => s.opportunity_id === o.id);
+                  return (
+                    <Item key={o.id} variant="outline" size="sm">
+                      <ItemContent className="min-w-0 gap-1.5">
+                        <ItemTitle className="flex-wrap">
+                          {o.title}
+                          <Badge variant="outline">{o.pricing_model === "regie" ? "Régie" : "Forfait"}</Badge>
+                          <Badge variant={o.stage === "won" ? "success" : o.stage === "lost" ? "destructive" : "secondary"}>{stageLabel(o.stage)}</Badge>
+                        </ItemTitle>
+                        <ItemDescription>
+                          {money(Number(o.amount), o.currency)} ({amountDetail(o)}) · {o.probability}%
+                          {o.expected_close ? ` · closes ${o.expected_close}` : ""}
+                          {o.owner_email ? ` · ${o.owner_email}` : ""}
+                        </ItemDescription>
+                        {!!sponsors.length && (
+                          <div className="flex flex-wrap gap-1">
+                            {sponsors.map((s) => {
+                              const person = data.people.find((p) => p.id === s.person_id);
+                              return (
+                                <InfluenceBadge key={s.person_id} influence={s.influence} primary={s.is_primary} title={`${INFLUENCE_META[s.influence]?.label} on “${o.title}”`}>
+                                  {person?.name || "?"} · {INFLUENCE_META[s.influence]?.label}
+                                </InfluenceBadge>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {o.lost_reason && <p className="m-0 text-xs text-muted-foreground">Lost: {o.lost_reason}</p>}
+                      </ItemContent>
+                    </Item>
+                  );
+                })}
+              </ItemGroup>
+            ) : (
+              <EmptyState title="No opportunities yet">Create the first opportunity for {client.name} to start the funnel.</EmptyState>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <section className="panel">
-        <h2>Activity timeline</h2>
-        <form className="form timeline-composer" onSubmit={log}>
-          <select name="type" defaultValue="note" aria-label="Activity type">
-            {ACTIVITY_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <select name="person_id" defaultValue="" aria-label="Related person">
-            <option value="">No person</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <input
-            name="text"
-            required
-            maxLength={5000}
-            placeholder="Log a call, email, meeting or note…"
-          />
-          <button className="btn small" disabled={busy}>
-            Log
-          </button>
-        </form>
-        {activities.length ? (
-          activities.map((a) => (
-            <div className="list-row" key={a.id}>
-              <div>
-                <h3>{a.text}</h3>
-                <p className="muted small-text">
-                  {a.type.replace("_", " ")} · {a.author_email} ·{" "}
-                  {new Date(a.created_at).toLocaleString("fr-FR")}
-                  {a.person_id &&
-                    ` · with ${data.people.find((p) => p.id === a.person_id)?.name || "contact"}`}
-                </p>
+      <Dialog open={showPerson} onOpenChange={setShowPerson}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add a person</DialogTitle>
+            <DialogDescription>A contact inside {client.name}.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={addPerson}>
+            <FieldGroup>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField id="ap-name" name="name" label="Name" required maxLength={200} />
+                <TextField id="ap-role" name="role" label="Role" maxLength={200} placeholder="e.g. CTO" />
+                <TextField id="ap-email" name="email" label="Email" type="email" maxLength={200} />
+                <TextField id="ap-phone" name="phone" label="Phone" maxLength={40} />
+                <TextField id="ap-linkedin" name="linkedin" label="LinkedIn" type="url" maxLength={300} placeholder="https://linkedin.com/in/…" />
               </div>
-            </div>
-          ))
-        ) : (
-          <Empty title="No activity yet">
-            Log calls, emails and meetings to keep the relationship history.
-          </Empty>
-        )}
-      </section>
-    </>
+              <Field orientation="horizontal">
+                <Checkbox id="ap-dm" checked={newDecisionMaker} onCheckedChange={(v) => setNewDecisionMaker(v === true)} />
+                <FieldLabel htmlFor="ap-dm" className="font-normal">Decision-maker</FieldLabel>
+              </Field>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowPerson(false)}>Cancel</Button>
+                <Button type="submit" disabled={busy}>Add</Button>
+              </DialogFooter>
+            </FieldGroup>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showOpportunity} onOpenChange={setShowOpportunity}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add an opportunity</DialogTitle>
+            <DialogDescription>For {client.name}.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={addOpportunity}>
+            <FieldGroup>
+              <PageAlerts error={opportunityError} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField id="ao-title" name="title" label="Title" required maxLength={200} />
+                <Field>
+                  <FieldLabel htmlFor="ao-model">Pricing model</FieldLabel>
+                  <NativeSelect id="ao-model" name="pricing_model" value={pricingModel} onChange={(e) => { setPricingModel(e.target.value); setOpportunityError(""); }}>
+                    <NativeSelectOption value="regie">Régie</NativeSelectOption>
+                    <NativeSelectOption value="forfait">Forfait</NativeSelectOption>
+                  </NativeSelect>
+                </Field>
+                {pricingModel === "regie" && (
+                  <>
+                    <TextField id="ao-tjm" name="tjm" label="TJM (€ / day)" type="number" min="0" step="10" />
+                    <TextField id="ao-days" name="estimated_days" label="Estimated days" type="number" min="0" step="1" />
+                  </>
+                )}
+                {pricingModel === "forfait" && (
+                  <TextField id="ao-fixed" name="fixed_price" label="Forfait (€)" type="number" min="0" step="100" />
+                )}
+                <Field>
+                  <FieldLabel>Expected close</FieldLabel>
+                  <DateField name="expected_close" aria-label="Expected close" />
+                </Field>
+                <TextField id="ao-owner" name="owner_email" label="Owner" type="email" defaultValue={actorEmail} maxLength={200} />
+              </div>
+              <FieldDescription>
+                {pricingModel === "regie" ? "Régie is priced as TJM × estimated days." : "Forfait is a lump-sum price."} The amount is derived automatically.
+              </FieldDescription>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowOpportunity(false)}>Cancel</Button>
+                <Button type="submit" disabled={busy}>Add</Button>
+              </DialogFooter>
+            </FieldGroup>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity timeline</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <form className="flex flex-wrap gap-2" onSubmit={log}>
+            <NativeSelect name="type" defaultValue="note" aria-label="Activity type">
+              {ACTIVITY_TYPES.map((t) => (
+                <NativeSelectOption key={t} value={t}>{t}</NativeSelectOption>
+              ))}
+            </NativeSelect>
+            <NativeSelect name="person_id" defaultValue="" aria-label="Related person">
+              <NativeSelectOption value="">No person</NativeSelectOption>
+              {people.map((p) => (
+                <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>
+              ))}
+            </NativeSelect>
+            <Input name="text" required maxLength={5000} placeholder="Log a call, email, meeting or note…" aria-label="Activity" className="min-w-56 flex-1" />
+            <Button type="submit" disabled={busy}>Log</Button>
+          </form>
+          {activities.length ? (
+            <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
+              {activities.map((a) => (
+                <li key={a.id} className="py-2.5">
+                  <div className="text-sm">{a.text}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {a.type.replace("_", " ")} · {a.author_email} · {new Date(a.created_at).toLocaleString("fr-FR")}
+                    {a.person_id && ` · with ${data.people.find((p) => p.id === a.person_id)?.name || "contact"}`}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState title="No activity yet">Log calls, emails and meetings to keep the relationship history.</EmptyState>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function Info({ label, value }: { label: string; value: React.ReactNode }) {
+const INFLUENCE_VARIANT: Record<string, "success" | "secondary" | "outline" | "destructive"> = {
+  champion: "success",
+  supporter: "secondary",
+  neutral: "outline",
+  blocker: "destructive",
+};
+
+function InfluenceBadge({ influence, primary, title, children }: { influence: string; primary?: boolean; title?: string; children: ReactNode }) {
   return (
-    <div>
-      <small className="muted">{label}</small>
-      <p>{value || "—"}</p>
+    <Badge variant={INFLUENCE_VARIANT[influence] ?? "outline"} title={title} className="gap-1 normal-case">
+      {primary && <Star className="size-3" aria-label="Primary" />}
+      {children}
+    </Badge>
+  );
+}
+
+function TextField({ id, label, ...props }: { id: string; label: string } & React.ComponentProps<typeof Input>) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input id={id} {...props} />
+    </Field>
+  );
+}
+
+function Info({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <dt className="label-mono">{label}</dt>
+      <dd className="m-0 truncate text-sm">{value || "—"}</dd>
     </div>
   );
 }

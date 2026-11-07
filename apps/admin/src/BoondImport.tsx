@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@clerk/react";
-import { Notice } from "@quicksort/hr-ui";
-import "./settings-page.css";
+import { Button, Field, FieldDescription, FieldGroup, FieldLabel, Input } from "@quicksort-sas/ui";
+import { PageAlerts } from "./ui";
+import { ConnectionBadge, Hint, SettingsCard, SettingsRow } from "./settings-ui";
 
 type Status = { configured: boolean; updatedAt: string | null; canSave: boolean };
 type ImportResult = { created: number; updated: number; skipped: number; total: number };
@@ -97,143 +98,149 @@ export function BoondImport({ isOwner }: { isOwner: boolean }) {
     }
   }
 
+  const results = [
+    ["Clients", clients],
+    ["Employees", employees],
+    ["Candidates", candidates],
+  ] as const;
   return (
-    <section className="sp-card" aria-label="Import from BoondManager">
-      <header className="sp-card-head sp-card-head--ruled">
-        <div>
-          <h2 className="sp-card-title">Import from BoondManager</h2>
-          <p className="sp-card-desc">
-            Pull clients into <strong>Sales → Clients</strong>, employees into{" "}
-            <strong>HR → Employees</strong> and candidates into <strong>HR → Talent pool</strong>{" "}
-            from your BoondManager account. Imports match on name (clients) or
-            email/name (people), so re-running one updates existing records instead
-            of creating duplicates.
-          </p>
-        </div>
-      </header>
-      <div className="sp-body">
-      <Notice error>{error}</Notice>
-      <Notice>{message}</Notice>
-
-      {isOwner ? (
-        <>
-          <p role="status">
-            {status
-              ? status.configured
-                ? `BoondManager account connected${status.updatedAt ? ` (saved ${new Date(status.updatedAt).toLocaleString()})` : ""}.`
-                : "No BoondManager account connected yet."
-              : "Checking connection…"}
-          </p>
-          {!status?.canSave && (
-            <p className="muted">
-              Secure storage needs a one-time server setup: configure
-              AI_SETTINGS_ENCRYPTION_KEY before saving credentials here.
-            </p>
-          )}
-          <form
-            className="form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void save();
-            }}
-          >
-            <div className="form-columns">
-              <label>
-                BoondManager username
-                <input
-                  autoComplete="off"
-                  required
-                  maxLength={200}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  disabled={busy || !status?.canSave}
-                />
-              </label>
-              <label>
-                BoondManager password
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  maxLength={200}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={busy || !status?.canSave}
-                />
-              </label>
-            </div>
-            <label>
-              Instance host
-              <input
-                required
-                maxLength={120}
-                pattern="[a-z0-9.-]+"
-                placeholder="yourcompany.boondmanager.com"
-                value={instance}
-                onChange={(e) => setInstance(e.target.value)}
-                disabled={busy || !status?.canSave}
-              />
-              <span className="muted">
-                Your BoondManager tenant — the host in your browser's address bar when
-                you use Boond (e.g. <code>acme.boondmanager.com</code>). REST API access
-                must be allowed in Boond (settings → security).{" "}
-                <a href="https://doc.boondmanager.com/api-externe/" target="_blank" rel="noreferrer">
-                  API documentation
-                </a>
-                .
+    <div className="flex flex-col gap-4">
+      <PageAlerts error={error} message={message} />
+      <SettingsCard
+        title="Import from BoondManager"
+        description={
+          <Hint className="text-sm">
+            Pull clients into <strong>Sales → Clients</strong>, employees into <strong>HR → Employees</strong> and candidates into{" "}
+            <strong>HR → Talent pool</strong> from your BoondManager account. Imports match on name (clients) or email/name (people),
+            so re-running one updates existing records instead of creating duplicates.
+          </Hint>
+        }
+        action={
+          status && (
+            <ConnectionBadge tone={status.configured ? "ok" : "neutral"}>{status.configured ? "Connected" : "Not connected"}</ConnectionBadge>
+          )
+        }
+      >
+        <SettingsRow
+          label="Connection"
+          hint={
+            isOwner ? (
+              <span role="status">
+                {status
+                  ? status.configured
+                    ? `BoondManager account connected${status.updatedAt ? ` (saved ${new Date(status.updatedAt).toLocaleString()})` : ""}.`
+                    : "No BoondManager account connected yet."
+                  : "Checking connection…"}
               </span>
-            </label>
-            <p className="muted small-text">
-              Stored encrypted; the saved password is never displayed again.
-            </p>
-            <div className="actions">
-              <button className="btn" disabled={busy || !status?.canSave}>
-                {busy ? "Saving…" : status?.configured ? "Replace connection" : "Save connection"}
-              </button>
-              {status?.configured && (
-                <button type="button" className="btn secondary" disabled={busy} onClick={() => void save(true)}>
-                  Remove connection
-                </button>
-              )}
-            </div>
-          </form>
-        </>
-      ) : (
-        <p>Ask a portal owner to connect the shared BoondManager account.</p>
-      )}
+            ) : undefined
+          }
+        >
+          {isOwner ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void save();
+              }}
+            >
+              <FieldGroup className="gap-4">
+                {!status?.canSave && (
+                  <Hint>Secure storage needs a one-time server setup: configure AI_SETTINGS_ENCRYPTION_KEY before saving credentials here.</Hint>
+                )}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="boond-username">BoondManager username</FieldLabel>
+                    <Input
+                      id="boond-username"
+                      autoComplete="off"
+                      required
+                      maxLength={200}
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      disabled={busy || !status?.canSave}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="boond-password">BoondManager password</FieldLabel>
+                    <Input
+                      id="boond-password"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      maxLength={200}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={busy || !status?.canSave}
+                    />
+                  </Field>
+                </div>
+                <Field>
+                  <FieldLabel htmlFor="boond-instance">Instance host</FieldLabel>
+                  <Input
+                    id="boond-instance"
+                    required
+                    maxLength={120}
+                    pattern="[a-z0-9.\-]+"
+                    placeholder="yourcompany.boondmanager.com"
+                    value={instance}
+                    onChange={(e) => setInstance(e.target.value)}
+                    disabled={busy || !status?.canSave}
+                  />
+                  <FieldDescription>
+                    Your BoondManager tenant — the host in your browser's address bar when you use Boond (e.g.{" "}
+                    <code>acme.boondmanager.com</code>). REST API access must be allowed in Boond (settings → security).{" "}
+                    <a href="https://doc.boondmanager.com/api-externe/" target="_blank" rel="noreferrer">
+                      API documentation
+                    </a>
+                    .
+                  </FieldDescription>
+                </Field>
+                <Hint>Stored encrypted; the saved password is never displayed again.</Hint>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={busy || !status?.canSave}>
+                    {busy ? "Saving…" : status?.configured ? "Replace connection" : "Save connection"}
+                  </Button>
+                  {status?.configured && (
+                    <Button type="button" variant="outline" disabled={busy} onClick={() => void save(true)}>
+                      Remove connection
+                    </Button>
+                  )}
+                </div>
+              </FieldGroup>
+            </form>
+          ) : (
+            <Hint>Ask a portal owner to connect the shared BoondManager account.</Hint>
+          )}
+        </SettingsRow>
 
-      <h3 style={{ marginTop: 24 }}>Run an import</h3>
-      <div className="actions">
-        <button className="btn secondary" disabled={busy || !status?.configured} onClick={() => void runImport("clients")}>
-          Import clients
-        </button>
-        <button className="btn secondary" disabled={busy || !status?.configured} onClick={() => void runImport("employees")}>
-          Import employees
-        </button>
-        <button className="btn secondary" disabled={busy || !status?.configured} onClick={() => void runImport("candidates")}>
-          Import candidates
-        </button>
-      </div>
-      {(clients || employees || candidates) && (
-        <ul className="muted small-text" style={{ marginTop: 12, paddingLeft: 18 }}>
-          {clients && (
-            <li>
-              Clients: {clients.created} created · {clients.updated} updated · {clients.skipped} skipped (of {clients.total} found)
-            </li>
+        <SettingsRow label="Run an import" hint="Re-running updates matched records.">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={busy || !status?.configured} onClick={() => void runImport("clients")}>
+              Import clients
+            </Button>
+            <Button variant="outline" disabled={busy || !status?.configured} onClick={() => void runImport("employees")}>
+              Import employees
+            </Button>
+            <Button variant="outline" disabled={busy || !status?.configured} onClick={() => void runImport("candidates")}>
+              Import candidates
+            </Button>
+          </div>
+          {results.some(([, r]) => r) && (
+            <ul className="m-0 flex flex-col gap-1 p-0 text-xs text-muted-foreground">
+              {results.map(
+                ([label, r]) =>
+                  r && (
+                    <li key={label} className="list-none">
+                      <span className="text-foreground">{label}:</span>{" "}
+                      <span className="num">
+                        {r.created} created · {r.updated} updated · {r.skipped} skipped (of {r.total} found)
+                      </span>
+                    </li>
+                  ),
+              )}
+            </ul>
           )}
-          {employees && (
-            <li>
-              Employees: {employees.created} created · {employees.updated} updated · {employees.skipped} skipped (of {employees.total} found)
-            </li>
-          )}
-          {candidates && (
-            <li>
-              Candidates: {candidates.created} created · {candidates.updated} updated · {candidates.skipped} skipped (of {candidates.total} found)
-            </li>
-          )}
-        </ul>
-      )}
-      </div>
-    </section>
+        </SettingsRow>
+      </SettingsCard>
+    </div>
   );
 }

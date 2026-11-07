@@ -112,12 +112,11 @@ locally. `api/` files stay thin, and the logic lives in `server/`.
 | `invoicing` | Draft → validate → send → cancel → sync client invoices | Qonto (behind `InvoicingProvider`) |
 | `sales-pipeline`, `boondmanager` | Pipeline board reads/moves; BoondManager import | BoondManager |
 | `business-competitor-intelligence`, `business-event-intelligence` | Research for the intelligence app | OpenAI, Treg |
-| `team-photo.mjs` | Serves private team portraits bundled with the function | — |
 
 ### `apps/candidate` — candidate portal (`@quicksort/candidate`, port 5175)
 
 A smaller stand-alone portal with onboarding, profile (capability profile),
-documents, contracts, tool access, team photos and account pages. It uses
+documents, contracts, tool access and account pages. It uses
 `@quicksort/candidate-db`/`candidate-ui`. Its CSP targets the
 `kupbvrnjppcwqxmzxasi` Supabase project. The admin app's `HrPortal` covers the
 same ground for users who sign in to admin without a staff role.

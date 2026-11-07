@@ -1,4 +1,7 @@
 import { db, getSessionToken, saveBlob, type DocumentAlert, type DocumentOwnerKind, type DocumentRecord, type DocumentTypeRecord } from "@quicksort/hr-db";
+import { expiryLabel, parisToday } from "./expiry";
+
+export { parisToday, expiryState, expiryLabel, type ExpiryState } from "./expiry";
 
 /**
  * Browser side of the document registry. Reads (documents, types, alerts,
@@ -147,6 +150,24 @@ export async function previewOwnPayslip(doc: Pick<DocumentRecord, "id">) {
   }
 }
 
+/** Portal: a document of the employee's own HR folder (the server checks it is theirs and logs the access). */
+export async function downloadOwnDocument(doc: Pick<DocumentRecord, "id" | "file_name">) {
+  const result = await request<Blob | { link: string }>({ action: "download-own-document", documentId: doc.id });
+  if (result instanceof Blob) saveBlob(result, doc.file_name);
+  else window.open(result.link, "_blank", "noopener");
+}
+
+export async function previewOwnDocument(doc: Pick<DocumentRecord, "id">) {
+  const result = await request<Blob | { link: string }>({ action: "download-own-document", documentId: doc.id, preview: true });
+  if (result instanceof Blob) {
+    const url = URL.createObjectURL(result);
+    window.open(url, "_blank", "noopener");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } else {
+    window.open(result.link, "_blank", "noopener");
+  }
+}
+
 /** Re-files a payslip under another person; the old record is archived. */
 export async function movePayslip(documentId: string, toPersonId: string) {
   return await request<{ document: DocumentRecord; previousMatricule: { employeeId: string; value: string } | null }>({
@@ -254,29 +275,6 @@ export async function extractDocumentDates(file: File): Promise<{ issuedOn: stri
   });
   if (!response.ok) return null;
   return (await response.json()) as { issuedOn: string | null; expiresOn: string | null };
-}
-
-/** Today in Paris, like the document_alerts view. */
-export const parisToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date());
-
-const dayNumber = (iso: string) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 86_400_000;
-
-export type ExpiryState = { tone: "expired" | "expiring" | "valid" | "none"; daysLeft: number | null };
-
-/** Same thresholds as the view: expired before today, expiring inside the largest warn window. */
-export function expiryState(doc: Pick<DocumentRecord, "expires_on">, type: Pick<DocumentTypeRecord, "warn_days"> | undefined, today = parisToday()): ExpiryState {
-  if (!doc.expires_on) return { tone: "none", daysLeft: null };
-  const daysLeft = dayNumber(doc.expires_on) - dayNumber(today);
-  if (daysLeft < 0) return { tone: "expired", daysLeft };
-  const window = Math.max(-1, ...(type?.warn_days || []));
-  return { tone: daysLeft <= window ? "expiring" : "valid", daysLeft };
-}
-
-export function expiryLabel(state: ExpiryState) {
-  if (state.daysLeft === null) return "";
-  if (state.tone === "expired") return state.daysLeft === -1 ? "Expired yesterday" : `Expired ${-state.daysLeft} days ago`;
-  if (state.daysLeft === 0) return "Expires today";
-  return state.daysLeft === 1 ? "Expires tomorrow" : `Expires in ${state.daysLeft} days`;
 }
 
 /** Suggested expiry: issue date (or today) plus the type's default validity. */

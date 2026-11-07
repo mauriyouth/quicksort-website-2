@@ -1,20 +1,28 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSession } from '@clerk/react';
 import { Upload, Sparkles } from 'lucide-react';
 import { z } from 'zod';
 import { db, errorMessage } from '@quicksort/hr-db';
 import { MAX_INTAKE_PDF_BYTES, parsedProfileSchema, type ParsedProfile } from '../candidate-intake';
 import { Field, Form, Tag, checked, text, type RunCommand } from './ui';
+import type { Opportunity } from './domain';
+import { fileCv } from './recruitmentCv';
+/** Positions a new candidate can be filed against (closed ones are hidden). */
+const CLOSED_POSITION = new Set(['filled', 'closed', 'cancelled', 'rejected']);
+const removeTransferCopy = (path: string) => void db().storage.from('candidate-documents').remove([path]).catch(() => {});
 export function Intake({
   actorEmail,
   run,
   busy,
+  positions,
   onAdded
 }: {
   actorEmail: string;
   run: RunCommand;
   busy: boolean;
-  onAdded: () => void;
+  positions: Opportunity[];
+  /** Called once the person is saved; a warning means a follow-up step (application, Drive filing) failed. */
+  onAdded: (warning?: string) => void;
 }) {
   const {
     session
@@ -25,6 +33,14 @@ export function Intake({
   const [fileName, setFileName] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  // The parsed PDF stays in the candidate-documents bucket until the person is
+  // saved, so the server can file it on Google Drive; removed afterwards, or
+  // when the dialog closes without saving.
+  const storagePath = useRef('');
+  useEffect(() => () => {
+    if (storagePath.current) removeTransferCopy(storagePath.current);
+  }, []);
+  const openPositions = positions.filter(position => !CLOSED_POSITION.has(position.status));
   async function parse(file: File | undefined) {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.pdf') || !file.size || file.size > MAX_INTAKE_PDF_BYTES) {
@@ -42,6 +58,8 @@ export function Intake({
       });
       if (!token || !session?.user.id) throw new Error('Your session expired. Sign in again.');
       uploadedPath = `${session.user.id}/${crypto.randomUUID()}.pdf`;
+      if (storagePath.current) removeTransferCopy(storagePath.current);
+      storagePath.current = '';
       const uploaded = await db().storage.from('candidate-documents').upload(uploadedPath, file, {
         upsert: false,
         contentType: 'application/pdf'
@@ -74,19 +92,45 @@ export function Intake({
       }).parse(result).profile;
       setProfile(parsed);
       setFileName(file.name);
+      storagePath.current = uploadedPath;
+      uploadedPath = '';
       requestAnimationFrame(() => formRef.current?.querySelector('input')?.focus());
     } catch (failure) {
       setError(errorMessage(failure));
     } finally {
-      // Throwaway transfer copy — nothing references it after parsing.
-      if (uploadedPath) void db().storage.from('candidate-documents').remove([uploadedPath]).catch(() => {});
+      // Failed parse: nothing references the transfer copy.
+      if (uploadedPath) removeTransferCopy(uploadedPath);
       setParsing(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   }
   const reviewedRun: RunCommand = async (input, success) => {
-    await run(input, success);
-    onAdded();
+    const { position_id: positionId, ...command } = input as { position_id?: string; full_name: string };
+    const result = await run(command, success);
+    const personId = result ? result.person_id : undefined;
+    if (!personId) return onAdded();
+    const position = openPositions.find(p => p.id === positionId);
+    const warnings: string[] = [];
+    if (position) {
+      try {
+        await run({ kind: 'create_application', person_id: personId, opportunity_id: position.id }, `Person added and linked to “${position.title}”.`);
+      } catch (failure) {
+        warnings.push(`The person was saved, but the application to “${position.title}” failed: ${errorMessage(failure)}`);
+      }
+    }
+    const path = storagePath.current;
+    if (path) {
+      storagePath.current = '';
+      const warning = await fileCv(() => session?.getToken({ template: 'supabase' }) ?? Promise.resolve(null), {
+        storagePath: path,
+        personId,
+        personName: command.full_name,
+        position: position ? { title: position.title, openedAt: position.created_at } : null
+      });
+      if (warning) warnings.push(warning);
+      removeTransferCopy(path);
+    }
+    onAdded(warnings.join(' '));
   };
   return <>
     <div className="hr-card">
@@ -124,8 +168,13 @@ export function Intake({
         notes: text(data, 'notes'),
         source: text(data, 'source'),
         owner_email: text(data, 'owner_email'),
-        contact_allowed: checked(data, 'contact_allowed')
+        contact_allowed: checked(data, 'contact_allowed'),
+        position_id: text(data, 'position_id')
       })}>
+        <Field name="position_id" label="Position" options={openPositions.map(position => ({
+          value: position.id,
+          label: position.title
+        }))} hint={profile ? 'The CV is filed on Google Drive under <year>/<position>, or “Candidatures spontanées” when no position is set.' : 'Creates the application to this position.'} />
         <Field name="full_name" label="Full name" value={profile?.fullName} required />
         <Field name="headline" label="Professional headline" value={profile?.headline} />
         <Field name="email" label="Email" type="email" value={profile?.email} />

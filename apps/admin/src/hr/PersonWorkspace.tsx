@@ -402,6 +402,8 @@ function Profile({
           <p>Linked {date(account.linked_at)}</p>
         </div> : <>
           <p className="hr-portal-note">Linking an account gives {person.full_name.split(' ')[0] || 'this person'} access to their offers, documents and CRA tasks.</p>
+          <CreatePortalAccount person={person} role={employees.length ? 'employee' : 'candidate'} onCreated={reload} />
+          <p className="hr-source-list">Or link a sign-in they already made:</p>
           <AccountLinker person={person} workspace={workspace} run={run} busy={busy} />
         </>}
       </section>
@@ -418,6 +420,42 @@ const focusSection = (id: string) => {
   section.scrollIntoView({ behavior: 'smooth', block: 'center' });
   section.querySelector<HTMLElement>('input:not([type="hidden"]), textarea')?.focus({ preventScroll: true });
 };
+/** Creates the sign-in for this person from their record (email and name) and links it (api/accounts.ts). */
+function CreatePortalAccount({ person, role, onCreated }: { person: Person; role: 'employee' | 'candidate'; onCreated: () => unknown }) {
+  const { session } = useSession();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const email = (person.email ?? '').trim();
+  async function create() {
+    setSaving(true);
+    setError('');
+    try {
+      const token = await session?.getToken({ template: 'supabase' });
+      if (!token) throw new Error('Sign in again to create accounts.');
+      const response = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personId: person.id, role }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error || 'Could not create the account.');
+      await onCreated();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setSaving(false);
+    }
+  }
+  return <div className="hr-portal-create">
+    {email
+      ? <p className="hr-source-list">Creates a sign-in for <strong>{email}</strong> as {role === 'employee' ? 'an employee' : 'a candidate'}, named as on this record, and links it.</p>
+      : <p className="hr-source-list">Add a work email to this profile to create their portal account.</p>}
+    <button type="button" className="hr-portal-cta" disabled={!email || saving} onClick={() => void create()}>
+      {saving ? 'Creating…' : 'Create portal account →'}
+    </button>
+    {error && <p role="alert" className="hr-error">{error}</p>}
+  </div>;
+}
 function AccountLinker({ person, workspace, run, busy }: {
   person: Person; workspace: Workspace; run: RunCommand; busy: boolean;
 }) {
@@ -1116,7 +1154,7 @@ export function EmploymentDetail({
       ? 'Documents kept from this employment. Nothing is required any more.'
       : `Required for ${employee.contract_type ? label(employee.contract_type) : 'this employment'}${needsResidencePermit(employee.nationality) ? ' and a non-EU nationality' : ''}. Identity and social-security files are stored in the HR-only Drive folder.`}
       rail={!ended && <div className="hr-emp-notes">
-        <span><Lock size={13} aria-hidden="true" /> Visible to HR only</span>
+        <span><Lock size={13} aria-hidden="true" /> Visible to the employee, HR and admins</span>
         <span><Eye size={13} aria-hidden="true" /> Every view and download is logged</span>
       </div>}>
       <DocumentsPanel
@@ -1129,7 +1167,7 @@ export function EmploymentDetail({
     </EmpSection>}
     {workspace.capabilities.recruit && !freelance && <EmpSection title="Payslips" detail="Silae payslips filed for this person, newest first." rail={<div className="payslips-callout">
       <Lock size={20} strokeWidth={1.5} aria-hidden="true" />
-      <div><strong>Visible to HR only</strong><span>Every view and download is logged against your name.</span></div>
+      <div><strong>Visible to the employee, HR and admins</strong><span>Every view and download is logged against your name.</span></div>
     </div>}>
       <PersonPayslips personId={employee.person_id} personName={person.full_name} onChanged={reload} />
     </EmpSection>}

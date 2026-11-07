@@ -21,6 +21,7 @@ import {
   setStructure,
   type BankRow,
   type PlanSources,
+  type RevenueBasis,
   type SavedPlan,
   type StructureEntry,
 } from "./actuals";
@@ -88,6 +89,10 @@ const SCENARIOS: { id: PlanScenario; param: string; label: string }[] = [
   { id: "pessimistic", param: "pessimiste", label: "Pessimiste" },
   { id: "optimistic", param: "optimiste", label: "Optimiste" },
 ];
+const BASES: { id: RevenueBasis; param: string; label: string; text: string }[] = [
+  { id: "period", param: "prestation", label: "Mois de prestation", text: "par mois de prestation" },
+  { id: "issue", param: "emission", label: "Date d’émission", text: "par date d’émission" },
+];
 const multLabel = (v: number) => `×${String(v).replace(".", ",")}`;
 type Draft = { hyp: Record<HypothesisKey, string>; ventes: string[]; departs: string[] };
 
@@ -134,6 +139,18 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         const next = new URLSearchParams(prev);
         if (id === "pessimistic") next.delete("charges");
         else next.set("charges", SCENARIOS.find((s) => s.id === id)!.param);
+        return next;
+      },
+      { replace: true },
+    );
+  // Revenue month: period of service (default) or issue date, also kept in the URL.
+  const basis = BASES.find((b) => b.param === params.get("ca")) ?? BASES[0];
+  const setBasis = (id: RevenueBasis) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (id === "period") next.delete("ca");
+        else next.set("ca", BASES.find((b) => b.id === id)!.param);
         return next;
       },
       { replace: true },
@@ -323,8 +340,8 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   const unclassifiedTotal = bank.unclassifiedCount.reduce((a, b) => a + b, 0);
   const multiplier = base ? base.multipliers[scenario] : 0;
   const agg = useMemo(
-    () => (base && cra ? aggregateActuals({ ...base, cjmMultiplier: multiplier, cra }, year, openFrom, today) : null),
-    [base, cra, year, openFrom, today, multiplier],
+    () => (base && cra ? aggregateActuals({ ...base, cjmMultiplier: multiplier, cra, revenueBasis: basis.id }, year, openFrom, today) : null),
+    [base, cra, year, openFrom, today, multiplier, basis.id],
   );
   // Switching scenario re-seeds the forecast loaded salary, unless it was edited.
   const seededSalaire = useRef<number | undefined>(undefined);
@@ -487,6 +504,19 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         </div>
         <span className="bp-meta">{status} · montants en € HT</span>
         <label className="bp-scenario">
+          <span>CA par</span>
+          <select
+            className="qs-input"
+            value={basis.id}
+            onChange={(e) => setBasis(e.target.value as RevenueBasis)}
+            title="Mois auquel une facture compte dans le CA des mois réels"
+          >
+            {BASES.map((b) => (
+              <option key={b.id} value={b.id}>{b.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="bp-scenario">
           <span>Charges salariales</span>
           <select
             className="qs-input"
@@ -536,7 +566,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               hint={`${kEur(plan.totals.ca / 12)} / mois en moyenne`}
               formula={[
                 "Somme des 12 mois.",
-                "Réel : factures finalisées ou payées, par mois de prestation.",
+                `Réel : factures finalisées ou payées, ${basis.text}.`,
                 "Prévisionnel : consultants × jours facturables × TJM (salariés × taux d’occupation).",
               ]}
             />
@@ -838,7 +868,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
           )}
 
           <footer className="bp-footer">
-            Mois réels : CA = factures finalisées ou payées par mois de prestation · encaissements = factures payées par date de paiement ·
+            Mois réels : CA = factures finalisées ou payées {basis.text} · encaissements = factures payées par date de paiement ·
             consultants = personnes avec une mission confirmée, active ou terminée sur le mois · ventes = missions démarrant dans le mois ·
             freelances = jours CRA × taux journalier · salaires = salaire mensuel brut × multiplicateur de charges (scénario {SCENARIOS.find((s) => s.id === scenario)!.label.toLowerCase()} : {multLabel(multiplier)}, × 1,4 pour les stagiaires) · inter-contrat =
             salariés sans mission sur le mois · départs = sorties d’employés. Salaires structure : personnes listées en structure, sur leur période

@@ -80,12 +80,55 @@ export async function saveLeaveRate(kind: LeaveKind, rate: number): Promise<void
   if (result.error) throw result.error;
 }
 
+/**
+ * Paid leave (CP) payslip checkpoint: the "Congés N-1 / Congés N" box of one
+ * payslip. The CP balance starts from it and only adds accrual for later
+ * months and CRA paid leave dated after the payslip month. RTT has none.
+ */
+export const payslipCheckpointSchema = z.object({
+  employee_id: z.uuid(),
+  period: z.string(),
+  n1_acquired: z.coerce.number().nonnegative(),
+  n1_taken: z.coerce.number().nonnegative(),
+  n_acquired: z.coerce.number().nonnegative(),
+  n_taken: z.coerce.number().nonnegative(),
+  updated_at: z.string(),
+});
+export type PayslipCheckpoint = z.infer<typeof payslipCheckpointSchema>;
+export type PayslipCheckpointInput = Omit<PayslipCheckpoint, 'updated_at'>;
+
+/** Pure. The CP days left on the payslip itself. */
+export function checkpointBalance(checkpoint: Pick<PayslipCheckpoint, 'n1_acquired' | 'n1_taken' | 'n_acquired' | 'n_taken'>): number {
+  return Math.round((checkpoint.n1_acquired - checkpoint.n1_taken + checkpoint.n_acquired - checkpoint.n_taken) * 100) / 100;
+}
+
+export async function loadPayslipCheckpoint(employeeId: string): Promise<PayslipCheckpoint | null> {
+  const result = await db().from('leave_payslip_checkpoints').select('*').eq('employee_id', employeeId).maybeSingle();
+  if (result.error) {
+    if (isMissingRelationError(result.error)) return null;
+    throw result.error;
+  }
+  return result.data ? payslipCheckpointSchema.parse(result.data) : null;
+}
+
+export async function savePayslipCheckpoint(input: PayslipCheckpointInput): Promise<void> {
+  const result = await db().from('leave_payslip_checkpoints').upsert({ ...input, updated_at: new Date().toISOString() });
+  if (result.error) throw result.error;
+}
+
+export async function deletePayslipCheckpoint(employeeId: string): Promise<void> {
+  const result = await db().from('leave_payslip_checkpoints').delete().eq('employee_id', employeeId);
+  if (result.error) throw result.error;
+}
+
 export function fmtDays(amount: number): string {
   return amount % 1 ? amount.toFixed(1) : String(amount);
 }
 
-export function useLeaveBalances(employeeIds: string[]): { balances: LeaveBalance[]; error: string } {
+export function useLeaveBalances(employeeIds: string[]): { balances: LeaveBalance[]; error: string; reload: () => void } {
   const [state, setState] = useState<{ balances: LeaveBalance[]; error: string }>({ balances: [], error: '' });
+  const [nonce, setNonce] = useState(0);
+  const reload = useCallback(() => setNonce((value) => value + 1), []);
   const key = employeeIds.join(',');
   useEffect(() => {
     let cancelled = false;
@@ -96,8 +139,8 @@ export function useLeaveBalances(employeeIds: string[]): { balances: LeaveBalanc
       .then((rows) => { if (!cancelled) setState({ balances: rows, error: '' }); })
       .catch((error: unknown) => { if (!cancelled) setState({ balances: [], error: errorMessage(error) }); });
     return () => { cancelled = true; };
-  }, [key]);
-  return state;
+  }, [key, nonce]);
+  return { ...state, reload };
 }
 
 export function useLeaveRates(): { rates: LeaveRate[]; missing: boolean; saving: boolean; save: (kind: LeaveKind, rate: number) => Promise<void> } {

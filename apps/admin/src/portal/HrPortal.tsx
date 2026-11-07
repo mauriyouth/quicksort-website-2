@@ -8,7 +8,6 @@ import {
   ArrowUpRight,
   Check,
   Download,
-  Images,
   CalendarDays,
   Receipt,
 } from "lucide-react";
@@ -33,9 +32,11 @@ import {
 } from "@quicksort/hr-ui";
 import { z } from "zod";
 import { executeCommand } from "../hr/data";
-import { TeamPhotos } from './TeamPhotos';
 import { CraScreen } from '../cra/CraScreen';
-import { downloadOwnPayslip, previewOwnPayslip } from '../documents/client';
+import { downloadOwnDocument, downloadOwnPayslip, previewOwnDocument, previewOwnPayslip } from '../documents/client';
+import { MyPayslips } from '../payslips/MyPayslips';
+import { MyDocuments, type MyDocumentType } from '../documents/MyDocuments';
+import '../documents/documents.css';
 
 type PortalRoute = { id: string; href: string };
 
@@ -68,6 +69,8 @@ const taskSchema = z.object({ id: z.uuid(), employee_id: z.uuid(), phase: z.stri
 const offerSchema = z.object({ id: z.uuid(), application_id: z.uuid(), title: z.string(), contract_type: z.string(), salary_monthly: z.number(), status: z.string(), shared_at: z.string().nullable(), valid_until: z.string().nullable(), version: z.number().int() });
 const payslipSchema = z.object({ id: z.uuid(), person_id: z.uuid(), title: z.string(), valid_from: z.string().nullable(), file_name: z.string(), size_bytes: z.number().nullable(), created_at: z.string() });
 type MyPayslip = z.infer<typeof payslipSchema>;
+const registrySchema = z.object({ id: z.uuid(), upload_path: z.string().nullable(), uploaded_by_me: z.boolean(), type_code: z.string(), type_label: z.string().nullable(), title: z.string(), file_name: z.string(), mime_type: z.string(), size_bytes: z.number().nullable(), status: z.enum(["active", "superseded", "archived"]), needs_review: z.boolean(), issued_on: z.string().nullable(), expires_on: z.string().nullable(), warn_days: z.array(z.number()), created_at: z.string() });
+type MyRegistryDocument = z.infer<typeof registrySchema>;
 type MyApplication = z.infer<typeof applicationSchema>;
 type MyApplicationEvent = z.infer<typeof applicationEventSchema>;
 type MyEmployment = z.infer<typeof employmentSchema>;
@@ -95,26 +98,15 @@ const STAGE_LABELS: Record<string, string> = {
 const nav = [
   { id: "overview", href: "/onboarding", label: "My onboarding", icon: LayoutDashboard },
   { id: "application", href: "/application", label: "My application", icon: FileText },
-  { id: "documents", href: "/documents", label: "My documents", icon: Upload },
-  { id: "payslips", href: "/payslips", label: "My payslips", icon: Receipt },
+  { id: "documents", href: "/documents", label: "Documents", icon: Upload },
+  { id: "payslips", href: "/payslips", label: "Payslips", icon: Receipt },
   { id: "contracts", href: "/contracts", label: "My contracts", icon: FileText },
   { id: "cra", href: "/cra", label: "My CRA", icon: CalendarDays },
   { id: "requests", href: "/tool-access", label: "Tool access", icon: KeyRound },
-  { id: "photos", href: "/team-photos", label: "Team photos", icon: Images },
   { id: "account", href: "/account", label: "Account", icon: Settings },
 ];
 
-/** Groups payslips by the year they cover (falling back to filing date), newest year first. */
-function payslipYears(rows: MyPayslip[]) {
-  const years = new Map<string, MyPayslip[]>();
-  for (const row of rows) {
-    const year = (row.valid_from ?? row.created_at).slice(0, 4);
-    years.set(year, [...(years.get(year) ?? []), row]);
-  }
-  return [...years.entries()].sort(([a], [b]) => b.localeCompare(a));
-}
-
-const GATED_TABS = ["overview", "requests", "photos"];
+const GATED_TABS = ["overview", "requests"];
 
 /**
  * Candidate/employee self-service portal ("HR portal"). Rendered by the app
@@ -127,6 +119,8 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
   const [tasks, setTasks] = useState<MyTask[]>([]);
   const [offers, setOffers] = useState<MyOffer[]>([]);
   const [payslips, setPayslips] = useState<MyPayslip[]>([]);
+  // The employee's HR folder (registry rows filed by HR, an admin or themselves).
+  const [folder, setFolder] = useState<MyRegistryDocument[]>([]);
   const [journeyError, setJourneyError] = useState("");
   const onboardingOpen = employments.some(e => e.status !== "ended");
   // Employment unlocks the journey; agreements remain available before hiring.
@@ -141,6 +135,8 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
   const
     [profile, setProfile] = useState<Row<"profiles"> | null>(null),
     [documents, setDocuments] = useState<Row<"candidate_documents">[]>([]),
+    [docTypes, setDocTypes] = useState<MyDocumentType[]>([]),
+    [nameFromHr, setNameFromHr] = useState(false),
     [contracts, setContracts] = useState<Row<"contracts">[]>([]),
     [signatures, setSignatures] = useState<Row<"contract_signatures">[]>([]),
     [requests, setRequests] = useState<Row<"tool_requests">[]>([]);
@@ -174,6 +170,18 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
         setApplications([]); setApplicationEvents([]); setEmployments([]); setTasks([]); setOffers([]); setPayslips([]);
         setJourneyError(errorMessage(e));
       }
+      // The HR folder is a bonus: own uploads still list without it.
+      const folderRows = await db().from("my_documents").select("*").order("created_at", { ascending: false });
+      try {
+        if (folderRows.error) throw folderRows.error;
+        setFolder(registrySchema.array().parse(folderRows.data));
+      } catch {
+        setFolder([]);
+      }
+      const managed = await db().rpc("my_name_from_hr");
+      setNameFromHr(!managed.error && managed.data === true);
+      const typeRows = await db().from("my_document_types").select("*");
+      setDocTypes(typeRows.error ? [] : (typeRows.data as MyDocumentType[]));
       const results = await Promise.all([
         db().from("profiles").select("*").eq("id", userId).single(),
         db()
@@ -237,13 +245,8 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
     setReview(null);
     setPreview("");
   }
-  async function upload(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const f = new FormData(form);
+  async function upload(file: File, typeCode: string | null, category: string) {
     await action(async () => {
-      const file = f.get("file");
-      if (!(file instanceof File)) throw new Error("Choose a document to upload.");
       validateFile(file);
       const extension =
         file.name
@@ -260,7 +263,8 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
         .insert({
           candidate_id: userId,
           name: file.name,
-          category: String(f.get("category")),
+          category,
+          type_code: typeCode,
           storage_path: path,
           size_bytes: file.size,
         });
@@ -268,8 +272,16 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
         await db().storage.from("candidate-documents").remove([path]);
         throw saved.error;
       }
-      form.reset();
-    }, "Document uploaded. Your Quicksort team can now review it.");
+    }, "Document sent. HR will check it.");
+  }
+  function removeUpload(upload: Row<"candidate_documents">) {
+    if (!confirm(`Remove “${upload.name}”?`)) return;
+    void action(async () => {
+      const storage = await db().storage.from("candidate-documents").remove([upload.storage_path]);
+      if (storage.error) throw storage.error;
+      const result = await db().from("candidate_documents").delete().eq("id", upload.id).select("id").single();
+      if (result.error) throw result.error;
+    }, "Document removed.");
   }
   async function openReview(c: Row<"contracts">) {
     await action(async () => {
@@ -299,6 +311,19 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
       setPreview("");
     }, "Your signature has been recorded. You can download the contract and signature receipt below.");
   }
+  // One list: every HR-folder document, plus own uploads HR has not filed (not
+  // linked yet, or a CV). An own upload rides on its registry row; a replaced
+  // or archived one only shows while the upload itself still exists.
+  const uploadByPath = new Map(documents.map((d) => [d.storage_path, d]));
+  const filedPaths = new Set(folder.map((f) => f.upload_path).filter(Boolean));
+  const folderRows = [
+    ...folder
+      .map((f) => ({ key: f.id, filed: f as MyRegistryDocument | undefined, upload: f.upload_path ? uploadByPath.get(f.upload_path) : undefined, createdAt: f.created_at }))
+      .filter((r) => r.filed!.status === "active" || r.upload),
+    ...documents
+      .filter((d) => !filedPaths.has(d.storage_path))
+      .map((d) => ({ key: d.id, filed: undefined as MyRegistryDocument | undefined, upload: d as typeof d | undefined, createdAt: d.created_at })),
+  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const unsigned = contracts.filter(
     (c) => !signatures.some((s) => s.contract_id === c.id),
   );
@@ -320,7 +345,6 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           </Empty>
         </section>
       )}
-      {tab === "photos" && onboardingOpen && <TeamPhotos />}
       {tab === "cra" && <>
         <header className="cra-portal-head">
           <h1>Monthly CRA</h1>
@@ -346,7 +370,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           <div className="stats">
             <Stat
               label="Documents"
-              value={documents.length}
+              value={folderRows.length}
               detail="Securely shared with your team"
               icon={Upload}
             />
@@ -422,142 +446,41 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
         </>
       )}
       {tab === "documents" && (
-        <>
-          <section className="panel">
-            <h2>Upload a document</h2>
-            <form className="form" onSubmit={upload}>
-              <div className="form-columns">
-                <label>
-                  Document type
-                  <select name="category">
-                    <option value="identity">Identity document</option>
-                    <option value="resume">CV / résumé</option>
-                    <option value="qualification">Qualification</option>
-                    <option value="other">Other document</option>
-                  </select>
-                </label>
-                <label>
-                  Choose a file
-                  <input
-                    name="file"
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.docx"
-                    required
-                  />
-                  <span className="muted">
-                    PDF, JPG, PNG or DOCX · up to 10 MB
-                  </span>
-                </label>
-              </div>
-              <div>
-                <button className="btn" disabled={busy}>
-                  <Upload size={16} />
-                  Upload document
-                </button>
-              </div>
-            </form>
-          </section>
-          <section className="panel">
-            <h2>Uploaded documents</h2>
-            {!documents.length && !loading && (
-              <Empty title="Your documents belong here">
-                Upload your first document using the form above.
-              </Empty>
-            )}
-            {documents.map((d) => (
-              <div className="list-row" key={d.id}>
-                <div>
-                  <h3 className="document-name">{d.name}</h3>
-                  <p className="muted">
-                    {d.category} · {(d.size_bytes / 1024 / 1024).toFixed(1)} MB
-                    · {formatDate(d.created_at)}
-                  </p>
-                </div>
-                <div className="actions">
-                  <button
-                    className="btn secondary small"
-                    disabled={busy}
-                    onClick={() =>
-                      void action(
-                        () =>
-                          downloadFile(
-                            "candidate-documents",
-                            d.storage_path,
-                            d.name,
-                          ),
-                        "Document downloaded.",
-                      )
-                    }
-                  >
-                    <Download size={14} />
-                    Download
-                  </button>
-                  <button
-                    className="btn danger small"
-                    disabled={busy}
-                    onClick={() => {
-                      if (confirm(`Remove “${d.name}”?`))
-                        void action(async () => {
-                          const storage = await db()
-                            .storage.from("candidate-documents")
-                            .remove([d.storage_path]);
-                          if (storage.error) throw storage.error;
-                          const result = await db()
-                            .from("candidate_documents")
-                            .delete()
-                            .eq("id", d.id)
-                            .select("id")
-                            .single();
-                          if (result.error) throw result.error;
-                        }, "Document removed.");
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-          </section>
-        </>
+        <section className="panel">
+          <h2>Documents</h2>
+          <MyDocuments
+            folder={folder}
+            uploads={documents}
+            types={docTypes}
+            busy={busy}
+            loading={loading}
+            onUpload={(file, typeCode, category) => void upload(file, typeCode, category)}
+            onOpen={(doc) => void action(() => previewOwnDocument(doc), "Document opened.")}
+            onDownload={(row) =>
+              void action(
+                () => (row.filed ? downloadOwnDocument(row.filed) : downloadFile("candidate-documents", row.upload!.storage_path, row.upload!.name)),
+                "Document downloaded.",
+              )
+            }
+            onRemove={(u) => removeUpload(documents.find((d) => d.id === u.id)!)}
+          />
+        </section>
       )}
       {tab === "payslips" && (
         <section className="panel">
-          <h2>My payslips</h2>
+          <h2>Payslips</h2>
           {!payslips.length && !loading && (
             <Empty title="No payslips yet">
               Your payslips appear here once HR has filed them.
             </Empty>
           )}
-          {payslipYears(payslips).map(([year, rows]) => (
-            <div key={year}>
-              <h3>{year}</h3>
-              {rows.map((p) => (
-                <div className="list-row" key={p.id}>
-                  <div>
-                    <h3 className="document-name">{p.title}</h3>
-                    <p className="muted">{p.file_name}</p>
-                  </div>
-                  <div className="actions">
-                    <button
-                      className="btn secondary small"
-                      disabled={busy}
-                      onClick={() => void action(() => previewOwnPayslip(p), "Payslip opened.")}
-                    >
-                      Open
-                    </button>
-                    <button
-                      className="btn secondary small"
-                      disabled={busy}
-                      onClick={() => void action(() => downloadOwnPayslip(p), "Payslip downloaded.")}
-                    >
-                      <Download size={14} />
-                      Download
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
+          <MyPayslips
+            rows={payslips}
+            busy={busy}
+            onOpen={(p) => void action(() => previewOwnPayslip(p), "Payslip opened.")}
+            onDownload={(p) => void action(() => downloadOwnPayslip(p), "Payslip downloaded.")}
+            onDownloadAll={(rows) => void action(async () => { for (const p of rows) await downloadOwnPayslip(p); }, rows.length === 1 ? "Payslip downloaded." : "Payslips downloaded.")}
+          />
         </section>
       )}
       {tab === "contracts" && (
@@ -792,6 +715,17 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
             <section className="panel">
               <h2>Your profile</h2>
               <p className="muted">{email}</p>
+              {nameFromHr ? (
+                <div className="form">
+                  <label>
+                    Full name
+                    <input value={profile?.full_name ?? ""} readOnly disabled aria-describedby="name-from-hr" />
+                  </label>
+                  <p className="muted small-text" id="name-from-hr">
+                    Managed by HR from your employee record. Ask HR if it needs correcting.
+                  </p>
+                </div>
+              ) : (
               <form
                 className="form"
                 key={profile?.full_name}
@@ -824,6 +758,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
                   </button>
                 </div>
               </form>
+              )}
             </section>
             <section className="panel">
               <AccountSecurity />

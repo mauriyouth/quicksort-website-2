@@ -8,7 +8,6 @@ import {
   ArrowUpRight,
   Check,
   Download,
-  Images,
   UserRound,
 } from "lucide-react";
 import {
@@ -32,7 +31,6 @@ import {
   Pill,
   formatDate,
 } from "@quicksort/candidate-ui";
-import { TeamPhotos } from './TeamPhotos';
 import { CandidateCapabilityProfile } from "./CandidateCapabilityProfile";
 const nav = [
   { id: "overview", href: "/onboarding", label: "My onboarding", icon: LayoutDashboard },
@@ -40,7 +38,6 @@ const nav = [
   { id: "documents", href: "/documents", label: "My documents", icon: Upload },
   { id: "contracts", href: "/contracts", label: "My contracts", icon: FileText },
   { id: "requests", href: "/tool-access", label: "Tool access", icon: KeyRound },
-  { id: "photos", href: "/team-photos", label: "Team photos", icon: Images },
   { id: "account", href: "/account", label: "Account", icon: Settings },
 ];
 export default function App() {
@@ -219,7 +216,6 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
     >
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
-      {tab === "photos" && <TeamPhotos />}
       {tab === "overview" && (
         <>
           <Heading

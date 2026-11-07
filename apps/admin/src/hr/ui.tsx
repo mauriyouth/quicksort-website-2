@@ -3,7 +3,10 @@ import { X, ArrowUpRight } from 'lucide-react';
 import { errorMessage } from '@quicksort/hr-db';
 import { z } from 'zod';
 import { DateField } from '../DateField';
-export type RunCommand = (input: unknown, success?: string) => Promise<void>;
+import { PersonPhoto } from '../documents/PersonPhoto';
+import type { CommandResult } from './domain';
+/** Runs an HR command; implementations may resolve with the command result (e.g. the new person_id). */
+export type RunCommand = (input: unknown, success?: string) => Promise<CommandResult | void>;
 export const text = (data: FormData, key: string) => String(data.get(key) ?? '').trim();
 export const nullable = (data: FormData, key: string) => text(data, key) || null;
 export const number = (data: FormData, key: string) => Number(text(data, key));
@@ -412,16 +415,21 @@ export function Empty({
 export function PersonLink({
   name,
   detail,
-  open
+  open,
+  personId
 }: {
   name: string;
   detail?: string;
   open: () => void;
+  /** Shows the person's filed photo in place of the initials when set. */
+  personId?: string;
 }) {
   return <button className="hr-person-link" onClick={open}>
-    <span className="hr-avatar">
-      {initials(name)}
-    </span>
+    {personId
+      ? <PersonPhoto personId={personId} name={name} fallback={initials(name)} className="hr-avatar" />
+      : <span className="hr-avatar">
+          {initials(name)}
+        </span>}
     <span>
       <strong>
         {name}

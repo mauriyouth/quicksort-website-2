@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { CalendarDays, Clock3, Plus, RefreshCw, Search, Users, X, ArrowUpRight, MapPin } from 'lucide-react';
 import { db, errorMessage } from '@quicksort/hr-db';
 import { executeCommand, loadWorkspace } from './data';
-import type { Employee, Opportunity, Person, Workspace } from './domain';
+import type { CommandResult, Employee, Opportunity, Person, Workspace } from './domain';
 import { AssignForm, PersonWorkspace, available, personName, stages, type PersonTab, type RecordContext } from './PersonWorkspace';
 import { Action, Dialog, Empty, Field, Form, PersonLink, SearchMultiField, Section, Tag, checked, date, initials, label, nullable, text, today, type RunCommand } from './ui';
 import type { Application, ApplicationStage } from './domain';
@@ -16,6 +16,7 @@ import { monthDays } from '../cra/domain';
 import './workspace.css';
 import { DocumentAlertsQueue } from '../documents/DocumentAlerts';
 import { PersonPhoto } from '../documents/PersonPhoto';
+import { PaidLeaveAdjust } from './PaidLeaveAdjust';
 export type HrView = 'overview' | 'recruiting' | 'people' | 'journeys';
 const viewCopy: Record<HrView, {
   title: string;
@@ -170,8 +171,9 @@ export function HrWorkspace({
     setBusy(true);
     setError('');
     setMessage('');
+    let result: CommandResult;
     try {
-      await executeCommand(input);
+      result = await executeCommand(input);
     } catch (failure) {
       setBusy(false);
       setError(errorMessage(failure));
@@ -186,6 +188,7 @@ export function HrWorkspace({
     } finally {
       setBusy(false);
     }
+    return result;
   };
   const selectedPerson = workspace?.people.find(person => person.id === personId);
   const selectedEmployees = workspace && selectedPerson ? workspace.employees.filter(employee => employee.person_id === selectedPerson.id) : [];
@@ -238,7 +241,10 @@ export function HrWorkspace({
       {view === 'people' && !selectedPerson && <People context={context} />}
       {view === 'journeys' && !selectedPerson && <Journeys context={context} />}
       {intake && canRecruit && <Dialog title="Add a person" close={() => setIntake(false)}>
-        <Intake actorEmail={actorEmail} run={run} busy={busy} onAdded={() => setIntake(false)} />
+        <Intake actorEmail={actorEmail} run={run} busy={busy} positions={context.workspace.opportunities} onAdded={warning => {
+          setIntake(false);
+          if (warning) setError(warning);
+        }} />
       </Dialog>}
       {myCra && <Dialog title="My CRA" close={() => setMyCra(false)}>
         <CraScreen audience="employee" draftOwner={actorEmail} />
@@ -320,7 +326,10 @@ function PersonPage({
   const lastCra = useLastCra(employees);
   // Remaining leave across every employment period of this person, net of
   // CRA consumption (CP and RTT accrue per calendar month from each start).
-  const { balances, error: balanceError } = useLeaveBalances(employees.map(employee => employee.id));
+  const { balances, error: balanceError, reload: reloadBalances } = useLeaveBalances(employees.map(employee => employee.id));
+  // Paid leave is adjusted on the live employment, else the latest one.
+  const leaveEmployee = live && live.contract_type !== 'Freelance' ? live : [...employees].filter(employee => employee.contract_type !== 'Freelance').sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
+  const [adjustingLeave, setAdjustingLeave] = useState(false);
   const cpLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'cp'), 0);
   const rttLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'rtt'), 0);
   const day = today();
@@ -341,7 +350,7 @@ function PersonPage({
         {/* Person header: breadcrumb and title merged, name shown once */}
         <section className="hr-person-head">
           <div className="hr-person-lead">
-            <PersonPhoto personId={person.id} name={person.full_name} fallback={initials(person.full_name)} className="hr-person-avatar" />
+            <PersonPhoto personId={person.id} name={person.full_name} fallback={initials(person.full_name)} className="hr-person-avatar" editable />
             <div className="hr-person-id">
               <h1>{person.full_name}</h1>
               <div className="hr-person-meta">
@@ -355,7 +364,8 @@ function PersonPage({
               </div>
             </div>
           </div>
-          <dl className="hr-person-stats">
+          {/* Candidates and talent pool have no employment yet: no assignment, CRA or leave to show. */}
+          {employees.length > 0 && <dl className="hr-person-stats">
             <div>
               <dt>Default assignment</dt>
               <dd>{defaultAssignment}</dd>
@@ -366,16 +376,20 @@ function PersonPage({
             </div>
             <div>
               <dt>CP balance</dt>
-              <dd>{balanceError ? 'unavailable' : employees.length ? `${fmtDays(cpLeft)} days` : '—'}</dd>
+              <dd>
+                {balanceError ? 'unavailable' : employees.length ? `${fmtDays(cpLeft)} days` : '—'}
+                {leaveEmployee && <>{' '}<button type="button" className="hr-health-gap-link" onClick={() => setAdjustingLeave(true)}>Adjust</button></>}
+              </dd>
             </div>
             <div>
               <dt>RTT balance</dt>
               <dd>{balanceError ? 'unavailable' : employees.length ? `${fmtDays(rttLeft)} days` : '—'}</dd>
             </div>
-          </dl>
+          </dl>}
         </section>
       </div>
     </header>
+    {adjustingLeave && leaveEmployee && <PaidLeaveAdjust employeeId={leaveEmployee.id} personName={person.full_name} close={() => setAdjustingLeave(false)} saved={reloadBalances} />}
     <div className="hr-person-sheet">
       <PersonWorkspace person={person} context={context} tab={tab} onNavigate={onNavigate} initialApplication={initialApplication} initialEmployment={initialEmployment} />
     </div>
@@ -668,7 +682,7 @@ function People({
             const periods = employee ? commits.filter(assignment => assignment.employee_id === employee.id) : [];
             return <tr key={person.id}>
               <td>
-                {canRecruit ? <PersonLink name={person.full_name} detail={person.headline || person.email} open={() => open(person.id)} /> : <>
+                {canRecruit ? <PersonLink personId={person.id} name={person.full_name} detail={person.headline || person.email} open={() => open(person.id)} /> : <>
                   <strong>
                     {person.full_name}
                   </strong>
@@ -1362,7 +1376,7 @@ function Journeys({
             const requiredOpen = tasks.filter(task => task.required && !task.completed_at);
             return <tr key={employee.id}>
               <td>
-                <PersonLink name={personName(workspace, employee.person_id)} detail={employee.role} open={() => open(employee.person_id, undefined, employee.id)} />
+                <PersonLink personId={employee.person_id} name={personName(workspace, employee.person_id)} detail={employee.role} open={() => open(employee.person_id, undefined, employee.id)} />
               </td>
               <td>
                 <Tag tone={employee.status === 'ended' ? 'quiet' : 'good'}>

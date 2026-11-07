@@ -8,8 +8,8 @@ type Candidate = { id: string; name: string };
 type MatriculeReset = { employeeId: string; value: string };
 
 const FREELANCE = "Freelance";
-const SHORT_MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
-const PREFIX = "Bulletin de paie ";
+export const SHORT_MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
+export const PREFIX = "Bulletin de paie ";
 
 /** "Octobre 2026" (or "Octobre 2026 (2)") from the stored title; the badge and year come from valid_from. */
 const slipLabel = (row: PayslipRow) => (row.title.startsWith(PREFIX) ? row.title.slice(PREFIX.length) : row.title);

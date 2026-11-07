@@ -17,6 +17,8 @@ import { SectionHeader, SALES_TABS, HR_TABS, OPS_TABS, type SectionTab } from ".
 import { SettingsPage, type SettingsSection } from "./SettingsPage";
 import { Clients } from "./sales/Clients";
 import { People } from "./sales/People";
+import { CreateAccountPanel } from "./CreateAccount";
+import { ImpersonatePanel, ImpersonationBanner, useImpersonationTicket } from "./Impersonation";
 
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
 import { useSession } from "@clerk/react";
@@ -167,8 +169,11 @@ export default function App() {
     return () => setCandidateSessionToken(async () => null);
   }, [clerkSession?.id]);
   const staff = !auth.loading && !!auth.session && (auth.role === "admin" || auth.role === "hr");
+  const impersonationError = useImpersonationTicket();
   return (
     <BrowserRouter>
+      <ImpersonationBanner />
+      {impersonationError && <Notice error>{impersonationError}</Notice>}
       {!auth.loading && auth.session && auth.role === "sales" ? (
         <AuthGate auth={auth}>
           <StaffingWorkspace email={auth.session.user.email || ""} />
@@ -931,6 +936,8 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         )} />
         <Route path="/accounts" element={(
           <>
+          {role === "admin" && <CreateAccountPanel onCreated={load} />}
+          {role === "admin" && <ImpersonatePanel people={people} roleOf={roleOf} selfEmail={email} />}
           <section className="panel">
             <div className="panel-head">
               <label className="form">

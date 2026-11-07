@@ -343,6 +343,28 @@ test('an employee downloads their own payslip; foreign, unknown and sales caller
   assert.deepEqual(sales.storage.log, []);
 });
 
+test('an employee downloads documents of their own HR folder from Drive or portal storage; others get 404', async () => {
+  const hrFiled = { ...payslipRow, provider_file_id: 'attestation-1', file_name: 'attestation.pdf' };
+  const ownUpload = { ...payslipRow, provider_file_id: 'candidate-documents/u1/id.pdf', file_name: 'id.pdf', storage_provider: 'supabase', encrypted_credentials: null };
+  const rows = { [documentId]: [hrFiled], '45454545-4545-4545-8545-454545454545': [ownUpload] };
+  const own = setup({ role: 'employee', rpc: { own_document_download_source: ({ document_id }) => ({ data: rows[document_id] || [], error: null }) } });
+  let res = await call(own.handler, { action: 'download-own-document', documentId });
+  assert.equal(res.code, 200);
+  assert.equal(res.body.toString(), 'drive:attestation-1');
+  assert.match(res.headers['content-disposition'], /attachment/);
+  res = await call(own.handler, { action: 'download-own-document', documentId: '45454545-4545-4545-8545-454545454545', preview: true });
+  assert.equal(res.code, 200);
+  assert.equal(res.body.toString(), 'candidate-documents:u1/id.pdf');
+  assert.match(res.headers['content-disposition'], /^inline/);
+  assert.ok(!own.supa.calls.some(([name]) => name === 'log_document_access'), 'The RPC logs the access itself');
+
+  own.storage.log.length = 0;
+  res = await call(own.handler, { action: 'download-own-document', documentId: '66666666-6666-4666-8666-666666666666' });
+  assert.equal(res.code, 404);
+  assert.equal(res.body.error, 'Document not found.');
+  assert.deepEqual(own.storage.log, []);
+});
+
 const personB = '77777777-7777-4777-8777-777777777777';
 const slip = { id: documentId, type_code: 'PAYSLIP', status: 'active', person_id: personId, provider_file_id: 'slip-1', provider_folder_id: 'old-folder', valid_from: '2026-09-01', storage_provider: 'gdrive' };
 const moveSetup = (extra = {}) => setup({

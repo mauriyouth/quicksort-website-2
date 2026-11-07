@@ -19,9 +19,11 @@ function apiRoutes(): Plugin {
     '/api/bank-transactions': '/api/bank-transactions.ts',
     '/api/bank-transactions-cron': '/api/bank-transactions-cron.ts',
     '/api/google-drive': '/api/google-drive.ts',
+    '/api/recruitment-cv': '/api/recruitment-cv.ts',
     '/api/documents': '/api/documents.ts',
     '/api/documents-extract': '/api/documents-extract.ts',
-    '/api/team-photo': '/api/team-photo.mjs',
+    '/api/accounts': '/api/accounts.ts',
+    '/api/impersonate': '/api/impersonate.ts',
   };
   return {
     name: 'quicksort-admin-api-routes',

@@ -33,6 +33,9 @@ import { archivedProjectPrefix } from "./archive.ts";
  *   { action: "download-own-payslip", documentId }
  *     Any signed-in role. payslip_download_source only answers for an active
  *     payslip of a person linked to the caller (and logs the access itself).
+ *   { action: "download-own-document", documentId }
+ *     Any signed-in role. own_document_download_source only answers for a
+ *     document of the caller's own HR folder (payslips excepted) and logs it.
  *   { action: "move-payslip", documentId, toPersonId, requestId? }
  *     HR. Moves a wrongly filed payslip to another person's folder; move_payslip
  *     archives the old row and registers the new one atomically.
@@ -96,6 +99,7 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("file-existing"), ...metadataFields }),
   z.object({ action: z.literal("download"), documentId: uuid, preview: z.boolean().optional().default(false) }),
   z.object({ action: z.literal("download-own-payslip"), documentId: uuid, preview: z.boolean().optional().default(false) }),
+  z.object({ action: z.literal("download-own-document"), documentId: uuid, preview: z.boolean().optional().default(false) }),
   z.object({ action: z.literal("move-payslip"), documentId: uuid, toPersonId: uuid, requestId: uuid.optional() }),
 ]);
 
@@ -290,19 +294,31 @@ export function createDocumentsHandler(deps: {
       const client = deps.createClient(url, key, { accessToken: async () => token.slice(7) });
       const identity = await client.rpc("sync_clerk_profile");
       if (identity.error || !identity.data) return res.status(401).json({ error: "Sign in again." });
-      if (action.action === "download-own-payslip") {
-        const source = await client.rpc("payslip_download_source", { document_id: action.documentId });
+      if (action.action === "download-own-payslip" || action.action === "download-own-document") {
+        const payslip = action.action === "download-own-payslip";
+        const source = payslip
+          ? await client.rpc("payslip_download_source", { document_id: action.documentId })
+          : await client.rpc("own_document_download_source", { document_id: action.documentId });
         if (source.error) throw source.error;
         const row = (Array.isArray(source.data) ? source.data[0] : source.data) as
           | { provider_file_id: string; file_name: string; mime_type: string | null; size_bytes: number | null; storage_provider: string; encrypted_credentials: string | null }
           | null | undefined;
-        if (!row) return res.status(404).json({ error: "Payslip not found." });
-        if (row.storage_provider !== "gdrive" || !row.encrypted_credentials)
-          return res.status(503).json({ error: "The storage holding this payslip is not connected." });
-        const storage = storageFromCredentials(row.encrypted_credentials);
-        if ((row.size_bytes ?? 0) > INLINE_DOWNLOAD_BYTES)
-          return res.status(200).json({ link: (await storage.getFile(row.provider_file_id)).link });
-        const bytes = await (await storage.download(row.provider_file_id)).arrayBuffer();
+        if (!row) return res.status(404).json({ error: payslip ? "Payslip not found." : "Document not found." });
+        let bytes: ArrayBuffer;
+        if (row.storage_provider === "supabase" && !payslip) {
+          // Portal files (own uploads, signed contracts): storage RLS lets the caller read their own folder.
+          const [bucket, ...rest] = row.provider_file_id.split("/");
+          const file = await client.storage.from(bucket).download(rest.join("/"));
+          if (file.error || !file.data) throw new DocumentError(502, "The file could not be read from storage.");
+          bytes = await file.data.arrayBuffer();
+        } else {
+          if (row.storage_provider !== "gdrive" || !row.encrypted_credentials)
+            return res.status(503).json({ error: `The storage holding this ${payslip ? "payslip" : "document"} is not connected.` });
+          const storage = storageFromCredentials(row.encrypted_credentials);
+          if ((row.size_bytes ?? 0) > INLINE_DOWNLOAD_BYTES)
+            return res.status(200).json({ link: (await storage.getFile(row.provider_file_id)).link });
+          bytes = await (await storage.download(row.provider_file_id)).arrayBuffer();
+        }
         res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
         res.setHeader("Content-Disposition", action.preview
           ? `inline; filename*=UTF-8''${encodeURIComponent(row.file_name)}`

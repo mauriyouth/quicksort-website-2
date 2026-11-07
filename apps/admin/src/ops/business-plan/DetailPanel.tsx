@@ -214,7 +214,8 @@ function RevenueBody({ month, plan, agg, hypotheses: H }: BodyProps) {
             </table>
           )}
           <p className="bp-note">
-            Factures finalisées ou payées (hors factures ignorées), rattachées à leur mois de prestation
+            Factures finalisées ou payées (hors factures ignorées), rattachées à leur{" "}
+            {agg.revenueBasis === "issue" ? "mois d’émission" : "mois de prestation"}
             {byIssue > 0 && ` ; sans mois de prestation, à leur mois d’émission (${plural(byIssue, "facture")})`}. Montants hors taxes.
           </p>
         </>

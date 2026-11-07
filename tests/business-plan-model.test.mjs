@@ -510,3 +510,13 @@ test("travel costs: own fixed line, real on closed months, hypothesis otherwise,
   const S = p.series;
   assert.ok(Math.abs(S.tvaDed[1] - VAT_RATE * (S.free[1] + S.fl[1] + S.fo[1] + S.fm[1] + S.fh[1] + S.fdp[1] + S.fd[1])) < 1e-6);
 });
+
+test("revenue can be bucketed by issue date instead of period month", () => {
+  const { months, invoiceLines, revenueBasis } = aggregateActuals(sources({ revenueBasis: "issue" }), 2026, 10, new Date(2026, 10, 1));
+  assert.equal(revenueBasis, "issue");
+  assert.equal(months[0].ca, 500); // only the invoice issued in January
+  assert.equal(months[1].ca, 1000.1); // period January, issued in February
+  assert.deepEqual(invoiceLines[1].map((l) => [l.amount, l.byIssueDate]), [[1000.1, false]]);
+  assert.equal(months[2].enc, 1000.1); // collections are unaffected
+  assert.equal(aggregateActuals(sources(), 2026, 10, new Date(2026, 10, 1)).revenueBasis, "period");
+});

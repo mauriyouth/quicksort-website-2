@@ -46,6 +46,7 @@
 .hr-person-link > svg { opacity: .5; margin-left: auto; flex-shrink: 0; }
 .hr-person-link:hover strong { text-decoration: underline; text-underline-offset: 3px; }
 .hr-avatar { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--qs-lime) 13%, var(--qs-bg-2)); color: var(--qs-ink); font-size: 12px; font-weight: 600; }
+.hr-avatar.has-photo { object-fit: cover; background: var(--qs-bg-2); }
 .hr-table-wrap { border: 1px solid var(--qs-line); border-radius: 12px; overflow: auto; background: var(--qs-paper); }
 .hr-table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
 .hr-table th { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; color: var(--qs-muted); background: var(--qs-bg-2); font-weight: 600; padding: 13px 18px; }

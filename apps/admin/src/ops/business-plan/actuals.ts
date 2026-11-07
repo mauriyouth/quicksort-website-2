@@ -62,12 +62,17 @@ export type PlanSources = {
   invoices: InvoiceRow[];
   cra: CraRow[];
   cjmMultiplier: number;
+  /** Month an invoice's revenue counts in: its period (default) or its issue date. */
+  revenueBasis?: RevenueBasis;
   /** Optional, for names in the drill-down panels. */
   people?: { id: string; full_name: string }[];
   clients?: { id: string; name: string }[];
   /** Employments counted as structure staff, not consultants, over a period. */
   structureStaff: StructureEntry[];
 };
+
+/** "period" = month of service (period_month, else issue date); "issue" = issue date (else period). */
+export type RevenueBasis = "period" | "issue";
 
 /** A structure listing: null start = hire date, null end = exit date. */
 export type StructureEntry = { employee_id: string; start_date?: string | null; end_date?: string | null };
@@ -126,6 +131,8 @@ export type FreelanceLine = {
 export type Seeds = Partial<Hypotheses>;
 
 export type Aggregate = {
+  /** How closed months' revenue was bucketed. */
+  revenueBasis: RevenueBasis;
   /** Actuals for each month of the year (null for open months). */
   months: (ActualMonth | null)[];
   /** Hypothesis values measured from data (only those with a source). */
@@ -227,7 +234,10 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     return openDaysBetween(start > from ? start : from, end && end < to ? end : to);
   };
 
-  // Invoices → revenue by period, collections by payment month (in cents).
+  // Invoices → revenue by period or issue month, collections by payment month (in cents).
+  const revenueBasis: RevenueBasis = src.revenueBasis ?? "period";
+  const revenueMonth = (inv: InvoiceRow) =>
+    (revenueBasis === "issue" ? inv.issue_date || inv.period_month : inv.period_month || inv.issue_date) || "";
   const caByMonth = new Map<string, number>();
   const encByMonth = new Map<string, number>();
   const invByMonth = new Map<string, InvoiceRow[]>();
@@ -235,7 +245,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   for (const inv of src.invoices) {
     if (inv.ignored) continue;
     if (inv.status === "finalized" || inv.status === "paid") {
-      const key = (inv.period_month || inv.issue_date || "").slice(0, 7);
+      const key = revenueMonth(inv).slice(0, 7);
       if (key) {
         caByMonth.set(key, (caByMonth.get(key) || 0) + cents(inv.total_ht));
         invByMonth.set(key, [...(invByMonth.get(key) || []), inv]);
@@ -277,7 +287,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
       issueDate: inv.issue_date,
       paidAt: inv.paid_at ? inv.paid_at.slice(0, 10) : null,
       amount: cents(inv.total_ht) / 100,
-      byIssueDate: !inv.period_month,
+      byIssueDate: revenueBasis === "period" && !inv.period_month,
       periodMonth: inv.period_month ? inv.period_month.slice(0, 10) : null,
       url: inv.invoice_url ?? null,
     };
@@ -515,7 +525,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
 
   const recentStarts = staffedRows.filter((a) => a.start_date > yearAgo && a.start_date <= now).length;
 
-  return { months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers, invoiceLines, encLines, structure, structureLines };
+  return { revenueBasis, months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers, invoiceLines, encLines, structure, structureLines };
 }
 
 /* ── Loaders ────────────────────────────────────────────────────────── */

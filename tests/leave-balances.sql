@@ -85,4 +85,30 @@ select pg_temp.assert_true((select count(*) from public.employee_leave_balances(
 select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=3.5,'Employee CP balance reflects the repriced rate');
 reset role;
 select pg_temp.assert_true(not has_function_privilege('anon','public.employee_leave_balances()','execute'),'Anonymous balance read is denied');
+-- (g) Payslip checkpoint (CP only): the balance starts from the payslip's
+-- N-1 + N figures, accrues only the months after the payslip month and
+-- consumes only CRA paid leave dated after it. RTT is untouched.
+update public.leave_accrual_settings set rate=2.08 where kind='cp';
+insert into public.leave_payslip_checkpoints(employee_id,period,n1_acquired,n1_taken,n_acquired,n_taken) values
+ ('26000000-0000-4000-8000-000000000021',(select m1 from leave_anchor),25,25,8.33,7);
+select set_config('request.jwt.claims','{"sub":"26000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=35.41,'Checkpoint accrual = payslip figures + one month after it');
+select pg_temp.assert_true((select consumed from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=32,'CRA paid leave inside the payslip month is not counted twice');
+select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=3.41,'Checkpoint CP available');
+select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000-4000-8000-000000000021','rtt'))=0.1,'RTT ignores the CP checkpoint');
+insert into public.cra_months(employee_id,month) values ('26000000-0000-4000-8000-000000000021',(select m0 from leave_anchor));
+insert into public.cra_entries(employee_id,month,day,part,status,project_id) values
+ ('26000000-0000-4000-8000-000000000021',(select m0 from leave_anchor),(select m0 + 2 from leave_anchor),'full','paid_leave',null);
+select pg_temp.assert_true((select consumed from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=33,'CRA paid leave after the payslip month is consumed');
+-- Only HR operators read or write checkpoints.
+select set_config('request.jwt.claims','{"sub":"26000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+set local role authenticated;
+select pg_temp.assert_true((select count(*) from public.leave_payslip_checkpoints)=0,'Sales role sees no payslip checkpoints');
+reset role;
+select set_config('request.jwt.claims','{"sub":"26000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+set local role authenticated;
+update public.leave_payslip_checkpoints set n_taken=8 where employee_id='26000000-0000-4000-8000-000000000021';
+select pg_temp.assert_true((select n_taken from public.leave_payslip_checkpoints where employee_id='26000000-0000-4000-8000-000000000021')=8,'Admin edits a payslip checkpoint');
+reset role;
+
 rollback;

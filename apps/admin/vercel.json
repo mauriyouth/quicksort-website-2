@@ -3,10 +3,6 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/team-photo",
-      "destination": "/api/team-photo"
-    },
-    {
       "source": "/((?!api(?:/|$)).*)",
       "destination": "/index.html"
     }
@@ -17,11 +13,6 @@
       "schedule": "0 5 * * *"
     }
   ],
-  "functions": {
-    "api/team-photo.mjs": {
-      "includeFiles": "private/team-photos/**"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",

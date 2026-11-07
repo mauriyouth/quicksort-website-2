@@ -13,6 +13,8 @@ type Status = {
   rootFolderName?: string;
   peopleRootFolderId?: string | null;
   peopleRootFolderName?: string | null;
+  recruitmentRootFolderId?: string | null;
+  recruitmentRootFolderName?: string | null;
 };
 
 /**
@@ -32,6 +34,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
   const [serviceAccountJson, setServiceAccountJson] = useState("");
   const [rootFolderId, setRootFolderId] = useState("");
   const [peopleRootFolderId, setPeopleRootFolderId] = useState("");
+  const [recruitmentRootFolderId, setRecruitmentRootFolderId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -56,6 +59,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
     setStatus(next);
     setRootFolderId(next.rootFolderId || "");
     setPeopleRootFolderId(next.peopleRootFolderId || "");
+    setRecruitmentRootFolderId(next.recruitmentRootFolderId || "");
   }
 
   useEffect(() => {
@@ -77,8 +81,9 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
               ...(serviceAccountJson.trim() ? { serviceAccountJson: serviceAccountJson.trim() } : {}),
               rootFolderId: rootFolderId.trim(),
               peopleRootFolderId: peopleRootFolderId.trim(),
+              recruitmentRootFolderId: recruitmentRootFolderId.trim(),
             },
-      )) as { rootFolderName?: string; peopleRootFolderName?: string | null };
+      )) as { rootFolderName?: string; peopleRootFolderName?: string | null; recruitmentRootFolderName?: string | null };
       setServiceAccountJson("");
       applyStatus(await request());
       setMessage(
@@ -86,7 +91,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
           ? "Google Drive connection removed."
           : `Google Drive connected — contracts go to “${result.rootFolderName || "Contrats_Clients"}”${
               result.peopleRootFolderName ? `, HR documents to “${result.peopleRootFolderName}”` : ""
-            }.`,
+            }${result.recruitmentRootFolderName ? `, candidate CVs to “${result.recruitmentRootFolderName}”` : ""}.`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the Google Drive connection.");
@@ -104,7 +109,9 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
     : configured
       ? `Service account ${status.serviceAccountEmail || "(saved)"} connected${
           status.rootFolderName ? `, root folder “${status.rootFolderName}”` : ""
-        }${status.peopleRootFolderName ? `, HR folder “${status.peopleRootFolderName}”` : ", no HR folder yet"}${status.updatedAt ? ` — saved ${new Date(status.updatedAt).toLocaleString()}` : ""}.`
+        }${status.peopleRootFolderName ? `, HR folder “${status.peopleRootFolderName}”` : ", no HR folder yet"}${
+          status.recruitmentRootFolderName ? `, CV folder “${status.recruitmentRootFolderName}”` : ""
+        }${status.updatedAt ? ` — saved ${new Date(status.updatedAt).toLocaleString()}` : ""}.`
       : "No Google Drive service account connected yet.";
 
   return (
@@ -119,8 +126,8 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
               Store project contracts on Google Drive: one folder per contract (named{" "}
               <strong>Client/Contract</strong>) under the shared <strong>Contrats_Clients</strong>{" "}
               root, with the contract and its annexes inside. Employee documents go to a separate,
-              HR-only folder. Uploads happen from <strong>Sales → Projects</strong> and{" "}
-              <strong>HR → Employment</strong>.
+              HR-only folder, and candidate CVs to a recruitment folder. Uploads happen from{" "}
+              <strong>Sales → Projects</strong>, <strong>HR → Employment</strong> and <strong>HR → Add person</strong>.
             </p>
           </div>
           <span className={`sp-pill${pillClass}`} role="status">
@@ -210,6 +217,30 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
               </div>
             </div>
 
+            {/* Candidate CVs folder row */}
+            <div className="sp-row">
+              <div>
+                <div className="sp-row-label">Candidate CVs folder ID or URL</div>
+                <div className="sp-row-hint">
+                  {status?.recruitmentRootFolderName ? `Current: “${status.recruitmentRootFolderName}”` : "Needed to file CVs from the hiring pipeline"}
+                </div>
+              </div>
+              <div className="sp-controls">
+                <input
+                  className="sp-input"
+                  value={recruitmentRootFolderId}
+                  onChange={e => setRecruitmentRootFolderId(e.target.value)}
+                  placeholder="ID or URL of the CVs folder"
+                  aria-label="Candidate CVs folder ID"
+                />
+                <p className="sp-row-hint">
+                  CVs added in <strong>HR → Add person</strong> are filed as <strong>year / position / Candidate.pdf</strong>{" "}
+                  (or <strong>Candidatures spontanées</strong> without a position), and copied when a person is linked to a
+                  position. The folder must sit in a Shared Drive and be shared with the service account.
+                </p>
+              </div>
+            </div>
+
             <footer className="sp-foot">
               <span className="sp-row-hint" role="status">{footStatus}</span>
               <span className="sp-inline">
@@ -226,7 +257,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
                 <button
                   type="button"
                   className="sp-btn"
-                  disabled={busy || !(serviceAccountJson.trim() || (configured && (rootFolderId.trim() || peopleRootFolderId.trim())))}
+                  disabled={busy || !(serviceAccountJson.trim() || (configured && (rootFolderId.trim() || peopleRootFolderId.trim() || recruitmentRootFolderId.trim())))}
                   onClick={() => void save()}
                 >
                   {busy ? "Saving…" : !configured ? "Connect" : serviceAccountJson.trim() ? "Replace key" : "Save folders"}

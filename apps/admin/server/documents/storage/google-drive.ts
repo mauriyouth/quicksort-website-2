@@ -1,4 +1,4 @@
-import { createSign } from "node:crypto";
+import { createSign, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { decryptApiKey } from "../../ai-settings.ts";
@@ -19,8 +19,9 @@ export const ROOT_FOLDER_NAME = "Contrats_Clients";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable";
+const MULTIPART_URL = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
 const API_BASE = "https://www.googleapis.com/drive/v3";
-const FILE_FIELDS = "id,name,mimeType,size,modifiedTime,webViewLink,parents,sha256Checksum";
+export const FILE_FIELDS = "id,name,mimeType,size,modifiedTime,webViewLink,parents,sha256Checksum";
 
 export const serviceAccountSchema = z.object({
   client_email: z.string().trim().min(3).max(300),
@@ -32,6 +33,9 @@ export const settingsSchema = serviceAccountSchema.extend({
   root_folder_name: z.string().max(500),
   people_root_folder_id: z.string().min(1).max(200).optional(),
   people_root_folder_name: z.string().max(500).optional(),
+  /** Candidate CVs (hiring pipeline): <root>/<year>/<position>/<candidate>.pdf. */
+  recruitment_root_folder_id: z.string().min(1).max(200).optional(),
+  recruitment_root_folder_name: z.string().max(500).optional(),
 });
 
 export type DriveSettings = z.infer<typeof settingsSchema>;
@@ -160,12 +164,13 @@ export async function ensureChildFolder(sa: ServiceAccount, parentId: string, na
   });
 }
 
-/** Opens a resumable upload session; the browser streams the bytes to the returned URL. */
-export async function createUploadSession(sa: ServiceAccount, file: { name: string; mimeType: string; size: number }, folderId: string, origin?: string | null) {
-  // A service account has no quota: the file only lands if the target folder
-  // itself sits in a Shared Drive. Folder IDs are cached (settings, project
-  // rows), so a folder linked before a move can still be a My Drive one —
-  // name it instead of surfacing Google's generic storageQuotaExceeded.
+/**
+ * A service account has no quota: a file only lands if the target folder
+ * itself sits in a Shared Drive. Folder IDs are cached (settings, project
+ * rows), so a folder linked before a move can still be a My Drive one —
+ * name it instead of surfacing Google's generic storageQuotaExceeded.
+ */
+async function assertSharedDriveFolder(sa: ServiceAccount, folderId: string) {
   const target = await driveApi<{ id: string; name?: string; driveId?: string; webViewLink?: string }>(sa, `/files/${folderId}`, {
     query: { fields: "id,name,driveId,webViewLink", supportsAllDrives: "true" },
   });
@@ -173,6 +178,39 @@ export async function createUploadSession(sa: ServiceAccount, file: { name: stri
     throw new Error(
       `The upload folder "${target.name || folderId}" (${target.webViewLink || folderId}) is in a personal My Drive, not a Shared Drive, so the service account cannot store files there. Move it into the Shared Drive (or unlink it so a new one is created under the root) and retry.`,
     );
+}
+
+/**
+ * Uploads bytes the server already holds (single multipart request — fine for
+ * files up to ~10 MB). appProperties are private key/value tags Drive can
+ * search on (e.g. the HR person a CV belongs to).
+ */
+export async function uploadFileContent(
+  sa: ServiceAccount,
+  file: { name: string; mimeType: string; data: Buffer; appProperties?: Record<string, string> },
+  folderId: string,
+): Promise<DriveFile> {
+  await assertSharedDriveFolder(sa, folderId);
+  const token = await driveToken(sa);
+  const boundary = `qs-${randomUUID()}`;
+  const metadata = { name: file.name, parents: [folderId], mimeType: file.mimeType, ...(file.appProperties ? { appProperties: file.appProperties } : {}) };
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${file.mimeType}\r\n\r\n`, "utf8"),
+    file.data,
+    Buffer.from(`\r\n--${boundary}--`, "utf8"),
+  ]);
+  const response = await fetch(`${MULTIPART_URL}&supportsAllDrives=true&fields=${encodeURIComponent(FILE_FIELDS)}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  if (!response.ok) throw await failure(response, sa);
+  return (await response.json()) as DriveFile;
+}
+
+/** Opens a resumable upload session; the browser streams the bytes to the returned URL. */
+export async function createUploadSession(sa: ServiceAccount, file: { name: string; mimeType: string; size: number }, folderId: string, origin?: string | null) {
+  await assertSharedDriveFolder(sa, folderId);
   const token = await driveToken(sa);
   const response = await fetch(`${UPLOAD_URL}&supportsAllDrives=true`, {
     method: "POST",

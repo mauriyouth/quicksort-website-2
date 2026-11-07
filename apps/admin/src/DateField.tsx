@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { atNoon, buildCells, isOutOfRange, parseISO, toISO } from "./date-field-calendar";
 
 /**
  * Design-system date picker, shared across the admin app.
@@ -33,27 +34,10 @@ type Props = {
   "aria-label"?: string;
 };
 
-function toISO(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function parseISO(value: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!m) return null;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
-
-const atNoon = (d: Date) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12);
 
 const MONTH_FMT: Intl.DateTimeFormatOptions = { month: "long", year: "numeric" };
 const DAY_FMT: Intl.DateTimeFormatOptions = {
@@ -61,17 +45,6 @@ const DAY_FMT: Intl.DateTimeFormatOptions = {
   month: "short",
   year: "numeric",
 };
-
-/** Monday-first calendar cells for the visible month, 6 weeks padded. */
-function buildCells(view: Date): Date[] {
-  const first = new Date(view.getFullYear(), view.getMonth(), 1);
-  const lead = (first.getDay() + 6) % 7; // Mon=0 … Sun=6
-  const start = new Date(view.getFullYear(), view.getMonth(), 1 - lead, 12);
-  return Array.from(
-    { length: 42 },
-    (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i),
-  );
-}
 
 const shiftDays = (d: Date, days: number) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
@@ -132,13 +105,12 @@ export function DateField({
   }, [max]);
 
   const clampDate = (d: Date): Date => {
-    if (minDate && d < minDate) return minDate;
-    if (maxDate && d > maxDate) return maxDate;
+    if (minDate && isOutOfRange(d, minDate, null)) return minDate;
+    if (maxDate && isOutOfRange(d, null, maxDate)) return maxDate;
     return d;
   };
 
-  const isDisabled = (d: Date) =>
-    (minDate !== null && d < minDate) || (maxDate !== null && d > maxDate);
+  const isDisabled = (d: Date) => isOutOfRange(d, minDate, maxDate);
 
   /** True when the given month (0-based) contains at least one enabled day. */
   const monthEnabled = (year: number, month: number) => {

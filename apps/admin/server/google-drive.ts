@@ -35,12 +35,13 @@ export { contractFolderName };
  *
  * GET    /api/google-drive — connection status (configured, root folder,
  *        service-account email, canSave).
- * PUT    /api/google-drive — save { serviceAccountJson?, rootFolderId?, peopleRootFolderId? }
+ * PUT    /api/google-drive — save { serviceAccountJson?, rootFolderId?, peopleRootFolderId?, recruitmentRootFolderId? }
  *        (portal owners only). Without rootFolderId the single folder named
  *        "Contrats_Clients" is looked up at save time — which also proves the
  *        share works. Without serviceAccountJson the saved key and root are
  *        kept. peopleRootFolderId is the HR documents folder (by ID only —
  *        it must be shared with HR alone); a saved one is kept when omitted.
+ *        recruitmentRootFolderId is the candidate CVs folder (same rules).
  * DELETE /api/google-drive — remove the saved connection (portal owners only).
  * POST   /api/google-drive — Drive actions (admins):
  *        { action: "prepare-upload", projectId, fileName, mimeType, size }
@@ -74,6 +75,7 @@ const saveSchema = z.object({
   serviceAccountJson: z.string().trim().max(50000).optional(),
   rootFolderId: folderIdInput.optional(),
   peopleRootFolderId: folderIdInput.optional(),
+  recruitmentRootFolderId: folderIdInput.optional(),
 });
 
 const actionSchema = z.discriminatedUnion("action", [
@@ -222,6 +224,8 @@ export function createGoogleDriveHandler(deps = { createClient }) {
           rootFolderName: settings.root_folder_name,
           peopleRootFolderId: settings.people_root_folder_id || null,
           peopleRootFolderName: settings.people_root_folder_name || null,
+          recruitmentRootFolderId: settings.recruitment_root_folder_id || null,
+          recruitmentRootFolderName: settings.recruitment_root_folder_name || null,
         });
       }
 
@@ -301,18 +305,26 @@ export function createGoogleDriveHandler(deps = { createClient }) {
         const people = peopleId
           ? await driveApi<DriveFile>(probe, `/files/${peopleId}`, { query: { fields: "id,name", supportsAllDrives: "true" } })
           : null;
+        const recruitmentId = parsed.data.recruitmentRootFolderId || saved?.recruitment_root_folder_id || "";
+        if (recruitmentId && (recruitmentId === root.id || recruitmentId === people?.id))
+          return res.status(400).json({ error: "The candidate CVs folder must be separate from the contracts and HR documents folders." });
+        // Looking the folder up proves it is shared with the service account.
+        const recruitment = recruitmentId
+          ? await driveApi<DriveFile>(probe, `/files/${recruitmentId}`, { query: { fields: "id,name", supportsAllDrives: "true" } })
+          : null;
         const settings: DriveSettings = {
           ...account,
           root_folder_id: root.id,
           root_folder_name: root.name || ROOT_FOLDER_NAME,
           ...(people ? { people_root_folder_id: people.id, people_root_folder_name: people.name } : {}),
+          ...(recruitment ? { recruitment_root_folder_id: recruitment.id, recruitment_root_folder_name: recruitment.name } : {}),
         };
         const result = await client.from("google_drive_settings").upsert(
           { id: SETTING_ID, encrypted_credentials: encryptApiKey(JSON.stringify(settings)), updated_at: new Date().toISOString() },
           { onConflict: "id" },
         );
         if (result.error) throw result.error;
-        return res.status(200).json({ saved: true, rootFolderName: settings.root_folder_name, peopleRootFolderName: settings.people_root_folder_name || null, serviceAccountEmail: settings.client_email });
+        return res.status(200).json({ saved: true, rootFolderName: settings.root_folder_name, peopleRootFolderName: settings.people_root_folder_name || null, recruitmentRootFolderName: settings.recruitment_root_folder_name || null, serviceAccountEmail: settings.client_email });
       }
 
       // POST — Drive actions (admins).

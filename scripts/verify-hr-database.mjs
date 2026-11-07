@@ -42,6 +42,10 @@ try {
   console.log('Document checks passed: expiry windows, missing requirements, atomic renewal, immutability and role-scoped access.');
   psql(readFileSync(resolve(root, 'tests/payslips.sql'), 'utf8'));
   console.log('Payslip database checks passed.');
+  psql(readFileSync(resolve(root, 'tests/my-documents.sql'), 'utf8'));
+  console.log('My documents checks passed: employees see their own HR folder (no payslips, no other person) and downloads are audited.');
+  psql(readFileSync(resolve(root, 'tests/account-names.sql'), 'utf8'));
+  console.log('Account name checks passed: HR creates linked portal accounts, the HR record names linked profiles, unlinked accounts keep their own.');
   psql(readFileSync(resolve(root, 'tests/leave-balances.sql'), 'utf8'));
   console.log('Leave balance checks passed: half-day consumption, accrual windows, overdraw, retroactive rates and access gating.');
 } finally {

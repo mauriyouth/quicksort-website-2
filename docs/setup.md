@@ -93,7 +93,7 @@ Suggested domains: existing website domain, `admin.quicksort.fr`, `hr.quicksort.
 
 ## Verification
 
-- `pnpm build`: builds both apps; the admin build includes strict TypeScript checking and the team-photo asset check.
+- `pnpm build`: builds both apps; the admin build includes strict TypeScript checking.
 - `pnpm test`: URL and upload boundary checks.
 - `pnpm test:seo`: static website and EN/FR regression checks.
 - `pnpm test:browser`: mocked browser workflows and responsive layouts.

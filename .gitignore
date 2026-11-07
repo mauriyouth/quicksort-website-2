@@ -36,3 +36,7 @@ supabase/.temp/
 
 # Candidate HD portraits are deployed privately, never committed.
 /apps/candidate/private/
+
+# Local credentials and agent session state
+key.json
+.superpowers/

@@ -162,6 +162,38 @@ test('PUT with only the HR folder keeps the saved key and contracts root', async
   assert.match(res.body.error, /must be separate from the contracts root/);
 });
 
+test('PUT with only the candidate CVs folder saves it and keeps it separate from the contracts root', async t => {
+  const drive = [];
+  mockDrive(t, drive, {
+    files: async (target) => {
+      const u = new URL(target);
+      if (u.pathname.endsWith(`/files/${rootFolderId}`)) return { ok: true, status: 200, json: async () => ({ id: rootFolderId, name: 'Contrats_Clients' }) };
+      if (u.pathname.endsWith('/files/cv-folder')) return { ok: true, status: 200, json: async () => ({ id: 'cv-folder', name: 'CVs' }) };
+      throw new Error(`unexpected Drive call ${target}`);
+    },
+  });
+  const upserts = [];
+  const base = makeClient();
+  const client = {
+    ...base,
+    from: (table) => table === 'google_drive_settings'
+      ? chain(null, { upserts, maybeSingle: async () => ({ data: { encrypted_credentials: encrypted }, error: null }) })
+      : base.from(table),
+  };
+  const handler = createGoogleDriveHandler({ createClient: () => client });
+  let res = makeRes();
+  await handler({ method: 'PUT', headers: { authorization: 'Bearer actor' }, body: { recruitmentRootFolderId: 'https://drive.google.com/drive/u/1/folders/cv-folder' } }, res);
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.equal(res.body.recruitmentRootFolderName, 'CVs');
+  const saved = JSON.parse(decryptApiKey(upserts[0][0].encrypted_credentials));
+  assert.equal(saved.recruitment_root_folder_id, 'cv-folder');
+
+  res = makeRes();
+  await handler({ method: 'PUT', headers: { authorization: 'Bearer actor' }, body: { recruitmentRootFolderId: rootFolderId } }, res);
+  assert.equal(res.code, 400);
+  assert.match(res.body.error, /candidate CVs folder must be separate/);
+});
+
 test('PUT without a shared root folder explains the share step', async t => {
   const drive = [];
   mockDrive(t, drive, {

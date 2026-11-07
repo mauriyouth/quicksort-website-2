@@ -2,10 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Plus, RefreshCw, Search, UserPlus, X } from "lucide-react";
 import { db, errorMessage, type Job } from "@quicksort/hr-db";
 import { Notice, Empty, Pill, formatDate } from "@quicksort/hr-ui";
+import { useSession } from "@clerk/react";
 import { loadWorkspace, executeCommand } from "../hr/data";
+import { copyCv } from "../hr/recruitmentCv";
 import type { Person, Application, Opportunity } from "../hr/domain";
 
 export function Opportunities({ actorEmail }: { actorEmail: string }) {
+  const { session } = useSession();
   const [opportunities, setOpportunities] = useState<
     RowOpportunity[]
   >([]);
@@ -92,9 +95,18 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
     e.preventDefault();
     const personId = String(new FormData(e.currentTarget).get("person_id") || "");
     if (!personId) return;
+    let warning = "";
     void action(async () => {
       await executeCommand({ kind: "create_application", person_id: personId, opportunity_id: r.id });
-    }, "Application created. Existing applications remain linked to their own opportunities.");
+      // Best-effort: copy the person's filed CV into <year>/<position> on Drive.
+      warning = await copyCv(() => session?.getToken({ template: "supabase" }) ?? Promise.resolve(null), {
+        personId,
+        personName: people.find(p => p.id === personId)?.full_name || "Candidate",
+        position: { title: r.title, openedAt: r.created_at },
+      });
+    }, "Application created. Existing applications remain linked to their own opportunities.").then(() => {
+      if (warning) setError(warning);
+    });
   }
 
   const query = search.toLowerCase();

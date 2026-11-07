@@ -114,6 +114,7 @@ export type Database = {
           name: string
           size_bytes: number
           storage_path: string
+          type_code: string | null
         }
         Insert: {
           candidate_id: string
@@ -123,6 +124,7 @@ export type Database = {
           name: string
           size_bytes: number
           storage_path: string
+          type_code?: string | null
         }
         Update: {
           candidate_id?: string
@@ -132,6 +134,7 @@ export type Database = {
           name?: string
           size_bytes?: number
           storage_path?: string
+          type_code?: string | null
         }
         Relationships: [
           {
@@ -210,6 +213,39 @@ export type Database = {
           kind?: string
           rate?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      leave_payslip_checkpoints: {
+        Row: {
+          employee_id: string
+          period: string
+          n1_acquired: number
+          n1_taken: number
+          n_acquired: number
+          n_taken: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          employee_id: string
+          period: string
+          n1_acquired?: number
+          n1_taken?: number
+          n_acquired?: number
+          n_taken?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          employee_id?: string
+          period?: string
+          n1_acquired?: number
+          n1_taken?: number
+          n_acquired?: number
+          n_taken?: number
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -1010,10 +1046,13 @@ export type Database = {
       my_onboarding_items: HrTable<Omit<HrJourneyTask,'completed_by'|'created_at'>>;
       document_alerts: HrTable<DocumentAlert>;
       my_payslips: HrTable<{ id: string; person_id: string; title: string; valid_from: string | null; file_name: string; size_bytes: number | null; created_at: string }>;
+      my_documents: HrTable<{ id: string; upload_path: string | null; uploaded_by_me: boolean; type_code: string; type_label: string | null; title: string; file_name: string; mime_type: string; size_bytes: number | null; status: 'active' | 'superseded' | 'archived'; needs_review: boolean; issued_on: string | null; expires_on: string | null; warn_days: number[]; created_at: string }>;
+      my_document_types: HrTable<{ code: string; label: string; folder: string; requirement_group: string | null; requires_expiry: boolean; warn_days: number[]; sensitive: boolean; position: number; required: boolean; self_upload: boolean; relevant: boolean }>;
       my_offers: HrTable<Pick<HrOffer,'id'|'application_id'|'title'|'contract_type'|'salary_monthly'|'status'|'shared_at'|'valid_until'|'version'>>;
     }
     Functions: {
       cra_context: { Args: Record<PropertyKey, never>; Returns: Json };
+      my_name_from_hr: { Args: Record<PropertyKey, never>; Returns: boolean };
       cra_month_snapshot: { Args: { target_employee: string; target_month: string }; Returns: Json };
       cra_save_month: { Args: { target_employee: string; target_month: string; expected_version: number; entries: Json }; Returns: Json };
       employee_leave_balances: {
@@ -1023,6 +1062,7 @@ export type Database = {
       hr_command: { Args: { command: Json }; Returns: Json };
       register_document: { Args: { document: DocumentRegistration; supersedes?: string | null; request_id?: string }; Returns: DocumentRecord };
       set_employee_matricule: { Args: { employee_id: string; matricule: string; request_id?: string }; Returns: HrEmployee };
+      own_document_download_source: { Args: { document_id: string }; Returns: { provider_file_id: string; file_name: string; mime_type: string; size_bytes: number | null; storage_provider: string; encrypted_credentials: string | null }[] };
       payslip_download_source: { Args: { document_id: string }; Returns: { provider_file_id: string; file_name: string; mime_type: string; size_bytes: number | null; storage_provider: string; encrypted_credentials: string | null }[] };
       move_payslip: { Args: { document_id: string; to_person_id: string; to_folder_id: string; request_id?: string }; Returns: DocumentRecord };
       log_document_access: { Args: { document_id: string; request_id?: string }; Returns: undefined };

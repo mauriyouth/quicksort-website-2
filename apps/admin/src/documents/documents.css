@@ -936,97 +936,14 @@
 .docs-head .projects-lede {
   margin: 0;
 }
-.docs-kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 16px;
-}
-.docs-kpi {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 20px 24px;
-  border-radius: var(--qs-radius-lg);
-  background: var(--qs-paper);
-  border: 1px solid var(--qs-border);
-}
-.docs-kpi.strong {
-  border-color: var(--qs-fg-1);
-}
-.docs-kpi-label {
-  font-size: 13px;
-  color: var(--qs-fg-2);
-}
-.docs-kpi-value {
-  color: var(--qs-ink);
-  font-family: var(--qs-font-display);
-  font-size: clamp(22px, 2.2vw, 30px);
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-.docs-kpi-sub {
-  font-size: 13px;
-  color: var(--qs-muted);
-}
-.docs-count {
-  min-width: 20px;
-  height: 20px;
-  margin-left: 8px;
-  padding: 0 6px;
-  border-radius: var(--qs-radius-pill, 999px);
-  background: var(--qs-hover);
-  font-size: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-variant-numeric: tabular-nums;
-}
+
 .docs-empty {
   margin: 0;
   padding: 28px 24px;
   font-size: 14px;
   color: var(--qs-muted);
 }
-.docs-alerts {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  container-type: inline-size;
-}
-.docs-alert {
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 0.9fr) auto;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 24px;
-  border-top: 1px solid var(--qs-line);
-}
-.docs-alert .doc-pill {
-  justify-self: start;
-}
-.docs-alert-doc,
-.docs-alert-owner,
-.docs-alert-when {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.docs-alert-title {
-  font-size: 14px;
-  color: var(--qs-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.docs-alert-meta {
-  font-size: 12px;
-  color: var(--qs-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.docs-alert-action,
+
 .docs-more {
   color: var(--qs-ink);
   font-size: 13px;
@@ -1038,23 +955,6 @@
 .docs-more {
   display: inline-block;
   margin-top: 8px;
-}
-/* Narrow list (phone, or a tight content column): stack owner and date. */
-@container (max-width: 620px) {
-  .docs-alert {
-    grid-template-columns: 80px minmax(0, 1fr) auto;
-    row-gap: 6px;
-  }
-  .docs-alert-owner {
-    grid-column: 2;
-  }
-  .docs-alert-when {
-    grid-column: 2;
-  }
-  .docs-alert-action {
-    grid-column: 3;
-    grid-row: 1;
-  }
 }
 
 /* Editable person photo: the avatar becomes a button with a camera overlay. */

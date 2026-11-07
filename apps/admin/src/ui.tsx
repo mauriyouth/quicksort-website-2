@@ -57,6 +57,11 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "succ
   revoked: "destructive",
   owner: "default",
   admin: "outline",
+  // Opportunities (requisitions)
+  submitted: "warning",
+  filled: "default",
+  cancelled: "destructive",
+  closed: "secondary",
 };
 
 /** Record status chip (replaces hr-ui <Pill>). */

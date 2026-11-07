@@ -1,6 +1,42 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ExternalLink, RefreshCw, Send, Trash2, X } from "lucide-react";
-import { Notice } from "@quicksort/hr-ui";
+import type { ReactNode } from "react";
+import { ExternalLink, RefreshCw, Send, Trash2 } from "lucide-react";
+import { cn } from "cn";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Input,
+  NativeSelect,
+  NativeSelectOption,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  Textarea,
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@quicksort-sas/ui";
+import { PageAlerts, linkButton } from "../../ui";
+import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 import { errorText, InvoicingError, type InvoicingApi } from "./api";
 import { addDays, billingMonthOptions, dateTime, invoiceRowLabel, lineTotals, money, monthLabel, parisToday, shortDate, sourceLabel } from "./format";
 import type { DraftResponse, InvoiceDetail, InvoiceLine, InvoiceResponse } from "./types";
@@ -76,16 +112,6 @@ export function InvoiceDraftPanel({
   }, [api, invoiceId, apply]);
 
   useEffect(() => { void load(); }, [load]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || busy) return;
-      if (confirm) setConfirm(null);
-      else onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [busy, confirm, onClose]);
 
   const invoice = detail?.invoice;
   const currency = invoice?.currency || "EUR";
@@ -187,224 +213,227 @@ export function InvoiceDraftPanel({
   const locked = busy !== null;
 
   return (
-    <div className="inv-sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !locked) onClose(); }}>
-      <aside className="inv-sheet" role="dialog" aria-modal="true" aria-labelledby="inv-sheet-title">
-        <header className="inv-sheet-head">
-          <div className="inv-sheet-head-text">
-            <span className="inv-eyebrow">
-              {invoice ? `${sourceLabel(invoice.source)} · ${monthLabel(invoice.period_month ?? invoice.issue_date)}` : "Invoice"}
-            </span>
-            <h2 id="inv-sheet-title">
-              {invoice ? invoice.number || (invoice.status === "draft" ? "Draft invoice" : "Invoice") : "Loading…"}
-            </h2>
-            {invoice && (
-              <div className="inv-sheet-meta">
-                <span className={`inv-status inv-status--${invoiceRowLabel(invoice).split(" ")[0].toLowerCase()}`}>{invoiceRowLabel(invoice)}</span>
-                {invoice.consultant_name && <span>{invoice.consultant_name}</span>}
-                {invoice.project_title && <span>{invoice.project_title}</span>}
-                {invoice.client_name && <span>Billed to {invoice.client_name}</span>}
-              </div>
-            )}
-          </div>
-          <button type="button" className="projects-refresh" aria-label="Close" title="Close" onClick={onClose} disabled={locked}>
-            <X size={18} />
-          </button>
-        </header>
+    <Sheet open onOpenChange={(open) => { if (!open && !locked) onClose(); }}>
+      <SheetContent className="gap-0 data-[side=right]:sm:max-w-[760px]">
+        <SheetHeader className="gap-2">
+          <span className="label-mono">
+            {invoice ? `${sourceLabel(invoice.source)} · ${monthLabel(invoice.period_month ?? invoice.issue_date)}` : "Invoice"}
+          </span>
+          <SheetTitle className="text-2xl">
+            {invoice ? invoice.number || (invoice.status === "draft" ? "Draft invoice" : "Invoice") : "Loading…"}
+          </SheetTitle>
+          {invoice && (
+            <SheetDescription render={<div />} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <InvoiceStatusBadge label={invoiceRowLabel(invoice)} />
+              {invoice.consultant_name && <span className="text-foreground">{invoice.consultant_name}</span>}
+              {invoice.project_title && <span>{invoice.project_title}</span>}
+              {invoice.client_name && <span>Billed to {invoice.client_name}</span>}
+            </SheetDescription>
+          )}
+        </SheetHeader>
 
-        <div className="inv-sheet-body">
-          <Notice error>{error}</Notice>
-          <Notice>{warning}</Notice>
-          <Notice>{message}</Notice>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6 *:shrink-0">
+          <PageAlerts error={error} />
+          {warning && <Alert variant="warning" role="status"><AlertDescription>{warning}</AlertDescription></Alert>}
+          <PageAlerts message={message} />
 
           {deleted ? (
-            <p className="inv-muted">This draft no longer exists.</p>
+            <p className="m-0 text-sm text-muted-foreground">This draft no longer exists.</p>
           ) : !detail || !invoice ? (
-            !error && <p className="inv-muted">Loading the invoice…</p>
+            !error && <p role="status" className="m-0 text-sm text-muted-foreground">Loading the invoice…</p>
           ) : (
             <>
               {craChanged && !regenerated && editable && (
-                <div className="inv-banner" role="status">
-                  <span>CRA changed — regenerate this draft so it matches the timesheet.</span>
-                  <button type="button" className="pj-btn pj-btn-ghost" disabled={locked} onClick={regenerate}>
-                    <RefreshCw size={14} /> {busy === "regenerate" ? "Regenerating…" : "Regenerate"}
-                  </button>
-                </div>
+                <Alert variant="warning" role="status">
+                  <AlertDescription>CRA changed — regenerate this draft so it matches the timesheet.</AlertDescription>
+                  <AlertAction>
+                    <Button variant="outline" size="sm" disabled={locked} onClick={regenerate}>
+                      <RefreshCw data-icon="inline-start" /> {busy === "regenerate" ? "Regenerating…" : "Regenerate"}
+                    </Button>
+                  </AlertAction>
+                </Alert>
               )}
               {notInQonto && (
-                <div className="inv-banner" role="status">
-                  <span>This draft was never created in Qonto (the request was interrupted). Delete it, then create the draft again.</span>
-                </div>
+                <Alert variant="warning" role="status">
+                  <AlertDescription>This draft was never created in Qonto (the request was interrupted). Delete it, then create the draft again.</AlertDescription>
+                </Alert>
               )}
               {invoice.source === "imported" && invoice.status === "draft" && (
-                <div className="inv-banner" role="status">
-                  <span>Imported from Qonto, not created from a CRA. Check that it is not a duplicate of a CRA draft before validating it; edit its lines in Qonto.</span>
-                </div>
+                <Alert variant="warning" role="status">
+                  <AlertDescription>Imported from Qonto, not created from a CRA. Check that it is not a duplicate of a CRA draft before validating it; edit its lines in Qonto.</AlertDescription>
+                </Alert>
               )}
 
-              <section className="pj-card">
-                <div className="pj-card-head">
-                  <div>
-                    <h3 className="pj-card-title">Lines</h3>
-                    {editable && <p className="pj-card-desc">Values that differ from the CRA computation are highlighted.</p>}
-                  </div>
-                </div>
-                {detail.lines.length === 0 ? (
-                  <p className="inv-muted">
-                    {invoice.source === "imported" ? "Lines of imported invoices are kept in Qonto." : "No lines saved here. Regenerate the draft."}
-                  </p>
-                ) : (
-                  <div className="inv-lines">
-                    {detail.lines.map((l) => {
-                      const e = lines.find((x) => x.id === l.id) ?? toEdit(l);
-                      const qtyOff = differs(l.computed_quantity, e.quantity);
-                      const priceOff = differs(l.computed_unit_price, e.unitPrice);
-                      return (
-                        <div className="inv-line" key={l.id}>
-                          <div className="inv-line-title">
-                            <strong>{l.title}</strong>
-                            {l.pricing_line && <span className="inv-muted">{l.pricing_line}</span>}
-                          </div>
-                          {editable ? (
-                            <>
-                              <div className="inv-line-grid">
-                                <label className={`pj-field${qtyOff ? " inv-changed" : ""}`}>
-                                  <span className="pj-label">Quantity ({l.unit})</span>
-                                  <input inputMode="decimal" value={e.quantity} disabled={locked}
-                                    onChange={(ev) => setLine(l.id, { quantity: ev.target.value })} />
-                                  {qtyOff && <span className="pj-field-help">CRA: {Number(l.computed_quantity)}</span>}
-                                </label>
-                                <label className={`pj-field${priceOff ? " inv-changed" : ""}`}>
-                                  <span className="pj-label">Unit price HT</span>
-                                  <input inputMode="decimal" value={e.unitPrice} disabled={locked}
-                                    onChange={(ev) => setLine(l.id, { unitPrice: ev.target.value })} />
-                                  {priceOff && <span className="pj-field-help">TJM: {money(l.computed_unit_price, currency)}</span>}
-                                </label>
-                                <div className="pj-field">
-                                  <span className="pj-label">VAT</span>
-                                  <span className="inv-static">{Math.round(Number(l.vat_rate) * 1000) / 10} %</span>
-                                </div>
-                              </div>
-                              <label className="pj-field">
-                                <span className="pj-label">Description</span>
-                                <textarea rows={3} value={e.description} disabled={locked}
-                                  onChange={(ev) => setLine(l.id, { description: ev.target.value })} />
-                              </label>
-                            </>
-                          ) : (
-                            <div className="inv-line-read">
-                              <span>{Number(l.quantity)} {l.unit} × {money(l.unit_price, currency)}</span>
-                              <span className="inv-muted">VAT {Math.round(Number(l.vat_rate) * 1000) / 10} %</span>
-                              {l.description && <p className="inv-line-desc">{l.description}</p>}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-
-              <section className="pj-card">
-                <div className="pj-grid pj-grid-2">
-                  {editable ? (
-                    <>
-                      <div className="pj-field">
-                        <label className="pj-label" htmlFor="inv-due-date">Due date</label>
-                        <input id="inv-due-date" type="date" value={dueDate} min={invoice.issue_date ?? undefined} disabled={locked}
-                          onChange={(e) => setDueDate(e.target.value)} />
-                        <div className="inv-due-presets" role="group" aria-label="Payment terms">
-                          {DUE_PRESETS.map((n) => {
-                            const date = addDays(invoice.issue_date ?? parisToday(), n);
-                            return (
-                              <button key={n} type="button" className={`inv-due-preset${dueDate === date ? " on" : ""}`} disabled={locked}
-                                title={`Due ${shortDate(date)}`} onClick={() => setDueDate(date)}>
-                                J+{n}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <label className="pj-field">
-                        <span className="pj-label">Purchase order <span className="pj-label-opt">(optional)</span></span>
-                        <input value={purchaseOrder} maxLength={200} disabled={locked} onChange={(e) => setPurchaseOrder(e.target.value)} />
-                      </label>
-                    </>
+              <Card size="sm">
+                <CardHeader>
+                  <CardTitle>Lines</CardTitle>
+                  {editable && <CardDescription>Values that differ from the CRA computation are highlighted.</CardDescription>}
+                </CardHeader>
+                <CardContent>
+                  {detail.lines.length === 0 ? (
+                    <p className="m-0 text-sm text-muted-foreground">
+                      {invoice.source === "imported" ? "Lines of imported invoices are kept in Qonto." : "No lines saved here. Regenerate the draft."}
+                    </p>
                   ) : (
-                    <>
-                      <div className="pj-field"><span className="pj-label">Issue date</span><span className="inv-static">{shortDate(invoice.issue_date)}</span></div>
-                      {invoice.source === "imported" && (
-                        <div className="pj-field">
-                          <label className="pj-label" htmlFor="inv-period">Billing month</label>
-                          <div className="inv-period">
-                            <select id="inv-period" value={periodMonth} disabled={locked} onChange={(e) => setPeriodMonth(e.target.value)}>
-                              <option value="">Issue month{invoice.issue_date ? ` (${monthLabel(invoice.issue_date)})` : ""}</option>
-                              {periodOptions.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-                            </select>
-                            <button type="button" className="pj-btn pj-btn-ghost" disabled={locked || periodMonth === (invoice.period_month ?? "").slice(0, 7)} onClick={savePeriod}>
-                              {busy === "period" ? "Saving…" : "Save"}
-                            </button>
+                    <div className="flex flex-col divide-y divide-border">
+                      {detail.lines.map((l) => {
+                        const e = lines.find((x) => x.id === l.id) ?? toEdit(l);
+                        const qtyOff = differs(l.computed_quantity, e.quantity);
+                        const priceOff = differs(l.computed_unit_price, e.unitPrice);
+                        return (
+                          <div className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0" key={l.id}>
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                              <span className="font-medium">{l.title}</span>
+                              {l.pricing_line && <span className="text-xs text-muted-foreground">{l.pricing_line}</span>}
+                            </div>
+                            {editable ? (
+                              <>
+                                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_4.5rem]">
+                                  <Field className="gap-1.5">
+                                    <FieldLabel htmlFor={`inv-qty-${l.id}`}>Quantity ({l.unit})</FieldLabel>
+                                    <Input id={`inv-qty-${l.id}`} inputMode="decimal" value={e.quantity} disabled={locked}
+                                      className={cn("num", qtyOff && changedInput)}
+                                      onChange={(ev) => setLine(l.id, { quantity: ev.target.value })} />
+                                    {qtyOff && <FieldDescription className="num text-xs">CRA: {Number(l.computed_quantity)}</FieldDescription>}
+                                  </Field>
+                                  <Field className="gap-1.5">
+                                    <FieldLabel htmlFor={`inv-price-${l.id}`}>Unit price HT</FieldLabel>
+                                    <Input id={`inv-price-${l.id}`} inputMode="decimal" value={e.unitPrice} disabled={locked}
+                                      className={cn("num", priceOff && changedInput)}
+                                      onChange={(ev) => setLine(l.id, { unitPrice: ev.target.value })} />
+                                    {priceOff && <FieldDescription className="num text-xs">TJM: {money(l.computed_unit_price, currency)}</FieldDescription>}
+                                  </Field>
+                                  <Field className="gap-1.5">
+                                    <span className="text-sm font-medium">VAT</span>
+                                    <span className="num flex h-10 items-center text-sm text-muted-foreground">{Math.round(Number(l.vat_rate) * 1000) / 10} %</span>
+                                  </Field>
+                                </div>
+                                <Field className="gap-1.5">
+                                  <FieldLabel htmlFor={`inv-desc-${l.id}`}>Description</FieldLabel>
+                                  <Textarea id={`inv-desc-${l.id}`} className="min-h-20 text-sm md:text-sm" value={e.description} disabled={locked}
+                                    onChange={(ev) => setLine(l.id, { description: ev.target.value })} />
+                                </Field>
+                              </>
+                            ) : (
+                              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+                                <span className="num">{Number(l.quantity)} {l.unit} × {money(l.unit_price, currency)}</span>
+                                <span className="text-muted-foreground">VAT {Math.round(Number(l.vat_rate) * 1000) / 10} %</span>
+                                {l.description && <p className="m-0 w-full whitespace-pre-line text-muted-foreground">{l.description}</p>}
+                              </div>
+                            )}
                           </div>
-                          <span className="pj-field-help">The month the work was done.</span>
-                        </div>
-                      )}
-                      {invoice.source === "imported" && invoice.project_id && (
-                        <div className="pj-field">
-                          <label className="pj-label" htmlFor="inv-consultant">Consultant</label>
-                          <div className="inv-period">
-                            <select id="inv-consultant" value={consultantId} disabled={locked} onChange={(e) => setConsultantId(e.target.value)}>
-                              <option value="">Not assigned</option>
-                              {(detail.consultants ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            <button type="button" className="pj-btn pj-btn-ghost" disabled={locked || consultantId === (invoice.employee_id ?? "")} onClick={saveConsultant}>
-                              {busy === "consultant" ? "Saving…" : "Save"}
-                            </button>
-                          </div>
-                          <span className="pj-field-help">
-                            {detail.consultants?.length ? "Staffed on this project." : "Nobody is staffed on this project yet."}
-                          </span>
-                        </div>
-                      )}
-                      <div className="pj-field"><span className="pj-label">Due date</span><span className="inv-static">{shortDate(invoice.due_date)}</span></div>
-                      {invoice.purchase_order && <div className="pj-field"><span className="pj-label">Purchase order</span><span className="inv-static">{invoice.purchase_order}</span></div>}
-                      {invoice.sent_at && <div className="pj-field"><span className="pj-label">Sent</span><span className="inv-static">{dateTime(invoice.sent_at)}</span></div>}
-                      {invoice.paid_at && <div className="pj-field"><span className="pj-label">Paid</span><span className="inv-static">{shortDate(invoice.paid_at)}</span></div>}
-                    </>
+                        );
+                      })}
+                    </div>
                   )}
-                </div>
-                {totals && (
-                  <dl className="inv-totals">
-                    <div><dt>Total HT</dt><dd>{money(totals.ht, currency)}</dd></div>
-                    <div><dt>VAT</dt><dd>{money(totals.vat, currency)}</dd></div>
-                    <div className="inv-totals-ttc"><dt>Total TTC{dirty ? " (unsaved)" : ""}</dt><dd>{money(totals.ttc, currency)}</dd></div>
-                  </dl>
-                )}
-                {invalid && <p className="inv-error-text">Quantities must be positive (up to 4 decimals) and prices have at most 2 decimals.</p>}
-              </section>
+                </CardContent>
+              </Card>
+
+              <Card size="sm">
+                <CardContent className="flex flex-col gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {editable ? (
+                      <>
+                        <Field className="gap-1.5">
+                          <FieldLabel htmlFor="inv-due-date">Due date</FieldLabel>
+                          <Input id="inv-due-date" type="date" value={dueDate} min={invoice.issue_date ?? undefined} disabled={locked}
+                            onChange={(e) => setDueDate(e.target.value)} />
+                          <ToggleGroup variant="outline" size="sm" aria-label="Payment terms" className="mt-1"
+                            value={DUE_PRESETS.filter((n) => dueDate === addDays(invoice.issue_date ?? parisToday(), n)).map(String)}
+                            onValueChange={(v) => { const n = Number(v[0]); if (v[0]) setDueDate(addDays(invoice.issue_date ?? parisToday(), n)); }}>
+                            {DUE_PRESETS.map((n) => (
+                              <ToggleGroupItem key={n} value={String(n)} disabled={locked} title={`Due ${shortDate(addDays(invoice.issue_date ?? parisToday(), n))}`}>
+                                J+{n}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        </Field>
+                        <Field className="gap-1.5">
+                          <FieldLabel htmlFor="inv-po">Purchase order <span className="font-normal text-muted-foreground">(optional)</span></FieldLabel>
+                          <Input id="inv-po" value={purchaseOrder} maxLength={200} disabled={locked} onChange={(e) => setPurchaseOrder(e.target.value)} />
+                        </Field>
+                      </>
+                    ) : (
+                      <>
+                        <ReadField label="Issue date">{shortDate(invoice.issue_date)}</ReadField>
+                        {invoice.source === "imported" && (
+                          <Field className="gap-1.5">
+                            <FieldLabel htmlFor="inv-period">Billing month</FieldLabel>
+                            <div className="flex gap-2">
+                              <NativeSelect id="inv-period" className="min-w-0 flex-1" value={periodMonth} disabled={locked} onChange={(e) => setPeriodMonth(e.target.value)}>
+                                <NativeSelectOption value="">Issue month{invoice.issue_date ? ` (${monthLabel(invoice.issue_date)})` : ""}</NativeSelectOption>
+                                {periodOptions.map((m) => <NativeSelectOption key={m} value={m}>{monthLabel(m)}</NativeSelectOption>)}
+                              </NativeSelect>
+                              <Button variant="outline" className="h-10" disabled={locked || periodMonth === (invoice.period_month ?? "").slice(0, 7)} onClick={savePeriod}>
+                                {busy === "period" ? "Saving…" : "Save"}
+                              </Button>
+                            </div>
+                            <FieldDescription className="text-xs">The month the work was done.</FieldDescription>
+                          </Field>
+                        )}
+                        {invoice.source === "imported" && invoice.project_id && (
+                          <Field className="gap-1.5">
+                            <FieldLabel htmlFor="inv-consultant">Consultant</FieldLabel>
+                            <div className="flex gap-2">
+                              <NativeSelect id="inv-consultant" className="min-w-0 flex-1" value={consultantId} disabled={locked} onChange={(e) => setConsultantId(e.target.value)}>
+                                <NativeSelectOption value="">Not assigned</NativeSelectOption>
+                                {(detail.consultants ?? []).map((c) => <NativeSelectOption key={c.id} value={c.id}>{c.name}</NativeSelectOption>)}
+                              </NativeSelect>
+                              <Button variant="outline" className="h-10" disabled={locked || consultantId === (invoice.employee_id ?? "")} onClick={saveConsultant}>
+                                {busy === "consultant" ? "Saving…" : "Save"}
+                              </Button>
+                            </div>
+                            <FieldDescription className="text-xs">
+                              {detail.consultants?.length ? "Staffed on this project." : "Nobody is staffed on this project yet."}
+                            </FieldDescription>
+                          </Field>
+                        )}
+                        <ReadField label="Due date">{shortDate(invoice.due_date)}</ReadField>
+                        {invoice.purchase_order && <ReadField label="Purchase order">{invoice.purchase_order}</ReadField>}
+                        {invoice.sent_at && <ReadField label="Sent">{dateTime(invoice.sent_at)}</ReadField>}
+                        {invoice.paid_at && <ReadField label="Paid">{shortDate(invoice.paid_at)}</ReadField>}
+                      </>
+                    )}
+                  </div>
+                  {totals && (
+                    <dl className="m-0 flex flex-col gap-1.5 border-t border-border pt-4 text-sm">
+                      <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Total HT</dt><dd className="num m-0">{money(totals.ht, currency)}</dd></div>
+                      <div className="flex justify-between gap-4"><dt className="text-muted-foreground">VAT</dt><dd className="num m-0">{money(totals.vat, currency)}</dd></div>
+                      <div className="flex items-baseline justify-between gap-4 pt-1 text-base font-medium">
+                        <dt>Total TTC{dirty ? <span className="font-normal text-muted-foreground"> (unsaved)</span> : ""}</dt>
+                        <dd className="num m-0">{money(totals.ttc, currency)}</dd>
+                      </div>
+                    </dl>
+                  )}
+                  {invalid && <p role="alert" className="m-0 text-sm text-destructive">Quantities must be positive (up to 4 decimals) and prices have at most 2 decimals.</p>}
+                </CardContent>
+              </Card>
 
               {validated && (
-                <section className="pj-card">
-                  <div className="pj-card-head">
-                    <div>
-                      <h3 className="pj-card-title">Send</h3>
-                      <p className="pj-card-desc">
-                        {detail.recipients === null
-                          ? RECIPIENTS_UNREAD
-                          : detail.recipients.length
-                            ? `To ${detail.recipients.join(", ")}`
-                            : "This client has no invoice email in Qonto."}
-                      </p>
-                    </div>
-                  </div>
-                  {invoice.sent_at && <p className="inv-muted">Already sent on {dateTime(invoice.sent_at)}.</p>}
-                </section>
+                <Card size="sm">
+                  <CardHeader>
+                    <CardTitle>Send</CardTitle>
+                    <CardDescription>
+                      {detail.recipients === null
+                        ? RECIPIENTS_UNREAD
+                        : detail.recipients.length
+                          ? `To ${detail.recipients.join(", ")}`
+                          : "This client has no invoice email in Qonto."}
+                    </CardDescription>
+                  </CardHeader>
+                  {invoice.sent_at && <CardContent><p className="m-0 text-sm text-muted-foreground">Already sent on {dateTime(invoice.sent_at)}.</p></CardContent>}
+                </Card>
               )}
 
               {detail.events.length > 0 && (
-                <section className="inv-history">
-                  <h3 className="pj-card-title">History</h3>
-                  <ul>
+                <section aria-labelledby="inv-history-title" className="flex flex-col gap-2">
+                  <h3 id="inv-history-title" className="label-mono m-0">History</h3>
+                  <ul className="m-0 flex list-none flex-col divide-y divide-border p-0 text-sm">
                     {detail.events.map((ev) => (
-                      <li key={ev.id}><span>{ev.kind.replace(/_/g, " ")}</span><span className="inv-muted">{dateTime(ev.created_at)}</span></li>
+                      <li key={ev.id} className="flex justify-between gap-4 py-2 first:pt-0">
+                        <span className="first-letter:uppercase">{ev.kind.replace(/_/g, " ")}</span>
+                        <span className="num shrink-0 text-xs text-muted-foreground">{dateTime(ev.created_at)}</span>
+                      </li>
                     ))}
                   </ul>
                 </section>
@@ -414,108 +443,123 @@ export function InvoiceDraftPanel({
         </div>
 
         {detail && invoice && !deleted && (
-          <footer className="inv-sheet-foot">
+          <SheetFooter className="flex-row flex-wrap justify-end">
             {invoice.status === "draft" && (
-              <button type="button" className="pj-btn pj-btn-ghost inv-danger" disabled={locked} onClick={() => setConfirm("delete")}>
-                <Trash2 size={14} /> Delete draft
-              </button>
+              <Button variant="ghost" className="mr-auto text-destructive hover:text-destructive" disabled={locked} onClick={() => setConfirm("delete")}>
+                <Trash2 data-icon="inline-start" /> Delete draft
+              </Button>
             )}
             {editable && (
-              <button type="button" className="pj-btn pj-btn-ghost" disabled={locked} onClick={regenerate}>
-                <RefreshCw size={14} /> {busy === "regenerate" ? "Regenerating…" : "Regenerate"}
-              </button>
+              <Button variant="outline" disabled={locked} onClick={regenerate}>
+                <RefreshCw data-icon="inline-start" /> {busy === "regenerate" ? "Regenerating…" : "Regenerate"}
+              </Button>
             )}
             {editable && (
-              <button type="button" className="pj-btn pj-btn-ghost" disabled={locked || !dirty || invalid} data-save-shortcut onClick={save}>
+              <Button variant="outline" disabled={locked || !dirty || invalid} data-save-shortcut onClick={save}>
                 {busy === "save" ? "Saving…" : "Save changes"}
-              </button>
+              </Button>
             )}
             {invoice.status === "draft" && invoice.provider_invoice_id && (
-              <button type="button" className="pj-btn pj-btn-primary" disabled={locked || dirty}
+              <Button disabled={locked || dirty}
                 title={dirty ? "Save your changes before validating." : undefined} onClick={() => setConfirm("validate")}>
                 {busy === "validate" ? "Validating…" : "Validate"}
-              </button>
+              </Button>
             )}
             {invoice.status === "finalized" && (
-              <button type="button" className="pj-btn pj-btn-ghost inv-danger" disabled={locked} onClick={() => setConfirm("cancel")}>
+              <Button variant="ghost" className="mr-auto text-destructive hover:text-destructive" disabled={locked} onClick={() => setConfirm("cancel")}>
                 {busy === "cancel" ? "Canceling…" : "Cancel invoice"}
-              </button>
+              </Button>
             )}
             {invoice.invoice_url && (
-              <a className="pj-btn pj-btn-ghost" href={invoice.invoice_url} target="_blank" rel="noreferrer">
-                <ExternalLink size={14} /> Open in Qonto
+              <a className={linkButton({ variant: "outline" })} href={invoice.invoice_url} target="_blank" rel="noreferrer">
+                <ExternalLink data-icon="inline-start" /> Open in Qonto
               </a>
             )}
             {validated && (
-              <button type="button" className="pj-btn pj-btn-primary" disabled={locked || !detail.recipients || detail.recipients.length === 0}
+              <Button disabled={locked || !detail.recipients || detail.recipients.length === 0}
                 title={detail.recipients === null ? RECIPIENTS_UNREAD : undefined}
                 onClick={() => setConfirm(invoice.sent_at ? "resend" : "send")}>
-                <Send size={14} /> {busy === "send" ? "Sending…" : invoice.sent_at ? "Resend" : "Send"}
-              </button>
+                <Send data-icon="inline-start" /> {busy === "send" ? "Sending…" : invoice.sent_at ? "Resend" : "Send"}
+              </Button>
             )}
-          </footer>
+          </SheetFooter>
         )}
 
-        {confirm && invoice && totals && (
-          <div className="inv-confirm-backdrop">
-            <div className="inv-confirm" role="alertdialog" aria-modal="true" aria-labelledby="inv-confirm-title">
-              {confirm === "validate" && (
-                <>
-                  <h3 id="inv-confirm-title">Validate this invoice?</h3>
-                  <p>Qonto will assign a number and the invoice can no longer be edited, only canceled.</p>
-                  {invoice.source === "imported" && <p className="inv-error-text">This draft was imported from Qonto, not created from a CRA.</p>}
-                  <p className="inv-confirm-amount">{money(invoice.total_ttc, currency)} <span>TTC</span></p>
-                </>
-              )}
-              {confirm === "delete" && (
-                <>
-                  <h3 id="inv-confirm-title">Delete this draft?</h3>
-                  <p>{invoice.provider_invoice_id ? "It is deleted in Qonto and here." : "It only exists here; nothing is sent to Qonto."}</p>
-                </>
-              )}
-              {confirm === "cancel" && (
-                <>
-                  <h3 id="inv-confirm-title">Cancel invoice {invoice.number}?</h3>
-                  <p>The {money(invoice.total_ttc, currency)} TTC invoice is canceled in Qonto. This cannot be undone.</p>
-                </>
-              )}
-              {confirm === "send" && (
-                <>
-                  <h3 id="inv-confirm-title">Send invoice {invoice.number}?</h3>
-                  <p>Qonto emails the {money(invoice.total_ttc, currency)} TTC invoice to:</p>
-                  <ul className="inv-confirm-list">
-                    {(detail?.recipients ?? []).map((r) => <li key={r}>{r}</li>)}
-                  </ul>
-                </>
-              )}
-              {confirm === "resend" && (
-                <>
-                  <h3 id="inv-confirm-title">Send this invoice again?</h3>
-                  <p>It was already sent on {dateTime(invoice.sent_at)}. It will be emailed again to {detail?.recipients?.join(", ") || "the client's Qonto emails"}.</p>
-                </>
-              )}
-              <div className="inv-confirm-actions">
-                <button type="button" className="pj-btn pj-btn-ghost" disabled={locked} onClick={() => setConfirm(null)}>Back</button>
-                <button
-                  type="button"
-                  className={`pj-btn ${confirm === "validate" || confirm === "send" || confirm === "resend" ? "pj-btn-primary" : "pj-btn-ghost inv-danger"}`}
-                  disabled={locked}
-                  onClick={() => {
-                    if (confirm === "validate") void validate();
-                    else if (confirm === "delete") void remove();
-                    else if (confirm === "cancel") void cancel();
-                    else void send(confirm === "resend");
-                  }}
-                >
-                  {locked
-                    ? "Working…"
-                    : confirm === "validate" ? "Validate" : confirm === "delete" ? "Delete draft" : confirm === "cancel" ? "Cancel invoice" : confirm === "send" ? "Send" : "Send again"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </aside>
+        <AlertDialog open={!!(confirm && invoice && totals)} onOpenChange={(open) => { if (!open && !locked) setConfirm(null); }}>
+          <AlertDialogContent>
+            {confirm && invoice && (
+              <>
+                <AlertDialogHeader>
+                  {confirm === "validate" && (
+                    <>
+                      <AlertDialogTitle>Validate this invoice?</AlertDialogTitle>
+                      <AlertDialogDescription>Qonto will assign a number and the invoice can no longer be edited, only canceled.</AlertDialogDescription>
+                      {invoice.source === "imported" && <p className="m-0 text-sm text-destructive">This draft was imported from Qonto, not created from a CRA.</p>}
+                      <p className="num m-0 pt-2 text-2xl font-medium">{money(invoice.total_ttc, currency)} <span className="text-sm text-muted-foreground">TTC</span></p>
+                    </>
+                  )}
+                  {confirm === "delete" && (
+                    <>
+                      <AlertDialogTitle>Delete this draft?</AlertDialogTitle>
+                      <AlertDialogDescription>{invoice.provider_invoice_id ? "It is deleted in Qonto and here." : "It only exists here; nothing is sent to Qonto."}</AlertDialogDescription>
+                    </>
+                  )}
+                  {confirm === "cancel" && (
+                    <>
+                      <AlertDialogTitle>Cancel invoice {invoice.number}?</AlertDialogTitle>
+                      <AlertDialogDescription>The {money(invoice.total_ttc, currency)} TTC invoice is canceled in Qonto. This cannot be undone.</AlertDialogDescription>
+                    </>
+                  )}
+                  {confirm === "send" && (
+                    <>
+                      <AlertDialogTitle>Send invoice {invoice.number}?</AlertDialogTitle>
+                      <AlertDialogDescription>Qonto emails the {money(invoice.total_ttc, currency)} TTC invoice to:</AlertDialogDescription>
+                      <ul className="m-0 list-none p-0 text-sm">
+                        {(detail?.recipients ?? []).map((r) => <li key={r} className="num">{r}</li>)}
+                      </ul>
+                    </>
+                  )}
+                  {confirm === "resend" && (
+                    <>
+                      <AlertDialogTitle>Send this invoice again?</AlertDialogTitle>
+                      <AlertDialogDescription>It was already sent on {dateTime(invoice.sent_at)}. It will be emailed again to {detail?.recipients?.join(", ") || "the client's Qonto emails"}.</AlertDialogDescription>
+                    </>
+                  )}
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={locked}>Back</AlertDialogCancel>
+                  <Button
+                    variant={confirm === "validate" || confirm === "send" || confirm === "resend" ? "default" : "destructive"}
+                    disabled={locked}
+                    onClick={() => {
+                      if (confirm === "validate") void validate();
+                      else if (confirm === "delete") void remove();
+                      else if (confirm === "cancel") void cancel();
+                      else void send(confirm === "resend");
+                    }}
+                  >
+                    {locked
+                      ? "Working…"
+                      : confirm === "validate" ? "Validate" : confirm === "delete" ? "Delete draft" : confirm === "cancel" ? "Cancel invoice" : confirm === "send" ? "Send" : "Send again"}
+                  </Button>
+                </AlertDialogFooter>
+              </>
+            )}
+          </AlertDialogContent>
+        </AlertDialog>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// Edited values that differ from the CRA computation.
+const changedInput = "border-warning ring-2 ring-warning/20 hover:border-warning";
+
+function ReadField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium">{label}</span>
+      <span className="text-sm text-muted-foreground">{children}</span>
     </div>
   );
 }

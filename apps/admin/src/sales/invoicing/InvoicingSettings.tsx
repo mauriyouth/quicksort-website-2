@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { db, errorMessage } from "@quicksort/hr-db";
-import { Notice } from "@quicksort/hr-ui";
+import { cn } from "cn";
+import { Button, Field, FieldLabel, Input, NativeSelect, NativeSelectOption, Switch } from "@quicksort-sas/ui";
+import { PageAlerts } from "../../ui";
+import { ConnectionBadge, Hint, SettingsCard, SettingsRow } from "../../settings-ui";
 import { storedPricingLines } from "../pricing-lines";
 import { errorText, type InvoicingApi } from "./api";
 import { previousMonth } from "./format";
 import { ServicePicker } from "./ServicePicker";
+import "../sales.css"; // ServicePicker (client-picker styles)
 import type { ClientLink, InvoicingSettings as Settings, PaymentAccount, ProductLink, ProviderClient, ProviderProduct } from "./types";
 
 type RegieProject = { id: string; title: string; client_id: string; intermediary_client_id: string | null; status: string; lines: string[] };
@@ -162,132 +166,114 @@ export function InvoicingSettings({ api, focus, onSaved }: { api: InvoicingApi; 
   const connected = !!settings?.hasSecret;
   const locked = busy !== null;
 
-  return (
-    <div className="inv-settings">
-      <Notice error>{error}</Notice>
-      <Notice>{message}</Notice>
+  const row = "grid scroll-mt-24 gap-2 py-3 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] md:items-center md:gap-8";
+  const focused = "-mx-3 rounded-md bg-muted px-3 first:pt-3 last:pb-3";
 
-      <form className="pj-card" onSubmit={save} aria-label="Qonto connection">
-        <div className="pj-card-head">
-          <div>
-            <h2 className="pj-card-title">Qonto connection</h2>
-            <p className="pj-card-desc">API credentials from Qonto → Settings → Integrations. The secret key is stored encrypted and never shown again.</p>
-          </div>
-          <span className={`inv-status ${connected ? "inv-status--validated" : "inv-status--draft"}`}>{settings ? (connected ? "Connected" : "Not connected") : "Checking…"}</span>
-        </div>
-        <div className="pj-grid pj-grid-2">
-          <label className="pj-field">
-            <span className="pj-label">Login</span>
-            <input value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="off" placeholder="organisation-slug-1234" disabled={locked} />
-          </label>
-          <label className="pj-field">
-            <span className="pj-label">Secret key</span>
-            <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="new-password"
+  return (
+    <div className="flex flex-col gap-4">
+      <PageAlerts error={error} message={message} />
+
+      <form onSubmit={save} aria-label="Qonto connection">
+        <SettingsCard
+          title="Qonto connection"
+          description="API credentials from Qonto → Settings → Integrations. The secret key is stored encrypted and never shown again."
+          action={<ConnectionBadge tone={connected ? "ok" : "neutral"}>{settings ? (connected ? "Connected" : "Not connected") : "Checking…"}</ConnectionBadge>}
+          footer={
+            <>
+              <Hint>Saving with a new secret key checks it with Qonto first.</Hint>
+              <Button type="submit" variant="pivot" disabled={locked || !formValid}>
+                {busy === "settings" ? (secret.trim() ? "Checking with Qonto…" : "Saving…") : "Save settings"}
+              </Button>
+            </>
+          }
+        >
+          <SettingsRow label="Login">
+            <Input aria-label="Login" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="off" placeholder="organisation-slug-1234" disabled={locked} />
+          </SettingsRow>
+          <SettingsRow label="Secret key">
+            <Input aria-label="Secret key" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="new-password"
               placeholder={connected ? "Saved — type a new key to replace it" : "Paste the secret key"} disabled={locked} />
-          </label>
-          <label className="pj-field">
-            <span className="pj-label">Main account (IBAN)</span>
+          </SettingsRow>
+          <SettingsRow label="Main account (IBAN)" hint={<span className={accountsError ? "text-destructive" : undefined}>{accountsError || (connected ? "Payments are expected on this account." : "Accounts are listed once Qonto is connected.")}</span>}>
             {accounts && accounts.length > 0 ? (
-              <select value={iban} onChange={(e) => setIban(e.target.value)} disabled={locked}>
-                <option value="">Choose an account</option>
-                {!accounts.some((a) => a.iban === iban) && iban && <option value={iban}>{iban}</option>}
-                {accounts.map((a) => <option key={a.iban} value={a.iban}>{a.name} · {a.iban}</option>)}
-              </select>
+              <NativeSelect aria-label="Main account (IBAN)" className="w-full" value={iban} onChange={(e) => setIban(e.target.value)} disabled={locked}>
+                <NativeSelectOption value="">Choose an account</NativeSelectOption>
+                {!accounts.some((a) => a.iban === iban) && iban && <NativeSelectOption value={iban}>{iban}</NativeSelectOption>}
+                {accounts.map((a) => <NativeSelectOption key={a.iban} value={a.iban}>{a.name} · {a.iban}</NativeSelectOption>)}
+              </NativeSelect>
             ) : (
-              <input value={iban} onChange={(e) => setIban(e.target.value)} placeholder="FR76…" disabled={locked} />
+              <Input aria-label="Main account (IBAN)" className="num" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="FR76…" disabled={locked} />
             )}
-            <span className="pj-field-help">{accountsError || (connected ? "Payments are expected on this account." : "Accounts are listed once Qonto is connected.")}</span>
-          </label>
-          <label className="pj-field">
-            <span className="pj-label">Payment terms (days)</span>
-            <input type="number" min={1} max={120} value={dueDays} onChange={(e) => setDueDays(e.target.value)} disabled={locked} />
-          </label>
-          <label className="pj-field">
-            <span className="pj-label">Invoice CRA from</span>
-            <input type="month" value={startMonth} onChange={(e) => setStartMonth(e.target.value)} disabled={locked} />
-            <span className="pj-field-help">Months before this one never show up in To invoice.</span>
-          </label>
-          <div className="pj-field">
-            <span className="pj-label">Environment</span>
-            <label className="inv-check">
-              <input type="checkbox" checked={staging} onChange={(e) => setStaging(e.target.checked)} disabled={locked} />
+          </SettingsRow>
+          <SettingsRow label="Payment terms (days)">
+            <Input aria-label="Payment terms (days)" className="num w-28" type="number" min={1} max={120} value={dueDays} onChange={(e) => setDueDays(e.target.value)} disabled={locked} />
+          </SettingsRow>
+          <SettingsRow label="Invoice CRA from" hint="Months before this one never show up in To invoice.">
+            <Input aria-label="Invoice CRA from" className="w-48" type="month" value={startMonth} onChange={(e) => setStartMonth(e.target.value)} disabled={locked} />
+          </SettingsRow>
+          <SettingsRow label="Environment">
+            <label className="flex w-fit items-center gap-2.5 text-sm">
+              <Switch checked={staging} onCheckedChange={(v) => setStaging(v === true)} disabled={locked} />
               Use the Qonto sandbox
             </label>
-          </div>
-          {staging && (
-            <label className="pj-field">
-              <span className="pj-label">Sandbox staging token</span>
-              <input type="password" value={stagingToken} onChange={(e) => setStagingToken(e.target.value)} autoComplete="new-password"
-                placeholder={connected ? "Saved — type a new token to replace it" : "Paste the staging token"} disabled={locked} />
-            </label>
-          )}
-        </div>
-        <div className="inv-form-foot">
-          <button type="submit" className="pj-btn pj-btn-primary" disabled={locked || !formValid}>
-            {busy === "settings" ? (secret.trim() ? "Checking with Qonto…" : "Saving…") : "Save settings"}
-          </button>
-        </div>
+            {staging && (
+              <Field className="gap-1.5">
+                <FieldLabel htmlFor="inv-staging-token">Sandbox staging token</FieldLabel>
+                <Input id="inv-staging-token" type="password" value={stagingToken} onChange={(e) => setStagingToken(e.target.value)} autoComplete="new-password"
+                  placeholder={connected ? "Saved — type a new token to replace it" : "Paste the staging token"} disabled={locked} />
+              </Field>
+            )}
+          </SettingsRow>
+        </SettingsCard>
       </form>
 
-      <section className="pj-card" id="inv-client-links" aria-label="Client links">
-        <div className="pj-card-head">
-          <div>
-            <h2 className="pj-card-title">Clients</h2>
-            <p className="pj-card-desc">Each billed client (or intermediary) must match a client in Qonto. Its invoice emails come from Qonto.</p>
-          </div>
-        </div>
-        {!connected ? (
-          <p className="inv-muted">Connect Qonto to link clients.</p>
-        ) : !qontoClients ? (
-          <p className="inv-muted">{linksError || "Loading Qonto clients…"}</p>
-        ) : billedClients.length === 0 ? (
-          <p className="inv-muted">No client is billed on a régie project yet.</p>
-        ) : (
-          <div className="inv-map">
-            {billedClients.map((c) => {
+      <div id="inv-client-links">
+        <SettingsCard title="Clients" description="Each billed client (or intermediary) must match a client in Qonto. Its invoice emails come from Qonto.">
+          {!connected ? (
+            <Hint>Connect Qonto to link clients.</Hint>
+          ) : !qontoClients ? (
+            <Hint>{linksError || "Loading Qonto clients…"}</Hint>
+          ) : billedClients.length === 0 ? (
+            <Hint>No client is billed on a régie project yet.</Hint>
+          ) : (
+            billedClients.map((c) => {
               const link = clientLinks.find((l) => l.client_id === c.id);
               const missing = link && !qontoClients.some((q) => q.id === link.provider_client_id);
               return (
-                <label className={`inv-map-row${focus === `client-${c.id}` ? " inv-focus" : ""}`} key={c.id} id={`client-${c.id}`}>
-                  <span className="inv-map-name">{c.name}</span>
-                  <select value={link?.provider_client_id ?? ""} disabled={locked} onChange={(e) => void linkClient(c.id, e.target.value)}>
-                    <option value="">Not linked</option>
-                    {missing && <option value={link.provider_client_id}>{link.provider_client_name || link.provider_client_id} (not found in Qonto)</option>}
+                <div className={cn(row, focus === `client-${c.id}` && focused)} key={c.id} id={`client-${c.id}`}>
+                  <label htmlFor={`inv-client-${c.id}`} className="text-sm font-medium">{c.name}</label>
+                  <NativeSelect id={`inv-client-${c.id}`} className="w-full" value={link?.provider_client_id ?? ""} disabled={locked} onChange={(e) => void linkClient(c.id, e.target.value)}>
+                    <NativeSelectOption value="">Not linked</NativeSelectOption>
+                    {missing && <NativeSelectOption value={link.provider_client_id}>{link.provider_client_name || link.provider_client_id} (not found in Qonto)</NativeSelectOption>}
                     {qontoClients.map((q) => (
-                      <option key={q.id} value={q.id}>{q.name}{q.emails.length ? ` · ${q.emails[0]}` : " · no invoice email"}</option>
+                      <NativeSelectOption key={q.id} value={q.id}>{q.name}{q.emails.length ? ` · ${q.emails[0]}` : " · no invoice email"}</NativeSelectOption>
                     ))}
-                  </select>
-                </label>
+                  </NativeSelect>
+                </div>
               );
-            })}
-          </div>
-        )}
-      </section>
+            })
+          )}
+        </SettingsCard>
+      </div>
 
-      <section className="pj-card" id="inv-product-links" aria-label="Service links">
-        <div className="pj-card-head">
-          <div>
-            <h2 className="pj-card-title">Services</h2>
-            <p className="pj-card-desc">Each pricing line of a régie project bills as a Qonto service (title, description and VAT come from it).</p>
-          </div>
-        </div>
-        {!connected ? (
-          <p className="inv-muted">Connect Qonto to link services.</p>
-        ) : !products ? (
-          <p className="inv-muted">{linksError || "Loading Qonto services…"}</p>
-        ) : projects.length === 0 ? (
-          <p className="inv-muted">No régie project yet.</p>
-        ) : (
-          <div className="inv-map">
-            {projects.map((p) => (
-              <div className={`inv-map-group${focus === `project-${p.id}` ? " inv-focus" : ""}`} key={p.id} id={`project-${p.id}`}>
-                <span className="inv-map-group-title">{p.title}</span>
-                {p.lines.length === 0 && <span className="inv-muted">No pricing line on this project.</span>}
+      <div id="inv-product-links">
+        <SettingsCard title="Services" description="Each pricing line of a régie project bills as a Qonto service (title, description and VAT come from it).">
+          {!connected ? (
+            <Hint>Connect Qonto to link services.</Hint>
+          ) : !products ? (
+            <Hint>{linksError || "Loading Qonto services…"}</Hint>
+          ) : projects.length === 0 ? (
+            <Hint>No régie project yet.</Hint>
+          ) : (
+            projects.map((p) => (
+              <div className={cn("flex scroll-mt-24 flex-col gap-2 py-4 first:pt-0 last:pb-0", focus === `project-${p.id}` && focused)} key={p.id} id={`project-${p.id}`}>
+                <span className="text-sm font-medium">{p.title}</span>
+                {p.lines.length === 0 && <Hint>No pricing line on this project.</Hint>}
                 {p.lines.map((name) => {
                   const link = productLinks.find((l) => l.project_id === p.id && l.pricing_line === name);
                   return (
-                    <div className="inv-map-row" key={name || "unnamed"}>
-                      <span className="inv-map-name">{name || "Unnamed line"}</span>
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] md:items-center md:gap-8" key={name || "unnamed"}>
+                      <span className="text-sm text-muted-foreground">{name || "Unnamed line"}</span>
                       {name ? (
                         <ServicePicker
                           products={products}
@@ -297,16 +283,16 @@ export function InvoicingSettings({ api, focus, onSaved }: { api: InvoicingApi; 
                           onChange={(id) => void linkProduct(p.id, name, id)}
                         />
                       ) : (
-                        <span className="inv-muted">Name this pricing line on the project to link it.</span>
+                        <Hint>Name this pricing line on the project to link it.</Hint>
                       )}
                     </div>
                   );
                 })}
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+            ))
+          )}
+        </SettingsCard>
+      </div>
     </div>
   );
 }

@@ -1,1 +1,18 @@
-{"extends":"../../tsconfig.base.json","compilerOptions":{"types":["vite/client","node"],"allowImportingTsExtensions":true,"rewriteRelativeImportExtensions":true},"include":["src","api","../../packages/hr-db/src","../../packages/hr-ui/src"]}
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"],
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    // Admin runs React 19; the shared workspace packages still ship React 18
+    // types for the other apps. Resolve every `react` import (including the
+    // ones inside packages/*) to admin's own copy so there is one React.
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
+    }
+  },
+  "include": ["src", "api", "../../packages/hr-db/src", "../../packages/hr-ui/src"]
+}

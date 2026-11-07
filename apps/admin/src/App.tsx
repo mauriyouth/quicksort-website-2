@@ -13,6 +13,7 @@ import { DocumentAlerts } from "./documents/DocumentAlerts";
 import { OpsBoard } from "./ops/OpsBoard";
 import { PipelineBoard } from "./sales/PipelineBoard";
 import { SalesDashboard } from "./sales/SalesDashboard";
+import { AdminShell } from "./AdminShell";
 import { SectionHeader, SALES_TABS, HR_TABS, OPS_TABS, type SectionTab } from "./SectionHeader";
 import { SettingsPage, type SettingsSection } from "./SettingsPage";
 import { Clients } from "./sales/Clients";
@@ -77,7 +78,6 @@ import { useAuth } from "@quicksort/hr-db/auth";
 import {
   resolvePortalRoute,
   AuthGate,
-  Shell,
   Stat,
   Notice,
   Empty,
@@ -208,14 +208,14 @@ function StaffingWorkspace({ email }: { email: string }) {
     const item = staffingNav.find(n => n.id === id);
     if (item) routerNavigate(item.href);
   }
-  return <Shell portal="Staffing" email={email} nav={staffingNav} current={tab} onNavigate={navigate} hideSubmenu hideTopbar>
-    <SectionHeader label={tab === "account" ? "Settings" : "People"} current={tab} onNavigate={navigate} />
+  return <AdminShell portal="Staffing" email={email} nav={staffingNav} current={tab} onNavigate={navigate}
+    header={<SectionHeader label={tab === "account" ? "Settings" : "People"} current={tab} onNavigate={navigate} />}>
     <Routes>
       <Route path="/" element={<Navigate to="/hr/people" replace />} />
       <Route path="/settings" element={<AccountSecurity />} />
       <Route path="/hr/people/*" element={<HrWorkspace view="people" actorEmail={email} role="sales" />} />
     </Routes>
-  </Shell>;
+  </AdminShell>;
 }
 function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role: "hr" | "admin" }) {
   const workspaceNav = role === "hr" ? nav.filter(item => item.id === "hr" || item.id === "account") : isOwner ? ownerNav : nav;
@@ -532,25 +532,20 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
           ? SETTINGS_TABS
           : [];
   return (
-    <Shell
+    <AdminShell
       portal="Admin"
       email={email}
       nav={workspaceNav}
       current={tab}
       onNavigate={navigate}
-      hideSubmenu
-      hideTopbar
-      sidebarAction={
-        <button
-          type="button"
-          className="spotlight-trigger"
-          onClick={() => setSpotlightOpen(true)}
-          title="Search the workspace (⌘P)"
-        >
-          <Search size={16} />
-          <span>Search</span>
-          <kbd>⌘P</kbd>
-        </button>
+      onSearch={() => setSpotlightOpen(true)}
+      header={
+        <SectionHeader
+          label={headerLabel}
+          tabs={headerTabs}
+          current={tab === "account" ? settingsSection : headerCurrent}
+          onNavigate={navigate}
+        />
       }
     >
       <SpotlightSearch
@@ -568,12 +563,6 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
       />
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
-      <SectionHeader
-        label={headerLabel}
-        tabs={headerTabs}
-        current={tab === "account" ? settingsSection : headerCurrent}
-        onNavigate={navigate}
-      />
       {/* Pages render only for routes the current role can see; unknown
           paths fall through to the shell's not-found state (tab resolution). */}
       {tab !== "not-found" && (
@@ -1159,6 +1148,6 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
           Refreshing workspace…
         </p>
       )}
-    </Shell>
+    </AdminShell>
   );
 }

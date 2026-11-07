@@ -1,5 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Pin React types to this app's copy: admin runs React 19, and pnpm's
+    // hidden hoist would otherwise hand 19's types to shared dependencies.
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
+    }
+  },
   "include": [
     "src",
     "../../packages/candidate-db/src",

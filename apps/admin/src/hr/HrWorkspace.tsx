@@ -355,7 +355,9 @@ function PersonPage({
               </div>
             </div>
           </div>
-          <dl className="hr-person-stats">
+          {/* Staffing, CRA and leave only exist once there is an employment —
+              candidates and talent-pool people have none to show. */}
+          {employees.length > 0 && <dl className="hr-person-stats">
             <div>
               <dt>Default assignment</dt>
               <dd>{defaultAssignment}</dd>
@@ -372,7 +374,7 @@ function PersonPage({
               <dt>RTT balance</dt>
               <dd>{balanceError ? 'unavailable' : employees.length ? `${fmtDays(rttLeft)} days` : '—'}</dd>
             </div>
-          </dl>
+          </dl>}
         </section>
       </div>
     </header>

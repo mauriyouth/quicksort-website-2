@@ -1,9 +1,9 @@
 {
-  "name": "@quicksort/design-system",
+  "name": "@quicksort-sas/design-system",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Quicksort design system — brand tokens (light/dark), theme helpers, ThemeToggle, Logo, and UI primitives. Extracted from the Quicksort identity system (apps/web/quicksort-design-system).",
+  "license": "UNLICENSED",
   "exports": {
     ".": "./src/index.ts",
     "./tokens.css": "./src/tokens.css",
@@ -11,13 +11,42 @@
     "./styles.css": "./src/styles.css",
     "./assets/*": "./assets/*"
   },
+  "files": [
+    "dist",
+    "assets",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/*.css dist/",
+    "prepublishOnly": "pnpm run build"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./tokens.css": "./dist/tokens.css",
+      "./components.css": "./dist/components.css",
+      "./styles.css": "./dist/styles.css",
+      "./assets/*": "./assets/*"
+    }
+  },
   "peerDependencies": {
     "react": "^18.2.0"
   },
-  "devDependencies": {
-    "@types/react": "18.2.0"
-  },
   "dependencies": {
     "lucide-react": "0.453.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.0",
+    "typescript": "5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mauriyouth/quicksort-website-2.git",
+    "directory": "packages/design-system"
   }
 }

@@ -39,7 +39,7 @@ export async function startComponentHarness(entry: string) {
         { find: '@clerk/react', replacement: join(root, 'clerk.tsx') },
         { find: /^@quicksort\/hr-db$/, replacement: join(repo, 'packages/hr-db/src/index.ts') },
         { find: '@quicksort/hr-ui', replacement: join(repo, 'packages/hr-ui/src') },
-        { find: '@quicksort/design-system', replacement: join(repo, 'packages/design-system/src') },
+        { find: '@quicksort-sas/design-system', replacement: join(repo, 'packages/design-system/src') },
         { find: 'react-dom', replacement: join(repo, 'apps/admin/node_modules/react-dom') },
         { find: 'react', replacement: join(repo, 'apps/admin/node_modules/react') },
       ],

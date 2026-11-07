@@ -1,4 +1,4 @@
-# @quicksort/design-system
+# @quicksort-sas/design-system
 
 React component library for the Quicksort brand, extracted from the identity
 system in `apps/web/quicksort-design-system` (the standalone
@@ -19,9 +19,9 @@ source — this package is built from the source, not the bundle).
 
 ```tsx
 // once in the app entry
-import "@quicksort/design-system/styles.css";
+import "@quicksort-sas/design-system/styles.css";
 
-import { ThemeToggle, Button, Card, Pill, restoreTheme } from "@quicksort/design-system";
+import { ThemeToggle, Button, Card, Pill, restoreTheme } from "@quicksort-sas/design-system";
 
 // early, to avoid a flash of the wrong mode (or use an inline <head> script)
 restoreTheme("dark");

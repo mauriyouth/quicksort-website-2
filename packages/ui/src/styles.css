@@ -1,5 +1,5 @@
-@import "@quicksort/design-system/tokens.css";
-@import "@quicksort/design-system/components.css";
+@import "@quicksort-sas/design-system/tokens.css";
+@import "@quicksort-sas/design-system/components.css";
 @import "./brand.css";
 * {
   box-sizing: border-box;

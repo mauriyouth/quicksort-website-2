@@ -7,8 +7,8 @@ export {
   setTheme,
   restoreTheme,
   type QuicksortTheme,
-} from "@quicksort/design-system";
-import { ThemeToggle } from "@quicksort/design-system";
+} from "@quicksort-sas/design-system";
+import { ThemeToggle } from "@quicksort-sas/design-system";
 import { useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowUpRight,

@@ -8,10 +8,10 @@ export {
   setTheme,
   restoreTheme,
   type QuicksortTheme,
-} from "@quicksort/design-system";
+} from "@quicksort-sas/design-system";
 import {
   ThemeToggle,
-} from "@quicksort/design-system";
+} from "@quicksort-sas/design-system";
 import { SignIn, useClerk } from "@clerk/react";
 import { useEffect, useState, type ReactNode } from "react";
 import {

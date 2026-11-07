@@ -2,13 +2,13 @@
    QUICKSORT · DESIGN SYSTEM · TOKENS
    Extracted from the Quicksort identity system
    (apps/web/quicksort-design-system/colors_and_type.css).
-   Type pairing: Inter (UI / wordmark) + Hanken Grotesk (display).
+   Type pairing: Host Grotesk (headlines and text) + Martian Mono
+   (labels, numbers and the wordmark). Weights 400 and 500 only.
    Core palette: Rich Black, Dim Gray, Timberwolf, Seasalt, Signal Lime.
    ───────────────────────────────────────────────────────────────── */
 
-/* Webfonts — loaded from Google Fonts. Inter Medium stands in for the
-   Helvetica Neue Medium used once in the source file (see README). */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Hanken+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Webfonts — loaded from Google Fonts. Weights 400 and 500 only. */
+@import url('https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&family=Martian+Mono:wght@400;500&display=swap');
 
 :root {
   /* ── Primitive palette ────────────────────────────────────── */
@@ -42,9 +42,9 @@
   --qs-border-inv-strong: rgba(250,250,250,0.24);
 
   /* ── Type families ────────────────────────────────────────── */
-  --qs-font-display: 'Hanken Grotesk', 'Inter', Arial, sans-serif;
-  --qs-font-sans:    'Inter', Arial, sans-serif;
-  --qs-font-mono:    'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+  --qs-font-display: 'Host Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  --qs-font-sans:    'Host Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  --qs-font-mono:    'Martian Mono', 'SF Mono', ui-monospace, monospace;
 
   /* ── Type scale (slide-native, 1920×1080) ─────────────────── */
   --qs-fs-hero:    90px;  /* wordmark-scale */
@@ -214,7 +214,6 @@
   line-height: var(--qs-leading-normal);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-feature-settings: "ss01", "cv11";
 }
 
 .qs-type h1, .qs-h1 {
@@ -253,10 +252,10 @@
   text-wrap: pretty;
 }
 .qs-eyebrow {
-  font-family: var(--qs-font-sans);
-  font-weight: 500;
+  font-family: var(--qs-font-mono);
+  font-weight: 400;
   font-size: var(--qs-fs-xs);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--qs-fg-3);
 }

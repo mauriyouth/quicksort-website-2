@@ -73,10 +73,10 @@ export function Logo({
       <span
         aria-hidden="true"
         style={{
-          fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
-          fontWeight: 500,
-          fontSize: size * 0.82,
-          letterSpacing: "-0.03em",
+          fontFamily: "'Martian Mono', 'SF Mono', ui-monospace, monospace",
+          fontWeight: 400,
+          fontSize: size * 0.72,
+          letterSpacing: "-0.02em",
           lineHeight: 1,
           color: ink,
         }}

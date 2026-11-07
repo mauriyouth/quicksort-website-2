@@ -1,6 +1,6 @@
-export { ThemeToggle, type ThemeToggleProps } from "./ThemeToggle";
-export { Logo, LogoMark } from "./Logo";
-export { getTheme, setTheme, restoreTheme, type QuicksortTheme } from "./theme";
+export { ThemeToggle, type ThemeToggleProps } from "./ThemeToggle.js";
+export { Logo, LogoMark } from "./Logo.js";
+export { getTheme, setTheme, restoreTheme, type QuicksortTheme } from "./theme.js";
 export {
   Button,
   Card,
@@ -14,4 +14,4 @@ export {
   Field,
   ListRow,
   type ButtonProps,
-} from "./primitives";
+} from "./primitives.js";

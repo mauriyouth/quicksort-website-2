@@ -1,7 +1,7 @@
 /* ── Date picker (DateField.tsx) ──────────────────────────────
    Shared across the admin app. Field chrome matches .qs-input;
    popover is styled with design-system tokens from
-   @quicksort/hr-ui / @quicksort/design-system. */
+   @quicksort/hr-ui / @quicksort-sas/design-system. */
 .date-field-root {
   position: relative;
 }

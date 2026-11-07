@@ -7,7 +7,7 @@ import type {
 import { CircleHelp, type LucideIcon } from "lucide-react";
 
 /* React wrappers for the .qs-* classes in components.css.
-   Import "@quicksort/design-system/components.css" once in the app. */
+   Import "@quicksort-sas/design-system/components.css" once in the app. */
 
 export function cn(...parts: Array<string | false | undefined>): string {
   return parts.filter(Boolean).join(" ");

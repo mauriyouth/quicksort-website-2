@@ -1,5 +1,5 @@
 /* Portal theme for the admin/HR portals.
-   Alias layer over @quicksort/design-system tokens: the portal keeps its
+   Alias layer over @quicksort-sas/design-system tokens: the portal keeps its
    legacy variable names, but they now resolve to design-system semantic
    tokens, so the whole portal flips with data-theme.
 

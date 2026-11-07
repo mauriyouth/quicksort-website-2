@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { getTheme, setTheme, type QuicksortTheme } from "./theme";
+import { getTheme, setTheme, type QuicksortTheme } from "./theme.js";
 
 export type ThemeToggleProps = {
   /** Controlled mode. Omit for uncontrolled (reads/writes the DOM + localStorage). */

@@ -313,6 +313,9 @@ importers:
       '@types/react':
         specifier: 18.2.0
         version: 18.2.0
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   packages/hr-db:
     dependencies:
@@ -335,7 +338,7 @@ importers:
       '@clerk/react':
         specifier: 6.15.1
         version: 6.15.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@quicksort/design-system':
+      '@quicksort-sas/design-system':
         specifier: workspace:*
         version: link:../design-system
       '@quicksort/hr-db':
@@ -354,12 +357,12 @@ importers:
 
   packages/ui:
     dependencies:
+      '@quicksort-sas/design-system':
+        specifier: workspace:*
+        version: link:../design-system
       '@quicksort/db':
         specifier: workspace:*
         version: link:../db
-      '@quicksort/design-system':
-        specifier: workspace:*
-        version: link:../design-system
       lucide-react:
         specifier: 0.453.0
         version: 0.453.0(react@18.3.1)

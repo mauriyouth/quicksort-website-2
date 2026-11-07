@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@clerk/react": "6.15.1",
-    "@quicksort/design-system": "workspace:*",
+    "@quicksort-sas/design-system": "workspace:*",
     "lucide-react": "0.453.0",
     "@quicksort/hr-db": "workspace:*"
   },

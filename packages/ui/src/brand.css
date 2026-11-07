@@ -1,4 +1,4 @@
-/* Alias layer over @quicksort/design-system tokens.
+/* Alias layer over @quicksort-sas/design-system tokens.
    The portal keeps its legacy variable names, but they now resolve to
    design-system semantic tokens (light by default — flip with
    data-theme="dark" on <html> or any subtree). */

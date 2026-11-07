@@ -1,10 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
-import { Notice } from "@quicksort/hr-ui";
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  Stat,
+  StatGroup,
+  StatLabel,
+  StatSource,
+  StatValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@quicksort-sas/ui";
+import { EmptyState, PageAlerts, PageHeading, linkButton } from "../ui";
 import { db, errorMessage, isMissingRelationError, type DocumentAlert } from "@quicksort/hr-db";
 import { expiryLabel, formatDay, loadAlerts } from "./client";
-import "../sales/sales.css";
 import "./documents.css";
 
 /**
@@ -18,6 +40,7 @@ type Row = DocumentAlert & { ownerName: string; ownerDetail: string; href: strin
 
 const RANK = { expired: 0, missing: 1, expiring: 2 } as const;
 const SEVERITY_LABEL = { expired: "Expired", expiring: "Expiring", missing: "Missing" } as const;
+const SEVERITY_BADGE = { expired: "destructive", expiring: "warning", missing: "secondary" } as const;
 
 async function ownerNames(alerts: DocumentAlert[]) {
   const ids = (key: "person_id" | "project_id" | "client_id") => [...new Set(alerts.map(a => a[key]).filter((id): id is string => !!id))];
@@ -98,77 +121,96 @@ export function DocumentAlerts() {
   ];
 
   return (
-    <div className="docs-page">
-      <header className="docs-head">
-        <h1>Documents</h1>
-        <p className="projects-lede">Identity papers, contracts and certificates that expired, expire soon or are still missing.</p>
-      </header>
-      <Notice error>{error}</Notice>
-      {notReady && <Notice>The documents registry is not set up yet — apply the documents migrations (supabase db push).</Notice>}
+    <div className="flex flex-col gap-6">
+      <PageHeading title="Documents">
+        Identity papers, contracts and certificates that expired, expire soon or are still missing.
+      </PageHeading>
+      <PageAlerts error={error} />
+      {notReady && <PageAlerts message="The documents registry is not set up yet — apply the documents migrations (supabase db push)." />}
 
-      <section className="docs-kpis" aria-label="Summary">
-        {kpis.map(k => (
-          <div key={k.label} className={`docs-kpi${k.strong ? " strong" : ""}`}>
-            <span className="docs-kpi-label">{k.label}</span>
-            <span className="docs-kpi-value">{rows ? k.value : "—"}</span>
-            <span className="docs-kpi-sub">{k.sub}</span>
-          </div>
-        ))}
-      </section>
-
-      <section className="projects-card" aria-label="Document alerts">
-        <div className="projects-toolbar">
-          <div className="projects-tabs" role="tablist" aria-label="Alert filters">
-            {tabs.map(([id, label, count]) => (
-              <button key={id} type="button" role="tab" aria-selected={filter === id}
-                className={`projects-tab${filter === id ? " on" : ""}`} onClick={() => setFilter(id)}>
-                {label}<span className="docs-count">{count}</span>
-              </button>
+      <Card aria-label="Summary">
+        <CardContent>
+          <StatGroup>
+            {kpis.map(k => (
+              <Stat key={k.label} pivot={k.strong}>
+                <StatValue>{rows ? k.value : "—"}</StatValue>
+                <StatLabel>{k.label}</StatLabel>
+                <StatSource>{k.sub}</StatSource>
+              </Stat>
             ))}
-          </div>
-          <div className="projects-toolbar-right">
-            <label className="projects-search">
-              <Search size={16} aria-hidden="true" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search person, project or document" aria-label="Search alerts" />
-            </label>
-          </div>
-        </div>
+          </StatGroup>
+        </CardContent>
+      </Card>
 
-        {rows === null && <p className="docs-empty">Loading…</p>}
-        {rows !== null && !visible.length && (
-          <p className="docs-empty">{rows.length ? "No alert matches this filter." : "Nothing to renew — every required document is filed and valid."}</p>
-        )}
-        {!!visible.length && (
-          <ul className="docs-alerts">
-            {visible.map(r => (
-              <li key={`${r.severity}-${r.document_id || r.type_code}-${r.person_id || r.project_id || r.client_id}-${r.extension_id || ""}`} className="docs-alert">
-                <span className={`doc-pill doc-pill--${r.severity}`}>{SEVERITY_LABEL[r.severity]}</span>
-                <div className="docs-alert-doc">
-                  <span className="docs-alert-title">{r.title}</span>
-                  {r.type_label !== r.title && <span className="docs-alert-meta">{r.type_label}</span>}
-                </div>
-                <div className="docs-alert-owner">
-                  <span className="docs-alert-title">{r.ownerName}</span>
-                  <span className="docs-alert-meta">{r.ownerDetail}</span>
-                </div>
-                <div className="docs-alert-when">
-                  {r.severity === "missing" ? (
-                    <span className="docs-alert-meta">Not filed</span>
-                  ) : (
-                    <>
-                      <span className="docs-alert-title">{expiryLabel({ tone: r.severity, daysLeft: r.days_left })}</span>
-                      <span className="docs-alert-meta">{formatDay(r.expires_on)}</span>
-                    </>
-                  )}
-                </div>
-                <Link className="docs-alert-action" to={r.href}>
-                  {r.severity === "missing" ? "Upload" : "Renew"}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <Card aria-label="Document alerts">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+          <Tabs value={filter} onValueChange={(value) => setFilter(value as Filter)}>
+            <TabsList variant="line" aria-label="Alert filters">
+              {tabs.map(([id, label, count]) => (
+                <TabsTrigger key={id} value={id} className="gap-1.5">
+                  {label}
+                  <span className="num text-xs text-muted-foreground">{count}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <InputGroup className="w-full sm:w-72">
+            <InputGroupAddon><Search /></InputGroupAddon>
+            <InputGroupInput value={search} onChange={e => setSearch(e.target.value)} placeholder="Search person, project or document" aria-label="Search alerts" />
+          </InputGroup>
+        </CardHeader>
+        <CardContent>
+          {rows === null && <p role="status" className="text-sm text-muted-foreground">Loading…</p>}
+          {rows !== null && !visible.length && (
+            <EmptyState title={rows.length ? "No alert matches this filter" : "Nothing to renew"}>
+              {rows.length ? "Try another filter or search." : "Every required document is filed and valid."}
+            </EmptyState>
+          )}
+          {!!visible.length && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-28">Status</TableHead>
+                  <TableHead>Document</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Due</TableHead>
+                  <TableHead className="w-24"><span className="sr-only">Action</span></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map(r => (
+                  <TableRow key={`${r.severity}-${r.document_id || r.type_code}-${r.person_id || r.project_id || r.client_id}-${r.extension_id || ""}`}>
+                    <TableCell><Badge variant={SEVERITY_BADGE[r.severity]}>{SEVERITY_LABEL[r.severity]}</Badge></TableCell>
+                    <TableCell className="whitespace-normal">
+                      <div className="font-medium">{r.title}</div>
+                      {r.type_label !== r.title && <div className="text-xs text-muted-foreground">{r.type_label}</div>}
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
+                      <div>{r.ownerName}</div>
+                      <div className="text-xs text-muted-foreground">{r.ownerDetail}</div>
+                    </TableCell>
+                    <TableCell>
+                      {r.severity === "missing" ? (
+                        <span className="text-xs text-muted-foreground">Not filed</span>
+                      ) : (
+                        <>
+                          <div>{expiryLabel({ tone: r.severity, daysLeft: r.days_left })}</div>
+                          <div className="num text-xs text-muted-foreground">{formatDay(r.expires_on)}</div>
+                        </>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link className={linkButton({ variant: "outline", size: "sm" })} to={r.href}>
+                        {r.severity === "missing" ? "Upload" : "Renew"}
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

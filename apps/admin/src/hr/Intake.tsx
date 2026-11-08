@@ -4,6 +4,7 @@ import { Upload, Sparkles } from 'lucide-react';
 import { z } from 'zod';
 import { db, errorMessage } from '@quicksort/hr-db';
 import { MAX_INTAKE_PDF_BYTES, parsedProfileSchema, type ParsedProfile } from '../candidate-intake';
+import { Button, Card, CardContent, Checkbox, Field as UiField, FieldLabel } from '@quicksort-sas/ui';
 import { Field, Form, Tag, checked, text, type RunCommand } from './ui';
 import type { Opportunity } from './domain';
 import { fileCv } from './recruitmentCv';
@@ -133,29 +134,31 @@ export function Intake({
     onAdded(warnings.join(' '));
   };
   return <>
-    <div className="hr-card">
-      <div className="hr-card-head">
-        <div>
-          <div className="hr-inline">
-            <Sparkles size={16} aria-hidden="true" />
-            <h3>Start with a resume</h3>
+    <Card size="sm">
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex max-w-prose min-w-0 flex-1 flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-4" aria-hidden="true" />
+              <h3 className="m-0 text-[15px] font-medium">Start with a resume</h3>
+            </div>
+            <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">Extract a profile from a PDF, then review and edit every field before saving. You can also enter the person manually.</p>
           </div>
-          <p>Extract a profile from a PDF, then review and edit every field before saving. You can also enter the person manually.</p>
+          <Button variant="outline" disabled={parsing || busy} onClick={() => fileRef.current?.click()}>
+            <Upload aria-hidden="true" />
+            {parsing ? 'Extracting…' : 'Choose PDF'}
+          </Button>
         </div>
-        <button className="btn secondary" disabled={parsing || busy} onClick={() => fileRef.current?.click()}>
-          <Upload size={15} aria-hidden="true" />
-          {parsing ? 'Extracting…' : 'Choose PDF'}
-        </button>
-      </div>
-      <input ref={fileRef} hidden type="file" accept="application/pdf,.pdf" aria-label="Resume PDF" onChange={event => void parse(event.target.files?.[0])} />
-      {profile && <>
-        <Tag tone="quiet">Extraction confidence: {profile.confidence}</Tag>
-        <p>Source: {fileName}. Extracted facts are suggestions until you save the reviewed profile.</p>
-      </>}
-      {error && <p role="alert" className="hr-error">
-        {error}
-      </p>}
-    </div>
+        <input ref={fileRef} hidden type="file" accept="application/pdf,.pdf" aria-label="Resume PDF" onChange={event => void parse(event.target.files?.[0])} />
+        {profile && <div className="flex flex-col items-start gap-2">
+          <Tag tone="quiet">Extraction confidence: {profile.confidence}</Tag>
+          <p className="m-0 text-[13px] text-muted-foreground">Source: {fileName}. Extracted facts are suggestions until you save the reviewed profile.</p>
+        </div>}
+        {error && <p role="alert" className="m-0 text-[13px] text-destructive">
+          {error}
+        </p>}
+      </CardContent>
+    </Card>
     <div ref={formRef}>
       <Form key={fileName || 'manual'} title={profile ? 'Review the extracted profile' : 'Person details'} run={reviewedRun} busy={busy || parsing} button="Save reviewed person" success="Person added to the talent pool. Open their record to create an application." submit={data => ({
         kind: 'create_person',
@@ -187,7 +190,10 @@ export function Intake({
         }))} required />
         <Field name="skills" label="Skills and certifications" type="textarea" value={profile?.skills.join(', ')} />
         <Field name="notes" label="Profile notes" type="textarea" value={profile ? `${profile.summary}\n\nResume source: ${fileName}` : ''} />
-        <label className="hr-checkbox hr-wide"><input type="checkbox" name="contact_allowed" defaultChecked />Contact permitted for future opportunities</label>
+        <UiField orientation="horizontal" className="col-span-full gap-2">
+          <Checkbox id="hr-intake-contact" name="contact_allowed" value="on" defaultChecked />
+          <FieldLabel htmlFor="hr-intake-contact" className="font-normal">Contact permitted for future opportunities</FieldLabel>
+        </UiField>
       </Form>
     </div>
   </>;

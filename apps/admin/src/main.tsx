@@ -6,7 +6,6 @@ import { installSaveShortcut } from "./save-shortcut";
 import "./index.css";
 import "@quicksort/hr-ui/styles.css";
 import "./admin-theme.css";
-import "./date-field.css";
 installSaveShortcut();
 // @quicksort-sas/ui switches palettes on the `dark` class; the admin (and the
 // shared ThemeToggle) switch on data-theme. Keep the class in step with it.

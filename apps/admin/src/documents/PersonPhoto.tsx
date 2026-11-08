@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Camera } from "lucide-react";
-import "./documents.css";
+import { Camera, X } from "lucide-react";
+import { cn } from "cn";
 import { db } from "@quicksort/hr-db";
 import { DOCUMENTS_CHANGED, fetchDocumentFile, notifyDocumentsChanged, uploadDocument, type DocumentOwner } from "./client";
 
@@ -174,25 +174,37 @@ export function PersonPhoto({ personId, name, fallback, className, editable = fa
 
   const busy = progress !== null;
   return (
-    <span className="person-photo-edit">
+    <span className="relative inline-flex shrink-0">
       <button
         type="button"
-        className="person-photo-button"
+        className="group/photo relative inline-flex cursor-pointer rounded-xl border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-progress"
         onClick={() => input.current?.click()}
         disabled={busy}
         aria-label={src ? `Change the photo of ${name}` : `Add a photo of ${name}`}
         title={src ? "Change photo" : "Add photo"}
       >
         {visual}
-        <span className={`person-photo-overlay${busy ? " is-busy" : ""}`} aria-hidden="true">
-          {busy ? `${progress}%` : <Camera size={16} />}
+        <span
+          className={cn(
+            "absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/50 text-xs font-semibold text-white opacity-0 transition-opacity duration-150",
+            "group-hover/photo:opacity-100 group-focus-visible/photo:opacity-100 motion-reduce:transition-none",
+            busy && "opacity-100",
+          )}
+          aria-hidden="true"
+        >
+          {busy ? <span className="num">{progress}%</span> : <Camera className="size-4" />}
         </span>
       </button>
       <input ref={input} type="file" accept={PHOTO_TYPES.join(",")} hidden onChange={event => void onPick(event)} />
       {error && (
-        <span className="person-photo-error" role="alert">
+        <span
+          className="absolute top-[calc(100%+6px)] left-0 z-10 flex w-max max-w-[280px] items-start gap-2 rounded-lg border border-destructive bg-popover px-2 py-1.5 text-xs leading-snug text-destructive shadow-md"
+          role="alert"
+        >
           {error}
-          <button type="button" onClick={() => setError("")} aria-label="Dismiss">×</button>
+          <button type="button" className="inline-flex cursor-pointer border-0 bg-transparent p-0 text-inherit" onClick={() => setError("")} aria-label="Dismiss">
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
         </span>
       )}
     </span>

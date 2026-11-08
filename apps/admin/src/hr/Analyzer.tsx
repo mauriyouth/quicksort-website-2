@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { type Job, type Row } from "@quicksort/hr-db";
+import { Tabs, TabsList, TabsTrigger } from "@quicksort-sas/ui";
 import { CvAnalyzer } from "../CvAnalyzer";
 import { AnalysisHistory } from "../AnalysisHistory";
 
@@ -27,18 +28,15 @@ export function Analyzer({
   const [view, setView] = useState<AnalyzerView>("analyze");
   return (
     <>
-      <nav className="view-menu" aria-label="CV analyzer views">
-        {VIEWS.map((v) => (
-          <button
-            key={v.key}
-            aria-pressed={view === v.key}
-            className={view === v.key ? "active" : ""}
-            onClick={() => setView(v.key)}
-          >
-            {v.label}
-          </button>
-        ))}
-      </nav>
+      <Tabs value={view} onValueChange={(next) => setView(next as AnalyzerView)} className="mb-6">
+        <TabsList variant="line" aria-label="CV analyzer views" className="h-10 w-full justify-start gap-5 overflow-x-auto border-b border-border">
+          {VIEWS.map((v) => (
+            <TabsTrigger key={v.key} value={v.key} className="flex-none group-data-horizontal/tabs:after:bottom-0">
+              {v.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
       <div hidden={view !== "analyze"}>
         <CvAnalyzer jobs={jobs} documents={documents} people={people} />
       </div>

@@ -1,8 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { Archive, Check, ChevronLeft, ChevronRight, Clock, Download, ExternalLink, Eye, FileText, Loader2, RefreshCw, Upload, X } from "lucide-react";
-import { Notice } from "@quicksort/hr-ui";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Field,
+  FieldLabel,
+  FieldTitle,
+  Input,
+  NativeSelect,
+  NativeSelectOption,
+  Progress,
+} from "@quicksort-sas/ui";
+import { cn } from "cn";
 import { errorMessage, type DocumentAlert, type DocumentRecord, type DocumentTypeRecord } from "@quicksort/hr-db";
 import { DateField } from "../DateField";
+import { PageAlerts } from "../ui";
 import {
   DOCUMENTS_CHANGED,
   downloadDocument,
@@ -30,7 +53,6 @@ import {
   type DocumentOwner,
   type UnfiledFile,
 } from "./client";
-import "./documents.css";
 import { TypeSearchField } from "./TypeSearchField";
 
 /**
@@ -111,6 +133,7 @@ export function DocumentsPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [archiveTarget, setArchiveTarget] = useState<DocumentRecord | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingType = useRef<{ typeCode: string; supersedes?: DocumentRecord; extensionId?: string } | null>(null);
   const uploadControllers = useRef(new Map<string, AbortController>());
@@ -307,62 +330,58 @@ export function DocumentsPanel({
   }
 
   const previewDoc = previewId ? byId.get(previewId) : undefined;
+  const askArchive = (doc: DocumentRecord) => setArchiveTarget(doc);
+  const rowHandlers = (doc: DocumentRecord | undefined) => ({
+    onPreview: () => doc && setPreviewId(doc.id),
+    onDownload: () => doc && void downloadDocument(doc).catch(e => setError(errorMessage(e))),
+    onClassify: () => doc && setDraft({ mode: "classify", file: { name: doc.file_name }, typeCode: defaultType, doc }),
+    onArchive: () => doc && askArchive(doc),
+  });
 
   return (
-    <div className="doc-panel">
+    <div className="flex min-w-0 flex-col gap-6">
       {(title || (folderLink && !checklist.length)) && (
-        <div className="doc-head">
-          {title && <h2 className="doc-title">{title}</h2>}
-          {folderLink && (
-            <a className="doc-link" href={folderLink} target="_blank" rel="noreferrer">
-              <ExternalLink size={13} aria-hidden="true" />
-              Open in Drive
-            </a>
-          )}
+        <div className="flex items-baseline justify-between gap-3">
+          {title && <h2 className="m-0 text-lg font-medium tracking-tight text-foreground">{title}</h2>}
+          {folderLink && <DriveLink href={folderLink} />}
         </div>
       )}
-      <Notice error>{error}</Notice>
-      <Notice>{message}</Notice>
+      <PageAlerts error={error} message={message} />
 
       {!!checklist.length && (
-        <div className="doc-summary">
-          <div className="doc-summary-top">
-            <div className="doc-summary-counts">
-              <span className="doc-count">{filedCount} of {checklistRows.length} filed</span>
-              <span className="doc-muted">{summaryParts.join(" · ") || "All required documents filed"}</span>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="font-heading text-[32px] leading-none tracking-[-0.03em] text-foreground">{filedCount} of {checklistRows.length} filed</span>
+              <span className="text-[13px] text-muted-foreground">{summaryParts.join(" · ") || "All required documents filed"}</span>
             </div>
-            {folderLink && (
-              <a className="doc-link" href={folderLink} target="_blank" rel="noreferrer">
-                <ExternalLink size={14} aria-hidden="true" />
-                Open in Drive
-              </a>
-            )}
+            {folderLink && <DriveLink href={folderLink} />}
           </div>
-          <div className="doc-segments" role="img" aria-label={`${filedCount} of ${checklistRows.length} required documents filed`}>
+          <div className="flex gap-1" role="img" aria-label={`${filedCount} of ${checklistRows.length} required documents filed`}>
             {checklistRows.map(row => (
-              <span key={row.key} className={`doc-segment${row.doc ? " is-filed" : uploadByRowKey.has(row.key) ? " is-uploading" : ""}`} />
+              <span key={row.key} className={cn("h-1.5 flex-1 rounded-full bg-border", row.doc ? "bg-pivot" : uploadByRowKey.has(row.key) && "bg-foreground/40")} />
             ))}
           </div>
         </div>
       )}
 
       {!!missing.length && (
-        <ul className="doc-missing" aria-label="Missing documents">
+        <ul className="m-0 flex list-none flex-col gap-2 rounded-lg border border-dashed border-input px-3 py-2.5" aria-label="Missing documents">
           {missing.map(alert => (
-            <li key={`${alert.type_code}-${alert.extension_id || ""}`}>
-              <span className="doc-pill doc-pill--missing">Missing</span>
-              <span className="doc-missing-name">{alert.title}</span>
-              <button type="button" className="doc-text-button" disabled={busy}
+            <li key={`${alert.type_code}-${alert.extension_id || ""}`} className="flex items-center gap-2 text-[13px]">
+              <StatusBadge state="missing">Missing</StatusBadge>
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{alert.title}</span>
+              <Button variant="link" size="sm" className="h-auto px-0" disabled={busy}
                 onClick={() => pick({ typeCode: alert.type_code, extensionId: alert.extension_id || undefined })}>
                 Upload
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
 
       {!!checklistRows.length && (
-        <div className="doc-rows">
+        <div className={ROWS}>
           {unmatchedUploads.map(upload => (
             <UploadingRow key={upload.key} fileName={upload.fileName} progress={upload.progress} onCancel={() => cancelUpload(upload.key)} />
           ))}
@@ -371,24 +390,14 @@ export function DocumentsPanel({
             return pending ? (
               <UploadingRow key={row.key} fileName={pending.fileName} progress={pending.progress} onCancel={() => cancelUpload(pending.key)} />
             ) : (
-              <DocumentRow
-                key={row.key}
-                row={row}
-                busy={busy}
-                onPreview={() => row.doc && setPreviewId(row.doc.id)}
-                onDownload={() => row.doc && void downloadDocument(row.doc).catch(e => setError(errorMessage(e)))}
-                onPick={pick}
-                onClassify={() => row.doc && setDraft({ mode: "classify", file: { name: row.doc.file_name }, typeCode: defaultType, doc: row.doc })}
-                onArchive={() => row.doc && confirm(`Archive “${row.doc.title}”? It leaves the active list; the file stays in storage.`) &&
-                  void run("Document archived.", () => updateDocument(row.doc!.id, { status: "archived" }))}
-              />
+              <DocumentRow key={row.key} row={row} busy={busy} onPick={pick} {...rowHandlers(row.doc)} />
             );
           })}
         </div>
       )}
 
       {!checklistRows.length && !!uploadList.length && (
-        <div className="doc-rows">
+        <div className={ROWS}>
           {uploadList.map(upload => (
             <UploadingRow key={upload.key} fileName={upload.fileName} progress={upload.progress} onCancel={() => cancelUpload(upload.key)} />
           ))}
@@ -409,17 +418,21 @@ export function DocumentsPanel({
       ) : (
         <button
           type="button"
-          className={`doc-drop${busy ? " is-busy" : ""}`}
+          className={cn(
+            "flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-input bg-card p-6 text-center text-foreground outline-none transition-colors",
+            "hover:border-foreground/40 hover:bg-accent focus-visible:border-foreground focus-visible:ring-2 focus-visible:ring-ring/15",
+            "disabled:cursor-wait disabled:opacity-60",
+          )}
           onDrop={onDrop}
           onDragOver={e => e.preventDefault()}
           onClick={() => !busy && pick({ typeCode: defaultType })}
           disabled={busy}
         >
-          <span className="doc-drop-icon" aria-hidden="true">
-            <Upload size={18} />
+          <span className="inline-flex size-10 items-center justify-center rounded-full bg-accent" aria-hidden="true">
+            <Upload className="size-[18px]" />
           </span>
-          <span className="doc-drop-main">{busy ? "Working…" : "Drop a document or click to browse"}</span>
-          <span className="doc-drop-sub">You choose its type and validity next → PDF, JPG or PNG, up to 10 MB</span>
+          <span className="text-[15px] font-medium">{busy ? "Working…" : "Drop a document or click to browse"}</span>
+          <span className="text-[13px] text-muted-foreground">You choose its type and validity next → PDF, JPG or PNG, up to 10 MB</span>
         </button>
       )}
       <input
@@ -433,95 +446,71 @@ export function DocumentsPanel({
         }}
       />
 
-      {docs === null && <p className="doc-muted">Loading…</p>}
-      {docs !== null && !active.length && !missing.length && !checklist.length && <p className="doc-muted">No documents filed yet.</p>}
+      {docs === null && <p role="status" className={MUTED}>Loading…</p>}
+      {docs !== null && !active.length && !missing.length && !checklist.length && <p className={MUTED}>No documents filed yet.</p>}
 
       {extraSections.map(section => (
-        <section key={section.title} className="doc-group">
-          <h3 className="doc-group-title">{section.title}</h3>
-          <div className="doc-rows">
+        <section key={section.title} className="flex flex-col gap-1.5">
+          <h3 className={GROUP_TITLE}>{section.title}</h3>
+          <div className={ROWS}>
             {section.rows.map(row => (
-              <DocumentRow
-                key={row.key}
-                row={row}
-                busy={busy}
-                onPreview={() => row.doc && setPreviewId(row.doc.id)}
-                onDownload={() => row.doc && void downloadDocument(row.doc).catch(e => setError(errorMessage(e)))}
-                onPick={pick}
-                onClassify={() => row.doc && setDraft({ mode: "classify", file: { name: row.doc.file_name }, typeCode: defaultType, doc: row.doc })}
-                onArchive={() => row.doc && confirm(`Archive “${row.doc.title}”? It leaves the active list; the file stays in storage.`) &&
-                  void run("Document archived.", () => updateDocument(row.doc!.id, { status: "archived" }))}
-              />
+              <DocumentRow key={row.key} row={row} busy={busy} onPick={pick} {...rowHandlers(row.doc)} />
             ))}
           </div>
         </section>
       ))}
 
       {groups.map(group => (
-        <section key={group.folder} className="doc-group">
-          <h3 className="doc-group-title">{FOLDER_TITLES[group.folder] ?? group.folder}</h3>
-          <div className="doc-rows">
+        <section key={group.folder} className="flex flex-col gap-1.5">
+          <h3 className={GROUP_TITLE}>{FOLDER_TITLES[group.folder] ?? group.folder}</h3>
+          <div className={ROWS}>
             {group.docs.map(doc => {
               const row = rowFor(doc);
-              return (
-                <DocumentRow
-                  key={row.key}
-                  row={row}
-                  busy={busy}
-                  onPreview={() => setPreviewId(doc.id)}
-                  onDownload={() => void downloadDocument(doc).catch(e => setError(errorMessage(e)))}
-                  onPick={pick}
-                  onClassify={() => setDraft({ mode: "classify", file: { name: doc.file_name }, typeCode: defaultType, doc })}
-                  onArchive={() => confirm(`Archive “${doc.title}”? It leaves the active list; the file stays in storage.`) &&
-                    void run("Document archived.", () => updateDocument(doc.id, { status: "archived" }))}
-                />
-              );
+              return <DocumentRow key={row.key} row={row} busy={busy} onPick={pick} {...rowHandlers(doc)} />;
             })}
           </div>
         </section>
       ))}
 
       {!!activity.length && (
-        <section className="doc-activity">
-          <h3 className="doc-activity-title">Recent activity</h3>
-          <div className="doc-activity-card">
-            {activity.map((event, index) => {
+        <section className="flex flex-col gap-2.5">
+          <h3 className="m-0 text-sm font-medium text-foreground">Recent activity</h3>
+          <ul className="m-0 flex list-none flex-col divide-y divide-border overflow-hidden rounded-xl border border-border bg-card p-0">
+            {activity.map(event => {
               const target = byId.get(event.next_state);
               const what = event.kind === "document_registered"
                 ? `uploaded ${target?.file_name || event.rationale || "a document"}`
                 : `viewed ${target?.file_name || "a document"}`;
               return (
-                <div key={event.id} className="doc-activity-row" style={index ? { borderTop: "1px solid var(--qs-line)" } : undefined}>
-                  <span className="doc-activity-dot" aria-hidden="true" />
-                  <span className="doc-activity-what">
-                    <strong>{event.actor_email || "HR"}</strong> {what}
+                <li key={event.id} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 px-4 py-2.5 text-[13px]">
+                  <span className="size-1.5 flex-none rounded-full bg-faint" aria-hidden="true" />
+                  <span className="min-w-[12rem] flex-1 truncate text-muted-foreground">
+                    <strong className="font-medium text-foreground">{event.actor_email || "HR"}</strong> {what}
                   </span>
-                  <span className="doc-activity-when">{formatDateTime(event.created_at)}</span>
-                </div>
+                  <span className="flex-none text-muted-foreground tabular-nums">{formatDateTime(event.created_at)}</span>
+                </li>
               );
             })}
-          </div>
-          <p className="doc-muted">Every view and download is logged.</p>
+          </ul>
+          <p className={MUTED}>Every view and download is logged.</p>
         </section>
       )}
 
       {!!unfiled.length && !draft && (
-        <section className="doc-group">
-          <h3 className="doc-group-title">In Drive, not filed yet ({unfiled.length})</h3>
-          <p className="doc-muted">Uploaded before typed documents existed. Filing moves each file into its folder and tracks its validity.</p>
-          <ul className="doc-list">
+        <section className="flex flex-col gap-1.5">
+          <h3 className={GROUP_TITLE}>In Drive, not filed yet ({unfiled.length})</h3>
+          <p className={MUTED}>Uploaded before typed documents existed. Filing moves each file into its folder and tracks its validity.</p>
+          <ul className="m-0 flex list-none flex-col p-0">
             {unfiled.map(file => (
-              <li key={file.id} className="doc-row">
-                <FileText size={15} aria-hidden="true" className="doc-row-icon" />
-                <div className="doc-row-main">
-                  <span className="doc-row-title">
-                    {file.link ? <a href={file.link} target="_blank" rel="noreferrer">{file.name}</a> : file.name}
-                  </span>
-                </div>
-                <button type="button" className="doc-text-button" disabled={busy}
+              <li key={file.id} className="flex min-w-0 items-center gap-2 border-t border-border py-2">
+                <FileText aria-hidden="true" className="size-[15px] flex-none text-faint" />
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                  {file.link ? <a href={file.link} target="_blank" rel="noreferrer" className="text-inherit underline-offset-4 hover:underline">{file.name}</a> : file.name}
+                </span>
+                <Button variant="link" size="sm" className="h-auto px-0" disabled={busy}
                   onClick={() => setDraft({ mode: "existing", file, typeCode: defaultType })}>
                   File as…
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -529,24 +518,24 @@ export function DocumentsPanel({
       )}
 
       {!!history.length && (
-        <section className="doc-group">
-          <button type="button" className="doc-text-button" onClick={() => setShowHistory(open => !open)} aria-expanded={showHistory}>
+        <section className="flex flex-col items-start gap-1.5">
+          <Button variant="link" size="sm" className="h-auto px-0" onClick={() => setShowHistory(open => !open)} aria-expanded={showHistory}>
             {showHistory ? "Hide history" : `History (${history.length})`}
-          </button>
+          </Button>
           {showHistory && (
-            <ul className="doc-list doc-list--history">
+            <ul className="m-0 flex w-full list-none flex-col p-0">
               {history.map(doc => (
-                <li key={doc.id} className="doc-row">
-                  <div className="doc-row-main">
-                    <span className="doc-row-title">{doc.title}</span>
-                    <span className="doc-row-meta">
+                <li key={doc.id} className="flex min-w-0 items-center gap-2 border-t border-border py-2">
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate text-sm text-muted-foreground">{doc.title}</span>
+                    <span className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
                       {typeOf.get(doc.type_code)?.label || doc.type_code} · {doc.status === "superseded" ? "replaced" : "archived"} · filed {formatDay(doc.created_at.slice(0, 10))}
                     </span>
                   </div>
-                  <button type="button" className="doc-icon-button" title="Download" aria-label={`Download ${doc.title}`}
+                  <Button variant="ghost" size="icon-sm" title="Download" aria-label={`Download ${doc.title}`}
                     onClick={() => void downloadDocument(doc).catch(e => setError(errorMessage(e)))}>
-                    <Download size={15} />
-                  </button>
+                    <Download />
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -567,9 +556,97 @@ export function DocumentsPanel({
           }}
         />
       )}
+
+      <AlertDialog open={!!archiveTarget} onOpenChange={open => { if (!open) setArchiveTarget(null); }}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive “{archiveTarget?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>It leaves the active list; the file stays in storage.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const doc = archiveTarget;
+                setArchiveTarget(null);
+                if (doc) void run("Document archived.", () => updateDocument(doc.id, { status: "archived" }));
+              }}
+            >
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+const MUTED = "m-0 text-[13px] text-muted-foreground";
+const GROUP_TITLE = "m-0 text-[13px] font-medium text-muted-foreground";
+const ROWS = "flex flex-col border-t border-border";
+
+function DriveLink({ href }: { href: string }) {
+  return (
+    <a
+      className="inline-flex items-center gap-1.5 text-sm font-medium whitespace-nowrap text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-foreground"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+    >
+      <ExternalLink className="size-3.5" aria-hidden="true" />
+      Open in Drive
+    </a>
+  );
+}
+
+type BadgeState = "filed" | "review" | "expiring" | "expired" | "missing" | "uploading";
+const BADGE: Record<BadgeState, { variant: "secondary" | "outline" | "warning" | "destructive"; className?: string }> = {
+  filed: { variant: "secondary" },
+  review: { variant: "outline", className: "border-dashed" },
+  expiring: { variant: "warning" },
+  expired: { variant: "destructive" },
+  missing: { variant: "outline", className: "border-dashed" },
+  uploading: { variant: "outline" },
+};
+
+/** Row status (Verified, Expires in…, Missing…) as a package Badge. */
+function StatusBadge({ state, children }: { state: BadgeState; children: ReactNode }) {
+  const { variant, className } = BADGE[state];
+  return <Badge variant={variant} className={className}>{children}</Badge>;
+}
+
+/** Status medallion: solid check (filed), clock ring (expiring/expired), dashed ring (missing), spinner. */
+function Medallion({ state }: { state: RowState | "uploading" }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-flex size-8 flex-none items-center justify-center rounded-full",
+        state === "filed" && "bg-foreground text-background",
+        state === "expiring" && "border-[1.5px] border-foreground text-foreground",
+        state === "expired" && "border-[1.5px] border-destructive text-destructive",
+        state === "missing" && "border-[1.5px] border-dashed border-input",
+        state === "uploading" && "text-foreground",
+      )}
+    >
+      {state === "filed" && <Check className="size-[15px]" strokeWidth={2.2} />}
+      {(state === "expiring" || state === "expired") && <Clock className="size-[15px]" strokeWidth={1.75} />}
+      {state === "uploading" && <Loader2 className="size-[18px] animate-spin motion-reduce:animate-none" strokeWidth={1.5} />}
+    </span>
+  );
+}
+
+/** File-type tile (PDF, JPG…) next to a filed document. */
+function ExtTile({ fileName }: { fileName: string }) {
+  return (
+    <span className="inline-flex h-9 w-8 flex-none items-end justify-center rounded-md border border-border bg-muted pb-1.5 font-mono text-[9px] font-semibold tracking-[0.02em] text-muted-foreground" aria-hidden="true">
+      {(fileName.split(".").pop() || "").toUpperCase().slice(0, 4)}
+    </span>
+  );
+}
+
+const ROW_LINE = "flex min-w-0 flex-wrap items-center gap-x-6 gap-y-3 border-b border-border py-4";
+const IDENTITY = "flex min-w-0 flex-[1_1_240px] items-center gap-3.5 rounded-lg py-1 text-left";
 
 /** One row of the checklist: status medallion, identity, file, pill, actions. */
 function DocumentRow({
@@ -600,79 +677,75 @@ function DocumentRow({
       ].filter(Boolean).join(" · ")
     : "";
   return (
-    <div className="doc-rowline">
+    <div className={ROW_LINE}>
       <button
         type="button"
-        className="doc-identity"
+        className={cn(IDENTITY, "group/identity cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/15")}
         onClick={doc ? onPreview : () => onPick({ typeCode: row.typeCode, supersedes: row.supersedes })}
         aria-label={doc ? `Preview ${row.name}` : `Upload ${row.name}`}
       >
-        <span className={`doc-medallion doc-medallion--${state}`} aria-hidden="true">
-          {state === "filed" && <Check size={15} strokeWidth={2.2} />}
-          {(state === "expiring" || state === "expired") && <Clock size={15} strokeWidth={1.75} />}
-        </span>
-        <span className="doc-identity-text">
-          <span className="doc-row-name">{row.name}</span>
-          <span className="doc-row-hint">{[row.hint, row.context].filter(Boolean).join(" · ")}</span>
+        <Medallion state={state} />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-[15px] font-medium text-foreground decoration-border underline-offset-4 group-hover/identity:underline">{row.name}</span>
+          <span className="truncate text-[13px] text-muted-foreground">{[row.hint, row.context].filter(Boolean).join(" · ")}</span>
         </span>
       </button>
 
-      <div className="doc-file">
+      <div className="flex min-w-0 flex-[1_1_220px] items-center gap-3">
         {doc ? (
           <>
-            <span className="doc-ext" aria-hidden="true">{(doc.file_name.split(".").pop() || "").toUpperCase().slice(0, 4)}</span>
-            <span className="doc-file-text">
-              <span className="doc-file-name" title={doc.file_name}>{doc.file_name}</span>
-              <span className="doc-file-meta">{meta}</span>
+            <ExtTile fileName={doc.file_name} />
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate text-sm text-foreground" title={doc.file_name}>{doc.file_name}</span>
+              <span className="text-[13px] text-muted-foreground [overflow-wrap:anywhere]">{meta}</span>
             </span>
           </>
         ) : (
-          <span className="doc-file-meta">{row.supersedes ? "Renewal keeps the previous version in history." : "Not filed yet"}</span>
+          <span className="text-[13px] text-muted-foreground">{row.supersedes ? "Renewal keeps the previous version in history." : "Not filed yet"}</span>
         )}
       </div>
 
-      <div className="doc-status">
+      <div className="flex flex-none">
         {doc ? (
           state === "filed" ? (
             row.needsReview
-              ? <span className="doc-pill doc-pill--missing">To classify</span>
-              : <span className="doc-pill">Verified</span>
+              ? <StatusBadge state="review">To classify</StatusBadge>
+              : <StatusBadge state="filed">Verified</StatusBadge>
           ) : state === "expiring" ? (
-            <span className="doc-pill doc-pill--expiring">{expiryLabel(type)}</span>
+            <StatusBadge state="expiring">{expiryLabel(type)}</StatusBadge>
           ) : (
-            <span className="doc-pill doc-pill--expired">{expiryLabel(type)}</span>
+            <StatusBadge state="expired">{expiryLabel(type)}</StatusBadge>
           )
         ) : (
-          <span className="doc-pill doc-pill--missing">Missing</span>
+          <StatusBadge state="missing">Missing</StatusBadge>
         )}
       </div>
 
-      <div className="doc-actions">
+      <div className="ml-auto flex flex-none items-center justify-end gap-1">
         {doc ? (
           <>
-            <button type="button" className="doc-icon-button" title="Preview" aria-label={`Preview ${row.name}`} disabled={busy} onClick={onPreview}>
-              <Eye size={16} />
-            </button>
-            <button type="button" className="doc-icon-button" title="Download" aria-label={`Download ${row.name}`} disabled={busy} onClick={onDownload}>
-              <Download size={16} />
-            </button>
-            <button type="button" className="doc-icon-button" title="Renew with a new file" aria-label={`Renew ${row.name}`} disabled={busy}
+            <Button variant="ghost" size="icon-sm" title="Preview" aria-label={`Preview ${row.name}`} disabled={busy} onClick={onPreview}>
+              <Eye />
+            </Button>
+            <Button variant="ghost" size="icon-sm" title="Download" aria-label={`Download ${row.name}`} disabled={busy} onClick={onDownload}>
+              <Download />
+            </Button>
+            <Button variant="ghost" size="icon-sm" title="Renew with a new file" aria-label={`Renew ${row.name}`} disabled={busy}
               onClick={() => onPick({ typeCode: doc.type_code, supersedes: doc })}>
-              <RefreshCw size={16} />
-            </button>
+              <RefreshCw />
+            </Button>
             {row.needsReview && (
-              <button type="button" className="doc-text-button" disabled={busy} onClick={onClassify}>Classify</button>
+              <Button variant="outline" size="sm" disabled={busy} onClick={onClassify}>Classify</Button>
             )}
-            <button type="button" className="doc-icon-button" title="Archive (the file stays in Drive)" aria-label={`Archive ${row.name}`} disabled={busy} onClick={onArchive}>
-              <Archive size={16} />
-            </button>
+            <Button variant="ghost" size="icon-sm" title="Archive (the file stays in Drive)" aria-label={`Archive ${row.name}`} disabled={busy} onClick={onArchive}>
+              <Archive />
+            </Button>
           </>
         ) : (
-          <button type="button" className="doc-upload" disabled={busy}
-            onClick={() => onPick({ typeCode: row.typeCode, supersedes: row.supersedes })}>
-            <Upload size={15} aria-hidden="true" />
+          <Button size="sm" disabled={busy} onClick={() => onPick({ typeCode: row.typeCode, supersedes: row.supersedes })}>
+            <Upload data-icon="inline-start" aria-hidden="true" />
             {row.supersedes ? "Renew" : "Upload"}
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -682,38 +755,32 @@ function DocumentRow({
 /** The uploading state of a row: spinner medallion, live progress, cancel. */
 function UploadingRow({ fileName, progress, onCancel }: { fileName: string; progress: number; onCancel: () => void }) {
   return (
-    <div className="doc-rowline">
-      <div className="doc-identity doc-identity--static">
-        <span className="doc-medallion doc-medallion--uploading" aria-hidden="true">
-          <Loader2 size={18} strokeWidth={1.5} />
-        </span>
-        <span className="doc-identity-text">
-          <span className="doc-row-name">Uploading…</span>
-          <span className="doc-row-hint">Filing starts as soon as the bytes land</span>
+    <div className={ROW_LINE}>
+      <div className={IDENTITY}>
+        <Medallion state="uploading" />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-[15px] font-medium text-foreground">Uploading…</span>
+          <span className="truncate text-[13px] text-muted-foreground">Filing starts as soon as the bytes land</span>
         </span>
       </div>
-      <div className="doc-file">
-        <div className="doc-upload-track">
-          <div className="doc-upload-line">
-            <span className="doc-file-name" title={fileName}>{fileName}</span>
-            <span className="doc-upload-pct">{progress}%</span>
-          </div>
-          <div className="doc-progress" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label={`Uploading ${fileName}`}>
-            <span className="doc-progress-bar" style={{ width: `${progress}%` }} />
-          </div>
+      <div className="flex min-w-0 flex-[1_1_220px] flex-col gap-2">
+        <div className="flex justify-between gap-3 text-[13px]">
+          <span className="truncate text-foreground" title={fileName}>{fileName}</span>
+          <span className="num flex-none text-muted-foreground">{progress}%</span>
         </div>
+        <Progress value={progress} aria-label={`Uploading ${fileName}`} />
       </div>
-      <div className="doc-status">
-        <span className="doc-pill doc-pill--uploading">Uploading</span>
+      <div className="flex flex-none">
+        <StatusBadge state="uploading">Uploading</StatusBadge>
       </div>
-      <div className="doc-actions">
-        <button type="button" className="doc-ghost" onClick={onCancel}>Cancel</button>
+      <div className="ml-auto flex flex-none items-center justify-end gap-1">
+        <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
       </div>
     </div>
   );
 }
 
-/** In-app preview: viewer on the left, details and actions on the right. */
+/** In-app preview (package Dialog): viewer on the left, details and actions on the right. */
 function DocumentPreview({
   doc,
   type,
@@ -758,103 +825,94 @@ function DocumentPreview({
     };
   }, [doc.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const inlineFile = file && "url" in file && (file.mime === "application/pdf" || file.mime.startsWith("image/")) ? file : null;
 
   return (
-    <div className="doc-preview">
-      <button type="button" tabIndex={-1} aria-label="Close preview" className="doc-preview-backdrop" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label={`Preview of ${doc.title}`} className="doc-preview-dialog">
-        <div className="doc-preview-viewer">
-          <div className="doc-preview-toolbar">
-            <span className="doc-preview-ext" aria-hidden="true">{ext}</span>
-            <span className="doc-preview-file" title={doc.file_name}>{doc.file_name}</span>
-            <span className="doc-preview-tools">
-              <button type="button" className="doc-icon-button" aria-label="Open in a new tab"
-                onClick={() => void previewDocument(doc)}>
-                <ExternalLink size={15} />
-              </button>
-            </span>
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[calc(100dvh-3rem)] w-full flex-wrap gap-0 overflow-auto p-0 sm:max-w-[1040px] sm:p-0"
+      >
+        <div className="flex min-w-0 flex-[999_1_520px] flex-col bg-muted">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+            <span className="inline-flex h-[22px] flex-none items-center rounded-md bg-accent px-1.5 font-mono text-[10px] font-semibold text-muted-foreground" aria-hidden="true">{ext}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-foreground" title={doc.file_name}>{doc.file_name}</span>
+            <Button variant="ghost" size="icon-sm" aria-label="Open in a new tab" onClick={() => void previewDocument(doc)}>
+              <ExternalLink />
+            </Button>
           </div>
-          <div className="doc-preview-stage">
-            {loading && <span className="doc-preview-loading">Loading the document…</span>}
+          <div className="flex min-h-[260px] flex-1 items-center justify-center px-4 py-6 sm:min-h-[420px] sm:px-6 sm:py-8">
+            {loading && <span role="status" className="text-[13px] text-muted-foreground">Loading the document…</span>}
             {!loading && inlineFile && (inlineFile.mime === "application/pdf"
-              ? <iframe title={`Preview of ${doc.file_name}`} src={inlineFile.url} className="doc-preview-frame" />
-              : <img src={inlineFile.url} alt={`Preview of ${doc.file_name}`} className="doc-preview-image" />)}
+              ? <iframe title={`Preview of ${doc.file_name}`} src={inlineFile.url} className="h-[45vh] min-h-[260px] w-full rounded-md border-0 bg-background sm:h-[60vh] sm:min-h-[420px]" />
+              : <img src={inlineFile.url} alt={`Preview of ${doc.file_name}`} className="max-h-[60vh] max-w-full rounded-md shadow-lg" />)}
             {!loading && !inlineFile && (
-              <div className="doc-preview-fallback">
-                <p>{file && "link" in file ? "This file is too large to preview inline." : "This file cannot be previewed inline."}</p>
-                <button type="button" className="doc-upload" onClick={() => void previewDocument(doc)}>
-                  <ExternalLink size={15} aria-hidden="true" />
+              <div className="flex flex-col items-center gap-3 text-center text-[13px] text-muted-foreground">
+                <p className="m-0">{file && "link" in file ? "This file is too large to preview inline." : "This file cannot be previewed inline."}</p>
+                <Button size="sm" onClick={() => void previewDocument(doc)}>
+                  <ExternalLink data-icon="inline-start" aria-hidden="true" />
                   Open in a new tab
-                </button>
+                </Button>
               </div>
             )}
           </div>
         </div>
 
-        <div className="doc-preview-details">
-          <div className="doc-preview-head">
-            <div className="doc-preview-title">
-              <h2>{doc.title}</h2>
+        <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-5 p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col items-start gap-2.5">
+              <DialogTitle className="text-2xl">{doc.title}</DialogTitle>
               {state.tone === "valid" || state.tone === "none"
-                ? <span className="doc-pill">Verified</span>
+                ? <StatusBadge state="filed">Verified</StatusBadge>
                 : state.tone === "expiring"
-                  ? <span className="doc-pill doc-pill--expiring">{expiryLabel(state)}</span>
-                  : <span className="doc-pill doc-pill--expired">{expiryLabel(state)}</span>}
+                  ? <StatusBadge state="expiring">{expiryLabel(state)}</StatusBadge>
+                  : <StatusBadge state="expired">{expiryLabel(state)}</StatusBadge>}
             </div>
-            <button type="button" className="doc-icon-button" aria-label="Close preview" onClick={onClose}>
-              <X size={17} />
-            </button>
+            <Button variant="ghost" size="icon-sm" aria-label="Close preview" onClick={onClose}>
+              <X />
+            </Button>
           </div>
 
           {state.tone === "expiring" && (
-            <p className="doc-preview-note">
+            <p className="m-0 rounded-xl border border-input px-3.5 py-3 text-[13px] leading-normal text-muted-foreground">
               Ask the employee for a renewed {type?.label || "document"} before it lapses — an employment cannot run without a valid one.
             </p>
           )}
 
-          <dl className="doc-preview-facts">
-            <dt>File</dt><dd>{doc.file_name}</dd>
-            <dt>Size</dt><dd>{formatBytes(doc.size_bytes) || "—"}</dd>
-            <dt>Uploaded</dt><dd>{formatDay(doc.created_at.slice(0, 10))}</dd>
-            <dt>Validity</dt><dd>{doc.expires_on ? `Valid until ${formatDay(doc.expires_on)}` : "No expiry"}</dd>
-            <dt>Stored in</dt><dd>{doc.owner_kind === "person" ? "HR-only Drive folder" : "Drive folder"}</dd>
+          <dl className="m-0 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-[13px]">
+            <dt className="text-muted-foreground">File</dt><dd className="m-0 text-foreground [overflow-wrap:anywhere]">{doc.file_name}</dd>
+            <dt className="text-muted-foreground">Size</dt><dd className="m-0 text-foreground">{formatBytes(doc.size_bytes) || "—"}</dd>
+            <dt className="text-muted-foreground">Uploaded</dt><dd className="m-0 text-foreground">{formatDay(doc.created_at.slice(0, 10))}</dd>
+            <dt className="text-muted-foreground">Validity</dt><dd className="m-0 text-foreground">{doc.expires_on ? `Valid until ${formatDay(doc.expires_on)}` : "No expiry"}</dd>
+            <dt className="text-muted-foreground">Stored in</dt><dd className="m-0 text-foreground">{doc.owner_kind === "person" ? "HR-only Drive folder" : "Drive folder"}</dd>
           </dl>
 
-          <div className="doc-preview-actions">
-            <button type="button" className="doc-upload" onClick={() => void downloadDocument(doc).catch(() => undefined)}>
-              <Download size={15} aria-hidden="true" />
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => void downloadDocument(doc).catch(() => undefined)}>
+              <Download data-icon="inline-start" aria-hidden="true" />
               Download
-            </button>
-            <button type="button" className="doc-ghost" onClick={() => onRenew(doc)}>
-              <RefreshCw size={14} aria-hidden="true" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onRenew(doc)}>
+              <RefreshCw data-icon="inline-start" aria-hidden="true" />
               Renew
-            </button>
+            </Button>
           </div>
-          {doc.owner_kind === "person" && <p className="doc-muted">Viewing is logged in the access log.</p>}
+          {doc.owner_kind === "person" && <p className={MUTED}>Viewing is logged in the access log.</p>}
 
-          <div className="doc-preview-nav">
-            <button type="button" className="doc-ghost" disabled={index <= 0} onClick={() => onNavigate(docs[index - 1].id)}>
-              <ChevronLeft size={15} aria-hidden="true" />
+          <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-4 text-[13px] text-muted-foreground">
+            <Button variant="outline" size="sm" disabled={index <= 0} onClick={() => onNavigate(docs[index - 1].id)}>
+              <ChevronLeft data-icon="inline-start" aria-hidden="true" />
               Previous
-            </button>
-            <span>{index + 1} of {docs.length}</span>
-            <button type="button" className="doc-ghost" disabled={index >= docs.length - 1} onClick={() => onNavigate(docs[index + 1].id)}>
+            </Button>
+            <span className="num">{index + 1} of {docs.length}</span>
+            <Button variant="outline" size="sm" disabled={index >= docs.length - 1} onClick={() => onNavigate(docs[index + 1].id)}>
               Next
-              <ChevronRight size={15} aria-hidden="true" />
-            </button>
+              <ChevronRight data-icon="inline-end" aria-hidden="true" />
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -973,6 +1031,7 @@ function DocumentForm({
   // root through data-field (no `name`, so they stay out of the host form's
   // FormData) and Enter is handled here instead of by implicit submission.
   const rootRef = useRef<HTMLDivElement>(null);
+  const id = useId();
   function submit() {
     const root = rootRef.current;
     if (!root || busy || (type?.requires_expiry && !expiresOn)) return;
@@ -1000,7 +1059,7 @@ function DocumentForm({
   return (
     <div
       ref={rootRef}
-      className="doc-form"
+      className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4"
       role="group"
       aria-label="Document details"
       onKeyDown={e => {
@@ -1011,64 +1070,64 @@ function DocumentForm({
         }
       }}
     >
-      <p className="doc-form-file">
-        <FileText size={14} aria-hidden="true" />
+      <p className="m-0 flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-foreground [overflow-wrap:anywhere]">
+        <FileText className="size-3.5" aria-hidden="true" />
         <span title={draft.file.name}>{draft.file.name}</span>
-        {draft.supersedes && <span className="doc-muted">replaces “{draft.supersedes.title}”</span>}
+        {draft.supersedes && <span className="font-normal text-muted-foreground">replaces “{draft.supersedes.title}”</span>}
       </p>
-      <label className="doc-field">
-        <span>Type</span>
+      <Field className="gap-1.5">
+        <FieldTitle>Type</FieldTitle>
         <TypeSearchField types={types} value={typeCode} disabled={!!draft.supersedes} onChange={setTypeCode} />
-      </label>
-      <label className="doc-field">
-        <span>Title</span>
-        <input data-field="title" aria-required="true" maxLength={200}
+      </Field>
+      <Field className="gap-1.5">
+        <FieldLabel htmlFor={`${id}-title`}>Title</FieldLabel>
+        <Input id={`${id}-title`} data-field="title" aria-required="true" maxLength={200}
           onInput={e => e.currentTarget.setCustomValidity("")}
           defaultValue={draft.supersedes?.title || (draft.mode === "classify" && !draft.doc.title.includes("à classer") ? draft.doc.title : baseName(draft.file.name))} />
-      </label>
+      </Field>
       {linked && !!contracts.length && (
-        <label className="doc-field">
-          <span>Attached to</span>
-          <select data-field="parent"defaultValue={draft.supersedes?.parent_document_id || mainContract?.id || ""}>
-            <option value="">Not attached</option>
-            {contracts.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-          </select>
-        </label>
+        <Field className="gap-1.5">
+          <FieldLabel htmlFor={`${id}-parent`}>Attached to</FieldLabel>
+          <NativeSelect id={`${id}-parent`} data-field="parent" className="w-full" defaultValue={draft.supersedes?.parent_document_id || mainContract?.id || ""}>
+            <NativeSelectOption value="">Not attached</NativeSelectOption>
+            {contracts.map(c => <NativeSelectOption key={c.id} value={c.id}>{c.title}</NativeSelectOption>)}
+          </NativeSelect>
+        </Field>
       )}
       {typeCode === "AVENANT" && !!extensions.length && (
-        <label className="doc-field">
-          <span>Extension</span>
-          <select data-field="extension"defaultValue={draft.extensionId || draft.supersedes?.extension_id || ""}>
-            <option value="">None</option>
-            {extensions.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
-          </select>
-        </label>
+        <Field className="gap-1.5">
+          <FieldLabel htmlFor={`${id}-extension`}>Extension</FieldLabel>
+          <NativeSelect id={`${id}-extension`} data-field="extension" className="w-full" defaultValue={draft.extensionId || draft.supersedes?.extension_id || ""}>
+            <NativeSelectOption value="">None</NativeSelectOption>
+            {extensions.map(x => <NativeSelectOption key={x.id} value={x.id}>{x.label}</NativeSelectOption>)}
+          </NativeSelect>
+        </Field>
       )}
-      {readingDates && <p className="doc-muted">Reading the dates off the document…</p>}
-      {datesRead && <p className="doc-muted">Dates read from the document — check them against the paper copy.</p>}
-      <div className="doc-field-row">
-        <label className="doc-field">
-          <span>Issued on</span>
+      {readingDates && <p role="status" className={MUTED}>Reading the dates off the document…</p>}
+      {datesRead && <p className={MUTED}>Dates read from the document — check them against the paper copy.</p>}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5">
+        <Field className="gap-1.5">
+          <FieldTitle>Issued on</FieldTitle>
           <DateField value={issuedOn} onChange={setIssuedOn} aria-label="Issued on" />
-        </label>
-        <label className="doc-field">
-          <span>Expires on{type?.requires_expiry ? " *" : ""}</span>
+        </Field>
+        <Field className="gap-1.5">
+          <FieldTitle>Expires on{type?.requires_expiry ? " *" : ""}</FieldTitle>
           <DateField value={expiresOn} min={issuedOn || undefined} aria-label="Expires on"
             onChange={next => { setExpiryTouched(true); setExpiresOn(next); }} />
-        </label>
+        </Field>
       </div>
       {type?.default_validity_months && !expiryTouched && (
-        <p className="doc-muted">Expiry suggested from a {type.default_validity_months >= 12 && type.default_validity_months % 12 === 0 ? `${type.default_validity_months / 12}-year` : `${type.default_validity_months}-month`} validity — adjust it to the date on the document.</p>
+        <p className={MUTED}>Expiry suggested from a {type.default_validity_months >= 12 && type.default_validity_months % 12 === 0 ? `${type.default_validity_months / 12}-year` : `${type.default_validity_months}-month`} validity — adjust it to the date on the document.</p>
       )}
-      <label className="doc-field">
-        <span>Notes</span>
-        <input data-field="notes" maxLength={2000} />
-      </label>
-      <div className="doc-form-actions">
-        <button type="button" className="doc-text-button" onClick={onCancel} disabled={busy}>Cancel</button>
-        <button type="button" onClick={submit} className="doc-primary"disabled={busy || (type?.requires_expiry && !expiresOn)}>
+      <Field className="gap-1.5">
+        <FieldLabel htmlFor={`${id}-notes`}>Notes</FieldLabel>
+        <Input id={`${id}-notes`} data-field="notes" maxLength={2000} />
+      </Field>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>Cancel</Button>
+        <Button size="sm" onClick={submit} disabled={busy || (type?.requires_expiry && !expiresOn)}>
           {busy ? "Saving…" : draft.mode === "classify" ? "Save type" : draft.mode === "existing" ? "File document" : draft.supersedes ? "Upload renewal" : "Upload"}
-        </button>
+        </Button>
       </div>
     </div>
   );

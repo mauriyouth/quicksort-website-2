@@ -829,6 +829,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                                   title={
                                     r.key === "ca" || r.key === "enc" ? "Voir le détail des factures"
                                       : r.key === "tva" ? "Voir le détail de la TVA"
+                                      : r.key === "cotc" || r.key === "cots" ? "Voir le détail des cotisations"
                                       : isFixedKey(r.key) ? "Voir le détail des transactions"
                                         : "Voir le détail par personne"
                                   }

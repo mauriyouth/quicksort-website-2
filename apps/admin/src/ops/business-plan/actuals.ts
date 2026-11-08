@@ -762,20 +762,20 @@ export function aggregateVat(
  * (mutuelle, meal vouchers, occupational health) prorated by the share of
  * the month counted (cost ÷ salary). Interns carry no charges.
  */
-export function socialCharges(
-  lines: SalaryLine[],
-  h: Pick<Hypotheses, "tauxCharges" | "mutuelle" | "ticketsResto" | "medecine">,
-): SocialCharges {
-  let gross = 0, heads = 0;
+type ChargeRates = Pick<Hypotheses, "tauxCharges" | "mutuelle" | "ticketsResto" | "medecine">;
+
+/** One person's employer charges for the month (none for interns or without a salary on file). */
+export function socialChargesOf(l: SalaryLine, h: ChargeRates): SocialCharges {
+  if (l.contractType === "Internship" || !l.salary) return { urssaf: 0, mutuelle: 0, tickets: 0, medecine: 0 };
+  const head = l.cost / l.salary;
+  return { urssaf: (l.cost * h.tauxCharges) / 100, mutuelle: head * h.mutuelle, tickets: head * h.ticketsResto, medecine: (head * h.medecine) / 12 };
+}
+
+export function socialCharges(lines: SalaryLine[], h: ChargeRates): SocialCharges {
+  const t = { urssaf: 0, mutuelle: 0, tickets: 0, medecine: 0 };
   for (const l of lines) {
-    if (l.contractType === "Internship" || !l.salary) continue;
-    gross += l.cost;
-    heads += l.cost / l.salary;
+    const c = socialChargesOf(l, h);
+    t.urssaf += c.urssaf; t.mutuelle += c.mutuelle; t.tickets += c.tickets; t.medecine += c.medecine;
   }
-  return {
-    urssaf: (gross * h.tauxCharges) / 100,
-    mutuelle: heads * h.mutuelle,
-    tickets: heads * h.ticketsResto,
-    medecine: (heads * h.medecine) / 12,
-  };
+  return t;
 }

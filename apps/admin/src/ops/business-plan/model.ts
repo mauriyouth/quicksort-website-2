@@ -247,7 +247,7 @@ export type VatActual = { collected: number; deductible: number; remitted: numbe
 export type RowKind = "line" | "sub" | "total" | "key" | "pct" | "section";
 export type PlanRow = {
   /** Set on rows that open a drill-down panel. */
-  key?: "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | FixedLineKey;
+  key?: "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | "cotc" | "cots" | FixedLineKey;
   kind: RowKind;
   label: string;
   values: number[];
@@ -269,7 +269,7 @@ export function planRows(r: PlanResult): PlanRow[] {
     { ...line("line", "Freelances", S.free), key: "free" },
     { ...line("line", "Salaires consultants (brut)", S.sal), key: "sal" },
     { ...line("sub", "— dont inter-contrats", S.inter), key: "inter" },
-    line("line", "Cotisations sociales consultants", S.cotc),
+    { ...line("line", "Cotisations sociales consultants", S.cotc), key: "cotc" },
     line("total", "Total coûts de production", S.prod),
     sec("Charges variables"),
     line("line", "Commission factor", S.fac),
@@ -280,7 +280,7 @@ export function planRows(r: PlanResult): PlanRow[] {
     line("pct", "Taux de marge brute", S.mbp, T.mbPct),
     sec("Charges fixes"),
     { ...line("line", "Salaires structure (brut)", S.fs), key: "fs" },
-    line("line", "Cotisations sociales structure", S.cots),
+    { ...line("line", "Cotisations sociales structure", S.cots), key: "cots" },
     { ...line("line", "Loyer et locaux", S.fl), key: "loyer" },
     { ...line("line", "Outils, cloud et licences IA", S.fo), key: "outils" },
     { ...line("line", "Marketing et événements", S.fm), key: "marketing" },

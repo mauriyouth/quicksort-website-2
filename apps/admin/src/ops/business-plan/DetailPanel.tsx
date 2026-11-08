@@ -28,8 +28,8 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@quicksort-sas/ui";
-import type { Aggregate, BankRow, SalaryLine, StructureEntry } from "./actuals";
-import { fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type FixedLineKey, type Hypotheses, type PlanResult, type VatActual, VAT_RATE } from "./model";
+import { socialChargesOf, type Aggregate, type BankRow, type SalaryLine, type StructureEntry } from "./actuals";
+import { chargesTotal, fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type FixedLineKey, type Hypotheses, type PlanResult, type VatActual, VAT_RATE } from "./model";
 
 /**
  * Drill-down panel for the P&L rows "Chiffre d’affaires", "Salaires
@@ -41,7 +41,7 @@ import { fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type Fi
  * forecast months show the formula plus today's named team, the base the
  * forecast projects from.
  */
-export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | FixedLineKey;
+export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | "cotc" | "cots" | FixedLineKey;
 
 const TITLES: Record<DetailKind, string> = {
   ca: "Chiffre d'affaires",
@@ -51,6 +51,8 @@ const TITLES: Record<DetailKind, string> = {
   inter: "Inter-contrats",
   enc: "Encaissements clients",
   tva: "TVA (effet trésorerie)",
+  cotc: "Cotisations sociales consultants",
+  cots: "Cotisations sociales structure",
   loyer: "Loyer et locaux",
   outils: "Outils, cloud et licences IA",
   marketing: "Marketing et événements",
@@ -147,6 +149,7 @@ export function DetailPanel({
           : kind === "inter" ? <InterBody {...body} />
           : kind === "enc" ? <CollectionBody {...body} />
           : kind === "tva" ? <VatBody {...body} />
+          : kind === "cotc" || kind === "cots" ? <ChargesBody {...body} forStructure={kind === "cots"} />
           : kind === "free" ? <FreelanceBody {...body} />
           : <FixedBody key={kind} line={kind} {...body} />}
         </div>
@@ -661,6 +664,87 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
           )}
         </Formula>
       )}
+    </>
+  );
+}
+
+/* ── Social charges ─────────────────────────────────────────────────── */
+
+function ChargesBody({ month, plan, agg, hypotheses: H, forStructure: structure }: BodyProps & { forStructure: boolean }) {
+  const S = plan.series;
+  const actual = plan.actual[month];
+  // Structure lines exist for every month (measured or projected); consultant lines only for closed months.
+  const rows = structure ? agg.structureLines[month] : actual ? agg.salaryLines[month] : null;
+  const total = structure ? S.cots[month] : S.cotc[month];
+  const people = (rows ?? []).map((l) => ({ l, c: socialChargesOf(l, H) }));
+  const heads = (rows ?? []).reduce((t, l) => t + (l.contractType !== "Internship" && l.salary ? l.cost / l.salary : 0), 0);
+  const salaried = S.cons[month] * (1 - H.pctFree / 100);
+  const gross = structure ? S.fs[month] : S.sal[month];
+  const perHead = H.mutuelle + H.ticketsResto + H.medecine / 12;
+
+  return (
+    <>
+      <PanelStats>
+        <PanelStat label={<>Total cotisations</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>soit</>}>{gross ? pct(total / gross) : "—"} du brut</PanelStat>
+        <PanelStat label={<>{rows ? "Salariés (équivalent mois)" : "Salariés (est.)"}</>}>{dec(rows ? heads : salaried)}</PanelStat>
+      </PanelStats>
+
+      {rows ? (
+        rows.length === 0 ? (
+          <p className="m-0 text-sm text-muted-foreground">Aucun salarié {structure ? "de structure" : "consultant"} ce mois-ci.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{structure ? "Personne" : "Consultant"}</TableHead>
+                <TableHead numeric>Brut du mois</TableHead>
+                <TableHead numeric>URSSAF et retraite</TableHead>
+                <TableHead numeric>Mutuelle, tickets, médecine</TableHead>
+                <TableHead numeric>Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {people.map(({ l, c }) => (
+                <TableRow key={l.employeeId}>
+                  <TableCell className="whitespace-normal">
+                    <span className="font-medium">{l.name}</span>
+                    {l.contractType === "Internship" && <div className="text-xs text-muted-foreground">stage : pas de cotisations</div>}
+                    {l.salary === null && <div className="text-xs text-muted-foreground">salaire non renseigné</div>}
+                    {l.salary !== null && l.cost < l.salary && <div className="text-xs text-muted-foreground">au prorata du mois ({pct(l.cost / l.salary)})</div>}
+                  </TableCell>
+                  <TableCell numeric>{eur(l.cost)}</TableCell>
+                  <TableCell numeric>{eur(c.urssaf)}</TableCell>
+                  <TableCell numeric>{eur(c.mutuelle + c.tickets + c.medecine)}</TableCell>
+                  <TableCell numeric>{eur(chargesTotal(c))}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell>Total</TableCell>
+                <TableCell numeric>{eur(people.reduce((t, p) => t + p.l.cost, 0))}</TableCell>
+                <TableCell numeric>{eur(people.reduce((t, p) => t + p.c.urssaf, 0))}</TableCell>
+                <TableCell numeric>{eur(people.reduce((t, p) => t + p.c.mutuelle + p.c.tickets + p.c.medecine, 0))}</TableCell>
+                <TableCell numeric>{eur(total)}</TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        )
+      ) : (
+        <Formula>
+          <FormulaRow label={<>Salaires consultants (brut)</>}>{eur(gross)}</FormulaRow>
+          <FormulaRow label={<>× URSSAF et retraite ({fmt(H.tauxCharges)} %)</>}>{eur((gross * H.tauxCharges) / 100)}</FormulaRow>
+          <FormulaRow label={<>+ salariés staffés (est. {dec(salaried)}) × {eur(perHead)} / mois</>}>{eur(salaried * perHead)}</FormulaRow>
+          <FormulaRow total label={<>= Cotisations sociales consultants</>}>{eur(total)}</FormulaRow>
+        </Formula>
+      )}
+
+      <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+        URSSAF et retraite = {fmt(H.tauxCharges)} % du brut ; par salarié et par mois : mutuelle {eur(H.mutuelle)}, tickets restaurant{" "}
+        {eur(H.ticketsResto)}, médecine du travail {eur(H.medecine / 12)} ({eur(H.medecine)} / an), au prorata de la part du mois comptée.
+        Stagiaires exclus. Hypothèses calées sur l'arrêté comptable de janvier–juillet 2026, modifiables dans « Hypothèses » → Cotisations sociales.
+      </p>
     </>
   );
 }

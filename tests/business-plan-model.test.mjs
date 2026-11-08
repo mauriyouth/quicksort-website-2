@@ -9,7 +9,7 @@ import {
   kEur,
   pct,
 } from "../apps/admin/src/ops/business-plan/model.ts";
-import { aggregateFixedCharges, aggregateVat, isVatRemittance, socialCharges } from "../apps/admin/src/ops/business-plan/actuals.ts";
+import { aggregateFixedCharges, aggregateVat, isVatRemittance, socialCharges, socialChargesOf } from "../apps/admin/src/ops/business-plan/actuals.ts";
 
 const VENTES = [2, 1, 2, 1, 1, 2, 1, 0, 2, 2, 1, 1];
 const DEPARTS = [0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0];
@@ -576,4 +576,16 @@ test("planRows: gross salary lines, charge lines and the social-charges section"
   const sec = labels.indexOf("Cotisations sociales");
   assert.deepEqual(labels.slice(sec + 1, sec + 6), ["URSSAF et retraite", "Mutuelle", "Tickets restaurant", "Médecine du travail", "Total cotisations sociales"]);
   assert.ok(sec > labels.indexOf("Marge d’exploitation (EBIT / CA)") && sec < labels.indexOf("Trésorerie"));
+});
+
+test("socialChargesOf: one person's charges, prorated; interns and missing salaries carry none", () => {
+  assert.deepEqual(socialChargesOf(sl({ cost: 2500 }), H_COT), { urssaf: 750, mutuelle: 75, tickets: 80, medecine: 5 });
+  assert.deepEqual(socialChargesOf(sl({ contractType: "Internship" }), H_COT), { urssaf: 0, mutuelle: 0, tickets: 0, medecine: 0 });
+  assert.deepEqual(socialChargesOf(sl({ salary: null }), H_COT), { urssaf: 0, mutuelle: 0, tickets: 0, medecine: 0 });
+});
+
+test("planRows: both social-charge lines open a drill-down", () => {
+  const rows = planRows(computePlan(H_COT, [forecast(0)]));
+  assert.equal(rows.find((r) => r.label === "Cotisations sociales consultants").key, "cotc");
+  assert.equal(rows.find((r) => r.label === "Cotisations sociales structure").key, "cots");
 });

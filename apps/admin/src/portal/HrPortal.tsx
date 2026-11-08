@@ -373,7 +373,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
       )}
       {tab === "cra" && <>
         <PageHeading title="Monthly CRA">
-          Fill your month day by day — or paint whole ranges — then save. Mornings and afternoons can be filled separately.
+          Fill your month day by day, or paint whole ranges, then save. Mornings and afternoons can be filled separately.
         </PageHeading>
         <CraScreen audience="employee" draftOwner={email} basePath="/cra" />
       </>}
@@ -382,8 +382,6 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
         <>
           <Card>
             <CardContent className="flex flex-col items-start gap-3 py-2">
-              <span className="label-mono">Let’s get you ready</span>
-              <h1 className="m-0 max-w-xl text-2xl font-medium tracking-tight sm:text-3xl">Great work starts with a thoughtful beginning.</h1>
               <p className="m-0 max-w-xl text-sm text-muted-foreground">
                 Keep your documents, agreements and access requests together. Your
                 Quicksort team is here to help along the way.
@@ -468,7 +466,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
                 ))}
                 </ul>
               ) : (
-                <EmptyState title="You’re all caught up">
+                <EmptyState title="You're all caught up">
                   New contracts will appear here when your team shares them.
                 </EmptyState>
               )}
@@ -499,7 +497,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           <AlertDialog open={!!removing} onOpenChange={(open) => { if (!open) setRemoving(null); }}>
             <AlertDialogContent size="sm">
               <AlertDialogHeader>
-                <AlertDialogTitle>Remove “{removing?.name}”?</AlertDialogTitle>
+                <AlertDialogTitle>Remove "{removing?.name}"?</AlertDialogTitle>
                 <AlertDialogDescription>HR will no longer see this file. You can send it again later.</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -598,7 +596,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
             <CardContent>
             {!contracts.length && !loading && (
               <EmptyState title="No contracts yet">
-                Your team will share your agreements here when they’re ready.
+                Your team will share your agreements here when they're ready.
               </EmptyState>
             )}
             <ul className={LIST}>

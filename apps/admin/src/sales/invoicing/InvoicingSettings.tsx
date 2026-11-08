@@ -192,7 +192,7 @@ export function InvoicingSettings({ api, focus, onSaved }: { api: InvoicingApi; 
           </SettingsRow>
           <SettingsRow label="Secret key">
             <Input aria-label="Secret key" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="new-password"
-              placeholder={connected ? "Saved — type a new key to replace it" : "Paste the secret key"} disabled={locked} />
+              placeholder={connected ? "Saved. Type a new key to replace it" : "Paste the secret key"} disabled={locked} />
           </SettingsRow>
           <SettingsRow label="Main account (IBAN)" hint={<span className={accountsError ? "text-destructive" : undefined}>{accountsError || (connected ? "Payments are expected on this account." : "Accounts are listed once Qonto is connected.")}</span>}>
             {accounts && accounts.length > 0 ? (
@@ -220,7 +220,7 @@ export function InvoicingSettings({ api, focus, onSaved }: { api: InvoicingApi; 
               <Field className="gap-1.5">
                 <FieldLabel htmlFor="inv-staging-token">Sandbox staging token</FieldLabel>
                 <Input id="inv-staging-token" type="password" value={stagingToken} onChange={(e) => setStagingToken(e.target.value)} autoComplete="new-password"
-                  placeholder={connected ? "Saved — type a new token to replace it" : "Paste the staging token"} disabled={locked} />
+                  placeholder={connected ? "Saved. Type a new token to replace it" : "Paste the staging token"} disabled={locked} />
               </Field>
             )}
           </SettingsRow>

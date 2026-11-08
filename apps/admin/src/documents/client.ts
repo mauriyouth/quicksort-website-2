@@ -9,6 +9,13 @@ export { parisToday, expiryState, expiryLabel, type ExpiryState } from "./expiry
  * touching storage goes through /api/documents (apps/admin/server/documents).
  */
 export type DocumentOwner = { kind: DocumentOwnerKind; id: string };
+
+/**
+ * The company's own papers (Operations → Admin). There is one company, so its
+ * documents have no owner column; this fixed id stands in for it in API
+ * requests and the folder cache. Mirrors server/documents/folders.ts.
+ */
+export const COMPANY_OWNER: DocumentOwner = { kind: "company", id: "00000000-0000-4000-8000-00000000c0de" };
 export type UnfiledFile = { id: string; name: string; mimeType: string; size: number | null; modifiedAt: string | null; link: string | null };
 export type DocumentMetadata = {
   typeCode: string;
@@ -190,7 +197,8 @@ export async function loadDocumentActivity(personId: string) {
   return (data || []) as DocumentActivityEvent[];
 }
 
-const ownerColumn = (kind: DocumentOwnerKind) => `${kind}_id` as const;
+/** The company has no owner column; callers filter it by owner_kind instead. */
+const ownerColumn = (kind: Exclude<DocumentOwnerKind, "company">) => `${kind}_id` as const;
 
 export async function loadDocumentTypes() {
   const { data, error } = await db().from("document_types").select("*").order("position");
@@ -199,7 +207,9 @@ export async function loadDocumentTypes() {
 }
 
 export async function loadOwnerDocuments(owner: DocumentOwner) {
-  const { data, error } = await db().from("documents").select("*").eq(ownerColumn(owner.kind), owner.id).order("created_at", { ascending: false });
+  const query = db().from("documents").select("*");
+  const { data, error } = await (owner.kind === "company" ? query.eq("owner_kind", "company") : query.eq(ownerColumn(owner.kind), owner.id))
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []) as DocumentRecord[];
 }
@@ -229,7 +239,7 @@ export async function loadAlerts(filter?: { kind: DocumentOwnerKind; id?: string
   let query = db().from("document_alerts").select("*");
   if (filter) {
     query = query.eq("owner_kind", filter.kind);
-    if (filter.id) query = query.eq(ownerColumn(filter.kind), filter.id);
+    if (filter.id && filter.kind !== "company") query = query.eq(ownerColumn(filter.kind), filter.id);
   }
   const { data, error } = await query;
   if (error) throw error;

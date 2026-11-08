@@ -44,7 +44,7 @@ import { fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type Fi
 export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | FixedLineKey;
 
 const TITLES: Record<DetailKind, string> = {
-  ca: "Chiffre d’affaires",
+  ca: "Chiffre d'affaires",
   sal: "Salaires consultants chargés",
   free: "Freelances",
   fs: "Salaires structure chargés",
@@ -232,8 +232,8 @@ function RevenueBody({ month, plan, agg, hypotheses: H }: BodyProps) {
           )}
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
             Factures finalisées ou payées (hors factures ignorées), rattachées à leur{" "}
-            {agg.revenueBasis === "issue" ? "mois d’émission" : "mois de prestation"}
-            {byIssue > 0 && ` ; sans mois de prestation, à leur mois d’émission (${plural(byIssue, "facture")})`}. Montants hors taxes.
+            {agg.revenueBasis === "issue" ? "mois d'émission" : "mois de prestation"}
+            {byIssue > 0 && ` ; sans mois de prestation, à leur mois d'émission (${plural(byIssue, "facture")})`}. Montants hors taxes.
           </p>
         </>
       ) : (
@@ -242,9 +242,9 @@ function RevenueBody({ month, plan, agg, hypotheses: H }: BodyProps) {
           <FormulaRow label={<>× jours facturables × TJM</>}>{eur(nf * H.jours * H.tjm)}</FormulaRow>
           <FormulaRow label={<>Salariés staffés</>}>{dec(ns)}</FormulaRow>
           <FormulaRow label={<>× jours × occupation {pct(H.occ / 100)} × TJM</>}>{eur(ns * H.jours * (H.occ / 100) * H.tjm)}</FormulaRow>
-          <FormulaRow total label={<>= Chiffre d’affaires</>}>{eur(total)}</FormulaRow>
+          <FormulaRow total label={<>= Chiffre d'affaires</>}>{eur(total)}</FormulaRow>
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « TJM moyen facturé », « Jours ouvrés facturables », « Taux d’occupation des salariés »
+            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « TJM moyen facturé », « Jours ouvrés facturables », « Taux d'occupation des salariés »
             ou les ventes / départs pour ajuster.
           </p>
         </Formula>
@@ -348,12 +348,12 @@ function CollectionBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
           {source >= 0 ? (
             <FormulaRow label={<>CA de {MONTH_NAMES[source]} {year} ({plan.actual[source] ? "réel" : "prévisionnel"})</>}>{eur(S.ca[source])}</FormulaRow>
           ) : (
-            <FormulaRow label={<>CA de {MONTH_NAMES[0]} {year} (mois source antérieur à l’année)</>}>{eur(S.ca[0] ?? 0)}</FormulaRow>
+            <FormulaRow label={<>CA de {MONTH_NAMES[0]} {year} (mois source antérieur à l'année)</>}>{eur(S.ca[0] ?? 0)}</FormulaRow>
           )}
           <FormulaRow total label={<>= Encaissements</>}>{eur(total)}</FormulaRow>
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
             Mois prévisionnel : le CA est encaissé {`${lag} mois`} après le mois de prestation (délai client {fmt(H.dso)} j ÷ 30, arrondi).
-            {source < 0 && " Le mois source tombant l’année précédente, on reprend le CA de janvier."} Modifiez « Délai de paiement clients » pour ajuster.
+            {source < 0 && " Le mois source tombant l'année précédente, on reprend le CA de janvier."} Modifiez « Délai de paiement clients » pour ajuster.
           </p>
         </Formula>
       )}
@@ -375,19 +375,19 @@ function VatBody({ month, plan, vat }: BodyProps) {
       <PanelStats>
         <PanelStat label={<>Effet sur la trésorerie</>}>{signed(S.tva[month])}</PanelStat>
         <PanelStat label={<>TVA encaissée</>}>{eur(S.tvaCol[month])}</PanelStat>
-        <PanelStat label={<>TVA reversée à l’État</>}>{eur(S.tvaRem[month])}</PanelStat>
+        <PanelStat label={<>TVA reversée à l'État</>}>{eur(S.tvaRem[month])}</PanelStat>
       </PanelStats>
 
       <Formula>
         <FormulaRow label={<>TVA encaissée{real ? " (factures payées ce mois)" : ` (${rate} des encaissements)`}</>}>{signed(S.tvaCol[month])}</FormulaRow>
         <FormulaRow label={<>TVA payée aux fournisseurs{real ? " (dépenses Qonto du mois)" : ` (${rate} des freelances et charges fixes hors salaires)`}</>}>{signed(-S.tvaDed[month])}</FormulaRow>
-        <FormulaRow label={<>TVA reversée à l’État{real ? " (paiements DGFIP du mois)" : " (solde du mois précédent)"}</>}>{signed(-S.tvaRem[month])}</FormulaRow>
+        <FormulaRow label={<>TVA reversée à l'État{real ? " (paiements DGFIP du mois)" : " (solde du mois précédent)"}</>}>{signed(-S.tvaRem[month])}</FormulaRow>
         <FormulaRow total label={<>= Effet TVA sur la trésorerie</>}>{signed(S.tva[month])}</FormulaRow>
       </Formula>
 
       {real && paid ? (
         paid.length === 0 ? (
-          <p className="m-0 text-sm text-muted-foreground">Aucun paiement de TVA à l’État ce mois-ci.</p>
+          <p className="m-0 text-sm text-muted-foreground">Aucun paiement de TVA à l'État ce mois-ci.</p>
         ) : (
           <Table>
             <TableHeader>
@@ -413,7 +413,7 @@ function VatBody({ month, plan, vat }: BodyProps) {
       <p className="m-0 text-xs leading-relaxed text-muted-foreground">
         {real
           ? "Mois réel : TVA des factures clients payées ce mois, TVA indiquée par Qonto sur les dépenses du mois, et paiements de TVA à la DGFIP (référence « TVA-… CA3 »)."
-          : `Estimation : ${rate} sur les encaissements et sur les achats soumis à TVA (freelances et charges fixes hors salaires) ; le solde est reversé le mois suivant, jamais négatif (un crédit de TVA n’est pas remboursé ici).`}
+          : `Estimation : ${rate} sur les encaissements et sur les achats soumis à TVA (freelances et charges fixes hors salaires) ; le solde est reversé le mois suivant, jamais négatif (un crédit de TVA n'est pas remboursé ici).`}
         {" "}Le compte de résultat reste hors taxes : seule la trésorerie est concernée.
       </p>
     </>
@@ -502,15 +502,15 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
       <p className="m-0 text-xs leading-relaxed text-muted-foreground">
         {actual
           ? "Mois réel : salaire mensuel brut en vigueur sur le mois × multiplicateur de charges, pour chaque personne de structure en poste."
-          : "Mois prévisionnel : dernier salaire connu × multiplicateur de charges, pour chaque personne de structure en poste ce mois-ci (jusqu’à sa sortie)."}{" "}
+          : "Mois prévisionnel : dernier salaire connu × multiplicateur de charges, pour chaque personne de structure en poste ce mois-ci (jusqu'à sa sortie)."}{" "}
         Période commençant ou finissant en cours de mois : au prorata des jours ouvrés. Stagiaires : coût = salaire × 1,4 (charges patronales très faibles).{" "}
-        Les jours ouvrés en mission (confirmée, active ou terminée, au prorata de l’allocation) basculent en salaires consultants.
+        Les jours ouvrés en mission (confirmée, active ou terminée, au prorata de l'allocation) basculent en salaires consultants.
         Hors période, et pour les autres salariés : consultant (inter-contrat sans mission).
       </p>
 
       <h3 className="m-0 mt-2 text-base font-medium">Personnes de structure</h3>
       {members.length === 0 ? (
-        <p className="m-0 text-sm text-muted-foreground">Personne n’est listé en structure.</p>
+        <p className="m-0 text-sm text-muted-foreground">Personne n'est listé en structure.</p>
       ) : (
         <Table>
           <TableBody>
@@ -526,7 +526,7 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
           <NativeSelect id="bp-structure-pick" className="min-w-56 flex-1" value={pick} onChange={(e) => setPick(e.target.value)} disabled={busy}>
             <NativeSelectOption value="">Choisir un salarié…</NativeSelectOption>
             {others.map((e) => (
-              <NativeSelectOption key={e.id} value={e.id}>{e.name}{e.detail ? ` — ${e.detail}` : ""}</NativeSelectOption>
+              <NativeSelectOption key={e.id} value={e.id}>{e.name}{e.detail ? `, ${e.detail}` : ""}</NativeSelectOption>
             ))}
           </NativeSelect>
           <Button disabled={busy || !pick} onClick={() => save(pick, { employee_id: pick })}>
@@ -576,7 +576,7 @@ function StructureMember({
         <div className={cn("text-xs", invalid ? "text-destructive" : "text-muted-foreground")}>
           {invalid
             ? "La fin doit suivre le début."
-            : `${start ? `Du ${frDate(start)}` : `Depuis l’embauche (${frDate(e.hired)})`} ${end ? `au ${frDate(end)}` : e.exit ? `jusqu’à la sortie (${frDate(e.exit)})` : "sans fin"}`}
+            : `${start ? `Du ${frDate(start)}` : `Depuis l'embauche (${frDate(e.hired)})`} ${end ? `au ${frDate(end)}` : e.exit ? `jusqu'à la sortie (${frDate(e.exit)})` : "sans fin"}`}
         </div>
       </TableCell>
       <TableCell className="text-right align-top">
@@ -647,15 +647,15 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
           <FormulaRow label={<>dont inter-contrats (1 − occupation {pct(H.occ / 100)})</>}>{eur(inter)}</FormulaRow>
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
             Mois prévisionnel : calculé depuis les hypothèses. Modifiez « Salaire chargé consultant / mois », « Part de freelances » ou
-            « Taux d’occupation » pour ajuster.
+            « Taux d'occupation » pour ajuster.
           </p>
           <h3 className="m-0 mt-2 text-base font-medium">Équipe salariée actuelle</h3>
           {current.length === 0 ? (
-            <p className="m-0 text-sm text-muted-foreground">Aucun consultant salarié en poste aujourd’hui.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucun consultant salarié en poste aujourd'hui.</p>
           ) : (
             <>
               <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-                {plural(current.length, "consultant")} salarié{current.length > 1 ? "s" : ""} en poste aujourd’hui · coût chargé réel{" "}
+                {plural(current.length, "consultant")} salarié{current.length > 1 ? "s" : ""} en poste aujourd'hui · coût chargé réel{" "}
                 {eur(currentTotal)} / mois
                 {currentWithSalary > 0 && <> · moyenne {eur(currentTotal / currentWithSalary)} (hypothèse : {eur(H.salaire)})</>}
               </p>
@@ -702,7 +702,7 @@ function InterBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyPr
           )}
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
             Inter-contrat = consultant salarié sans mission confirmée, active ou terminée sur le mois. Coût = salaire mensuel brut × multiplicateur
-            de charges. Les personnes de structure n’y figurent jamais.
+            de charges. Les personnes de structure n'y figurent jamais.
           </p>
         </>
       ) : (
@@ -711,15 +711,15 @@ function InterBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyPr
           <FormulaRow label={<>× (1 − occupation {pct(H.occ / 100)})</>}>{pct(1 - H.occ / 100)}</FormulaRow>
           <FormulaRow total label={<>= Inter-contrats</>}>{eur(total)}</FormulaRow>
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-            Mois prévisionnel : part non occupée des salariés, d’après l’hypothèse « Taux d’occupation des salariés ».
+            Mois prévisionnel : part non occupée des salariés, d'après l'hypothèse « Taux d'occupation des salariés ».
           </p>
-          <h3 className="m-0 mt-2 text-base font-medium">Salariés sans mission aujourd’hui</h3>
+          <h3 className="m-0 mt-2 text-base font-medium">Salariés sans mission aujourd'hui</h3>
           {benched.length === 0 ? (
-            <p className="m-0 text-sm text-muted-foreground">Aucun consultant salarié sans mission aujourd’hui.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucun consultant salarié sans mission aujourd'hui.</p>
           ) : (
             <>
               <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-                {plural(benched.length, "consultant")} sans mission aujourd’hui · coût chargé réel {eur(benchedTotal)} / mois
+                {plural(benched.length, "consultant")} sans mission aujourd'hui · coût chargé réel {eur(benchedTotal)} / mois
               </p>
               <SalaryRoster rows={benched} multiplier={multiplier} total={benchedTotal} monthStart={monthStartOf(year, month)} />
             </>
@@ -817,11 +817,11 @@ function FreelanceBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
           </p>
           <h3 className="m-0 mt-2 text-base font-medium">Freelances actuels</h3>
           {current.length === 0 ? (
-            <p className="m-0 text-sm text-muted-foreground">Aucun freelance en poste aujourd’hui.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucun freelance en poste aujourd'hui.</p>
           ) : (
             <>
               <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-                {plural(current.length, "freelance")} aujourd’hui
+                {plural(current.length, "freelance")} aujourd'hui
                 {avgRate !== null && <> · taux moyen réel {eur(avgRate)} / jour (hypothèse : {eur(H.coutFree)})</>}
               </p>
               <Table>
@@ -900,9 +900,9 @@ function FixedBody({ line, month, plan, hypotheses: H, bank }: BodyProps & { lin
         <p className="m-0 text-xs leading-relaxed text-muted-foreground">
           {actual
             ? "Pas de données Qonto pour ce mois : hypothèse affichée."
-            : `Mois prévisionnel : hypothèse « ${TITLES[line]} » (${eur(hypothesis)} / mois), modifiable dans l’onglet Hypothèses.`}{" "}
+            : `Mois prévisionnel : hypothèse « ${TITLES[line]} » (${eur(hypothesis)} / mois), modifiable dans l'onglet Hypothèses.`}{" "}
           {mean === null
-            ? "Aucun mois clôturé de l’année n’est encore couvert par Qonto."
+            ? "Aucun mois clôturé de l'année n'est encore couvert par Qonto."
             : `Moyenne réelle : transactions Qonto HT classées sur ${recent.length > 1 ? `les ${recent.length} derniers mois clôturés couverts` : "le dernier mois clôturé couvert"}.`}
         </p>
       </>
@@ -993,8 +993,8 @@ function FixedBody({ line, month, plan, hypotheses: H, bank }: BodyProps & { lin
         </Table>
       )}
       <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-        Débits Qonto réglés, classés par l’IA (Kimi) ou corrigés à la main, montants hors taxes (TTC − TVA ; sans TVA connue, HT = TTC).
-        Changer la ligne d’une transaction recalcule le plan ; la correction sert d’exemple aux prochains classements.
+        Débits Qonto réglés, classés par l'IA (Kimi) ou corrigés à la main, montants hors taxes (TTC − TVA ; sans TVA connue, HT = TTC).
+        Changer la ligne d'une transaction recalcule le plan ; la correction sert d'exemple aux prochains classements.
       </p>
     </>
   );

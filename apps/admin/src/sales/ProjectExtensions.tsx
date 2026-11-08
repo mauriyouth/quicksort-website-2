@@ -930,7 +930,7 @@ export function ProjectExtensionsSection({
       )}
       {extensions !== null && !extensions.length && !adding && (
         <p className="m-0 text-[13px] text-muted-foreground">
-          No extensions yet — add one when the contract is renewed.
+          No extensions yet. Add one when the contract is renewed.
         </p>
       )}
 
@@ -1194,7 +1194,7 @@ export function ProjectExtensionsSection({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete extension “{deleting?.label || "Extension"}”?
+              Delete extension "{deleting?.label || "Extension"}"?
             </AlertDialogTitle>
             <AlertDialogDescription>
               The renewal and its pricing lines are removed. The project end

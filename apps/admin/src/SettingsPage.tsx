@@ -3,7 +3,6 @@ import { ArrowUpRight } from "lucide-react";
 import { Button } from "@quicksort-sas/ui";
 import { SettingsCard, SettingsRow } from "./settings-ui";
 import { AiSettings } from "./AiSettings";
-import { BoondImport } from "./BoondImport";
 import { GoogleDriveSettings } from "./GoogleDriveSettings";
 
 export type SettingsSection = "account" | "ai" | "drive";
@@ -28,7 +27,6 @@ export function SettingsPage({
       {section === "account" && <AccountCard email={email} />}
       {section === "ai" && <AiSettings isOwner={isOwner} />}
       {section === "drive" && <GoogleDriveSettings isOwner={isOwner} />}
-      {section === "account" && <BoondImport isOwner={isOwner} />}
     </div>
   );
 }

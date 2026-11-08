@@ -333,7 +333,7 @@ export function SpotlightSearch({
         <CommandList className="max-h-[min(60vh,28rem)]">
           <CommandEmpty>
             <div className="flex flex-col gap-1">
-              <span className="font-medium text-foreground">No results for “{query.trim()}”</span>
+              <span className="font-medium text-foreground">No results for "{query.trim()}"</span>
               <span>Check the spelling or search for a page, name or title</span>
             </div>
           </CommandEmpty>

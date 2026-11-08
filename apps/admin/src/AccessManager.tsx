@@ -237,7 +237,7 @@ export function AccessManager() {
 
       <Section
         title="Workspace rights"
-        description="Fine-grained staff rights — employee, HR, or sales. Admin access is reviewed above; owner accounts are excluded."
+        description="Fine-grained staff rights: employee, HR, or sales. Admin access is reviewed above; owner accounts are excluded."
       >
         <form onSubmit={assignRole}>
           <FieldGroup>

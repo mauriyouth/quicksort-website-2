@@ -97,7 +97,9 @@ export function MyDocuments({ folder, uploads, types, busy, loading, onUpload, o
   const checklist: Row[] = [...groups].map(([key, members]) => {
     const codes = new Set(members.map((t) => t.code));
     const label = members.map((t) => t.label).join(" or ");
-    const docs = active.filter((d) => codes.has(d.type_code));
+    // Most up-to-date first (a titre and its récépissé share a group).
+    const docs = active.filter((d) => codes.has(d.type_code))
+      .sort((a, b) => (b.expires_on || "9999-12-31").localeCompare(a.expires_on || "9999-12-31"));
     const valid = docs.find((d) => expiryState(d, d).tone !== "expired");
     const doc = valid ?? docs[0];
     const selfUpload = members.find((t) => t.self_upload)?.code;

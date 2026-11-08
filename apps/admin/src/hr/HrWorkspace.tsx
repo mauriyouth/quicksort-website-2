@@ -44,32 +44,17 @@ import { Intake } from './Intake';
 import { CraScreen } from '../cra/CraScreen';
 import { loadMonth } from '../cra/data';
 import { balanceFor, fmtDays, useLeaveBalances } from '../cra/balances';
-import { monthDays } from '../cra/domain';
+import { accruesLeave, monthDays } from '../cra/domain';
 import './workspace.css';
 import { DocumentAlertsQueue } from '../documents/DocumentAlerts';
 import { PersonPhoto } from '../documents/PersonPhoto';
 import { PaidLeaveAdjust } from './PaidLeaveAdjust';
 export type HrView = 'overview' | 'recruiting' | 'people' | 'journeys';
-const viewCopy: Record<HrView, {
-  title: string;
-  description: string;
-}> = {
-  overview: {
-    title: 'The next move, clearly.',
-    description: 'Recruitment decisions, new arrivals and departures in one working queue.'
-  },
-  recruiting: {
-    title: 'Build your next team.',
-    description: 'Connect hiring needs, applications, interviews and employment offers.'
-  },
-  people: {
-    title: 'One person. Every chapter.',
-    description: 'Candidates, colleagues and alumni — with staffing capacity and monthly CRA in the same place.'
-  },
-  journeys: {
-    title: 'Make every handoff count.',
-    description: 'Preboarding, onboarding, probation and offboarding with owners and evidence.'
-  }
+const viewTitles: Record<HrView, string> = {
+  overview: 'Overview',
+  recruiting: 'Recruiting',
+  people: 'People',
+  journeys: 'Journeys'
 };
 type OpenPerson = (personId: string, applicationId?: string, employeeId?: string) => void;
 type PageContext = RecordContext & {
@@ -239,7 +224,7 @@ export function HrWorkspace({
     openProject
   } : null;
   return <div className="flex min-w-0 flex-col gap-6" aria-busy={loading}>
-    {!(selectedPerson && canRecruit) && <PageHeading eyebrow={`People operations · ${label(view)}`} title={viewCopy[view].title} action={<div className="flex flex-wrap gap-2">
+    {!(selectedPerson && canRecruit) && <PageHeading eyebrow="People operations" title={viewTitles[view]} action={<div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={loading || busy} onClick={() => {
           setLoading(true);
           setError('');
@@ -248,7 +233,6 @@ export function HrWorkspace({
         {canRecruit && <Button variant="pivot" onClick={() => setIntake(true)}><Plus aria-hidden="true" /> Add person</Button>}
         {!canRecruit && view === 'people' && <Button variant="outline" onClick={() => setMyCra(true)}><CalendarDays aria-hidden="true" /> My CRA</Button>}
       </div>}>
-      {viewCopy[view].description}
     </PageHeading>}
     <PageAlerts error={error} message={message} />
     {loading && !workspace ? <Empty>
@@ -343,20 +327,23 @@ function PersonPage({
   const employees = context.workspace.employees.filter(employee => employee.person_id === person.id);
   const lastCra = useLastCra(employees);
   // Remaining leave across every employment period of this person, net of
-  // CRA consumption (CP and RTT accrue per calendar month from each start).
+  // CRA consumption (per calendar month from each start: CP at month end, RTT at its start).
   const { balances, error: balanceError, reload: reloadBalances } = useLeaveBalances(employees.map(employee => employee.id));
   // Paid leave is adjusted on the live employment, else the latest one.
-  const leaveEmployee = live && live.contract_type !== 'Freelance' ? live : [...employees].filter(employee => employee.contract_type !== 'Freelance').sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
+  const leaveEmployee = live && accruesLeave(live) ? live : [...employees].filter(accruesLeave).sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
   const [adjustingLeave, setAdjustingLeave] = useState(false);
-  const cpLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'cp'), 0);
-  const rttLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'rtt'), 0);
+  // CP/RTT only accrue on salaried contracts; freelance and internal
+  // employments have no balance.
+  const leaveEmployees = employees.filter(accruesLeave);
+  const cpLeft = leaveEmployees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'cp'), 0);
+  const rttLeft = leaveEmployees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'rtt'), 0);
   const day = today();
   // The staffing commitment that currently books this person, highest
   // allocation first — shown as “Client — Project”, like the CRA default.
   const currentAssignment = context.workspace.assignments.filter(assignment => employees.some(employee => employee.id === assignment.employee_id) && ['reserved', 'confirmed', 'active'].includes(assignment.status) && assignment.start_date <= day && (!assignment.end_date || assignment.end_date >= day)).sort((a, b) => b.allocation_pct - a.allocation_pct)[0];
   const assignmentProject = currentAssignment ? context.workspace.projects.find(project => project.id === currentAssignment.project_id) : undefined;
   const assignmentClient = assignmentProject?.client_id ? context.workspace.clients.find(client => client.id === assignmentProject.client_id) : undefined;
-  const defaultAssignment = assignmentProject ? `${assignmentClient ? `${assignmentClient.name} — ` : ''}${assignmentProject.title}` : 'None';
+  const defaultAssignment = assignmentProject ? `${assignmentClient ? `${assignmentClient.name} · ` : ''}${assignmentProject.title}` : 'None';
   const craTally = lastCra && lastCra.filled > 0 && lastCra.workdays > 0 && lastCra.filled < lastCra.workdays ? `${lastCra.filled % 1 ? lastCra.filled.toFixed(1) : lastCra.filled} / ${lastCra.workdays} days` : '';
   const craLabel = !lastCra ? '—' : `${new Date(`${lastCra.month}-01T12:00:00`).toLocaleDateString('en-GB', {
     month: 'short',
@@ -392,17 +379,17 @@ function PersonPage({
             <dt className="label-mono">Last CRA</dt>
             <dd className="m-0 font-medium">{craLabel}</dd>
           </div>
-          <div className={stat}>
+          {leaveEmployees.length > 0 && <div className={stat}>
             <dt className="label-mono">CP balance</dt>
             <dd className="m-0 flex items-baseline gap-2 font-medium">
-              {balanceError ? 'unavailable' : employees.length ? `${fmtDays(cpLeft)} days` : '—'}
+              {balanceError ? 'unavailable' : `${fmtDays(cpLeft)} days`}
               {leaveEmployee && <Button type="button" variant="link" size="xs" className="text-muted-foreground" onClick={() => setAdjustingLeave(true)}>Adjust</Button>}
             </dd>
-          </div>
-          <div className={stat}>
+          </div>}
+          {leaveEmployees.length > 0 && <div className={stat}>
             <dt className="label-mono">RTT balance</dt>
-            <dd className="m-0 font-medium">{balanceError ? 'unavailable' : employees.length ? `${fmtDays(rttLeft)} days` : '—'}</dd>
-          </div>
+            <dd className="m-0 font-medium">{balanceError ? 'unavailable' : `${fmtDays(rttLeft)} days`}</dd>
+          </div>}
         </dl>}
       </section>
     </header>
@@ -579,7 +566,8 @@ function People({
   // Current staff are grouped by contract; 'employees' links from before the split open on Everyone.
   const [filter, setFilter] = useState(() => {
     const param = getParam('group');
-    return param && param !== 'employees' ? param : 'all';
+    // Applicants live in the Recruitment pipeline, not the People list.
+    return param && param !== 'employees' && param !== 'candidates' && param !== 'talent' ? param : 'all';
   });
   const [day, setDay] = useState(today());
   const [capacityFilter, setCapacityFilter] = useState('all');
@@ -593,13 +581,16 @@ function People({
     if (live) return contractGroups[live.contract_type] ?? 'no_contract';
     return periods.length ? 'alumni' : workspace.applications.some(application => application.person_id === person.id && application.status === 'active') ? 'candidates' : 'talent';
   };
-  const groupCount = (value: string) => workspace.people.filter(person => value === 'all' || stateOf(person) === value).length;
+  // Applicants (an active application, never employed) are managed in the
+  // Recruitment pipeline, so the People list leaves them out entirely.
+  const listed = workspace.people.filter(person => stateOf(person) !== 'candidates');
+  // “Everyone” means people under a live contract (employees and freelancers);
+  // alumni keep their own tab, the talent pool isn't listed.
+  const inGroup = (person: Person, value: string) => value === 'all' ? !['alumni', 'talent', 'candidates'].includes(stateOf(person)) : stateOf(person) === value;
+  const groupCount = (value: string) => listed.filter(person => inGroup(person, value)).length;
   const groups = [{
     value: 'all',
     label: 'Everyone'
-  }, {
-    value: 'candidates',
-    label: 'Candidates'
   }, {
     value: 'cdi',
     label: 'CDI'
@@ -621,16 +612,13 @@ function People({
   }, {
     value: 'alumni',
     label: 'Alumni'
-  }, {
-    value: 'talent',
-    label: 'Talent pool'
-  }].filter(group => ['all', 'candidates', 'cdi', 'freelance', 'interns', 'alternants', 'alumni', 'talent'].includes(group.value) || group.value === filter || groupCount(group.value) > 0);
+  }].filter(group => ['all', 'cdi', 'freelance', 'interns', 'alternants', 'alumni'].includes(group.value) || group.value === filter || groupCount(group.value) > 0);
   const commits = workspace.assignments.filter(assignment => ['reserved', 'confirmed', 'active', 'completed'].includes(assignment.status) && assignment.start_date <= day && (!assignment.end_date || assignment.end_date >= day));
   const employeesOnDate = workspace.employees.filter(activeOn);
   const rolloffs = workspace.assignments.filter(assignment => !['completed', 'cancelled'].includes(assignment.status) && assignment.end_date && assignment.end_date >= day && assignment.end_date <= new Date(new Date(`${day}T12:00:00`).getTime() + 30 * 86400000).toISOString().slice(0, 10));
   const currentCapacity = employeesOnDate.reduce((sum, employee) => sum + available(workspace, employee, day), 0);
-  const people = workspace.people.filter(person => {
-    if (filter !== 'all' && stateOf(person) !== filter) return false;
+  const people = listed.filter(person => {
+    if (!inGroup(person, filter)) return false;
     const employee = employeeOnDate(person);
     if (capacityFilter === 'available' && (!employee || available(workspace, employee, day) <= 0)) return false;
     return `${person.full_name} ${person.email} ${person.skills} ${person.headline} ${person.location}`.toLowerCase().includes(query.toLowerCase());
@@ -1055,7 +1043,7 @@ function ApplicationQuickView({
   const toggle = (active: boolean) => cn('h-auto px-0 text-[13px] text-muted-foreground hover:text-foreground', active && 'text-foreground decoration-foreground');
   const sectionHead = 'flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1';
   const hint = 'text-xs text-muted-foreground';
-  return <Dialog bare className="sm:max-w-[720px]" title={`Stage decision — ${person?.full_name ?? 'Unknown person'}`} close={close}>
+  return <Dialog bare className="sm:max-w-[720px]" title={`Stage decision · ${person?.full_name ?? 'Unknown person'}`} close={close}>
     <div className="flex shrink-0 items-start gap-3.5 border-b border-border px-5 py-4 sm:px-6">
       <span className={cn(avatarClass, 'size-11 text-sm')} aria-hidden="true">{initials(person?.full_name ?? '?')}</span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -1153,7 +1141,7 @@ function ApplicationQuickView({
           <label htmlFor="hr-quick-rationale-input" className="text-[15px] font-medium">Comments</label>
           <span className={hint}>{rationaleReady ? 'Required · ready' : `Required · ${RATIONALE_MIN - rationaleLength} more characters`}</span>
         </div>
-        <Textarea id="hr-quick-rationale-input" className="min-h-32 resize-y" value={rationale} onChange={event => setRationale(event.target.value)} placeholder="What did you see that supports this move? Keep it factual — it’s stored on the candidate’s record." />
+        <Textarea id="hr-quick-rationale-input" className="min-h-32 resize-y" value={rationale} onChange={event => setRationale(event.target.value)} placeholder="What did you see that supports this move? Keep it factual. It's stored on the candidate's record." />
       </div>}
       {error && <p role="alert" className="m-0 text-[13px] text-destructive">{error}</p>}
     </div>
@@ -1217,7 +1205,7 @@ function RequisitionForm({
         The role title and requirements come from the linked job post.
       </p>
     </UiField>
-    {job ? <p className="col-span-full m-0 text-[13px] text-muted-foreground">Role and requirements are taken from “{job.title}”.</p> : <Field name="title" label="Role to hire" value={opportunity?.title} required hint="Named manually until a job post is linked — the post then provides the title and requirements." />}
+    {job ? <p className="col-span-full m-0 text-[13px] text-muted-foreground">Role and requirements are taken from "{job.title}".</p> : <Field name="title" label="Role to hire" value={opportunity?.title} required hint="Named manually until a job post is linked. The post then provides the title and requirements." />}
     <Field name="hiring_mode" label="Hiring mode" value={opportunity?.hiring_mode ?? 'sur_mission'} options={[{
       value: 'sur_mission',
       label: 'For a client mission'

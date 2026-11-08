@@ -100,7 +100,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     { key: "consDebut", label: "Consultants staffés au 1er janvier", unit: "nb" },
     { key: "tjm", label: "TJM moyen facturé", unit: "€" },
     { key: "jours", label: "Jours ouvrés facturables / mois", unit: "j" },
-    { key: "occ", label: "Taux d’occupation des salariés", unit: "%" },
+    { key: "occ", label: "Taux d'occupation des salariés", unit: "%" },
     { key: "pctFree", label: "Part de freelances", unit: "%" },
   ] },
   { title: "Coûts de production", fields: [
@@ -122,7 +122,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
   { title: "Trésorerie et impôt", fields: [
     { key: "tresoDebut", label: "Trésorerie au 1er janvier", unit: "€", step: 1000 },
     { key: "dso", label: "Délai de paiement clients", unit: "jours", step: 30 },
-    { key: "tauxIS", label: "Taux d’IS appliqué", unit: "%", step: 0.5 },
+    { key: "tauxIS", label: "Taux d'IS appliqué", unit: "%", step: 0.5 },
   ] },
 ];
 
@@ -134,7 +134,7 @@ const SCENARIOS: { id: PlanScenario; param: string; label: string }[] = [
 ];
 const BASES: { id: RevenueBasis; param: string; label: string; text: string }[] = [
   { id: "period", param: "prestation", label: "Mois de prestation", text: "par mois de prestation" },
-  { id: "issue", param: "emission", label: "Date d’émission", text: "par date d’émission" },
+  { id: "issue", param: "emission", label: "Date d'émission", text: "par date d'émission" },
 ];
 const multLabel = (v: number) => `×${String(v).replace(".", ",")}`;
 type Draft = { hyp: Record<HypothesisKey, string>; ventes: string[]; departs: string[] };
@@ -150,7 +150,7 @@ const MAX_SYNC_RELAUNCHES = 10;
 /** "à l’instant", "12 min", "3 h", "2 j". */
 function ago(iso: string, now: number): string {
   const min = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
-  if (min < 1) return "à l’instant";
+  if (min < 1) return "à l'instant";
   if (min < 60) return `il y a ${min} min`;
   const h = Math.round(min / 60);
   return h < 24 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
@@ -458,7 +458,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         return { ...b, structureStaff: entry ? [...rest, { ...entry, employee_id: employeeId }] : rest };
       });
     } catch (e) {
-      setError(isMissingRelationError(e) ? "La table business_plan_structure n’existe pas encore — appliquez la migration." : errorMessage(e));
+      setError(isMissingRelationError(e) ? "La table business_plan_structure n'existe pas encore. Appliquez la migration." : errorMessage(e));
     }
   }
 
@@ -487,7 +487,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
       setDirty(false);
       setMessage(`Business plan ${year} enregistré.`);
     } catch (e) {
-      setError(isMissingRelationError(e) ? "La table business_plans n’existe pas encore — appliquez la migration." : errorMessage(e));
+      setError(isMissingRelationError(e) ? "La table business_plans n'existe pas encore. Appliquez la migration." : errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -550,7 +550,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
           <PageAlerts error={error} message={message} />
           {tableMissing && (
             <Alert variant="destructive" role="status">
-              <AlertDescription>La table business_plans n’existe pas encore : les hypothèses ne peuvent pas être enregistrées.</AlertDescription>
+              <AlertDescription>La table business_plans n'existe pas encore : les hypothèses ne peuvent pas être enregistrées.</AlertDescription>
             </Alert>
           )}
         </div>
@@ -633,13 +633,13 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               <CardContent className="flex flex-col gap-6">
                 <StatGroup>
                   <Kpi
-                    label="Chiffre d’affaires"
+                    label="Chiffre d'affaires"
                     value={kEur(plan.totals.ca)}
                     hint={`${kEur(plan.totals.ca / 12)} / mois en moyenne`}
                     formula={[
                       "Somme des 12 mois.",
                       `Réel : factures finalisées ou payées, ${basis.text}.`,
-                      "Prévisionnel : consultants × jours facturables × TJM (salariés × taux d’occupation).",
+                      "Prévisionnel : consultants × jours facturables × TJM (salariés × taux d'occupation).",
                     ]}
                   />
                   <Kpi
@@ -659,17 +659,17 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                     formula={[
                       "= Marge brute − charges fixes",
                       `= ${kEur(plan.totals.mb)} − ${kEur(sumOf(plan.series.fix))}`,
-                      "Excédent brut d’exploitation : avant amortissements, intérêts et IS.",
+                      "Excédent brut d'exploitation : avant amortissements, intérêts et IS.",
                     ]}
                   />
                   <Kpi
-                    label="EBIT (résultat d’exploitation)"
+                    label="EBIT (résultat d'exploitation)"
                     value={kEur(plan.totals.ex)}
                     hint={`${pct(plan.totals.exPct)} du CA`}
                     formula={[
                       "= EBITDA − dotations aux amortissements et provisions",
                       `= ${kEur(plan.totals.eb)} − ${kEur(sumOf(plan.series.da))}`,
-                      "Résultat de l’activité courante, avant intérêts et IS.",
+                      "Résultat de l'activité courante, avant intérêts et IS.",
                     ]}
                   />
                 </StatGroup>
@@ -678,16 +678,16 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                   <Kpi
                     label="Résultat net estimé"
                     value={kEur(plan.totals.rn)}
-                    hint={`résultat d’exploitation ${kEur(plan.totals.ex)} − IS ${kEur(plan.totals.is)}`}
+                    hint={`résultat d'exploitation ${kEur(plan.totals.ex)} − IS ${kEur(plan.totals.is)}`}
                     accent
                     formula={[
-                      "= Résultat d’exploitation − IS",
-                      `Résultat d’exploitation = EBE − dotations = ${kEur(plan.totals.eb)} − ${kEur(sumOf(plan.series.da))} = ${kEur(plan.totals.ex)}`,
-                      `IS = ${fmt(H!.tauxIS)} % du résultat d’exploitation s’il est positif = ${kEur(plan.totals.is)}`,
+                      "= Résultat d'exploitation − IS",
+                      `Résultat d'exploitation = EBE − dotations = ${kEur(plan.totals.eb)} − ${kEur(sumOf(plan.series.da))} = ${kEur(plan.totals.ex)}`,
+                      `IS = ${fmt(H!.tauxIS)} % du résultat d'exploitation s'il est positif = ${kEur(plan.totals.is)}`,
                     ]}
                   />
                   <Kpi
-                    label="Consultants fin d’année"
+                    label="Consultants fin d'année"
                     value={fmt(plan.totals.consFin)}
                     hint={`${fmt(plan.totals.ventes)} ventes · ${fmt(plan.totals.departs)} départs`}
                     formula={[
@@ -696,7 +696,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                     ]}
                   />
                   <Kpi
-                    label="Trésorerie fin d’année"
+                    label="Trésorerie fin d'année"
                     value={kEur(plan.totals.treso)}
                     hint={`point bas : ${kEur(plan.totals.tresoMin)}`}
                     formula={[
@@ -891,7 +891,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                                     type="button"
                                     className={cn(DRILL, "num px-2 text-right")}
                                     onClick={() => setDetail({ kind: r.key!, month: m })}
-                                    aria-label={`${r.label} — détail ${MONTH_NAMES[m]}${hint ? ` · ${hint}` : ""}`}
+                                    aria-label={`${r.label}, détail ${MONTH_NAMES[m]}${hint ? ` · ${hint}` : ""}`}
                                     title={hint || undefined}
                                   >
                                     {toReview > 0 && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-destructive align-middle" aria-hidden="true" />}
@@ -916,7 +916,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <SectionTitle id="bp-chart" title="CA et EBITDA (EBE) par mois" />
                   <div className="flex flex-wrap gap-5 text-sm text-muted-foreground">
-                    <span className="inline-flex items-center gap-2"><i className="inline-block size-3 rounded-[3px] bg-(--chart-1)" aria-hidden="true" />Chiffre d’affaires</span>
+                    <span className="inline-flex items-center gap-2"><i className="inline-block size-3 rounded-[3px] bg-(--chart-1)" aria-hidden="true" />Chiffre d'affaires</span>
                     <span className="inline-flex items-center gap-2"><i className="inline-block size-3 rounded-[3px] bg-(--chart-2)" aria-hidden="true" />EBITDA (EBE)</span>
                     {actualCount > 0 && actualCount < 12 && (
                       <span className="inline-flex items-center gap-2"><i className={cn("inline-block size-3 rounded-[3px] border border-(--chart-1)", STRIPES_SM)} aria-hidden="true" />Prévisionnel</span>
@@ -925,7 +925,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                 </div>
                 <Card>
                   <CardContent className="overflow-x-auto">
-                    <div role="img" aria-label="Histogramme mensuel du chiffre d’affaires et de l’EBITDA" className="grid min-w-[640px] grid-cols-12 items-end gap-3">
+                    <div role="img" aria-label="Histogramme mensuel du chiffre d'affaires et de l'EBITDA" className="grid min-w-[640px] grid-cols-12 items-end gap-3">
                       {MONTH_NAMES.map((name, m) => {
                         const forecast = actualCount > 0 && !plan.actual[m];
                         return (
@@ -971,10 +971,10 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                 Mois réels : CA = factures finalisées ou payées {basis.text} · encaissements = factures payées par date de paiement ·
                 consultants = personnes avec une mission confirmée, active ou terminée sur le mois · ventes = missions démarrant dans le mois ·
                 freelances = jours CRA × taux journalier · salaires = salaire mensuel brut × multiplicateur de charges (scénario {SCENARIOS.find((s) => s.id === scenario)!.label.toLowerCase()} : {multLabel(multiplier)}, × 1,4 pour les stagiaires) · inter-contrat =
-                salariés sans mission sur le mois · départs = sorties d’employés. Salaires structure : personnes listées en structure, sur leur période
-                (par défaut de l’embauche à la sortie ; prévisionnel : dernier salaire connu), hors jours ouvrés en mission —
-                comptés en salaires consultants, au prorata de l’allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses. TVA (trésorerie seulement) : mois clôturés couverts par Qonto = TVA des factures payées − TVA des dépenses − paiements DGFIP ; sinon 20 % des encaissements − 20 % des freelances et charges fixes hors salaires, solde reversé le mois suivant.
-                Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur le résultat d’exploitation annuel positif (EBE − dotations) ·
+                salariés sans mission sur le mois · départs = sorties d'employés. Salaires structure : personnes listées en structure, sur leur période
+                (par défaut de l'embauche à la sortie ; prévisionnel : dernier salaire connu), hors jours ouvrés en mission,
+                comptés en salaires consultants, au prorata de l'allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses. TVA (trésorerie seulement) : mois clôturés couverts par Qonto = TVA des factures payées − TVA des dépenses − paiements DGFIP ; sinon 20 % des encaissements − 20 % des freelances et charges fixes hors salaires, solde reversé le mois suivant.
+                Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur le résultat d'exploitation annuel positif (EBE − dotations) ·
                 encaissements décalés du délai client, les coûts sont payés le mois même.
               </footer>
             </TabsContent>
@@ -986,7 +986,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Modifications non enregistrées</AlertDialogTitle>
-            <AlertDialogDescription>Changer d’année quand même ? Les modifications du business plan {year} seront perdues.</AlertDialogDescription>
+            <AlertDialogDescription>Changer d'année quand même ? Les modifications du business plan {year} seront perdues.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Rester sur {year}</AlertDialogCancel>
@@ -997,7 +997,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                 setPendingYear(null);
               }}
             >
-              Changer d’année
+              Changer d'année
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -912,6 +912,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       if (days < 0 || days > 30) return false;
     }
     if (tab === "archived" && !r.meta.is_terminal) return false;
+    if (tab === "all" && r.meta.is_terminal) return false;
     if (!query) return true;
     const p = r.project;
     return (
@@ -1044,7 +1045,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             start_date: a.start_date,
             end_date: a.end_date,
             status: a.status,
-            rationale: `Pricing line renamed to “${to}” on the contract page.`,
+            rationale: `Pricing line renamed to "${to}" on the contract page.`,
           });
     }, "Project saved.");
     closeProjectDialog();
@@ -1083,12 +1084,12 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     <div className="@container flex flex-col gap-6">
       <PageAlerts error={error || loadError} message={message} />
       {ref.missing && (
-        <PageAlerts error="The admin_settings migration is missing — apply supabase/migrations/20261007090000_sales_projects_admin_settings.sql, until then built-in defaults are used." />
+        <PageAlerts error="The admin_settings migration is missing. Apply supabase/migrations/20261007090000_sales_projects_admin_settings.sql; until then, built-in defaults are used." />
       )}
       <AlertDialog open={!!deleting} onOpenChange={(open) => { if (!open) setDeleting(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete project “{deleting?.title}”?</AlertDialogTitle>
+            <AlertDialogTitle>Delete project "{deleting?.title}"?</AlertDialogTitle>
             <AlertDialogDescription>The project is removed for good. This can't be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1334,7 +1335,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             </CardContent>
           </Card>
           <Card role="region" aria-label="Project list" className="pb-0">
-            <CardHeader className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
+            <CardHeader className="flex flex-col gap-3 @5xl:flex-row @5xl:items-center @5xl:justify-between">
               <Tabs
                 value={tab}
                 onValueChange={(v) => setTab(v as ProjectsTab)}
@@ -1343,17 +1344,17 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                 <TabsList
                   variant="line"
                   aria-label="Filter projects"
-                  className="h-10 max-w-full justify-start gap-4 overflow-x-auto"
+                  className="max-w-full flex-wrap justify-start gap-x-4 gap-y-1 group-data-horizontal/tabs:h-auto"
                 >
                   {(
                     [
-                      ["all", "All", rows.length],
+                      ["all", "All", activeCount],
                       ["attention", "Needs attention", attentionRows.length],
                       ["ending", "Ending in 30 days", endingSoon],
                       ["archived", "Archived", archivedCount],
                     ] as [ProjectsTab, string, number][]
                   ).map(([id, label, count]) => (
-                    <TabsTrigger key={id} value={id} className="gap-1.5">
+                    <TabsTrigger key={id} value={id} className="gap-1.5 py-2">
                       {label}
                       <span className="num text-xs text-muted-foreground">
                         {count}
@@ -1362,7 +1363,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                   ))}
                 </TabsList>
               </Tabs>
-              <div className="flex min-w-0 items-center gap-2 @3xl:w-80">
+              <div className="flex min-w-0 items-center gap-2 @5xl:w-80">
                 <InputGroup className="min-w-0 flex-1">
                   <InputGroupAddon>
                     <Search />
@@ -1581,7 +1582,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                                           ? r.consumedDays > 0
                                             ? `${fmtDays(r.consumedDays)} logged · set a day budget`
                                             : "No days logged yet"
-                                          : "Forfait — no day budget"}
+                                          : "Forfait, no day budget"}
                                       </span>
                                       <span className="num">
                                         <span className="text-muted-foreground">
@@ -2281,7 +2282,7 @@ function ProjectForm({
                 <NativeSelectOption value="">Create manually</NativeSelectOption>
                 {convertible.map((o) => (
                   <NativeSelectOption key={o.id} value={o.id}>
-                    {o.title} —{" "}
+                    {o.title},{" "}
                     {clients.find((c) => c.id === o.client_id)?.name ||
                       "Client"}
                   </NativeSelectOption>
@@ -2318,7 +2319,7 @@ function ProjectForm({
                     maxLength={200}
                   />
                   <FieldDescription>
-                    Same as the code — give it a readable name, e.g. "Credit
+                    Same as the code: give it a readable name, e.g. "Credit
                     Chain · AI squad"
                   </FieldDescription>
                 </Field>
@@ -2348,8 +2349,8 @@ function ProjectForm({
                   />
                   <FieldDescription>
                     {intermediaryId
-                      ? `Billed to ${clients.find((c) => c.id === intermediaryId)?.name || "the intermediary"} — the main client isn't invoiced.`
-                      : "No intermediary — the main client is billed directly."}
+                      ? `Billed to ${clients.find((c) => c.id === intermediaryId)?.name || "the intermediary"}: the main client isn't invoiced.`
+                      : "No intermediary: the main client is billed directly."}
                   </FieldDescription>
                 </Field>
                 <Field>
@@ -2399,7 +2400,7 @@ function ProjectForm({
             <CardHeader>
               <SectionTitle>Contract</SectionTitle>
               <CardDescription>
-                The initial contract window and its pricing — renewals
+                The initial contract window and its pricing. Renewals
                 continue as extensions below.
               </CardDescription>
               {contractDays > 0 && (
@@ -2523,9 +2524,9 @@ function ProjectForm({
                       value={currency}
                       onChange={(e) => setCurrency(e.target.value)}
                     >
-                      <NativeSelectOption value="EUR">EUR — Euro</NativeSelectOption>
-                      <NativeSelectOption value="SAR">SAR — Saudi riyal</NativeSelectOption>
-                      <NativeSelectOption value="USD">USD — US dollar</NativeSelectOption>
+                      <NativeSelectOption value="EUR">EUR (Euro)</NativeSelectOption>
+                      <NativeSelectOption value="SAR">SAR (Saudi riyal)</NativeSelectOption>
+                      <NativeSelectOption value="USD">USD (US dollar)</NativeSelectOption>
                     </NativeSelect>
                   </Field>
                 </div>
@@ -2830,7 +2831,7 @@ function ProjectForm({
             <CardHeader>
               <SectionTitle>Notes</SectionTitle>
               <CardDescription>
-                Scope, team, renewal terms — anything the next person needs.
+                Scope, team, renewal terms: anything the next person needs.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -2923,7 +2924,7 @@ function ProjectForm({
                 )}
                 {consumedDays === 0 && (
                   <p className="m-0 text-[13px] text-muted-foreground">
-                    No client-project days recorded on this project yet — the
+                    No client-project days recorded on this project yet. The
                     bar fills as employees save their CRA.
                   </p>
                 )}
@@ -2951,7 +2952,7 @@ function ProjectForm({
                     ))}
                     {savedLineCaps.some((c) => c.consumed > c.cap) && (
                       <p className="m-0 text-[13px] text-destructive">
-                        A profile's annual cap is exceeded — the project is
+                        A profile's annual cap is exceeded; the project is
                         flagged in the list.
                       </p>
                     )}

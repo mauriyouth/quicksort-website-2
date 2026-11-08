@@ -36,6 +36,9 @@ export const settingsSchema = serviceAccountSchema.extend({
   /** Candidate CVs (hiring pipeline): <root>/<year>/<position>/<candidate>.pdf. */
   recruitment_root_folder_id: z.string().min(1).max(200).optional(),
   recruitment_root_folder_name: z.string().max(500).optional(),
+  /** Company papers (Kbis, URSSAF, fiscal, insurance, bilans) — Operations → Admin. */
+  company_root_folder_id: z.string().min(1).max(200).optional(),
+  company_root_folder_name: z.string().max(500).optional(),
 });
 
 export type DriveSettings = z.infer<typeof settingsSchema>;
@@ -270,16 +273,22 @@ const toStoredFile = (file: DriveFile): StoredFile => ({
 });
 
 export function createDriveStorage(sa: DriveSettings): DocumentStorage {
-  const rootId = (root: StorageRoot) => {
-    if (root === "clients") return sa.root_folder_id;
+  const rootFolder = (root: StorageRoot): StorageFolder => {
+    if (root === "clients") return { id: sa.root_folder_id, name: sa.root_folder_name, link: null };
+    if (root === "company") {
+      if (!sa.company_root_folder_id)
+        throw new Error("No company documents folder is connected. Set it in Settings → Google Drive contracts (company documents folder).");
+      // The company root is the company's own folder, so it carries a link for "Open in Drive".
+      return { id: sa.company_root_folder_id, name: sa.company_root_folder_name || "", link: `https://drive.google.com/drive/folders/${sa.company_root_folder_id}` };
+    }
     if (!sa.people_root_folder_id)
       throw new Error("No HR documents folder is connected. Set the people root folder in Settings → Google Drive (shared with HR only).");
-    return sa.people_root_folder_id;
+    return { id: sa.people_root_folder_id, name: sa.people_root_folder_name || "", link: null };
   };
   return {
     provider: "gdrive",
     async ensureFolder(root, path) {
-      let folder: StorageFolder = { id: rootId(root), name: root === "clients" ? sa.root_folder_name : sa.people_root_folder_name || "", link: null };
+      let folder: StorageFolder = rootFolder(root);
       for (const name of path) folder = toFolder(await ensureChildFolder(sa, folder.id, name));
       return folder;
     },

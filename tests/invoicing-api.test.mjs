@@ -456,7 +456,7 @@ test("month and project resources list consultant months to invoice", async () =
   assert.equal(month.body.rows[0].amountHt, "11700.00");
   const project = await f.request("GET", { query: { resource: "project", projectId: PROJECT } });
   assert.equal(project.code, 200);
-  assert.deepEqual(project.body.rows.map((r) => [r.employeeId, r.status]), [[EMP, "not_invoiced"]]);
+  assert.deepEqual(project.body.rows.map((r) => [r.employeeId, r.status, r.profile]), [[EMP, "not_invoiced", "Data Engineer"]]);
   assert.deepEqual(project.body.totals, { invoicedHt: "0.00", paidTtc: "0.00", outstandingTtc: "0.00" });
 });
 test("project totals sum validated and paid invoices", async () => {
@@ -469,6 +469,19 @@ test("project totals sum validated and paid invoices", async () => {
   assert.deepEqual(r.body.totals, { invoicedHt: "300.30", paidTtc: "240.24", outstandingTtc: "120.12" });
   assert.equal(r.body.rows.length, 0);
   assert.deepEqual(r.body.consultants, [{ id: EMP, name: "Jane Doe" }]);
+});
+test("project resource tags invoices and pending months with their TJM profile", async () => {
+  const f = fixture({ invoices: [
+    craInvoice({ status: "finalized", total_ht: 100 }),
+    craInvoice({ id: "inv-imp", source: "imported", period_month: null, issue_date: "2026-09-05", status: "paid" }),
+    craInvoice({ id: "inv-none", source: "imported", employee_id: null, period_month: null, issue_date: "2026-09-05" }),
+  ] });
+  f.tables.invoice_lines.push({ id: "l-1", invoice_id: "inv-1", position: 0, pricing_line: "Lead Data Engineer" });
+  const r = await f.request("GET", { query: { resource: "project", projectId: PROJECT } });
+  assert.equal(r.code, 200);
+  assert.deepEqual(r.body.profiles, ["Data Engineer"]);
+  // Lines win; else the consultant's staffing for the month before issue; else none.
+  assert.deepEqual(Object.fromEntries(r.body.invoices.map((i) => [i.id, i.profile])), { "inv-1": "Lead Data Engineer", "inv-imp": "Data Engineer", "inv-none": null });
 });
 test("invoice resource returns lines and events", async () => {
   const f = fixture();

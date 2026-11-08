@@ -15,6 +15,12 @@
    ink / stone colours, typefaces and 2px corners. Unlayered on purpose: it
    wins over tokens.css (layer legacy) for both modes, and follows the `.dark`
    class through the package variables. */
+/* Always reserve the scrollbar's width so switching between short and tall
+   pages (e.g. person record tabs) doesn't shift the centred layout. */
+html {
+  scrollbar-gutter: stable;
+}
+
 :root {
   --qs-fg-1: var(--foreground);
   --qs-fg-2: color-mix(in srgb, var(--foreground) 80%, var(--background));

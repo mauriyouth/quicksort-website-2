@@ -46,7 +46,7 @@ const DUE_PRESETS = [15, 30, 45, 60];
 
 type LineEdit = { id: string; quantity: string; unitPrice: string; description: string };
 type Confirm = "validate" | "delete" | "cancel" | "send" | "resend" | null;
-const RECIPIENTS_UNREAD = "Couldn't read the client's invoice emails from Qonto — refresh and try again.";
+const RECIPIENTS_UNREAD = "Couldn't read the client's invoice emails from Qonto. Refresh and try again.";
 
 const QTY = /^\d{1,6}(\.\d{1,4})?$/;
 const PRICE = /^\d{1,9}(\.\d{1,2})?$/;
@@ -245,7 +245,7 @@ export function InvoiceDraftPanel({
             <>
               {craChanged && !regenerated && editable && (
                 <Alert variant="warning" role="status">
-                  <AlertDescription>CRA changed — regenerate this draft so it matches the timesheet.</AlertDescription>
+                  <AlertDescription>CRA changed. Regenerate this draft so it matches the timesheet.</AlertDescription>
                   <AlertAction>
                     <Button variant="outline" size="sm" disabled={locked} onClick={regenerate}>
                       <RefreshCw data-icon="inline-start" /> {busy === "regenerate" ? "Regenerating…" : "Regenerate"}

@@ -279,7 +279,7 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
                         </Button>
                       </form>
                       {!linkable.length && (
-                        <p className="m-0 text-xs text-muted-foreground">No available people — add a person in HR first.</p>
+                        <p className="m-0 text-xs text-muted-foreground">No available people. Add a person in HR first.</p>
                       )}
                       {r.decided_by && (
                         <p className="m-0 text-xs text-muted-foreground">
@@ -299,7 +299,7 @@ export function Opportunities({ actorEmail }: { actorEmail: string }) {
                             void action(async () => {
                               if (!r.job_id) throw new Error("Link a career-site job post before publishing.");
                               await executeCommand({ kind: "publish_requisition", opportunity_id: r.id, expected_version: r.version, job_id: r.job_id });
-                            }, "Opportunity published — sourcing can start.")
+                            }, "Opportunity published. Sourcing can start.")
                           }
                         >
                           Publish

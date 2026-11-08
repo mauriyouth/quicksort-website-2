@@ -216,7 +216,7 @@ export function SearchField({
         pick(option.value);
       }} onMouseEnter={() => setHighlight(index)}>
         {option.label}
-      </li>) : <li className="cursor-default px-2.5 py-1.5 text-[13px] text-muted-foreground">No match for “{query.trim()}”.</li>}
+      </li>) : <li className="cursor-default px-2.5 py-1.5 text-[13px] text-muted-foreground">No match for "{query.trim()}".</li>}
     </ul>}
     </div>
     {hint && <FieldDescription className="text-xs">
@@ -269,7 +269,7 @@ export function SearchMultiField({
       {matches.map(option => <Button type="button" variant="outline" size="xs" className="rounded-full" key={option.value} onClick={() => pick(option.value)}>
         {option.label}
       </Button>)}
-      {!matches.length && <p className="m-0 px-1 text-xs text-muted-foreground">No record matches “{query.trim()}”.</p>}
+      {!matches.length && <p className="m-0 px-1 text-xs text-muted-foreground">No record matches "{query.trim()}".</p>}
     </div>}
     {hint && <FieldDescription className="text-xs">
       {hint}

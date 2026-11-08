@@ -185,7 +185,7 @@ export function ClientDetail({
           client_id: client.id,
           opportunity_id: (result.data as { id: string }).id,
           type: "note",
-          text: `Opportunity “${values.title}” created (${pricingModel === "regie" ? "régie" : "forfait"}).`,
+          text: `Opportunity "${values.title}" created (${pricingModel === "regie" ? "régie" : "forfait"}).`,
           author_email: actorEmail,
         });
       if (note.error) throw note.error;
@@ -446,7 +446,7 @@ export function ClientDetail({
                             {sponsors.map((s) => {
                               const person = data.people.find((p) => p.id === s.person_id);
                               return (
-                                <InfluenceBadge key={s.person_id} influence={s.influence} primary={s.is_primary} title={`${INFLUENCE_META[s.influence]?.label} on “${o.title}”`}>
+                                <InfluenceBadge key={s.person_id} influence={s.influence} primary={s.is_primary} title={`${INFLUENCE_META[s.influence]?.label} on "${o.title}"`}>
                                   {person?.name || "?"} · {INFLUENCE_META[s.influence]?.label}
                                 </InfluenceBadge>
                               );

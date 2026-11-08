@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDocumentsHandler } from '../apps/admin/server/documents/handler.ts';
-import { FOLDER_LABELS, datedSubfolder } from '../apps/admin/server/documents/folders.ts';
+import { COMPANY_OWNER_ID, FOLDER_LABELS, datedSubfolder } from '../apps/admin/server/documents/folders.ts';
 
 process.env.SUPABASE_URL = 'https://example.supabase.co';
 process.env.SUPABASE_PUBLISHABLE_KEY = 'public-anon-key';
@@ -17,6 +17,8 @@ const types = [
   { code: 'RIB', label: 'RIB', owner_kinds: ['person'], folder: 'administratif', requires_expiry: false },
   { code: 'CLIENT_CONTRACT', label: 'Contrat principal', owner_kinds: ['project'], folder: 'contrat', requires_expiry: false },
   { code: 'PAYSLIP', label: 'Bulletin de paie', owner_kinds: ['person'], folder: 'bulletins', requires_expiry: false },
+  { code: 'COMPANY_KBIS', label: 'Extrait Kbis', owner_kinds: ['company'], folder: 'kbis', requires_expiry: true },
+  { code: 'ANNUAL_ACCOUNTS', label: 'Bilan annuel', owner_kinds: ['company'], folder: 'bilans', requires_expiry: false },
 ];
 
 /** In-memory PostgREST: eq filters, maybeSingle/single, upsert with ignoreDuplicates. */
@@ -438,4 +440,43 @@ test('first upload on an archived project creates its folder under archived/<end
   const open = setup({ tables: { sales_projects: [{ ...archived, status: 'en_cours' }] } });
   await call(open.handler, { action: 'prepare-upload', owner: { kind: 'project', id: projectId }, typeCode: 'CLIENT_CONTRACT', title: 'Contrat signé', fileName: 'c.pdf', size: 10 });
   assert.deepEqual(open.storage.log[0], ['ensureFolder', 'clients', ['Teamwill/Refonte CRM']]);
+});
+
+test('company documents file under the company root, dated, and only for admins', async () => {
+  const company = { kind: 'company', id: COMPANY_OWNER_ID };
+  const { supa, storage, handler } = setup();
+  let res = await call(handler, { action: 'prepare-upload', owner: company, typeCode: 'COMPANY_KBIS', title: 'Kbis', fileName: 'kbis.PDF', size: 10, issuedOn: '2026-11-02', expiresOn: '2027-02-02' });
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.equal(res.body.fileName, 'quicksort_company_kbis_2026_11_02.pdf');
+  assert.deepEqual(storage.log[0], ['ensureFolder', 'company', []]);
+  assert.equal(storage.log[1][2], '03_Extrait_Kbis');
+  assert.deepEqual(supa.db.document_folders.map(f => [f.owner_kind, f.owner_id, f.folder_code]), [['company', COMPANY_OWNER_ID, ''], ['company', COMPANY_OWNER_ID, 'kbis']]);
+
+  // Bilans go one level deeper, by exercise year.
+  storage.log.length = 0;
+  res = await call(handler, { action: 'prepare-upload', owner: company, typeCode: 'ANNUAL_ACCOUNTS', title: 'Bilan 2025', fileName: 'liasse.pdf', size: 10, validFrom: '2025-01-01' });
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.deepEqual(storage.log.filter(entry => entry[0] === 'ensureChild').map(entry => entry[2]), ['05_Bilans', '2025']);
+
+  res = await call(handler, { action: 'prepare-upload', owner: { kind: 'company', id: personId }, typeCode: 'COMPANY_KBIS', title: 'x', fileName: 'x.pdf', size: 1, expiresOn: '2027-01-01' });
+  assert.equal(res.code, 404);
+  res = await call(handler, { action: 'prepare-upload', owner: company, typeCode: 'CNI', title: 'x', fileName: 'x.pdf', size: 1, expiresOn: '2027-01-01' });
+  assert.match(res.body.error, /cannot be filed on a company/);
+
+  const hr = setup({ role: 'hr' });
+  res = await call(hr.handler, { action: 'prepare-upload', owner: company, typeCode: 'COMPANY_KBIS', title: 'x', fileName: 'x.pdf', size: 1, expiresOn: '2027-01-01' });
+  assert.equal(res.code, 403);
+});
+
+test('company register checks the folder and registers without an owner column', async () => {
+  const company = { kind: 'company', id: COMPANY_OWNER_ID };
+  const { supa, storage, handler } = setup({ rpc: { register_document: args => ({ data: { id: documentId, ...args.document }, error: null }) } });
+  await call(handler, { action: 'prepare-upload', owner: company, typeCode: 'COMPANY_KBIS', title: 'Kbis', fileName: 'k.pdf', size: 1, expiresOn: '2027-01-01' });
+  const folderId = supa.db.document_folders.find(f => f.folder_code === 'kbis').provider_folder_id;
+  storage.files['file-1'] = { id: 'file-1', name: 'k.pdf', mimeType: 'application/pdf', size: 1, folderIds: [folderId], sha256: null };
+  const res = await call(handler, { action: 'register', owner: company, folderId, fileId: 'file-1', typeCode: 'COMPANY_KBIS', title: 'Kbis', expiresOn: '2027-01-01' });
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  const doc = supa.calls.find(([name]) => name === 'register_document')[1].document;
+  assert.equal(doc.owner_kind, 'company');
+  assert.deepEqual([doc.person_id, doc.client_id, doc.project_id], [null, null, null]);
 });

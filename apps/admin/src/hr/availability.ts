@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { db, errorMessage } from '@quicksort/hr-db';
-import { frenchHolidays, snapshotSchema, type Snapshot } from '../cra/domain';
+import { frenchHolidays } from '../cra/domain';
 import type { Assignment, Employee } from './domain';
 
 /**
@@ -11,7 +11,7 @@ import type { Assignment, Employee } from './domain';
  * internal work.
  *
  * Project time has two sources, kept disjoint by month:
- *  - months with a CRA snapshot consume exactly what the CRA records;
+ *  - months with CRA entries consume exactly what the CRA records;
  *  - months without one (typically the future) consume the allocation of
  *    reserved/confirmed/active assignments covering each open day.
  * Half-day entries weigh 0.5. Internal and unpaid-leave days do not reduce
@@ -41,26 +41,56 @@ function isoDay(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export function yearAvailability({ employees, assignments, snapshots }: {
+const craDaySchema = z.object({
+  employee_id: z.string().uuid(),
+  month: z.string(),
+  day: z.string(),
+  // Rows written before half-day support have no `part`: a full day.
+  part: z.enum(['full', 'am', 'pm']).nullish().transform(part => part ?? 'full'),
+  status: z.string()
+});
+
+const PAGE = 1000;
+
+/** This year's CRA days for the given employees, paged past PostgREST's row cap. */
+async function loadYearEntries(employeeIds: string[]): Promise<CraDay[]> {
+  const year = new Date().getFullYear();
+  const rows: CraDay[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const result = await db().from('cra_entries')
+      .select('employee_id,month,day,part,status')
+      .in('employee_id', employeeIds)
+      .gte('day', `${year}-01-01`)
+      .lte('day', `${year}-12-31`)
+      .order('employee_id').order('day').order('part')
+      .range(from, from + PAGE - 1);
+    if (result.error) throw result.error;
+    const page = z.array(craDaySchema).parse(result.data ?? []);
+    rows.push(...page);
+    if (page.length < PAGE) return rows;
+  }
+}
+
+export type CraDay = z.infer<typeof craDaySchema>;
+
+export function yearAvailability({ employees, assignments, entries }: {
   employees: Employee[];
   assignments: Assignment[];
-  /** CRA snapshots of these employees, any months. */
-  snapshots: { employee_id: string; month: string; snapshot: Snapshot }[];
+  /** Per-day CRA rows (public.cra_entries) of these employees. */
+  entries: CraDay[];
 }): YearAvailability {
   const year = new Date().getFullYear();
   const holidays = frenchHolidays(year);
-  const reportedMonths = new Set(snapshots.map(row => `${row.employee_id}:${row.month.slice(0, 7)}`));
+  const reportedMonths = new Set(entries.map(row => `${row.employee_id}:${row.month.slice(0, 7)}`));
   let projectDays = 0;
   let paidLeaveDays = 0;
   let rttDays = 0;
-  for (const { snapshot } of snapshots) {
-    for (const entry of snapshot.entries) {
-      if (!entry.day.startsWith(`${year}-`)) continue;
-      const weight = entry.part === 'full' ? 1 : 0.5;
-      if (entry.status === 'client_project') projectDays += weight;
-      else if (entry.status === 'paid_leave') paidLeaveDays += weight;
-      else if (entry.status === 'rtt') rttDays += weight;
-    }
+  for (const entry of entries) {
+    if (!entry.day.startsWith(`${year}-`)) continue;
+    const weight = entry.part === 'full' ? 1 : 0.5;
+    if (entry.status === 'client_project') projectDays += weight;
+    else if (entry.status === 'paid_leave') paidLeaveDays += weight;
+    else if (entry.status === 'rtt') rttDays += weight;
   }
   const employeeIds = new Set(employees.map(employee => employee.id));
   const relevant = assignments.filter(assignment => employeeIds.has(assignment.employee_id) && BOOKING_STATUSES.includes(assignment.status));
@@ -89,49 +119,29 @@ export function yearAvailability({ employees, assignments, snapshots }: {
   };
 }
 
-const craRowSchema = z.object({
-  employee_id: z.string().uuid(),
-  month: z.string(),
-  entries: z.unknown()
-});
-
-async function loadYearSnapshots(employeeIds: string[]) {
-  const result = await db().from('cra_entries').select('employee_id,month,entries').in('employee_id', employeeIds);
-  if (result.error) throw result.error;
-  const rows = z.array(craRowSchema).parse(result.data ?? []);
-  return rows.flatMap(row => {
-    const parsed = snapshotSchema.safeParse(row.entries);
-    return parsed.success ? [{
-      employee_id: row.employee_id,
-      month: row.month,
-      snapshot: parsed.data
-    }] : [];
-  });
-}
-
 export function useYearAvailability(employees: Employee[], assignments: Assignment[]): YearAvailability & { ready: boolean; error: string } {
   const idsKey = employees.map(employee => employee.id).sort().join(',');
-  const [state, setState] = useState<{ snapshots: Awaited<ReturnType<typeof loadYearSnapshots>>; error: string; loaded: boolean }>({ snapshots: [], error: '', loaded: false });
+  const [state, setState] = useState<{ entries: CraDay[]; error: string; loaded: boolean }>({ entries: [], error: '', loaded: false });
   useEffect(() => {
     let cancelled = false;
     if (!idsKey) {
-      setState({ snapshots: [], error: '', loaded: true });
+      setState({ entries: [], error: '', loaded: true });
       return;
     }
-    loadYearSnapshots(idsKey.split(','))
-      .then(snapshots => {
-        if (!cancelled) setState({ snapshots, error: '', loaded: true });
+    loadYearEntries(idsKey.split(','))
+      .then(entries => {
+        if (!cancelled) setState({ entries, error: '', loaded: true });
       })
       .catch((failure: unknown) => {
         // Visible, not silent: a missing RPC/table must not read as "fully available".
-        if (!cancelled) setState({ snapshots: [], error: errorMessage(failure), loaded: true });
+        if (!cancelled) setState({ entries: [], error: errorMessage(failure), loaded: true });
       });
     return () => {
       cancelled = true;
     };
   }, [idsKey]);
   return {
-    ...yearAvailability({ employees, assignments, snapshots: state.snapshots }),
+    ...yearAvailability({ employees, assignments, entries: state.entries }),
     ready: state.loaded,
     error: state.error
   };

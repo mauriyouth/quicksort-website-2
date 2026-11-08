@@ -156,7 +156,7 @@ export function ImpersonatePanel({ people, roleOf, selfEmail }: {
             />
           </InputGroup>
         </Field>
-        {query.trim() && results.length === 0 && <p className="m-0 text-sm text-muted-foreground">No user matches “{query.trim()}”.</p>}
+        {query.trim() && results.length === 0 && <p className="m-0 text-sm text-muted-foreground">No user matches "{query.trim()}".</p>}
         {results.length > 0 && (
           <ItemGroup className="gap-2">
             {results.map((p) => (

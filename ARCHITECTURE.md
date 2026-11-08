@@ -19,7 +19,7 @@ Clerk. Data and authorization live in Supabase (Postgres, RLS and Storage).
          │                 │ RLS       │ server-side      │ RLS           │ RLS      │ HTTP proxy
          ▼                 ▼           ▼                  ▼               ▼          ▼
   ┌──────────────────────────────┐   OpenAI · Qonto · Google Drive    admin.quicksort.fr/api/business-*
-  │ Supabase: Postgres + RLS +   │   BoondManager · Treg
+  │ Supabase: Postgres + RLS +   │   Treg
   │ Storage (supabase/migrations)│
   └──────────────────────────────┘
 ```
@@ -110,7 +110,7 @@ locally. `api/` files stay thin, and the logic lives in `server/`.
 | `documents`, `documents-extract` | Document registry: upload, register, file, download; AI metadata extraction | Google Drive, OpenAI |
 | `google-drive` | Service-account connection for contract folders | Google Drive API |
 | `invoicing` | Draft → validate → send → cancel → sync client invoices | Qonto (behind `InvoicingProvider`) |
-| `sales-pipeline`, `boondmanager` | Pipeline board reads/moves; BoondManager import | BoondManager |
+| `sales-pipeline` | Pipeline board reads/moves | — |
 | `business-competitor-intelligence`, `business-event-intelligence` | Research for the intelligence app | OpenAI, Treg |
 
 ### `apps/candidate` — candidate portal (`@quicksort/candidate`, port 5175)

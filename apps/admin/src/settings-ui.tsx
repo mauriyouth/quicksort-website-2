@@ -1,6 +1,6 @@
 /**
  * Building blocks for the Settings panels (Account, AI configuration,
- * Google Drive, BoondManager), on @quicksort-sas/ui. They replace the
+ * Google Drive), on @quicksort-sas/ui. They replace the
  * former sp-* classes from settings-page.css: a card with a ruled header
  * and a connection badge, label/hint rows, and an action footer.
  */

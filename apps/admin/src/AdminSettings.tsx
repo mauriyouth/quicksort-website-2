@@ -79,15 +79,15 @@ import { EmptyState, PageAlerts, PageHeading } from "./ui";
 const KIND_TITLES: Record<StatusKind, { title: string; hint: string }> = {
   project: {
     title: "Project statuses",
-    hint: "Free-form — add, reorder, recolor and delete as delivery evolves.",
+    hint: "Free-form: add, reorder, recolor and delete as delivery evolves.",
   },
   opportunity: {
     title: "Opportunity statuses",
-    hint: "Pipeline stages — keys are enforced by the deal workflow; relabel, recolor and reorder freely.",
+    hint: "Pipeline stages: keys are enforced by the deal workflow; relabel, recolor and reorder freely.",
   },
   resource: {
     title: "Resource statuses",
-    hint: "People lifecycle — keys are enforced by the HR pipeline; relabel, recolor and reorder freely.",
+    hint: "People lifecycle: keys are enforced by the HR pipeline; relabel, recolor and reorder freely.",
   },
 };
 
@@ -148,8 +148,8 @@ export function AdminSettings() {
       exported_at: new Date().toISOString(),
       statuses: ref.statuses.length
         ? ref.statuses
-        : "tables missing — nothing to back up yet",
-      types: ref.types.length ? ref.types : "tables missing — nothing to back up yet",
+        : "tables missing, nothing to back up yet",
+      types: ref.types.length ? ref.types : "tables missing, nothing to back up yet",
     };
     const url = URL.createObjectURL(
       new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
@@ -160,7 +160,7 @@ export function AdminSettings() {
     a.click();
     // Revoking in the same tick can cancel the download in some browsers.
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    setMessage("Backup downloaded — keep it somewhere safe.");
+    setMessage("Backup downloaded. Keep it somewhere safe.");
   };
 
   const saveStatus = (s: AdminStatus, patch: Partial<AdminStatus>) =>
@@ -197,7 +197,7 @@ export function AdminSettings() {
         .select("kind")
         .single();
       if (r.error) throw r.error;
-    }, "Status added — rename it below.");
+    }, "Status added. Rename it below.");
 
   const removeStatus = (s: AdminStatus) =>
     run(async () => {
@@ -209,7 +209,7 @@ export function AdminSettings() {
         .select("kind")
         .single();
       if (r.error) throw r.error;
-    }, `“${s.label}” deleted.`);
+    }, `"${s.label}" deleted.`);
 
   const reorderStatuses = (kind: StatusKind, ordered: AdminStatus[]) =>
     run(async () => {
@@ -254,7 +254,7 @@ export function AdminSettings() {
         .select("key")
         .single();
       if (r.error) throw r.error;
-    }, "Type added — rename it below.");
+    }, "Type added. Rename it below.");
 
   const removeType = (t: AdminType) =>
     run(async () => {
@@ -265,7 +265,7 @@ export function AdminSettings() {
         .select("key")
         .single();
       if (r.error) throw r.error;
-    }, `“${t.label}” deleted.`);
+    }, `"${t.label}" deleted.`);
 
   const reorderTypes = (ordered: AdminType[]) =>
     run(async () => {
@@ -318,7 +318,7 @@ export function AdminSettings() {
         <AlertDescription>
           <ol className="m-0 list-decimal space-y-0.5 pl-4">
             <li>
-              Download a backup of your configuration before any change —{" "}
+              Download a backup of your configuration before any change:{" "}
               <button
                 type="button"
                 className="font-medium text-foreground underline underline-offset-4 hover:no-underline"
@@ -340,7 +340,7 @@ export function AdminSettings() {
       {ref.missing && (
         <Alert variant="destructive">
           <AlertDescription>
-            The settings tables are missing — apply
+            The settings tables are missing. Apply
             supabase/migrations/20261007090000_sales_projects_admin_settings.sql.
             The editors below show built-in defaults until then.
           </AlertDescription>
@@ -391,7 +391,7 @@ export function AdminSettings() {
               busy={busy}
               onSave={saveStatus}
               onAdd={() => void addStatus(kind)}
-              onRemove={(s) => setPendingDelete({ title: `Delete status “${s.label}”?`, run: () => void removeStatus(s) })}
+              onRemove={(s) => setPendingDelete({ title: `Delete status "${s.label}"?`, run: () => void removeStatus(s) })}
               onMove={(i, dir) => moveStatus(kind, i, dir)}
             />
           ))}
@@ -403,7 +403,7 @@ export function AdminSettings() {
             busy={busy}
             onSave={(t, patch) => void saveType(t, patch)}
             onAdd={() => void addType()}
-            onRemove={(t) => setPendingDelete({ title: `Delete type “${t.label}”?`, run: () => void removeType(t) })}
+            onRemove={(t) => setPendingDelete({ title: `Delete type "${t.label}"?`, run: () => void removeType(t) })}
             onMove={moveType}
           />
         </TabsContent>
@@ -416,7 +416,7 @@ export function AdminSettings() {
             busy={busy}
             onSave={saveStatus}
             onAdd={() => void addStatus("resource")}
-            onRemove={(s) => setPendingDelete({ title: `Delete status “${s.label}”?`, run: () => void removeStatus(s) })}
+            onRemove={(s) => setPendingDelete({ title: `Delete status "${s.label}"?`, run: () => void removeStatus(s) })}
             onMove={(i, dir) => moveStatus("resource", i, dir)}
           />
         </TabsContent>
@@ -860,7 +860,8 @@ function TypeRow({
 }
 
 /** Accrual rates for paid vacation (CP) and reduced working time (RTT).
- *  Employees accrue these days per calendar month from their start date; a
+ *  Employees accrue these days per calendar month from their start date (CP
+ *  once the month is over, RTT from its start); a
  *  rate edit reprices every past and future month, so the copy next to the
  *  inputs says exactly that. */
 const LEAVE_KIND_LABELS: Record<LeaveKind, { label: string; sub: string }> = {
@@ -874,12 +875,12 @@ function LeaveAccrualPanel() {
     <ReferentialCard
       title="Leave accrual"
       count={rates.length}
-      hint="Days accrued per calendar month from each employee's start date, net of the leave already consumed on their CRA. Editing a rate reprices all past and future months — every balance updates immediately."
+      hint="Days accrued per calendar month from each employee's start date, net of the leave already consumed on their CRA. CP is acquired at the end of each month; RTT at its start. Editing a rate reprices all past and future months. Every balance updates immediately."
     >
       {missing && (
         <Alert variant="destructive">
           <AlertDescription>
-            The leave_accrual_settings table is missing — apply
+            The leave_accrual_settings table is missing. Apply
             supabase/migrations/20261104090000_leave_accrual_balances.sql. The
             rates below show built-in defaults until then.
           </AlertDescription>
@@ -911,8 +912,8 @@ function LeaveAccrualPanel() {
  *  Business plan page. */
 const ECONOMICS_ROWS = [
   { key: "cjm", label: "CJM multiplier", sub: "Offers: CJM = gross monthly salary × multiplier ÷ 21.7" },
-  { key: "optimistic", label: "Business plan — optimistic", sub: "Employer cost = gross × multiplier (real payroll ≈ ×1.4)" },
-  { key: "pessimistic", label: "Business plan — pessimistic", sub: "Employer cost = gross × multiplier (CJM-like, ×2)" },
+  { key: "optimistic", label: "Optimistic business plan", sub: "Employer cost = gross × multiplier (real payroll ≈ ×1.4)" },
+  { key: "pessimistic", label: "Pessimistic business plan", sub: "Employer cost = gross × multiplier (CJM-like, ×2)" },
 ] as const;
 
 function EconomicsPanel() {
@@ -926,7 +927,7 @@ function EconomicsPanel() {
       {missing && (
         <Alert variant="destructive">
           <AlertDescription>
-            Some unit-economics settings are missing — apply
+            Some unit-economics settings are missing. Apply
             supabase/migrations/20261206090000_business_plan_charge_multipliers.sql.
             The values below show built-in defaults until then.
           </AlertDescription>
@@ -1002,10 +1003,10 @@ function ClassifierPanel() {
       <p role="status" className="m-0 text-sm text-muted-foreground">
         {classifier
           ? classifier.configured
-            ? `Configured — key source: ${source}, model: ${classifier.model}.`
+            ? `Configured. Key source: ${source}, model: ${classifier.model}.`
             : classifier.source === "invalid"
-              ? "Stored key unreadable — save it again."
-              : "Not configured — no API key set."
+              ? "Stored key unreadable. Save it again."
+              : "Not configured. No API key set."
           : "Loading…"}
       </p>
       <PageAlerts error={error ?? ""} message={saved ? "Saved." : ""} />

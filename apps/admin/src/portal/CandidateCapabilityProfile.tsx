@@ -140,7 +140,7 @@ export function CandidateCapabilityProfile({ userId, profile, skills, projects, 
           </div>
           <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>Add skill</Button><Button type="button" variant="ghost" onClick={() => setAddingSkill(false)}>Cancel</Button></div>
         </form>}
-        {!skills.length ? <EmptyState title="No skills added yet">Add the skills that show how you contribute to QuickSort’s four service verticals.</EmptyState> : <ul className={LIST}>{skills.map((skill) => <li key={skill.id} className={ROW}>
+        {!skills.length ? <EmptyState title="No skills added yet">Add the skills that show how you contribute to QuickSort's four service verticals.</EmptyState> : <ul className={LIST}>{skills.map((skill) => <li key={skill.id} className={ROW}>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="label-mono">{capabilityName(skill.vertical)}</span>
             <h3 className="m-0 text-[15px] font-medium">{skill.name}</h3>

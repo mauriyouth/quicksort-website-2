@@ -47,7 +47,6 @@ function apiRoutes(): Plugin {
     '/api/ai-models': '/api/ai-models.ts',
     '/api/analysis-history': '/api/analysis-history.ts',
     '/api/sales-pipeline': '/api/sales-pipeline.ts',
-    '/api/boondmanager': '/api/boondmanager.ts',
     '/api/invoicing': '/api/invoicing.ts',
     '/api/bank-transactions': '/api/bank-transactions.ts',
     '/api/bank-transactions-cron': '/api/bank-transactions-cron.ts',

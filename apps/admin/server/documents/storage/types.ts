@@ -9,8 +9,8 @@
  */
 export type StorageProvider = "gdrive" | "s3";
 
-/** The two trees: client/project documents, and the restricted HR tree. */
-export type StorageRoot = "clients" | "people";
+/** The trees: client/project documents, the restricted HR tree, and the company's own papers. */
+export type StorageRoot = "clients" | "people" | "company";
 
 export type StorageFolder = { id: string; name: string; link: string | null };
 

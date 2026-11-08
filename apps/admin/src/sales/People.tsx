@@ -221,7 +221,7 @@ export function People({ actorEmail }: { actorEmail: string }) {
             <FilterCheck id="f-stale" checked={onlyStale} onChange={setOnlyStale}>Stale (90d+ no contact)</FilterCheck>
           </div>
           {!data.people.length && !loading && (
-            <EmptyState title="No people yet">Add contacts from a client page or with “New person” above.</EmptyState>
+            <EmptyState title="No people yet">Add contacts from a client page or with "New person" above.</EmptyState>
           )}
           {data.people.length > 0 && !visible.length && (
             <EmptyState title="No people match">Try a different search or clear the filters.</EmptyState>
@@ -323,9 +323,9 @@ function PersonDrawer({
           opportunity_id: opportunityId,
           person_id: person.id,
           type: "note",
-          text: `${person.name} marked as ${INFLUENCE_META[influence]?.label || influence} on “${
+          text: `${person.name} marked as ${INFLUENCE_META[influence]?.label || influence} on "${
             data.opportunities.find((o) => o.id === opportunityId)?.title || "opportunity"
-          }”.`,
+          }".`,
           author_email: actorEmail,
         });
       if (note.error) throw note.error;
@@ -452,7 +452,7 @@ function PersonDrawer({
               })}
             </ItemGroup>
           ) : (
-            <p className="m-0 text-xs text-muted-foreground">Not sponsoring any opportunity yet — mark an influence below.</p>
+            <p className="m-0 text-xs text-muted-foreground">Not sponsoring any opportunity yet. Mark an influence below.</p>
           )}
           {!!clientOpportunities.length && (
             <form

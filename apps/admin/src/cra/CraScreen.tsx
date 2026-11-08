@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { EmptyState, PageAlerts } from '../ui';
 import { loadContext, loadMonth, saveMonth } from './data';
 import { balanceFor, fmtDays, useLeaveBalances } from './balances';
-import { assignedProjects, currentMonth, dayHalves, entrySchema, entryValue, listMonths, setDayPart, shiftMonth, monthDays, monthSchema, sortEntries, statusLabels, freelanceStatusLabels, isFreelance, withinEmployment, type StatusLabels, type ActivityValue, type Assignment, type Context, type Employee, type Entry, type Part, type Snapshot } from './domain';
+import { assignedProjects, currentMonth, dayHalves, entrySchema, entryValue, listMonths, setDayPart, shiftMonth, monthDays, monthSchema, sortEntries, statusLabels, freelanceStatusLabels, isFreelance, accruesLeave, withinEmployment, type StatusLabels, type ActivityValue, type Assignment, type Context, type Employee, type Entry, type Part, type Snapshot } from './domain';
 
 function employeeIdFromPath() {
   // A standalone admin link pins the employee: /hr/cra/<id>[/yyyy/mm].
@@ -293,7 +293,7 @@ function EmployeePicker({ employees, selectedId, onSelect }: { employees: Employ
           onPointerMove={() => setHighlight(index)} onClick={() => choose(employee.id)}>
           <span>{employee.full_name}</span><small className="text-xs font-normal text-muted-foreground">{employee.role || 'Employee'} · Started {employee.start_date}</small>
         </button>
-      </li>) : <li className="px-3 py-2.5 text-xs text-muted-foreground" role="status">No employees match “{query}”.</li>}
+      </li>) : <li className="px-3 py-2.5 text-xs text-muted-foreground" role="status">No employees match "{query}".</li>}
     </ul>}
   </div>;
 }
@@ -327,6 +327,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   // Freelancers accrue no CP/RTT: no balance strip, a single Absence brush.
   const freelance = isFreelance(employee);
   const labels = freelance ? freelanceStatusLabels : statusLabels;
+  const noLeave = !accruesLeave(employee);
   const { balances, error: balanceError } = useLeaveBalances([employee.id]);
   const cpLeft = balanceFor(balances, employee.id, 'cp');
   const rttLeft = balanceFor(balances, employee.id, 'rtt');
@@ -519,7 +520,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
     setSelected([]); anchorRef.current = null;
     const plural = DURATIONS.find(item => item.id === duration)?.plural ?? 'days';
     const units = applied === 1 ? plural.replace(/s$/, '') : plural;
-    setMessage(applied ? (value ? `${applied} ${units} set to ${label}${skipped ? ` · ${skipped} skipped (project not assigned on those dates)` : ''}.` : `${applied} ${units} cleared.`) : 'No days updated — the project is not assigned on the selected dates.');
+    setMessage(applied ? (value ? `${applied} ${units} set to ${label}${skipped ? ` · ${skipped} skipped (project not assigned on those dates)` : ''}.` : `${applied} ${units} cleared.`) : 'No days updated. The project is not assigned on the selected dates.');
   }
   function selectEmpty() {
     const empty: string[] = [];
@@ -545,7 +546,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
       added++;
     }
     changeEntries(next);
-    setMessage(added ? `${added} empty working days filled with ${defaultProject.client_name} · ${defaultProject.title}. Existing entries were kept.` : 'No empty working days can take this project — check assignment dates.');
+    setMessage(added ? `${added} empty working days filled with ${defaultProject.client_name} · ${defaultProject.title}. Existing entries were kept.` : 'No empty working days can take this project. Check assignment dates.');
   }
 
   const selectedSet = new Set(selected);
@@ -573,7 +574,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
         <AlertDescription>This month has been invoiced and is locked. Ask an admin to change it.</AlertDescription>
       </Alert>}
       {invoiced && !invoiceLocked && <Alert variant="warning">
-        <AlertDescription>A validated invoice covers this month — changes will not update it.</AlertDescription>
+        <AlertDescription>A validated invoice covers this month. Changes will not update it.</AlertDescription>
       </Alert>}
 
       <section className="flex items-center gap-2" aria-label="Months">
@@ -597,7 +598,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
       </section>
 
       <section className="flex flex-wrap items-center justify-between gap-3" aria-label="CRA toolbar">
-        <p className="m-0 text-sm text-muted-foreground">{workdays.length} working days{holidayCount ? ` · ${holidayCount} public ${holidayCount === 1 ? 'holiday' : 'holidays'}` : ''}{defaultProject ? ` · Default ${defaultProject.client_name} — ${defaultProject.title}` : ''}</p>
+        <p className="m-0 text-sm text-muted-foreground">{workdays.length} working days{holidayCount ? ` · ${holidayCount} public ${holidayCount === 1 ? 'holiday' : 'holidays'}` : ''}{defaultProject ? ` · Default ${defaultProject.client_name} · ${defaultProject.title}` : ''}</p>
         {defaultProject && remaining > 0 && !invoiceLocked && <Button variant="outline" disabled={busy} onClick={fillDefault}>Fill {fmtDays(remaining)} empty</Button>}
       </section>
 
@@ -620,7 +621,7 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
             <span className="text-sm text-muted-foreground"> / {workdays.length} days filled{remaining ? '' : ' · Complete'}</span>
           </div>
           <div className="text-[13px] text-muted-foreground">
-            {freelance ? breakdown : <>{balanceError ? `Solde indisponible · ${balanceError}` : `Solde CP ${fmtDays(cpLeft)} j · RTT ${fmtDays(rttLeft)} j`}{!balanceError && breakdown ? ` · ${breakdown}` : ''}</>}
+            {noLeave ? breakdown : <>{balanceError ? `Solde indisponible · ${balanceError}` : `Solde CP ${fmtDays(cpLeft)} j · RTT ${fmtDays(rttLeft)} j`}{!balanceError && breakdown ? ` · ${breakdown}` : ''}</>}
           </div>
         </div>
         <div role="progressbar" aria-label="Days filled" aria-valuemin={0} aria-valuemax={workdays.length} aria-valuenow={filled} className="h-0.5 overflow-hidden rounded-full bg-border">

@@ -91,7 +91,7 @@ export function AiSettings({ isOwner }: { isOwner: boolean }) {
       <PageAlerts error={error} message={message} />
       <SettingsCard
         title="AI configuration"
-        description="Connect OpenAI to power candidate evaluations in the CV analyzer."
+        description="Connect OpenAI to run candidate evaluations in the CV analyzer."
         action={
           <>
             <ConnectionBadge tone={configured ? "ok" : "neutral"}>{statusLabel}</ConnectionBadge>

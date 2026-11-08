@@ -333,7 +333,7 @@ export function Invoicing() {
   ];
 
   const scope = monthFilter ? monthLabel(monthFilter)
-    : lo && hi ? `${shortDate(lo)} – ${shortDate(hi)}` : lo ? `since ${shortDate(lo)}` : hi ? `until ${shortDate(hi)}` : "all time";
+    : lo && hi ? `${shortDate(lo)} to ${shortDate(hi)}` : lo ? `since ${shortDate(lo)}` : hi ? `until ${shortDate(hi)}` : "all time";
   const byStatus = (s: StatusLabel) => base.filter((i) => statusOf(i) === s);
   const paidF = byStatus("Paid"), validatedF = byStatus("Validated"), overdueF = byStatus("Overdue");
   const unassignedF = base.filter(unassigned);
@@ -477,7 +477,7 @@ export function Invoicing() {
                 <TableBody>
                   {visibleRows.length === 0 && (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={colsTs} className="h-20 text-center text-muted-foreground">No consultant matches “{query}”.</TableCell>
+                      <TableCell colSpan={colsTs} className="h-20 text-center text-muted-foreground">No consultant matches "{query}".</TableCell>
                     </TableRow>
                   )}
                   {visibleRows.map((r) => {
@@ -755,7 +755,7 @@ export function Invoicing() {
 
             <nav className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4" aria-label="Pagination">
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                <span className="num">{filtered.length === 0 ? "0 invoices" : `${start + 1}–${Math.min(start + perPage, filtered.length)} of ${filtered.length}`}</span>
+                <span className="num">{filtered.length === 0 ? "0 invoices" : `${start + 1}-${Math.min(start + perPage, filtered.length)} of ${filtered.length}`}</span>
                 <label className="flex items-center gap-2">Rows per page
                   <NativeSelect size="sm" value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}>
                     {PER_PAGE.map((n) => <NativeSelectOption key={n} value={n}>{n}</NativeSelectOption>)}

@@ -288,7 +288,7 @@ export function CvAnalyzer({ jobs, documents, people }: { jobs: Job[]; documents
                 <span className="truncate text-xs text-muted-foreground">{candidate.fileName}</span>
               </ItemContent>
               <ItemActions className="flex-col items-end gap-0.5 text-right">
-                <strong className="num text-2xl font-medium">{metrics.assessable ? `${metrics.score}%` : "—"}</strong>
+                <strong className="num text-2xl font-medium">{metrics.assessable ? `${metrics.score}%` : "N/A"}</strong>
                 <small className="text-[10px] text-muted-foreground">documented match</small>
               </ItemActions>
               <ArrowUpRight className="hidden size-4 text-muted-foreground @md:block" aria-hidden="true" />
@@ -298,7 +298,7 @@ export function CvAnalyzer({ jobs, documents, people }: { jobs: Job[]; documents
           <EmptyHeader>
             <EmptyMedia variant="icon"><FileText /></EmptyMedia>
             <EmptyTitle>{finished ? "No profiles ready to shortlist" : "Your next shortlist starts here"}</EmptyTitle>
-            <EmptyDescription>{finished ? "Retry incomplete files, or provide more readable CVs with relevant experience." : "Choose a job and upload your CVs. We’ll surface up to 10 profiles with the strongest documented match."}</EmptyDescription>
+            <EmptyDescription>{finished ? "Retry incomplete files, or provide more readable CVs with relevant experience." : "Choose a job and upload your CVs. We'll surface up to 10 profiles with the strongest documented match."}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent className="flex-row flex-wrap justify-center gap-2">
             <Badge variant="outline">Evidence-based scores</Badge>

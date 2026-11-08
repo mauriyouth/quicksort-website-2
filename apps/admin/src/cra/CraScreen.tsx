@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, RefreshCw, Save, Search } from 'lucide-react';
-import { Empty, Notice } from '@quicksort/hr-ui';
+import { ChevronLeft, ChevronRight, Lock, RefreshCw, Save, Search } from 'lucide-react';
+import { Alert, AlertDescription, Button, Field, FieldLabel, InputGroup, InputGroupAddon, InputGroupInput } from '@quicksort-sas/ui';
+import { cn } from 'cn';
 import { errorMessage } from '@quicksort/hr-db';
 import { z } from 'zod';
+import { EmptyState, PageAlerts } from '../ui';
 import { loadContext, loadMonth, saveMonth } from './data';
 import { balanceFor, fmtDays, useLeaveBalances } from './balances';
 import { assignedProjects, currentMonth, dayHalves, entrySchema, entryValue, listMonths, setDayPart, shiftMonth, monthDays, monthSchema, sortEntries, statusLabels, freelanceStatusLabels, isFreelance, withinEmployment, type StatusLabels, type ActivityValue, type Assignment, type Context, type Employee, type Entry, type Part, type Snapshot } from './domain';
-import './cra.css';
 
 function employeeIdFromPath() {
   // A standalone admin link pins the employee: /hr/cra/<id>[/yyyy/mm].
@@ -38,8 +39,26 @@ const DURATIONS: { id: Part; name: string; plural: string }[] = [
   { id: 'pm', name: 'Afternoon', plural: 'afternoons' },
 ];
 
+type Activity = 'client' | 'internal' | 'cp' | 'rtt' | 'css' | 'empty';
+// Activity markers: client is a solid ink dot, internal a muted one, leaves
+// are rings (unpaid dashed). Monochrome on purpose — the label carries the name.
+const DOT: Record<Activity, string> = {
+  client: 'bg-foreground',
+  internal: 'bg-muted-foreground',
+  cp: 'border-[1.5px] border-foreground',
+  rtt: 'border-[1.5px] border-muted-foreground',
+  css: 'border-[1.5px] border-dashed border-muted-foreground',
+  empty: '',
+};
+function Dot({ kind, className }: { kind: Activity; className?: string }) {
+  return <span aria-hidden="true" className={cn('size-2 flex-none rounded-full', DOT[kind], className)} />;
+}
+/** Segmented control track and its items (duration radios, days-shown toggle). */
+const SEG_TRACK = 'flex gap-0.5 rounded-lg bg-muted p-0.5';
+const SEG_ITEM = 'h-8 min-w-0 flex-1 cursor-pointer truncate rounded-md px-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-sm aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm';
+
 // Display helpers — short mono codes for the calendar cells and brush labels.
-function activityClass(value: ActivityValue): 'client' | 'internal' | 'cp' | 'rtt' | 'css' | 'empty' {
+function activityClass(value: ActivityValue): Activity {
   if (value === 'internal') return 'internal';
   if (value === 'paid_leave') return 'cp';
   if (value === 'rtt') return 'rtt';
@@ -190,14 +209,19 @@ export function CraScreen({ audience, draftOwner, linkBase, fixedEmployeeId, bas
     window.addEventListener('keydown', step);
     return () => window.removeEventListener('keydown', step);
   });
-  return <section className="cra-screen">
-    {error && <><Notice error>{error}</Notice><button className="btn secondary" onClick={() => setRetry(value => value + 1)}>Retry loading CRA</button></>}
-    {!context && !error && <p className="muted" role="status">Loading CRA…</p>}
-    {context && !context.employees.length && <Empty title="No employee record linked">{audience === 'admin' ? 'Create an employment record in HR before filling a CRA.' : 'Ask HR to link your account to your employee record.'}</Empty>}
+  return <section className="@container flex min-w-0 flex-col gap-6 tabular-nums">
+    {error && <div className="flex flex-col items-start gap-3">
+      <PageAlerts error={error} />
+      <Button variant="outline" onClick={() => setRetry(value => value + 1)}>Retry loading CRA</Button>
+    </div>}
+    {!context && !error && <p className="m-0 text-sm text-muted-foreground" role="status">Loading CRA…</p>}
+    {context && !context.employees.length && <EmptyState title="No employee record linked">{audience === 'admin' ? 'Create an employment record in HR before filling a CRA.' : 'Ask HR to link your account to your employee record.'}</EmptyState>}
     {context && employee && <>
-      {!fixedEmployeeId && <div className="cra-filters panel">
-        <div className="cra-field"><label className="qs-label" htmlFor="cra-employee">Employee</label><EmployeePicker employees={context.employees} selectedId={employeeId} onSelect={selectEmployee} /></div>
-      </div>}      <MonthEditor key={`${employeeId}:${month}`} employee={employee} month={month} months={monthChoices} onMonth={changeMonth} assignments={context.assignments} draftOwner={draftOwner} audience={audience} />
+      {!fixedEmployeeId && <Field className="max-w-xl gap-1.5">
+        <FieldLabel htmlFor="cra-employee">Employee</FieldLabel>
+        <EmployeePicker employees={context.employees} selectedId={employeeId} onSelect={selectEmployee} />
+      </Field>}
+      <MonthEditor key={`${employeeId}:${month}`} employee={employee} month={month} months={monthChoices} onMonth={changeMonth} assignments={context.assignments} draftOwner={draftOwner} audience={audience} />
     </>}
   </section>;
 }
@@ -231,11 +255,11 @@ function EmployeePicker({ employees, selectedId, onSelect }: { employees: Employ
     setQuery('');
   }
 
-  return <div className="cra-employee-picker" ref={rootRef}>
-    <Search className="cra-employee-picker-icon" size={16} aria-hidden="true" />
-    <input
+  return <div className="relative min-w-0" ref={rootRef}>
+    <InputGroup>
+    <InputGroupAddon><Search aria-hidden="true" /></InputGroupAddon>
+    <InputGroupInput
       id="cra-employee"
-      className="qs-input"
       type="search"
       role="combobox"
       aria-label="Employee"
@@ -261,12 +285,15 @@ function EmployeePicker({ employees, selectedId, onSelect }: { employees: Employ
         }
       }}
     />
-    {open && <ul className="cra-employee-picker-list" id="cra-employee-options" role="listbox" aria-label="Employees">
+    </InputGroup>
+    {open && <ul className="absolute inset-x-0 top-full z-30 m-0 mt-1 max-h-[min(320px,50vh)] list-none overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg" id="cra-employee-options" role="listbox" aria-label="Employees">
       {results.length ? results.map((employee, index) => <li key={employee.id}>
-        <button id={`cra-employee-option-${employee.id}`} type="button" role="option" aria-selected={employee.id === selectedId} className={index === highlight ? 'on' : ''} onPointerMove={() => setHighlight(index)} onClick={() => choose(employee.id)}>
-          <span>{employee.full_name}</span><small>{employee.role || 'Employee'} · Started {employee.start_date}</small>
+        <button id={`cra-employee-option-${employee.id}`} type="button" role="option" aria-selected={employee.id === selectedId}
+          className={cn('flex min-h-11 w-full cursor-pointer flex-col items-start justify-center gap-0.5 rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-selected:font-medium', index === highlight && 'bg-accent')}
+          onPointerMove={() => setHighlight(index)} onClick={() => choose(employee.id)}>
+          <span>{employee.full_name}</span><small className="text-xs font-normal text-muted-foreground">{employee.role || 'Employee'} · Started {employee.start_date}</small>
         </button>
-      </li>) : <li className="cra-employee-picker-empty" role="status">No employees match “{query}”.</li>}
+      </li>) : <li className="px-3 py-2.5 text-xs text-muted-foreground" role="status">No employees match “{query}”.</li>}
     </ul>}
   </div>;
 }
@@ -524,138 +551,168 @@ function MonthEditor({ employee, month, months, onMonth, assignments, draftOwner
   const selectedSet = new Set(selected);
   const unit = duration === 'full' ? 'day' : 'half-day';
   const statusLabel = busy ? 'Saving…' : dirty ? draftStored ? 'Unsaved changes · draft kept in this browser' : 'Unsaved changes · save before leaving' : snapshot?.updated_at ? `Saved by ${snapshot.updated_by || 'your team'} on ${new Date(snapshot.updated_at).toLocaleString('en-GB')}` : 'No entries saved yet';
+  // The duration radios follow the radio-group keyboard pattern: arrows move
+  // the choice (and never reach the window-level month shortcut).
+  function durationKey(event: ReactKeyboardEvent<HTMLButtonElement>, index: number) {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const delta = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
+    const nextIndex = (index + delta + DURATIONS.length) % DURATIONS.length;
+    setDuration(DURATIONS[nextIndex].id);
+    (event.currentTarget.parentElement?.children[nextIndex] as HTMLElement | undefined)?.focus();
+  }
+  const gridColumns = { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` };
   return <>
-    <Notice error>{error}</Notice>
-    {!snapshot && !error && <p role="status" className="muted">Loading {monthLabel}…</p>}
-    {!snapshot && error && <button className="btn secondary" onClick={discard}>Retry loading month</button>}
+    <PageAlerts error={error} />
+    {!snapshot && !error && <p role="status" className="m-0 text-sm text-muted-foreground">Loading {monthLabel}…</p>}
+    {!snapshot && error && <Button variant="outline" className="self-start" onClick={discard}>Retry loading month</Button>}
     {snapshot && <>
-      {invoiceLocked && <Notice>This month has been invoiced and is locked. Ask an admin to change it.</Notice>}
-      {invoiced && !invoiceLocked && <Notice>A validated invoice covers this month — changes will not update it.</Notice>}
-      <section className="cra-months" aria-label="Months">
-        <button className="cra-month-nav" type="button" aria-label="Earlier months" disabled={windowStart <= 0 || busy} onClick={() => setWindowStart(value => value - 1)}><ChevronLeft size={18} aria-hidden="true" /></button>
-        <div className="cra-months-track">
+      {invoiceLocked && <Alert>
+        <Lock aria-hidden="true" />
+        <AlertDescription>This month has been invoiced and is locked. Ask an admin to change it.</AlertDescription>
+      </Alert>}
+      {invoiced && !invoiceLocked && <Alert variant="warning">
+        <AlertDescription>A validated invoice covers this month — changes will not update it.</AlertDescription>
+      </Alert>}
+
+      <section className="flex items-center gap-2" aria-label="Months">
+        <Button variant="outline" size="icon" aria-label="Earlier months" disabled={windowStart <= 0 || busy} onClick={() => setWindowStart(value => value - 1)}><ChevronLeft aria-hidden="true" /></Button>
+        <div className="grid min-w-0 flex-1 grid-cols-3 gap-1 @lg:grid-cols-6">
           {months.slice(windowStart, windowStart + MONTH_WINDOW).map((choice, index) => {
             const active = choice === month;
             const date = new Date(`${choice}-01T12:00:00`);
             const showYear = index === 0 || choice.endsWith('-01');
             const tally = active ? { filled, workdays: workdays.length } : monthTallies[choice];
             const status = !tally || tally.filled === 0 ? '—' : tally.filled >= tally.workdays ? 'Complete' : `${fmtDays(tally.filled)} / ${tally.workdays}`;
-            return <button key={choice} type="button" className={`cra-month${active ? ' cra-month--on' : ''}`} aria-pressed={active} aria-label={`${date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}${status !== '—' ? `, ${status}` : ''}`} onClick={() => onMonth(choice)}>
-              <span className="cra-month-label">{date.toLocaleDateString('en-GB', { month: 'short' })}{showYear ? ` ${choice.slice(0, 4)}` : ''}</span>
-              <span className="cra-month-status">{status}</span>
+            return <button key={choice} type="button"
+              className={cn('flex h-12 min-w-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md px-1 text-sm font-medium transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @lg:h-14', active && 'bg-foreground text-background hover:bg-foreground')}
+              aria-pressed={active} aria-label={`${date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}${status !== '—' ? `, ${status}` : ''}`} onClick={() => onMonth(choice)}>
+              <span className="max-w-full truncate">{date.toLocaleDateString('en-GB', { month: 'short' })}{showYear ? ` ${choice.slice(0, 4)}` : ''}</span>
+              <span className={cn('max-w-full truncate text-xs font-normal', active ? 'text-background/65' : 'text-muted-foreground')}>{status}</span>
             </button>;
           })}
         </div>
-        <button className="cra-month-nav" type="button" aria-label="Later months" disabled={windowStart + MONTH_WINDOW >= months.length || busy} onClick={() => setWindowStart(value => value + 1)}><ChevronRight size={18} aria-hidden="true" /></button>
+        <Button variant="outline" size="icon" aria-label="Later months" disabled={windowStart + MONTH_WINDOW >= months.length || busy} onClick={() => setWindowStart(value => value + 1)}><ChevronRight aria-hidden="true" /></Button>
       </section>
 
-      <section className="cra-toolbar" aria-label="CRA toolbar">
-        <div className="cra-toolbar-title">
-          <p className="cra-toolbar-meta">{workdays.length} working days{holidayCount ? ` · ${holidayCount} public ${holidayCount === 1 ? 'holiday' : 'holidays'}` : ''}{defaultProject ? ` · Default ${defaultProject.client_name} — ${defaultProject.title}` : ''}</p>
-        </div>
-        <div className="cra-toolbar-actions">
-          {defaultProject && remaining > 0 && !invoiceLocked && <button className="btn secondary" type="button" disabled={busy} onClick={fillDefault}>Fill {fmtDays(remaining)} empty</button>}
-        </div>
+      <section className="flex flex-wrap items-center justify-between gap-3" aria-label="CRA toolbar">
+        <p className="m-0 text-sm text-muted-foreground">{workdays.length} working days{holidayCount ? ` · ${holidayCount} public ${holidayCount === 1 ? 'holiday' : 'holidays'}` : ''}{defaultProject ? ` · Default ${defaultProject.client_name} — ${defaultProject.title}` : ''}</p>
+        {defaultProject && remaining > 0 && !invoiceLocked && <Button variant="outline" disabled={busy} onClick={fillDefault}>Fill {fmtDays(remaining)} empty</Button>}
       </section>
 
-      <div className="cra-savebar">
-        <span className="cra-savebar-message" role="status">{message}</span>
-        <span className="cra-save-state" role="status">{statusLabel}</span>
-        <div className="cra-savebar-actions">
-          {dirty && <button className="btn secondary" type="button" disabled={busy} onClick={discard}><RefreshCw size={16} aria-hidden="true" />Discard</button>}
-          <button className="btn" type="button" disabled={busy || !dirty || invoiceLocked} onClick={() => void save()}><Save size={16} aria-hidden="true" />{busy ? 'Saving…' : 'Save'}</button>
+      {/* Sticky save bar: Save/Discard stay reachable while scrolling the month,
+          and feedback lands next to the buttons. It clears the admin top bar,
+          and sits flush inside a dialog's own scroll area. */}
+      <div className="sticky top-16 z-10 flex flex-wrap items-center justify-end gap-x-4 gap-y-2 rounded-lg border border-border bg-background/90 px-4 py-2.5 backdrop-blur in-data-[slot=dialog-content]:top-0">
+        <span className="mr-auto min-w-0 flex-[1_1_220px] text-[13px] leading-normal text-foreground [overflow-wrap:anywhere] empty:hidden" role="status">{message}</span>
+        <span className="max-w-[340px] text-[13px] leading-normal text-muted-foreground [overflow-wrap:anywhere]" role="status">{statusLabel}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {dirty && <Button variant="outline" disabled={busy} onClick={discard}><RefreshCw data-icon="inline-start" aria-hidden="true" />Discard</Button>}
+          <Button disabled={busy || !dirty || invoiceLocked} onClick={() => void save()}><Save data-icon="inline-start" aria-hidden="true" />{busy ? 'Saving…' : 'Save'}</Button>
         </div>
       </div>
 
-      <section className="cra-summary" aria-label="Month summary">
-        <div className="cra-summary-row">
-          <div className="cra-summary-total">
-            <span className="cra-summary-filled">{fmtDays(filled)}</span>
-            <span className="muted"> / {workdays.length} days filled{remaining ? '' : ' · Complete'}</span>
+      <section className="flex flex-col gap-3" aria-label="Month summary">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <div className="flex items-baseline gap-0.5">
+            <span className="text-xl leading-none font-medium">{fmtDays(filled)}</span>
+            <span className="text-sm text-muted-foreground"> / {workdays.length} days filled{remaining ? '' : ' · Complete'}</span>
           </div>
-          <div className="muted cra-breakdown">
+          <div className="text-[13px] text-muted-foreground">
             {freelance ? breakdown : <>{balanceError ? `Solde indisponible · ${balanceError}` : `Solde CP ${fmtDays(cpLeft)} j · RTT ${fmtDays(rttLeft)} j`}{!balanceError && breakdown ? ` · ${breakdown}` : ''}</>}
           </div>
         </div>
-        <div role="progressbar" aria-label="Days filled" aria-valuemin={0} aria-valuemax={workdays.length} aria-valuenow={filled} className="cra-progress">
-          <div className="cra-progress-fill" style={{ width: `${workdays.length ? Math.round((filled / workdays.length) * 100) : 0}%` }} />
+        <div role="progressbar" aria-label="Days filled" aria-valuemin={0} aria-valuemax={workdays.length} aria-valuenow={filled} className="h-0.5 overflow-hidden rounded-full bg-border">
+          <div className="h-full rounded-full bg-foreground transition-[width] duration-300 ease-out motion-reduce:transition-none" style={{ width: `${workdays.length ? Math.round((filled / workdays.length) * 100) : 0}%` }} />
         </div>
       </section>
 
-      <div className="cra-cal-layout">
-        <section className="cra-cal" aria-label="Calendar" style={{ ['--cra-cols' as string]: columns }}>
-          <div className="cra-cal-head">
+      {/* Side by side once the screen itself has room (≥ 48rem); the apply
+          panel stacks under the calendar on narrow screens. */}
+      <div className="grid items-start gap-6 @3xl:grid-cols-[minmax(0,1fr)_17rem] @5xl:grid-cols-[minmax(0,1fr)_19rem]">
+        <section className="flex min-w-0 flex-col gap-2" aria-label="Calendar">
+          <div className="grid gap-1.5 px-1 text-xs font-medium text-muted-foreground @lg:gap-2" style={gridColumns}>
             <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div>
             {weekends && <><div>Sat</div><div>Sun</div></>}
           </div>
-          <div className="cra-cal-grid" onMouseLeave={() => { dragRef.current = null; }} onMouseUp={() => { dragRef.current = null; }}>
+          <div className="grid gap-1.5 @lg:gap-2" style={gridColumns} onMouseLeave={() => { dragRef.current = null; }} onMouseUp={() => { dragRef.current = null; }}>
             {cells.map(cell => {
               if (cell.out) {
-                return <button key={cell.iso} type="button" className="cra-cell cra-cell--out" disabled aria-label={`Activity for ${cell.iso}: outside this month`}><span className="cra-cell-num">{cell.num}</span></button>;
+                return <button key={cell.iso} type="button" className={cn(CELL, 'border-transparent')} disabled aria-label={`Activity for ${cell.iso}: outside this month`}><span className={cn(CELL_NUM, 'text-faint')}>{cell.num}</span></button>;
               }
               if (cell.holiday) {
-                return <button key={cell.iso} type="button" className="cra-cell cra-cell--holiday" disabled aria-label={`Activity for ${cell.iso}: public holiday`} title={cell.holiday}><span className="cra-cell-num">{cell.num}</span><span className="cra-cell-note">{cell.holiday}</span></button>;
+                return <button key={cell.iso} type="button" className={cn(CELL, 'border-dashed')} disabled aria-label={`Activity for ${cell.iso}: public holiday`} title={cell.holiday}><span className={cn(CELL_NUM, 'text-faint')}>{cell.num}</span><span className="hidden truncate text-xs text-muted-foreground @lg:block">{cell.holiday}</span></button>;
               }
               const halves = dayHalves(entries, cell.iso);
               const whole = halves.am === halves.pm;
               const has = !!(halves.am || halves.pm);
               const aria = `Activity for ${cell.iso}: ${whole ? `${activityName(halves.am, employeeProjects, labels)}, full day` : `morning ${activityName(halves.am, employeeProjects, labels)}, afternoon ${activityName(halves.pm, employeeProjects, labels)}`}`;
-              const lines: { key: string; tag: string; text: string; cls: string }[] = [];
+              const lines: { key: string; tag: string; text: string; cls: Activity }[] = [];
               if (whole) {
                 if (halves.am) lines.push({ key: 'day', tag: '', text: activityLabel(halves.am, employeeProjects, labels), cls: activityClass(halves.am) });
               } else {
                 if (halves.am) lines.push({ key: 'am', tag: 'AM', text: activityLabel(halves.am, employeeProjects, labels), cls: activityClass(halves.am) });
                 if (halves.pm) lines.push({ key: 'pm', tag: 'PM', text: activityLabel(halves.pm, employeeProjects, labels), cls: activityClass(halves.pm) });
               }
+              const isSelected = selectedSet.has(cell.iso);
               return <button key={cell.iso} type="button"
-                className={`cra-cell${has ? ' cra-cell--fill' : ' cra-cell--empty'}${cell.weekend ? ' cra-cell--weekend' : ''}${cell.locked ? ' cra-cell--off' : ''}${selectedSet.has(cell.iso) ? ' cra-cell--sel' : ''}`}
+                className={cn(CELL, 'cursor-pointer enabled:hover:border-foreground/40 disabled:cursor-not-allowed',
+                  has ? 'border-transparent bg-card' : cell.weekend && 'border-transparent bg-muted',
+                  cell.locked && 'opacity-45',
+                  isSelected && 'border-foreground bg-foreground/5 ring-1 ring-foreground enabled:hover:border-foreground')}
                 disabled={cell.locked || busy || invoiceLocked}
-                aria-pressed={selectedSet.has(cell.iso)}
+                aria-pressed={isSelected}
                 aria-label={aria}
                 title={!withinEmployment(employee, cell.iso) ? 'Outside employment period' : undefined}
                 onMouseDown={event => pressDay(cell.iso, event)}
                 onMouseEnter={() => dragDay(cell.iso)}
                 onClick={event => { if (event.detail === 0) keyToggle(cell.iso); }}>
-                <span className="cra-cell-num">{cell.num}</span>
-                {lines.length > 0 && <span className="cra-cell-lines">
-                  {lines.map(line => <span key={line.key} className="cra-line">
-                    <span aria-hidden="true" className={`cra-dot cra-dot--${line.cls}`} />
-                    <span className="cra-line-text">{line.tag ? `${line.tag} · ${line.text}` : line.text}</span>
+                <span className={CELL_NUM}>{cell.num}</span>
+                {lines.length > 0 && <span className="flex min-w-0 flex-col gap-1">
+                  {lines.map(line => <span key={line.key} className="flex min-w-0 items-center gap-2 text-xs">
+                    <Dot kind={line.cls} />
+                    <span className="hidden truncate @lg:block">{line.tag ? `${line.tag} · ${line.text}` : line.text}</span>
                   </span>)}
                 </span>}
               </button>;
             })}
           </div>
-          {invalidDays.length > 0 && <p className="cra-invalid-note">{invalidDays.length} {invalidDays.length === 1 ? 'entry' : 'entries'} use a project that is no longer assigned ({invalidDays.map(entry => entry.day).join(', ')}). Choose a current assignment or another activity before saving.</p>}
+          {invalidDays.length > 0 && <p className="m-0 mt-2 px-1 text-[13px] leading-relaxed text-destructive">{invalidDays.length} {invalidDays.length === 1 ? 'entry' : 'entries'} use a project that is no longer assigned ({invalidDays.map(entry => entry.day).join(', ')}). Choose a current assignment or another activity before saving.</p>}
         </section>
 
-        <aside className="cra-side" aria-label="Apply to selected days">
-          <div className="cra-side-head">
-            <span className="cra-side-title">{selected.length ? `${selected.length} ${unit}${selected.length === 1 ? '' : 's'} selected` : 'Select days to fill'}</span>
+        <aside className="flex min-w-0 flex-col gap-4 rounded-lg border border-border bg-card p-4" aria-label="Apply to selected days">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-sm font-medium">{selected.length ? `${selected.length} ${unit}${selected.length === 1 ? '' : 's'} selected` : 'Select days to fill'}</span>
             {selected.length
-              ? <button className="cra-link" type="button" onClick={() => { setSelected([]); anchorRef.current = null; }}>Clear</button>
-              : <button className="cra-link" type="button" onClick={selectEmpty}>Select empty</button>}
+              ? <Button variant="link" size="sm" className="h-auto px-0 text-muted-foreground" onClick={() => { setSelected([]); anchorRef.current = null; }}>Clear</Button>
+              : <Button variant="link" size="sm" className="h-auto px-0 text-muted-foreground" onClick={selectEmpty}>Select empty</Button>}
           </div>
-          <div className="cra-seg-group" role="radiogroup" aria-label="Duration">
-            {DURATIONS.map(item => <button key={item.id} type="button" role="radio" aria-checked={duration === item.id} className={`cra-seg${duration === item.id ? ' cra-seg-on' : ''}`} onClick={() => setDuration(item.id)}>{item.name}</button>)}
+          <div className={SEG_TRACK} role="radiogroup" aria-label="Duration">
+            {DURATIONS.map((item, index) => <button key={item.id} type="button" role="radio" aria-checked={duration === item.id} tabIndex={duration === item.id ? 0 : -1} className={SEG_ITEM} onClick={() => setDuration(item.id)} onKeyDown={event => durationKey(event, index)}>{item.name}</button>)}
           </div>
-          <div className={selected.length ? 'cra-types' : 'cra-types cra-types--dim'}>
-            {[...projectBrushes, ...plainBrushes].map(brush => <button key={brush.value} type="button" className="cra-type" disabled={!selected.length || busy || invoiceLocked} onClick={() => applyBrush(brush.value, brush.label)}>
-              <span aria-hidden="true" className={`cra-dot cra-dot--${brush.cls}`} />
-              <span className="cra-type-text">
-                <span className="cra-type-label">{brush.label}</span>
-                <span className="cra-type-sub">{brush.sub}</span>
+          <div className={cn('flex flex-col transition-opacity', !selected.length && 'opacity-40')}>
+            {[...projectBrushes, ...plainBrushes].map(brush => <button key={brush.value} type="button" className={BRUSH} disabled={!selected.length || busy || invoiceLocked} onClick={() => applyBrush(brush.value, brush.label)}>
+              <Dot kind={brush.cls as Activity} className="size-2.5" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-medium">{brush.label}</span>
+                <span className="truncate text-xs text-muted-foreground">{brush.sub}</span>
               </span>
-              <span className="cra-type-count">{valueCounts.get(brush.value) ? `${fmtDays(valueCounts.get(brush.value)!)} d` : ''}</span>
+              <span className="flex-none text-xs text-muted-foreground">{valueCounts.get(brush.value) ? `${fmtDays(valueCounts.get(brush.value)!)} d` : ''}</span>
             </button>)}
-            <button type="button" className="cra-clear-entries" disabled={!selected.length || busy || invoiceLocked} onClick={() => applyBrush('', 'Clear entries')}>Clear entries</button>
+            <button type="button" className={cn(BRUSH, 'min-h-11 text-[13px] text-muted-foreground enabled:hover:bg-transparent enabled:hover:text-foreground')} disabled={!selected.length || busy || invoiceLocked} onClick={() => applyBrush('', 'Clear entries')}>Clear entries</button>
           </div>
-          <div className="cra-seg-group" role="group" aria-label="Days shown">
-            <button type="button" aria-pressed={!weekends} className={`cra-seg${!weekends ? ' cra-seg-on' : ''}`} onClick={() => setWeekends(false)}>Mon–Fri</button>
-            <button type="button" aria-pressed={weekends} className={`cra-seg${weekends ? ' cra-seg-on' : ''}`} onClick={() => setWeekends(true)}>Mon–Sun</button>
+          <div className={SEG_TRACK} role="group" aria-label="Days shown">
+            <button type="button" aria-pressed={!weekends} className={SEG_ITEM} onClick={() => setWeekends(false)}>Mon–Fri</button>
+            <button type="button" aria-pressed={weekends} className={SEG_ITEM} onClick={() => setWeekends(true)}>Mon–Sun</button>
           </div>
         </aside>
       </div>
     </>}
   </>;
 }
+
+/** Calendar day cell: quiet surface; filled days sit on the card colour, selection outlines in ink. */
+const CELL = 'flex h-20 min-w-0 flex-col justify-between rounded-md border border-border p-2 text-left select-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @lg:h-24 @lg:p-3';
+const CELL_NUM = 'text-[13px] leading-none font-medium @lg:text-[15px]';
+const BRUSH = 'flex min-h-12 w-full cursor-pointer items-center gap-3 border-t border-border px-1 py-2 text-left transition-colors enabled:hover:bg-accent disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';

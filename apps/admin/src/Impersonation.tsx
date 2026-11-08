@@ -1,8 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { useClerk, useSession } from "@clerk/react";
 import type { Row } from "@quicksort/hr-db";
-import { Notice, Pill } from "@quicksort/hr-ui";
-import "./impersonation.css";
+import { Search, VenetianMask } from "lucide-react";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Field,
+  FieldLabel,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@quicksort-sas/ui";
+import { PageAlerts, StatusBadge } from "./ui";
 
 /* Admin impersonation. The server (api/impersonate.ts) authorizes + audits
  * the request and returns a short-lived Clerk actor ticket. Clerk refuses a
@@ -45,17 +64,26 @@ export function ImpersonationBanner() {
   if (!session?.actor) return null;
   const email = session.user.primaryEmailAddress?.emailAddress || "another user";
   return (
-    <div className="impersonation-banner" role="status">
-      <span>
-        Viewing the portal as <strong>{email}</strong>. Everything you do is recorded as them.
+    // Deliberately loud (full-width lime bar, pinned to the top): it is the
+    // security cue that every action is recorded as someone else.
+    <div
+      role="status"
+      className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b-[1.5px] border-pivot-foreground bg-pivot px-4 py-2.5 text-sm text-pivot-foreground"
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <VenetianMask className="size-4 shrink-0" aria-hidden="true" />
+        <span>
+          Viewing the portal as <strong className="font-semibold">{email}</strong>. Everything you do is recorded as them.
+        </span>
       </span>
-      <button
-        className="btn small"
+      <Button
+        size="sm"
+        className="border-pivot-foreground bg-pivot-foreground text-pivot hover:bg-pivot-foreground/85"
         disabled={busy}
         onClick={() => { setBusy(true); void clerk.signOut(); }}
       >
         Stop impersonating
-      </button>
+      </Button>
     </div>
   );
 }
@@ -103,43 +131,51 @@ export function ImpersonatePanel({ people, roleOf, selfEmail }: {
   }
 
   return (
-    <section className="panel" aria-label="Impersonate a user">
-      <h2>Impersonate a user</h2>
-      <p className="muted small-text">
-        Open the portal exactly as someone else sees it, for up to one hour. You will be
-        signed out of your admin session; sign back in when you stop. Every impersonation is
-        logged in the access audit.
-      </p>
-      <Notice error>{error}</Notice>
-      <label className="form">
-        Find a user
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Name or email…"
-          autoComplete="off"
-        />
-      </label>
-      {query.trim() && results.length === 0 && <p className="muted small-text">No user matches “{query.trim()}”.</p>}
-      {results.map((p) => (
-        <div className="list-row" key={p.id}>
-          <div>
-            <h3>{p.full_name || "New account"}</h3>
-            <p className="muted">{p.email}</p>
-          </div>
-          <div className="actions">
-            <Pill status={roleOf(p.id)} />
-            <button
-              className="btn small"
-              disabled={!!busyId}
-              onClick={() => void impersonate(p)}
-            >
-              {busyId === p.id ? "Opening…" : "View as"}
-            </button>
-          </div>
-        </div>
-      ))}
-    </section>
+    <Card role="region" aria-label="Impersonate a user" className="mb-6">
+      <CardHeader>
+        <CardTitle>Impersonate a user</CardTitle>
+        <CardDescription className="max-w-prose">
+          Open the portal exactly as someone else sees it, for up to one hour. You will be
+          signed out of your admin session; sign back in when you stop. Every impersonation is
+          logged in the access audit.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <PageAlerts error={error} />
+        <Field>
+          <FieldLabel htmlFor="impersonate-search">Find a user</FieldLabel>
+          <InputGroup>
+            <InputGroupAddon><Search /></InputGroupAddon>
+            <InputGroupInput
+              id="impersonate-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Name or email…"
+              autoComplete="off"
+            />
+          </InputGroup>
+        </Field>
+        {query.trim() && results.length === 0 && <p className="m-0 text-sm text-muted-foreground">No user matches “{query.trim()}”.</p>}
+        {results.length > 0 && (
+          <ItemGroup className="gap-2">
+            {results.map((p) => (
+              <Item variant="outline" size="sm" key={p.id}>
+                <ItemContent className="min-w-0">
+                  <ItemTitle><h3 className="m-0 truncate text-sm font-medium">{p.full_name || "New account"}</h3></ItemTitle>
+                  <ItemDescription className="truncate">{p.email}</ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  <StatusBadge status={roleOf(p.id)} />
+                  <Button size="sm" variant="outline" disabled={!!busyId} onClick={() => void impersonate(p)}>
+                    {busyId === p.id ? "Opening…" : "View as"}
+                  </Button>
+                </ItemActions>
+              </Item>
+            ))}
+          </ItemGroup>
+        )}
+      </CardContent>
+    </Card>
   );
 }

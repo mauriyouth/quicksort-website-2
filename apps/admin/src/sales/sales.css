@@ -109,11 +109,6 @@ Weighted forecast {
    (#151515 ground, #1E1E1E cards, #CCFF00 accent). */
 
 /* Header — display title + lede left, lime pill action bottom-right. */
-.projects-lede {
-  margin: 8px 0 0;
-  font-size: 15px;
-  color: var(--qs-muted);
-}
 
 /* Summary — four raised cards, auto-fit, 12px gap. */
 /* Inverted accent card — needs attention. */

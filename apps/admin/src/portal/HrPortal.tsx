@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Upload,
@@ -7,11 +7,12 @@ import {
   Settings,
   ArrowUpRight,
   Check,
-  Download,
   CalendarDays,
   Receipt,
+  X,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useClerk } from "@clerk/react";
 import {
   db,
   downloadFile,
@@ -20,23 +21,48 @@ import {
   type Row,
 } from "@quicksort/hr-db";
 import { validateFile } from "@quicksort/hr-db/validation";
+import { resolvePortalRoute, formatDate } from "@quicksort/hr-ui";
 import {
-  resolvePortalRoute,
-  AccountSecurity,
-  Shell,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Input,
+  NativeSelect,
+  NativeSelectOption,
   Stat,
-  Notice,
-  Empty,
-  Pill,
-  formatDate,
-} from "@quicksort/hr-ui";
+  StatGroup,
+  StatLabel,
+  StatSource,
+  StatValue,
+  Textarea,
+} from "@quicksort-sas/ui";
+import { cn } from "cn";
 import { z } from "zod";
+import { AdminShell } from "../AdminShell";
+import { SectionHeader } from "../SectionHeader";
+import { EmptyState, PageAlerts, PageHeading, StatusBadge } from "../ui";
 import { executeCommand } from "../hr/data";
 import { CraScreen } from '../cra/CraScreen';
 import { downloadOwnDocument, downloadOwnPayslip, previewOwnDocument, previewOwnPayslip } from '../documents/client';
 import { MyPayslips } from '../payslips/MyPayslips';
 import { MyDocuments, type MyDocumentType } from '../documents/MyDocuments';
-import '../documents/documents.css';
 
 type PortalRoute = { id: string; href: string };
 
@@ -274,8 +300,9 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
       }
     }, "Document sent. HR will check it.");
   }
+  // Removing an own upload asks first (an AlertDialog, in place of confirm()).
+  const [removing, setRemoving] = useState<Row<"candidate_documents"> | null>(null);
   function removeUpload(upload: Row<"candidate_documents">) {
-    if (!confirm(`Remove “${upload.name}”?`)) return;
     void action(async () => {
       const storage = await db().storage.from("candidate-documents").remove([upload.storage_path]);
       if (storage.error) throw storage.error;
@@ -328,126 +355,131 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
     (c) => !signatures.some((s) => s.contract_id === c.id),
   );
   return (
-    <Shell
+    <AdminShell
       portal="HR"
       email={email}
       nav={visibleNav}
       current={tab}
       onNavigate={navigate}
+      header={<SectionHeader label={visibleNav.find((n) => n.id === tab)?.label ?? nav.find((n) => n.id === tab)?.label ?? "Page not found"} current={tab} onNavigate={navigate} />}
     >
-      <Notice error>{error}</Notice>
-      <Notice>{message}</Notice>
+      <div className="flex min-w-0 flex-col gap-6">
+      <PageAlerts error={error} message={message} />
       {!onboardingOpen && GATED_TABS.includes(tab) && (
-        <section className="panel">
-          <Empty title="Opens when you join">
-            This section becomes available once your offer is accepted and your
-            onboarding begins. Follow your progress in My application.
-          </Empty>
-        </section>
+        <EmptyState title="Opens when you join">
+          This section becomes available once your offer is accepted and your
+          onboarding begins. Follow your progress in My application.
+        </EmptyState>
       )}
       {tab === "cra" && <>
-        <header className="cra-portal-head">
-          <h1>Monthly CRA</h1>
-          <p className="muted">Fill your month day by day — or paint whole ranges — then save. Mornings and afternoons can be filled separately.</p>
-        </header>
+        <PageHeading title="Monthly CRA">
+          Fill your month day by day — or paint whole ranges — then save. Mornings and afternoons can be filled separately.
+        </PageHeading>
         <CraScreen audience="employee" draftOwner={email} basePath="/cra" />
       </>}
       {tab === "application" && <MyApplicationTab email={email} busy={busy} action={action} applications={applications} events={applicationEvents} offers={offers} employments={employments} journeyError={journeyError} loading={loading} />}
       {tab === "overview" && onboardingOpen && (
         <>
-          <div className="hero">
-            <div className="eyebrow">Let’s get you ready</div>
-            <h2>Great work starts with a thoughtful beginning.</h2>
-            <p>
-              Keep your documents, agreements and access requests together. Your
-              Quicksort team is here to help along the way.
-            </p>
-            <button className="btn lime" onClick={() => navigate("documents")}>
-              Upload your documents
-              <ArrowUpRight size={16} />
-            </button>
-          </div>
-          <div className="stats">
-            <Stat
-              label="Documents"
-              value={folderRows.length}
-              detail="Securely shared with your team"
-              icon={Upload}
-            />
-            <Stat
-              label="To sign"
-              value={unsigned.length}
-              detail="Contracts awaiting your review"
-              icon={FileText}
-            />
-            <Stat
-              label="Tool requests"
-              value={requests.filter((r) => r.status === "pending").length}
-              detail="Awaiting a team response"
-              icon={KeyRound}
-            />
-          </div>
-          <div className="grid-two">
-            <section className="panel">
-              <h2>Your onboarding checklist</h2>
-              <Notice error>{journeyError}</Notice>
+          <Card>
+            <CardContent className="flex flex-col items-start gap-3 py-2">
+              <span className="label-mono">Let’s get you ready</span>
+              <h1 className="m-0 max-w-xl text-2xl font-medium tracking-tight sm:text-3xl">Great work starts with a thoughtful beginning.</h1>
+              <p className="m-0 max-w-xl text-sm text-muted-foreground">
+                Keep your documents, agreements and access requests together. Your
+                Quicksort team is here to help along the way.
+              </p>
+              <Button className="mt-2" onClick={() => navigate("documents")}>
+                Upload your documents
+                <ArrowUpRight data-icon="inline-end" aria-hidden="true" />
+              </Button>
+            </CardContent>
+          </Card>
+          <StatGroup>
+            <PortalStat label="Documents" value={folderRows.length} detail="Securely shared with your team" icon={Upload} />
+            <PortalStat label="To sign" value={unsigned.length} detail="Contracts awaiting your review" icon={FileText} />
+            <PortalStat label="Tool requests" value={requests.filter((r) => r.status === "pending").length} detail="Awaiting a team response" icon={KeyRound} />
+          </StatGroup>
+          <div className="@container grid items-start gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <PortalCardTitle>Your onboarding checklist</PortalCardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+              <PageAlerts error={journeyError} />
               {employments.filter(e => e.status !== "ended").map(employment => (
-                <div key={employment.id}>
-                  <h3>{employment.role}</h3>
-                  <p className="muted">Starting {formatDate(employment.start_date)} · {employment.status}</p>
+                <div key={employment.id} className="flex flex-col gap-1">
+                  <h3 className="m-0 text-[15px] font-medium">{employment.role}</h3>
+                  <p className={QUIET}>Starting {formatDate(employment.start_date)} · {employment.status}</p>
+                  <ul className={cn(LIST, "mt-2")}>
                   {tasks.filter(t => t.employee_id === employment.id).map(task => {
                     const dependency = task.dependency_id ? tasks.find(t => t.id === task.dependency_id) : null;
                     const waiting = Boolean(dependency && !dependency.completed_at);
-                    return <div className="list-row" key={task.id}>
-                      <div><h3>{task.title}</h3><p className="muted">{task.phase} · {task.required ? "Required" : "Optional"}{task.due_date ? ` · Due ${formatDate(task.due_date)}` : ""}</p>
-                        {task.assignee && <p className="muted small-text">Owner: {task.assignee}</p>}
-                        {waiting && <p className="muted small-text">Waiting for {dependency?.title}</p>}
+                    return <li className={cn(ROW, "flex-col items-stretch")} key={task.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <h4 className="m-0 text-sm font-medium">{task.title}</h4>
+                          <p className={QUIET}>{task.phase} · {task.required ? "Required" : "Optional"}{task.due_date ? ` · Due ${formatDate(task.due_date)}` : ""}</p>
+                          {task.assignee && <p className="m-0 text-xs text-muted-foreground">Owner: {task.assignee}</p>}
+                          {waiting && <p className="m-0 text-xs text-muted-foreground">Waiting for {dependency?.title}</p>}
+                        </div>
+                        {task.completed_at && <Check className="mt-0.5 size-4 shrink-0" aria-label="Completed" />}
                       </div>
-                      {task.completed_at ? <Check size={16} /> : <form onSubmit={e => {
+                      {!task.completed_at && <form className="flex flex-wrap gap-2" onSubmit={e => {
                         e.preventDefault(); const fields = new FormData(e.currentTarget);
                         void action(async () => { await executeCommand({ kind: "complete_task", task_id: task.id, expected_version: task.version, evidence: String(fields.get("evidence") || "").trim() }); }, "Task completed.");
-                      }}><input name="evidence" placeholder="Completion evidence" required aria-label={`Evidence for ${task.title}`} /><button className="btn secondary small" disabled={busy || waiting || ![email.toLowerCase(), "employee", "candidate"].includes(task.assignee.toLowerCase())}>Complete</button></form>}
-                    </div>;
+                      }}>
+                        <Input name="evidence" placeholder="Completion evidence" required aria-label={`Evidence for ${task.title}`} className="min-w-0 flex-[1_1_12rem]" />
+                        <Button type="submit" variant="outline" disabled={busy || waiting || ![email.toLowerCase(), "employee", "candidate"].includes(task.assignee.toLowerCase())}>Complete</Button>
+                      </form>}
+                    </li>;
                   })}
-                  {!tasks.some(t => t.employee_id === employment.id) && <p className="muted">Your team is preparing your onboarding plan.</p>}
+                  </ul>
+                  {!tasks.some(t => t.employee_id === employment.id) && <p className={QUIET}>Your team is preparing your onboarding plan.</p>}
                 </div>
               ))}
-
-            </section>
-            <section className="panel">
-              <h2>Waiting for your signature</h2>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <PortalCardTitle>Waiting for your signature</PortalCardTitle>
+              </CardHeader>
+              <CardContent>
               {unsigned.length ? (
-                unsigned.map((c) => (
-                  <div className="list-row" key={c.id}>
-                    <div>
-                      <h3>{c.title}</h3>
-                      <p className="muted small-text">
+                <ul className={LIST}>
+                {unsigned.map((c) => (
+                  <li className={ROW} key={c.id}>
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <h3 className="m-0 text-sm font-medium">{c.title}</h3>
+                      <p className="m-0 text-xs text-muted-foreground">
                         Shared {formatDate(c.created_at)}
                       </p>
                     </div>
-                    <button
-                      className="btn secondary small"
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => {
                         navigate("contracts");
                         void openReview(c);
                       }}
                     >
                       Review
-                    </button>
-                  </div>
-                ))
+                    </Button>
+                  </li>
+                ))}
+                </ul>
               ) : (
-                <Empty title="You’re all caught up">
+                <EmptyState title="You’re all caught up">
                   New contracts will appear here when your team shares them.
-                </Empty>
+                </EmptyState>
               )}
-            </section>
+              </CardContent>
+            </Card>
           </div>
         </>
       )}
       {tab === "documents" && (
-        <section className="panel">
-          <h2>Documents</h2>
+        <>
+          <PageHeading title="Documents" />
           <MyDocuments
             folder={folder}
             uploads={documents}
@@ -462,17 +494,38 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
                 "Document downloaded.",
               )
             }
-            onRemove={(u) => removeUpload(documents.find((d) => d.id === u.id)!)}
+            onRemove={(u) => setRemoving(documents.find((d) => d.id === u.id) ?? null)}
           />
-        </section>
+          <AlertDialog open={!!removing} onOpenChange={(open) => { if (!open) setRemoving(null); }}>
+            <AlertDialogContent size="sm">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove “{removing?.name}”?</AlertDialogTitle>
+                <AlertDialogDescription>HR will no longer see this file. You can send it again later.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={() => {
+                    const target = removing;
+                    setRemoving(null);
+                    if (target) removeUpload(target);
+                  }}
+                >
+                  Remove
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
       )}
       {tab === "payslips" && (
-        <section className="panel">
-          <h2>Payslips</h2>
+        <>
+          <PageHeading title="Payslips" />
           {!payslips.length && !loading && (
-            <Empty title="No payslips yet">
+            <EmptyState title="No payslips yet">
               Your payslips appear here once HR has filed them.
-            </Empty>
+            </EmptyState>
           )}
           <MyPayslips
             rows={payslips}
@@ -481,40 +534,47 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
             onDownload={(p) => void action(() => downloadOwnPayslip(p), "Payslip downloaded.")}
             onDownloadAll={(rows) => void action(async () => { for (const p of rows) await downloadOwnPayslip(p); }, rows.length === 1 ? "Payslip downloaded." : "Payslips downloaded.")}
           />
-        </section>
+        </>
       )}
       {tab === "contracts" && (
         <>
+          <PageHeading title="My contracts" />
           {review && (
-            <section className="panel">
-              <div className="panel-head">
-                <h2>Review: {review.title}</h2>
-                <button
-                  className="btn secondary small"
-                  onClick={() => {
-                    setReview(null);
-                    setPreview("");
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-              <p className="muted">
-                Read the complete PDF before signing. If the preview does not
-                load, download and open it.
-              </p>
+            <Card>
+              <CardHeader>
+                <PortalCardTitle>Review: {review.title}</PortalCardTitle>
+                <CardDescription>
+                  Read the complete PDF before signing. If the preview does not
+                  load, download and open it.
+                </CardDescription>
+                <CardAction>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Close"
+                    onClick={() => {
+                      setReview(null);
+                      setPreview("");
+                    }}
+                  >
+                    <X aria-hidden="true" />
+                  </Button>
+                </CardAction>
+              </CardHeader>
+              <CardContent className="flex flex-col items-start gap-4">
               <object
-                className="contract-preview"
+                className="h-[70vh] min-h-96 w-full rounded-sm border border-border bg-white"
                 data={preview}
                 type="application/pdf"
               >
-                <p>
+                <p className="p-4 text-sm text-neutral-600">
                   PDF preview is unavailable. Use Download PDF to review your
                   contract.
                 </p>
               </object>
-              <button
-                className="btn secondary small"
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={busy}
                 onClick={() =>
                   void action(
@@ -529,62 +589,40 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
                 }
               >
                 Download PDF
-              </button>
-              <form className="form" style={{ marginTop: 22 }} onSubmit={sign}>
-                <label>
-                  Your full legal name
-                  <input
-                    name="name"
-                    required
-                    minLength={2}
-                    maxLength={200}
-                    autoComplete="name"
-                    defaultValue={profile?.full_name}
-                  />
-                </label>
-                <label className="check">
-                  <input type="checkbox" name="consent" required />I have read
-                  this contract and agree to sign it electronically.
-                </label>
-                <p className="muted small-text">
-                  Your typed name, the document fingerprint and the signing time
-                  will be recorded. The original PDF remains available with a
-                  separate signature receipt.
-                </p>
-                <div>
-                  <button className="btn" disabled={busy}>
-                    Sign this contract
-                  </button>
-                </div>
-              </form>
-            </section>
+              </Button>
+              <SignForm busy={busy} defaultName={profile?.full_name} onSubmit={sign} />
+              </CardContent>
+            </Card>
           )}
-          <section className="panel">
+          <Card>
+            <CardContent>
             {!contracts.length && !loading && (
-              <Empty title="No contracts yet">
+              <EmptyState title="No contracts yet">
                 Your team will share your agreements here when they’re ready.
-              </Empty>
+              </EmptyState>
             )}
+            <ul className={LIST}>
             {contracts.map((c) => {
               const signature = signatures.find((s) => s.contract_id === c.id);
               return (
-                <div className="list-row" key={c.id}>
-                  <div>
-                    <h3>{c.title}</h3>
-                    <p className="muted">Shared {formatDate(c.created_at)}</p>
-                    <Pill status={signature ? "signed" : "pending"} />
+                <li className={ROW} key={c.id}>
+                  <div className="flex min-w-0 flex-[1_1_16rem] flex-col items-start gap-1">
+                    <h3 className="m-0 text-[15px] font-medium">{c.title}</h3>
+                    <p className={QUIET}>Shared {formatDate(c.created_at)}</p>
+                    <Badge variant={signature ? "success" : "warning"}>{signature ? "signed" : "pending"}</Badge>
                     {signature && (
                       <>
-                        <p className="signature">{signature.signer_name}</p>
-                        <p className="muted small-text">
+                        <p className="m-0 mt-1 font-serif text-2xl italic">{signature.signer_name}</p>
+                        <p className="m-0 text-xs text-muted-foreground">
                           Signed {formatDate(signature.signed_at)}
                         </p>
                       </>
                     )}
                   </div>
-                  <div className="actions">
-                    <button
-                      className="btn secondary small"
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
                       disabled={busy}
                       onClick={() =>
                         void action(
@@ -599,10 +637,11 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
                       }
                     >
                       Download PDF
-                    </button>
+                    </Button>
                     {signature ? (
-                      <button
-                        className="btn secondary small"
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() =>
                           saveBlob(
                             new Blob(
@@ -620,29 +659,35 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
                         }
                       >
                         Signature receipt
-                      </button>
+                      </Button>
                     ) : (
-                      <button
-                        className="btn small"
+                      <Button
+                        size="sm"
                         disabled={busy}
                         onClick={() => void openReview(c)}
                       >
                         Review & sign
-                      </button>
+                      </Button>
                     )}
                   </div>
-                </div>
+                </li>
               );
             })}
-          </section>
+            </ul>
+            </CardContent>
+          </Card>
         </>
       )}
       {tab === "requests" && onboardingOpen && (
         <>
-          <section className="panel">
-            <h2>Request a tool</h2>
+          <PageHeading title="Tool access" />
+          <Card>
+            <CardHeader>
+              <PortalCardTitle>Request a tool</PortalCardTitle>
+            </CardHeader>
+            <CardContent>
             <form
-              className="form"
+              className="flex flex-col gap-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 const form = e.currentTarget;
@@ -659,75 +704,81 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
                 }, "Request sent to your Quicksort team.");
               }}
             >
-              <label>
-                Tool or service
-                <input
+              <LabelledField label="Tool or service">
+                {(id) => <Input
+                  id={id}
                   name="tool"
                   required
                   maxLength={100}
                   placeholder="e.g. GitHub, Notion, Figma"
-                />
-              </label>
-              <label>
-                What do you need it for?
-                <textarea
+                />}
+              </LabelledField>
+              <LabelledField label="What do you need it for?">
+                {(id) => <Textarea
+                  id={id}
                   name="reason"
                   required
                   maxLength={2000}
+                  className="min-h-24 resize-y"
                   placeholder="Tell us about the project and access you need…"
-                />
-              </label>
+                />}
+              </LabelledField>
               <div>
-                <button className="btn" disabled={busy}>
+                <Button type="submit" disabled={busy}>
                   Send request
-                </button>
+                </Button>
               </div>
             </form>
-          </section>
-          <section className="panel">
-            <h2>Your requests</h2>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <PortalCardTitle>Your requests</PortalCardTitle>
+            </CardHeader>
+            <CardContent>
             {!requests.length && !loading && (
-              <Empty title="No requests yet">
+              <EmptyState title="No requests yet">
                 Need a tool to get started? Let your team know above.
-              </Empty>
+              </EmptyState>
             )}
+            <ul className={LIST}>
             {requests.map((r) => (
-              <div className="list-row" key={r.id}>
-                <div>
-                  <h3>{r.tool_name}</h3>
-                  <p className="wrap muted">{r.reason}</p>
+              <li className={ROW} key={r.id}>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <h3 className="m-0 text-[15px] font-medium">{r.tool_name}</h3>
+                  <p className={cn(QUIET, "whitespace-pre-wrap [overflow-wrap:anywhere]")}>{r.reason}</p>
                   {r.admin_note && (
-                    <p className="wrap">Team response: {r.admin_note}</p>
+                    <p className="m-0 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">Team response: {r.admin_note}</p>
                   )}
-                  <span className="muted small-text">
+                  <span className="text-xs text-muted-foreground">
                     {formatDate(r.created_at)}
                   </span>
                 </div>
-                <Pill status={r.status} />
-              </div>
+                <StatusBadge status={r.status} />
+              </li>
             ))}
-          </section>
+            </ul>
+            </CardContent>
+          </Card>
         </>
       )}
       {tab === "account" && (
         <>
-          <div className="grid-two">
-            <section className="panel">
-              <h2>Your profile</h2>
-              <p className="muted">{email}</p>
+          <PageHeading title="Account" />
+          <div className="grid items-start gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <PortalCardTitle>Your profile</PortalCardTitle>
+                <CardDescription>{email}</CardDescription>
+              </CardHeader>
+              <CardContent>
               {nameFromHr ? (
-                <div className="form">
-                  <label>
-                    Full name
-                    <input value={profile?.full_name ?? ""} readOnly disabled aria-describedby="name-from-hr" />
-                  </label>
-                  <p className="muted small-text" id="name-from-hr">
-                    Managed by HR from your employee record. Ask HR if it needs correcting.
-                  </p>
-                </div>
+                <LabelledField label="Full name" hint="Managed by HR from your employee record. Ask HR if it needs correcting." hintId="name-from-hr">
+                  {(id) => <Input id={id} value={profile?.full_name ?? ""} readOnly disabled aria-describedby="name-from-hr" />}
+                </LabelledField>
               ) : (
               <form
-                className="form"
+                className="flex flex-col gap-4"
                 key={profile?.full_name}
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -743,35 +794,123 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
                   }, "Profile updated.");
                 }}
               >
-                <label>
-                  Full name
-                  <input
+                <LabelledField label="Full name">
+                  {(id) => <Input
+                    id={id}
                     name="name"
                     defaultValue={profile?.full_name}
                     required
                     maxLength={200}
-                  />
-                </label>
+                  />}
+                </LabelledField>
                 <div>
-                  <button className="btn" disabled={busy}>
+                  <Button type="submit" disabled={busy}>
                     Save profile
-                  </button>
+                  </Button>
                 </div>
               </form>
               )}
-            </section>
-            <section className="panel">
-              <AccountSecurity />
-            </section>
+              </CardContent>
+            </Card>
+            <AccountCard />
           </div>
         </>
       )}
       {loading && (
-        <p className="muted" role="status">
+        <p className={QUIET} role="status">
           Refreshing your workspace…
         </p>
       )}
-    </Shell>
+      </div>
+    </AdminShell>
+  );
+}
+
+const QUIET = "m-0 text-[13px] text-muted-foreground";
+/** Divided list of records inside a card. */
+const LIST = "m-0 flex list-none flex-col divide-y divide-border p-0";
+const ROW = "flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0";
+
+/** Card title carrying the outline semantics of the old <h2>. */
+function PortalCardTitle({ children }: { children: ReactNode }) {
+  return <CardTitle role="heading" aria-level={2}>{children}</CardTitle>;
+}
+
+/** Label + control + optional hint; the control receives the generated id. */
+function LabelledField({ label, hint, hintId, children, className }: { label: string; hint?: string; hintId?: string; children: (id: string) => ReactNode; className?: string }) {
+  const id = useId();
+  return (
+    <Field className={cn("min-w-0 gap-1.5", className)}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      {children(id)}
+      {hint && <FieldDescription id={hintId} className="text-xs">{hint}</FieldDescription>}
+    </Field>
+  );
+}
+
+/** Overview figure (replaces hr-ui <Stat>): the count, padded to two digits, over its label and detail. */
+function PortalStat({ label, value, detail, icon: Icon }: { label: string; value: number; detail: string; icon: typeof Upload }) {
+  return (
+    <Stat>
+      <StatLabel className="flex max-w-none items-center justify-between gap-2">
+        {label}
+        <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+      </StatLabel>
+      <StatValue>{value.toString().padStart(2, "0")}</StatValue>
+      <StatSource>{detail}</StatSource>
+    </Stat>
+  );
+}
+
+/** Electronic signature: typed legal name and explicit consent. */
+function SignForm({ busy, defaultName, onSubmit }: { busy: boolean; defaultName?: string; onSubmit: (e: FormEvent<HTMLFormElement>) => void }) {
+  const consentId = useId();
+  return (
+    <form className="flex w-full max-w-xl flex-col gap-4 border-t border-border pt-5" onSubmit={onSubmit}>
+      <LabelledField label="Your full legal name">
+        {(id) => <Input
+          id={id}
+          name="name"
+          required
+          minLength={2}
+          maxLength={200}
+          autoComplete="name"
+          defaultValue={defaultName}
+        />}
+      </LabelledField>
+      <Field orientation="horizontal" className="items-start gap-2.5">
+        <Checkbox id={consentId} name="consent" value="on" required />
+        <FieldLabel htmlFor={consentId} className="font-normal leading-snug">
+          I have read this contract and agree to sign it electronically.
+        </FieldLabel>
+      </Field>
+      <p className={QUIET}>
+        Your typed name, the document fingerprint and the signing time
+        will be recorded. The original PDF remains available with a
+        separate signature receipt.
+      </p>
+      <div>
+        <Button type="submit" disabled={busy}>
+          Sign this contract
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Clerk account management (replaces hr-ui <AccountSecurity>). */
+function AccountCard() {
+  const clerk = useClerk();
+  return (
+    <Card>
+      <CardHeader>
+        <PortalCardTitle>Your account</PortalCardTitle>
+        <CardDescription>Manage your Google connection and active sessions.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button onClick={() => clerk.openUserProfile()}>Manage account</Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -792,42 +931,76 @@ function MyApplicationTab({
   const application = applications.find(a => a.id === selectedId) || applications.find(a => a.status === "active") || applications[0];
   return (
     <>
-      <Notice error>{journeyError}</Notice>
-      {loading && <p className="muted" role="status">Loading your applications…</p>}
-      {!loading && !journeyError && !application && <section className="panel"><Empty title="No application linked yet">Your HR team can link your account to your person record. Your documents and contracts are already available.</Empty></section>}
+      <PageHeading title="My application" />
+      <PageAlerts error={journeyError} />
+      {loading && <p className={QUIET} role="status">Loading your applications…</p>}
+      {!loading && !journeyError && !application && <EmptyState title="No application linked yet">Your HR team can link your account to your person record. Your documents and contracts are already available.</EmptyState>}
       {application && <>
-        <section className="panel">
-          <label>Application<select value={application.id} onChange={e => setSelectedId(e.target.value)}>{applications.map(a => <option value={a.id} key={a.id}>{a.title} · {a.status}</option>)}</select></label>
-          <h2 style={{ marginTop: 20 }}>{application.title}</h2>
-          <p><Pill status={application.status === "active" ? application.stage : application.status} /></p>
-          <h3 className="subsection-title" style={{ marginTop: 18 }}>Your journey so far</h3>
-          <div className="timeline">
-            <div className="timeline-item"><span className="timeline-dot" /><div><p><strong>Application received</strong></p><p className="muted small-text">{formatDate(application.created_at)}</p></div></div>
-            {events.filter(e => e.application_id === application.id).map(event => <div className="timeline-item" key={event.id}><span className="timeline-dot" /><div><p><strong>{STAGE_LABELS[event.to_stage] || event.to_stage || event.kind.replaceAll("_", " ")}</strong></p><p className="muted small-text">{formatDate(event.created_at)}</p></div></div>)}
+        <Card>
+          <CardContent className="flex flex-col items-start gap-5">
+          <LabelledField label="Application" className="w-full max-w-md">
+            {(id) => <NativeSelect id={id} className="w-full" value={application.id} onChange={e => setSelectedId(e.target.value)}>{applications.map(a => <NativeSelectOption value={a.id} key={a.id}>{a.title} · {a.status}</NativeSelectOption>)}</NativeSelect>}
+          </LabelledField>
+          <div className="flex flex-col items-start gap-2">
+            <h2 className="m-0 text-xl font-medium tracking-tight">{application.title}</h2>
+            <StatusBadge status={application.status === "active" ? application.stage : application.status} />
           </div>
-        </section>
-        {offers.filter(o => o.application_id === application.id).map(offer => <section className="panel" key={offer.id}>
-          <h2>{offer.title}</h2><p>{offer.contract_type} · {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(offer.salary_monthly)} gross per month</p><Pill status={offer.status} />
-          {offer.valid_until && <p className="muted">Valid until {formatDate(offer.valid_until)}</p>}
-          {offer.status === "shared" && <form className="form" onSubmit={e => {
+          <h3 className="m-0 text-sm font-medium">Your journey so far</h3>
+          <ol className="m-0 flex list-none flex-col p-0">
+            <TimelineItem title="Application received" at={application.created_at} />
+            {events.filter(e => e.application_id === application.id).map(event => <TimelineItem key={event.id} title={STAGE_LABELS[event.to_stage] || event.to_stage || event.kind.replaceAll("_", " ")} at={event.created_at} />)}
+          </ol>
+          </CardContent>
+        </Card>
+        {offers.filter(o => o.application_id === application.id).map(offer => <Card key={offer.id}>
+          <CardHeader>
+            <PortalCardTitle>{offer.title}</PortalCardTitle>
+            <CardDescription>{offer.contract_type} · {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(offer.salary_monthly)} gross per month</CardDescription>
+            <CardAction><StatusBadge status={offer.status} /></CardAction>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+          {offer.valid_until && <p className={QUIET}>Valid until {formatDate(offer.valid_until)}</p>}
+          {offer.status === "shared" && <form className="flex max-w-xl flex-col gap-4" onSubmit={e => {
             e.preventDefault(); const fields = new FormData(e.currentTarget); const response = fields.get("response");
             if (response !== "accepted" && response !== "declined") return;
             void action(async () => { await executeCommand({ kind: "respond_offer", offer_id: offer.id, expected_version: offer.version, response, rationale: String(fields.get("rationale") || "Offer response recorded by recipient.").trim() }); }, "Your offer response has been recorded.");
-          }}><label>Your response<select name="response" required defaultValue=""><option value="" disabled>Choose a response</option><option value="accepted">Accept offer</option><option value="declined">Decline offer</option></select></label><label>Message to HR<textarea name="rationale" maxLength={2000} /></label><button className="btn" disabled={busy}>Confirm response</button></form>}
-        </section>)}
-        <section className="panel"><h2>About AI in our process</h2><p className="muted">AI helps prepare profile summaries and interview questions. HR reviews suggestions and makes recruitment decisions. You can request human review below.</p></section>
+          }}>
+            <LabelledField label="Your response">
+              {(id) => <NativeSelect id={id} className="w-full" name="response" required defaultValue=""><NativeSelectOption value="" disabled>Choose a response</NativeSelectOption><NativeSelectOption value="accepted">Accept offer</NativeSelectOption><NativeSelectOption value="declined">Decline offer</NativeSelectOption></NativeSelect>}
+            </LabelledField>
+            <LabelledField label="Message to HR">
+              {(id) => <Textarea id={id} name="rationale" maxLength={2000} className="min-h-24 resize-y" />}
+            </LabelledField>
+            <div><Button type="submit" disabled={busy}>Confirm response</Button></div>
+          </form>}
+          </CardContent>
+        </Card>)}
+        <Card>
+          <CardHeader>
+            <PortalCardTitle>About AI in our process</PortalCardTitle>
+            <CardDescription>AI helps prepare profile summaries and interview questions. HR reviews suggestions and makes recruitment decisions. You can request human review below.</CardDescription>
+          </CardHeader>
+        </Card>
       </>}
-      {employments.length > 0 && <section className="panel"><h2>Your employment history</h2>{employments.map(period => <div className="list-row" key={period.id}><div><h3>{period.role}</h3><p className="muted">{period.matricule} · {formatDate(period.start_date)}{period.end_date ? ` to ${formatDate(period.end_date)}` : " onwards"}</p></div><Pill status={period.status} /></div>)}</section>}
-      <section className="panel">
-        <h2>Your rights</h2>
-        <p className="muted">
-          Request human re-review of any AI-assisted step, or exercise your
-          GDPR rights: access, rectification, erasure, portability, and the
-          right to express your point of view (Art. 22(3)). We respond without
-          detriment to your application.
-        </p>
+      {employments.length > 0 && <Card>
+        <CardHeader><PortalCardTitle>Your employment history</PortalCardTitle></CardHeader>
+        <CardContent>
+          <ul className={LIST}>{employments.map(period => <li className={ROW} key={period.id}><div className="flex min-w-0 flex-col gap-0.5"><h3 className="m-0 text-[15px] font-medium">{period.role}</h3><p className={QUIET}>{period.matricule} · {formatDate(period.start_date)}{period.end_date ? ` to ${formatDate(period.end_date)}` : " onwards"}</p></div><StatusBadge status={period.status} /></li>)}</ul>
+        </CardContent>
+      </Card>}
+      <Card>
+        <CardHeader>
+          <PortalCardTitle>Your rights</PortalCardTitle>
+          <CardDescription>
+            Request human re-review of any AI-assisted step, or exercise your
+            GDPR rights: access, rectification, erasure, portability, and the
+            right to express your point of view (Art. 22(3)). We respond without
+            detriment to your application.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
         <form
-          className="form"
+          className="@container flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
             const form = e.currentTarget;
@@ -845,34 +1018,47 @@ function MyApplicationTab({
             }, "Request sent. Our HR team will review it.");
           }}
         >
-          <div className="form-columns">
-            <label>
-              Request type
-              <select name="kind" defaultValue="human_review">
-                <option value="human_review">Human re-review of an AI-assisted step</option>
-                <option value="viewpoint">Express my point of view</option>
-                <option value="rectification">Rectify my data</option>
-                <option value="portability">Portability of my data</option>
-                <option value="erasure">Erase my data</option>
-              </select>
-            </label>
-            <label>
-              Message
-              <textarea
+          <div className="grid gap-4 @xl:grid-cols-2">
+            <LabelledField label="Request type">
+              {(id) => <NativeSelect id={id} className="w-full" name="kind" defaultValue="human_review">
+                <NativeSelectOption value="human_review">Human re-review of an AI-assisted step</NativeSelectOption>
+                <NativeSelectOption value="viewpoint">Express my point of view</NativeSelectOption>
+                <NativeSelectOption value="rectification">Rectify my data</NativeSelectOption>
+                <NativeSelectOption value="portability">Portability of my data</NativeSelectOption>
+                <NativeSelectOption value="erasure">Erase my data</NativeSelectOption>
+              </NativeSelect>}
+            </LabelledField>
+            <LabelledField label="Message">
+              {(id) => <Textarea
+                id={id}
                 name="message"
-                rows={3}
                 maxLength={3000}
+                className="min-h-24 resize-y"
                 placeholder="Tell us what you'd like reviewed or corrected…"
-              />
-            </label>
+              />}
+            </LabelledField>
           </div>
           <div>
-            <button className="btn" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               Send request to HR
-            </button>
+            </Button>
           </div>
         </form>
-      </section>
+        </CardContent>
+      </Card>
     </>
+  );
+}
+
+/** One step of the application timeline: a dot on a hairline, the stage, its date. */
+function TimelineItem({ title, at }: { title: string; at: string }) {
+  return (
+    <li className="relative flex gap-3 pb-4 last:pb-0 before:absolute before:top-3 before:bottom-0 before:left-[3.5px] before:w-px before:bg-border last:before:hidden">
+      <span className="mt-1.5 size-2 shrink-0 rounded-full bg-foreground" aria-hidden="true" />
+      <div className="flex flex-col gap-0.5">
+        <p className="m-0 text-sm font-medium">{title}</p>
+        <p className="m-0 text-xs text-muted-foreground">{formatDate(at)}</p>
+      </div>
+    </li>
   );
 }

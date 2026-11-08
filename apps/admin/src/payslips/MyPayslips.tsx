@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ArrowUpRight, Download } from "lucide-react";
-import { PREFIX, SHORT_MONTHS } from "./PersonPayslips";
-import "./payslips.css";
+import { Button } from "@quicksort-sas/ui";
+import { PAYSLIP_LIST, PAYSLIP_TOOLBAR, PAYSLIP_YEAR_TITLE, PREFIX, SHORT_MONTHS, PayslipItem, PayslipYearFilter } from "./PersonPayslips";
 
 export type OwnPayslip = { id: string; title: string; valid_from: string | null; file_name: string; created_at: string };
 
@@ -30,42 +30,28 @@ export function MyPayslips({ rows, busy, onOpen, onDownload, onDownloadAll }: {
     : `${visible.length} payslip${visible.length === 1 ? "" : "s"} in ${active}`;
 
   if (!rows.length) return null;
-  return <div className="payslips-person">
-    <div className="payslips-person-toolbar">
-      <div className="payslips-person-filters">
-        {years.length > 1 && <div role="group" aria-label="Filter by year" className="payslips-person-years">
-          {[{ id: "all", label: "All", count: rows.length }, ...years.map((y) => ({ id: y, label: y, count: rows.filter((row) => slipYear(row) === y).length }))].map((option) =>
-            <button key={option.id} type="button" aria-pressed={active === option.id} onClick={() => setYear(option.id)}>
-              {option.label}<span>{option.count}</span>
-            </button>)}
-        </div>}
-        <span className="payslips-person-summary">{summary}</span>
+  return <div className="flex min-w-0 flex-col gap-2">
+    <div className={PAYSLIP_TOOLBAR}>
+      <div className="flex flex-wrap items-center gap-4">
+        {years.length > 1 && <PayslipYearFilter active={active} onPick={setYear}
+          options={[{ id: "all", label: "All", count: rows.length }, ...years.map((y) => ({ id: y, label: y, count: rows.filter((row) => slipYear(row) === y).length }))]} />}
+        <span className="text-[13px] text-muted-foreground">{summary}</span>
       </div>
-      <button type="button" className="payslips-person-all" disabled={busy} onClick={() => onDownloadAll(visible)}>
-        <Download size={18} strokeWidth={1.5} aria-hidden="true" /> Download all
-      </button>
+      <Button variant="outline" disabled={busy} onClick={() => onDownloadAll(visible)}>
+        <Download data-icon="inline-start" aria-hidden="true" /> Download all
+      </Button>
     </div>
-    {groups.map((group) => <div key={group.year} className="payslips-person-group">
-      {active === "all" && years.length > 1 && <h3>{group.year}</h3>}
-      <ul className="payslips-person-list">
-        {group.items.map((row) => <li key={row.id}>
-          <span className="payslips-person-badge" aria-hidden="true">{slipShort(row)}</span>
-          <span className="payslips-person-main">
-            <span className="payslips-person-name">
-              <span className="payslips-person-title">{slipLabel(row)}</span>
-              {row.id === rows[0].id && <span className="payslips-person-latest">Latest</span>}
-            </span>
-            <span className="payslips-person-meta">Bulletin de paie · PDF</span>
-          </span>
-          <span className="payslips-person-actions">
-            <button type="button" className="payslips-person-btn" disabled={busy} onClick={() => onOpen(row)}>
-              Open <ArrowUpRight size={16} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-            <button type="button" className="payslips-person-btn icon" disabled={busy} aria-label={`Download ${row.title}`} title="Download" onClick={() => onDownload(row)}>
-              <Download size={20} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-          </span>
-        </li>)}
+    {groups.map((group) => <div key={group.year}>
+      {active === "all" && years.length > 1 && <h3 className={PAYSLIP_YEAR_TITLE}>{group.year}</h3>}
+      <ul className={PAYSLIP_LIST}>
+        {group.items.map((row) => <PayslipItem key={row.id} short={slipShort(row)} label={slipLabel(row)} latest={row.id === rows[0].id} latestVariant="pivot">
+          <Button variant="ghost" disabled={busy} onClick={() => onOpen(row)}>
+            Open <ArrowUpRight data-icon="inline-end" aria-hidden="true" />
+          </Button>
+          <Button variant="ghost" size="icon" disabled={busy} aria-label={`Download ${row.title}`} title="Download" onClick={() => onDownload(row)}>
+            <Download aria-hidden="true" />
+          </Button>
+        </PayslipItem>)}
       </ul>
     </div>)}
   </div>;

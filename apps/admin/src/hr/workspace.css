@@ -12,14 +12,12 @@
 .hr-table tbody tr:hover { background: var(--qs-hover); }
 .hr-table td small { display: block; margin-top: 5px; color: var(--qs-muted); }
 .hr-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-.hr-field > span, .hr-checkbox { font-size: 12px; font-weight: 500; }
+.hr-field > span { font-size: 12px; font-weight: 500; }
 .hr-field small { font-size: 11px; line-height: 1.5; color: var(--qs-muted); }
 .hr-field input, .hr-field select, .hr-field textarea { width: 100%; min-width: 0; font-size: 13px; border-radius: 7px; }
 .hr-field textarea { resize: vertical; }
 .hr-form-actions { justify-content: flex-end; margin-top: 17px; }
 .hr-form-actions .btn { min-height: 36px; font-size: 12px; }
-.hr-checkbox { display: flex; gap: 8px; align-items: center; font-weight: 400; }
-.hr-checkbox input { width: 16px; height: 16px; }
 .hr-error { color: var(--qs-danger); font-size: 13px; padding: 12px 14px; border: 1px solid currentColor; border-radius: 8px; margin: 12px 0 0; }
 
 /* Person · Profile tab — section cards, sticky save bar, completeness meter

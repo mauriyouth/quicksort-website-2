@@ -48,7 +48,6 @@ import { countryName, countryOptions, needsResidencePermit } from './countries';
 import { DocumentsPanel } from '../documents/DocumentsPanel';
 import { MatriculeEdit, PersonPayslips } from '../payslips/PersonPayslips';
 // PersonPayslips does not import its own stylesheet; it is loaded here.
-import '../payslips/payslips.css';
 import { Action, Empty, Field, Form, SearchField, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
 export const stages: ApplicationStage[] = ['application', 'screening', 'hr_interview', 'technical_interview', 'client_presentation', 'decision', 'offer', 'contract'];
 export const personName = (workspace: Workspace, id: string) => workspace.people.find(person => person.id === id)?.full_name ?? 'Unknown person';

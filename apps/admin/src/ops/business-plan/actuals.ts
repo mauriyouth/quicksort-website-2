@@ -25,7 +25,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Assignment, Employee, Salary, StaffingProject } from "../../hr/domain.ts";
 import { storedPricingLines, openDaysBetween } from "../../sales/pricing-lines.ts";
-import type { ActualMonth, FixedActuals, FixedChargeLine, Hypotheses, VatActual } from "./model.ts";
+import type { ActualMonth, FixedActuals, FixedChargeLine, Hypotheses, SocialCharges, VatActual } from "./model.ts";
 
 export type InvoiceRow = {
   status: string;
@@ -62,6 +62,8 @@ export type PlanSources = {
   invoices: InvoiceRow[];
   cra: CraRow[];
   cjmMultiplier: number;
+  /** Cost ratio applied to interns' gratification (default 1.4). */
+  internMultiplier?: number;
   /** Month an invoice's revenue counts in: its period (default) or its issue date. */
   revenueBasis?: RevenueBasis;
   /** Optional, for names in the drill-down panels. */
@@ -184,7 +186,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   // Interns cost far less than salaried staff (gratification + very low employer
   // charges), so they get their own employer-cost ratio instead of the CJM multiplier.
   const multFor = (e: { contract_type: string | null }) =>
-    e.contract_type === "Internship" ? 1.4 : src.cjmMultiplier;
+    e.contract_type === "Internship" ? src.internMultiplier ?? 1.4 : src.cjmMultiplier;
   const staffedRows = src.assignments.filter((a) => STAFFED.includes(a.status));
   const staffedIn = (id: string, from: string, to: string) =>
     staffedRows.some((a) => a.employee_id === id && overlaps(a.start_date, a.end_date, from, to));
@@ -752,4 +754,28 @@ export function aggregateVat(
     remittances.push(paid);
   }
   return { vat, remittances };
+}
+
+/**
+ * Employer social charges on salary lines whose cost is the gross salary
+ * (cjmMultiplier 1): URSSAF + pension as a % of gross, and per-head costs
+ * (mutuelle, meal vouchers, occupational health) prorated by the share of
+ * the month counted (cost ÷ salary). Interns carry no charges.
+ */
+export function socialCharges(
+  lines: SalaryLine[],
+  h: Pick<Hypotheses, "tauxCharges" | "mutuelle" | "ticketsResto" | "medecine">,
+): SocialCharges {
+  let gross = 0, heads = 0;
+  for (const l of lines) {
+    if (l.contractType === "Internship" || !l.salary) continue;
+    gross += l.cost;
+    heads += l.cost / l.salary;
+  }
+  return {
+    urssaf: (gross * h.tauxCharges) / 100,
+    mutuelle: heads * h.mutuelle,
+    tickets: heads * h.ticketsResto,
+    medecine: (heads * h.medecine) / 12,
+  };
 }

@@ -25,7 +25,7 @@ export type Hypotheses = {
   pctFree: number;
   /** Freelance daily buy rate, €. */
   coutFree: number;
-  /** Loaded monthly cost of a salaried consultant, €. */
+  /** Gross monthly salary of a salaried consultant, € (employer charges come from the social-charge hypotheses). */
   salaire: number;
   /** Factoring commission on revenue, %. */
   commFactor: number;
@@ -45,6 +45,14 @@ export type Hypotheses = {
   dso: number;
   /** Corporate tax rate, %. */
   tauxIS: number;
+  /** Employer URSSAF + pension contributions, % of gross salary. */
+  tauxCharges: number;
+  /** Employer health insurance (mutuelle), € per salaried employee per month. */
+  mutuelle: number;
+  /** Employer share of meal vouchers, € per salaried employee per month. */
+  ticketsResto: number;
+  /** Occupational health service, € per salaried employee per year. */
+  medecine: number;
 };
 
 export type HypothesisKey = keyof Hypotheses;
@@ -52,10 +60,12 @@ export type HypothesisKey = keyof Hypotheses;
 /** The mockup's indicative starting values. */
 export const DEFAULT_HYPOTHESES: Hypotheses = {
   consDebut: 18, tjm: 650, jours: 18, occ: 90, pctFree: 40,
-  coutFree: 480, salaire: 7000,
+  coutFree: 480, salaire: 5000,
   commFactor: 0, primeIC: 500, primeChasseur: 800,
   fLoyer: 4000, fOutils: 3000, fMarketing: 2500, fHonoraires: 1500, fDeplacements: 2000, fDivers: 1000, fAmort: 0,
   tresoDebut: 250000, dso: 60, tauxIS: 25,
+  // Calibrated on the accountant's Jan–Jul 2026 statement (79 employee-months).
+  tauxCharges: 30, mutuelle: 150, ticketsResto: 160, medecine: 120,
 };
 
 export const HYPOTHESIS_KEYS = Object.keys(DEFAULT_HYPOTHESES) as HypothesisKey[];
@@ -90,11 +100,17 @@ export type MonthInput = {
   fixed?: FixedActuals;
   /** Closed months covered by Qonto: real VAT cash flows (€). Otherwise estimated. */
   vat?: VatActual;
+  /** Closed months: employer charges on salaried consultants (forecast months are computed). */
+  cotConsultants?: SocialCharges;
+  /** Employer charges on structure staff (measured or projected, every month). */
+  cotStructure?: SocialCharges;
 };
 
 export type Series = {
   cons: number[]; ca: number[]; free: number[]; sal: number[]; inter: number[]; prod: number[];
   fac: number[]; ic: number[]; ch: number[]; varr: number[]; mb: number[]; mbp: number[];
+  /** Employer social charges: on consultants (production), on structure (fixed), and by item. */
+  cotc: number[]; cots: number[]; cu: number[]; cmu: number[]; ctr: number[]; cme: number[]; cot: number[];
   fs: number[]; fl: number[]; fo: number[]; fm: number[]; fh: number[]; fdp: number[]; fd: number[]; fix: number[];
   eb: number[]; ebp: number[]; da: number[]; ex: number[]; exp: number[]; enc: number[]; treso: number[];
   /** VAT cash effect: collected on collections, paid to suppliers, remitted to the state, net. */
@@ -120,6 +136,7 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
   const pf = h.pctFree / 100;
   const S: Series = {
     cons: [], ca: [], free: [], sal: [], inter: [], prod: [], fac: [], ic: [], ch: [], varr: [], mb: [], mbp: [],
+    cotc: [], cots: [], cu: [], cmu: [], ctr: [], cme: [], cot: [],
     fs: [], fl: [], fo: [], fm: [], fh: [], fdp: [], fd: [], fix: [], eb: [], ebp: [], da: [], ex: [], exp: [], enc: [], treso: [],
     tvaCol: [], tvaDed: [], tvaRem: [], tva: [],
     ventes: [], departs: [],
@@ -127,9 +144,11 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
   let c = h.consDebut;
   for (const m of months) {
     let ca: number, free: number, sal: number, inter: number, ventes: number, departs: number;
+    let cc: SocialCharges;
     if (m.actual) {
       ({ ca, free, sal, inter, ventes, departs } = m.actual);
       c = m.actual.cons;
+      cc = m.cotConsultants ?? NO_CHARGES;
     } else {
       ventes = m.ventes;
       departs = m.departs;
@@ -139,8 +158,14 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
       free = nf * h.jours * h.coutFree;
       sal = ns * h.salaire;
       inter = sal * (1 - occ);
+      cc = { urssaf: (sal * h.tauxCharges) / 100, mutuelle: ns * h.mutuelle, tickets: ns * h.ticketsResto, medecine: (ns * h.medecine) / 12 };
     }
-    const prod = free + sal;
+    const cs = m.cotStructure ?? NO_CHARGES;
+    const cotc = chargesTotal(cc), cots = chargesTotal(cs);
+    S.cotc.push(cotc); S.cots.push(cots);
+    S.cu.push(cc.urssaf + cs.urssaf); S.cmu.push(cc.mutuelle + cs.mutuelle); S.ctr.push(cc.tickets + cs.tickets); S.cme.push(cc.medecine + cs.medecine);
+    S.cot.push(cotc + cots);
+    const prod = free + sal + cotc;
     const fac = (ca * h.commFactor) / 100, ic = ventes * h.primeIC, ch = ventes * h.primeChasseur;
     const varr = fac + ic + ch;
     const mb = ca - prod - varr;
@@ -148,7 +173,7 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
     const fx = m.actual && m.fixed
       ? m.fixed
       : { loyer: h.fLoyer, outils: h.fOutils, marketing: h.fMarketing, honoraires: h.fHonoraires, deplacements: h.fDeplacements, divers: h.fDivers };
-    const fixMonth = fStructure + fx.loyer + fx.outils + fx.marketing + fx.honoraires + fx.deplacements + fx.divers;
+    const fixMonth = fStructure + cots + fx.loyer + fx.outils + fx.marketing + fx.honoraires + fx.deplacements + fx.divers;
     const eb = mb - fixMonth;
     S.cons.push(c); S.ca.push(ca); S.free.push(free); S.sal.push(sal); S.inter.push(inter); S.prod.push(prod);
     S.fac.push(fac); S.ic.push(ic); S.ch.push(ch); S.varr.push(varr); S.mb.push(mb); S.mbp.push(ca ? mb / ca : 0);
@@ -209,6 +234,11 @@ export type FixedChargeLine = FixedLineKey | "hors_charges_fixes";
 /** Real fixed charges of a month per line, € HT. */
 export type FixedActuals = Record<FixedLineKey, number>;
 
+/** Employer social charges for a month, € by item. */
+export type SocialCharges = { urssaf: number; mutuelle: number; tickets: number; medecine: number };
+export const NO_CHARGES: SocialCharges = { urssaf: 0, mutuelle: 0, tickets: 0, medecine: 0 };
+export const chargesTotal = (c: SocialCharges) => c.urssaf + c.mutuelle + c.tickets + c.medecine;
+
 /** Standard French VAT rate, used to estimate VAT on forecast months. */
 export const VAT_RATE = 0.2;
 /** Real VAT cash flows of a closed month, € (all positive amounts). */
@@ -237,8 +267,9 @@ export function planRows(r: PlanResult): PlanRow[] {
     { ...line("key", "Chiffre d’affaires", S.ca), key: "ca" },
     sec("Coûts de production"),
     { ...line("line", "Freelances", S.free), key: "free" },
-    { ...line("line", "Salaires consultants chargés", S.sal), key: "sal" },
+    { ...line("line", "Salaires consultants (brut)", S.sal), key: "sal" },
     { ...line("sub", "— dont inter-contrats", S.inter), key: "inter" },
+    line("line", "Cotisations sociales consultants", S.cotc),
     line("total", "Total coûts de production", S.prod),
     sec("Charges variables"),
     line("line", "Commission factor", S.fac),
@@ -248,7 +279,8 @@ export function planRows(r: PlanResult): PlanRow[] {
     line("key", "Gross margin (marge brute)", S.mb),
     line("pct", "Taux de marge brute", S.mbp, T.mbPct),
     sec("Charges fixes"),
-    { ...line("line", "Salaires structure chargés", S.fs), key: "fs" },
+    { ...line("line", "Salaires structure (brut)", S.fs), key: "fs" },
+    line("line", "Cotisations sociales structure", S.cots),
     { ...line("line", "Loyer et locaux", S.fl), key: "loyer" },
     { ...line("line", "Outils, cloud et licences IA", S.fo), key: "outils" },
     { ...line("line", "Marketing et événements", S.fm), key: "marketing" },
@@ -261,6 +293,12 @@ export function planRows(r: PlanResult): PlanRow[] {
     line("line", "Dotations aux amortissements et provisions", S.da),
     line("key", "EBIT (résultat d’exploitation)", S.ex),
     line("pct", "Marge d’exploitation (EBIT / CA)", S.exp, T.exPct),
+    sec("Cotisations sociales"),
+    line("line", "URSSAF et retraite", S.cu),
+    line("line", "Mutuelle", S.cmu),
+    line("line", "Tickets restaurant", S.ctr),
+    line("line", "Médecine du travail", S.cme),
+    line("total", "Total cotisations sociales", S.cot),
     sec("Trésorerie"),
     { ...line("line", "Encaissements clients", S.enc), key: "enc" },
     { ...line("line", "TVA (effet trésorerie)", S.tva), key: "tva" },

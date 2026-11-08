@@ -50,12 +50,12 @@ import {
 } from "@quicksort-sas/ui";
 import { PageAlerts } from "../../ui";
 import { loadWorkspace } from "../../hr/data";
-import { loadPlanMultipliers, type PlanMultipliers, type PlanScenario } from "../../hr/economics";
 import { BankError, useBankApi, type BankStatus } from "./bank";
 import {
   aggregateActuals,
   aggregateFixedCharges,
   aggregateVat,
+  socialCharges,
   loadCra,
   loadExtensions,
   loadInvoices,
@@ -105,7 +105,7 @@ const GROUPS: { title: string; fields: Field[] }[] = [
   ] },
   { title: "Coûts de production", fields: [
     { key: "coutFree", label: "Coût journalier freelance", unit: "€" },
-    { key: "salaire", label: "Salaire chargé consultant / mois", unit: "€", step: 100 },
+    { key: "salaire", label: "Salaire brut consultant / mois", unit: "€", step: 100 },
     { key: "commFactor", label: "Commission factor sur CA", unit: "%", step: 0.1 },
     { key: "primeIC", label: "Prime IC par vente", unit: "€", step: 50 },
     { key: "primeChasseur", label: "Prime chasseur par vente", unit: "€", step: 50 },
@@ -119,6 +119,12 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     { key: "fDivers", label: "Divers", unit: "€", step: 100 },
     { key: "fAmort", label: "Dotations aux amortissements et provisions", unit: "€", step: 100 },
   ] },
+  { title: "Cotisations sociales", fields: [
+    { key: "tauxCharges", label: "URSSAF et retraite patronales", unit: "% du brut", step: 0.5 },
+    { key: "mutuelle", label: "Mutuelle par salarié / mois", unit: "€", step: 10 },
+    { key: "ticketsResto", label: "Tickets restaurant par salarié / mois", unit: "€", step: 10 },
+    { key: "medecine", label: "Médecine du travail par salarié / an", unit: "€", step: 10 },
+  ] },
   { title: "Trésorerie et impôt", fields: [
     { key: "tresoDebut", label: "Trésorerie au 1er janvier", unit: "€", step: 1000 },
     { key: "dso", label: "Délai de paiement clients", unit: "jours", step: 30 },
@@ -126,17 +132,12 @@ const GROUPS: { title: string; fields: Field[] }[] = [
   ] },
 ];
 
-type Loaded = Omit<PlanSources, "cra" | "cjmMultiplier"> & { salariesVisible: boolean; multipliers: PlanMultipliers };
+type Loaded = Omit<PlanSources, "cra" | "cjmMultiplier"> & { salariesVisible: boolean };
 
-const SCENARIOS: { id: PlanScenario; param: string; label: string }[] = [
-  { id: "pessimistic", param: "pessimiste", label: "Pessimiste" },
-  { id: "optimistic", param: "optimiste", label: "Optimiste" },
-];
 const BASES: { id: RevenueBasis; param: string; label: string; text: string }[] = [
   { id: "period", param: "prestation", label: "Mois de prestation", text: "par mois de prestation" },
   { id: "issue", param: "emission", label: "Date d'émission", text: "par date d'émission" },
 ];
-const multLabel = (v: number) => `×${String(v).replace(".", ",")}`;
 type Draft = { hyp: Record<HypothesisKey, string>; ventes: string[]; departs: string[] };
 
 const untyped = () => db() as unknown as SupabaseClient;
@@ -170,18 +171,6 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         const next = new URLSearchParams(prev);
         if (v === "hyp") next.set("vue", "hypotheses");
         else next.delete("vue");
-        return next;
-      },
-      { replace: true },
-    );
-  // Employer-cost scenario (salary multiplier), also kept in the URL.
-  const scenario: PlanScenario = SCENARIOS.find((s) => s.param === params.get("charges"))?.id ?? "pessimistic";
-  const setScenario = (id: PlanScenario) =>
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (id === "pessimistic") next.delete("charges");
-        else next.set("charges", SCENARIOS.find((s) => s.id === id)!.param);
         return next;
       },
       { replace: true },
@@ -312,11 +301,10 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     let cancelled = false;
     (async () => {
       const client = untyped();
-      const [ws, invoices, extensions, mult, structureStaff] = await Promise.all([
+      const [ws, invoices, extensions, structureStaff] = await Promise.all([
         loadWorkspace(),
         loadInvoices(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
         loadExtensions(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
-        loadPlanMultipliers(),
         loadStructureStaff(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
       ]);
       if (cancelled) return;
@@ -327,7 +315,6 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         projects: ws.projects,
         extensions,
         invoices,
-        multipliers: mult.multipliers,
         people: ws.people.map((p) => ({ id: p.id, full_name: p.full_name })),
         clients: ws.clients,
         structureStaff,
@@ -381,20 +368,12 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     [base, bankRows, year, openFrom, coverageStart],
   );
   const unclassifiedTotal = bank.unclassifiedCount.reduce((a, b) => a + b, 0);
-  const multiplier = base ? base.multipliers[scenario] : 0;
+  // Salaries are gross: employer charges come from the "Cotisations sociales" hypotheses.
+  const multiplier = 1;
   const agg = useMemo(
-    () => (base && cra ? aggregateActuals({ ...base, cjmMultiplier: multiplier, cra, revenueBasis: basis.id }, year, openFrom, today) : null),
-    [base, cra, year, openFrom, today, multiplier, basis.id],
+    () => (base && cra ? aggregateActuals({ ...base, cjmMultiplier: 1, internMultiplier: 1, cra, revenueBasis: basis.id }, year, openFrom, today) : null),
+    [base, cra, year, openFrom, today, basis.id],
   );
-  // Switching scenario re-seeds the forecast loaded salary, unless it was edited.
-  const seededSalaire = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    const next = agg?.seeds.salaire;
-    const prev = seededSalaire.current;
-    seededSalaire.current = next;
-    if (next === undefined || prev === undefined || prev === next || saved?.hypotheses?.salaire !== undefined) return;
-    setDraft((d) => (d && num(d.hyp.salaire) === prev ? { ...d, hyp: { ...d.hyp, salaire: str(next) } } : d));
-  }, [agg, saved]);
 
   /** Draft as it would be with no edits: saved values, else data seeds, else mockup defaults. */
   const initialDraft = useCallback((): Draft | null => {
@@ -436,6 +415,8 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         structure: agg.structure[m],
         fixed: bank.fixed[m] ?? undefined,
         vat: vat.vat[m] ?? undefined,
+        cotConsultants: agg.salaryLines[m] ? socialCharges(agg.salaryLines[m]!, H) : undefined,
+        cotStructure: socialCharges(agg.structureLines[m], H),
       })),
     );
   }, [agg, draft, H, bank, vat]);
@@ -594,24 +575,6 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
             >
               {BASES.map((b) => (
                 <NativeSelectOption key={b.id} value={b.id}>{b.label}</NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </div>
-          <div className="flex items-center gap-2">
-            <label htmlFor="bp-charges" className="text-sm text-muted-foreground">Charges salariales</label>
-            <NativeSelect
-              id="bp-charges"
-              size="sm"
-              value={scenario}
-              onChange={(e) => setScenario(e.target.value as PlanScenario)}
-              disabled={!base}
-              title="Coût employeur = salaire brut × multiplicateur (réglages globaux → Unit economics)"
-            >
-              {SCENARIOS.map((s) => (
-                <NativeSelectOption key={s.id} value={s.id}>
-                  {s.label}
-                  {base ? ` (${multLabel(base.multipliers[s.id])})` : ""}
-                </NativeSelectOption>
               ))}
             </NativeSelect>
           </div>
@@ -970,7 +933,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               <footer className="border-t border-border pt-5 text-xs leading-relaxed text-muted-foreground">
                 Mois réels : CA = factures finalisées ou payées {basis.text} · encaissements = factures payées par date de paiement ·
                 consultants = personnes avec une mission confirmée, active ou terminée sur le mois · ventes = missions démarrant dans le mois ·
-                freelances = jours CRA × taux journalier · salaires = salaire mensuel brut × multiplicateur de charges (scénario {SCENARIOS.find((s) => s.id === scenario)!.label.toLowerCase()} : {multLabel(multiplier)}, × 1,4 pour les stagiaires) · inter-contrat =
+                freelances = jours CRA × taux journalier · salaires = salaire mensuel brut (stagiaires : gratification) · cotisations sociales = URSSAF et retraite en % du brut + mutuelle, tickets restaurant et médecine du travail par salarié, au prorata du mois (hypothèses calées sur l'arrêté comptable ; stagiaires exclus) · inter-contrat =
                 salariés sans mission sur le mois · départs = sorties d'employés. Salaires structure : personnes listées en structure, sur leur période
                 (par défaut de l'embauche à la sortie ; prévisionnel : dernier salaire connu), hors jours ouvrés en mission,
                 comptés en salaires consultants, au prorata de l'allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses. TVA (trésorerie seulement) : mois clôturés couverts par Qonto = TVA des factures payées − TVA des dépenses − paiements DGFIP ; sinon 20 % des encaissements − 20 % des freelances et charges fixes hors salaires, solde reversé le mois suivant.

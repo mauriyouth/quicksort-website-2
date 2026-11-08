@@ -33,7 +33,7 @@ import { fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type Fi
 
 /**
  * Drill-down panel for the P&L rows "Chiffre d’affaires", "Salaires
- * consultants chargés", "Freelances", "Salaires structure chargés",
+ * consultants (brut)", "Freelances", "Salaires structure (brut)",
  * "Inter-contrats", "Encaissements clients", "TVA (effet trésorerie)" and the
  * five fixed-charge lines.
  * Closed months list the invoices, named people or Qonto transactions behind
@@ -45,9 +45,9 @@ export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" 
 
 const TITLES: Record<DetailKind, string> = {
   ca: "Chiffre d'affaires",
-  sal: "Salaires consultants chargés",
+  sal: "Salaires consultants (brut)",
   free: "Freelances",
-  fs: "Salaires structure chargés",
+  fs: "Salaires structure (brut)",
   inter: "Inter-contrats",
   enc: "Encaissements clients",
   tva: "TVA (effet trésorerie)",
@@ -434,7 +434,6 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
   const listed = new Map(structure.entries.map((s) => [s.employee_id, s]));
   const members = structure.employees.filter((e) => listed.has(e.id));
   const others = structure.employees.filter((e) => !listed.has(e.id));
-  const mult = String(multiplier).replace(".", ",");
   const save = async (id: string, entry: StructureEntry | null) => {
     setBusy(true);
     try {
@@ -448,10 +447,9 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
   return (
     <>
       <PanelStats>
-        <PanelStat label={<>Total chargé</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>Total brut</>}>{eur(total)}</PanelStat>
         <PanelStat label={<>Personnes</>}>{counted.length}</PanelStat>
         {onMission > 0 && <PanelStat label={<>En mission</>}>{onMission}</PanelStat>}
-        <PanelStat label={<>Multiplicateur de charges</>}>×{mult}</PanelStat>
       </PanelStats>
       {missing > 0 && (
         <Alert variant="warning"><AlertDescription>
@@ -466,7 +464,7 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
             <TableRow>
               <TableHead>Personne</TableHead>
               <TableHead numeric>Brut / mois</TableHead>
-              <TableHead numeric>Chargé ×{mult}</TableHead>
+              <TableHead numeric>Brut du mois</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -501,9 +499,9 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
       )}
       <p className="m-0 text-xs leading-relaxed text-muted-foreground">
         {actual
-          ? "Mois réel : salaire mensuel brut en vigueur sur le mois × multiplicateur de charges, pour chaque personne de structure en poste."
-          : "Mois prévisionnel : dernier salaire connu × multiplicateur de charges, pour chaque personne de structure en poste ce mois-ci (jusqu'à sa sortie)."}{" "}
-        Période commençant ou finissant en cours de mois : au prorata des jours ouvrés. Stagiaires : coût = salaire × 1,4 (charges patronales très faibles).{" "}
+          ? "Mois réel : salaire mensuel brut en vigueur sur le mois, pour chaque personne de structure en poste."
+          : "Mois prévisionnel : dernier salaire brut connu, pour chaque personne de structure en poste ce mois-ci (jusqu'à sa sortie)."}{" "}
+        Période commençant ou finissant en cours de mois : au prorata des jours ouvrés. Stagiaires : gratification seule. Les cotisations sociales sont sur la ligne « Cotisations sociales structure ».{" "}
         Les jours ouvrés en mission (confirmée, active ou terminée, au prorata de l'allocation) basculent en salaires consultants.
         Hors période, et pour les autres salariés : consultant (inter-contrat sans mission).
       </p>
@@ -610,12 +608,11 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
   const currentTotal = current.reduce((t, l) => t + l.cost, 0);
   const currentWithSalary = current.filter((l) => l.salary !== null).length;
   const salariedCount = dec(S.cons[month] * (1 - H.pctFree / 100));
-  const mult = String(multiplier).replace(".", ",");
 
   return (
     <>
       <PanelStats>
-        <PanelStat label={<>Total chargé</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>Total brut</>}>{eur(total)}</PanelStat>
         <PanelStat label={<>dont inter-contrats</>}>{eur(inter)}</PanelStat>
         <PanelStat label={<>{actual ? "Consultants salariés" : "Salariés staffés (est.)"}</>}>{actual ? rows?.length ?? 0 : salariedCount}</PanelStat>
       </PanelStats>
@@ -633,7 +630,7 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
             <SalaryRoster rows={rows} multiplier={multiplier} total={total} />
           )}
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-            Salaire mensuel brut en vigueur sur le mois × multiplicateur de charges ({mult}, scénario choisi) pour estimer le coût employeur ; stagiaires × 1,4.
+            Salaire mensuel brut en vigueur sur le mois (stagiaires : gratification). Les cotisations patronales sont sur la ligne « Cotisations sociales consultants ».
             Inter-contrat = salarié sans mission confirmée, active ou terminée sur le mois. Les freelances sont comptés dans la ligne
             « Freelances », les salariés sans aucune mission dans les charges de structure.
           </p>
@@ -642,11 +639,11 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
         <Formula>
           <FormulaRow label={<>Consultants staffés</>}>{fmt(S.cons[month])}</FormulaRow>
           <FormulaRow label={<>× part de salariés (1 − {pct(H.pctFree / 100)})</>}>{salariedCount}</FormulaRow>
-          <FormulaRow label={<>× salaire chargé / mois (hypothèse)</>}>{eur(H.salaire)}</FormulaRow>
-          <FormulaRow total label={<>= Salaires consultants chargés</>}>{eur(total)}</FormulaRow>
+          <FormulaRow label={<>× salaire brut / mois (hypothèse)</>}>{eur(H.salaire)}</FormulaRow>
+          <FormulaRow total label={<>= Salaires consultants (brut)</>}>{eur(total)}</FormulaRow>
           <FormulaRow label={<>dont inter-contrats (1 − occupation {pct(H.occ / 100)})</>}>{eur(inter)}</FormulaRow>
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « Salaire chargé consultant / mois », « Part de freelances » ou
+            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « Salaire brut consultant / mois », « Part de freelances » ou
             « Taux d'occupation » pour ajuster.
           </p>
           <h3 className="m-0 mt-2 text-base font-medium">Équipe salariée actuelle</h3>
@@ -655,7 +652,7 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
           ) : (
             <>
               <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-                {plural(current.length, "consultant")} salarié{current.length > 1 ? "s" : ""} en poste aujourd'hui · coût chargé réel{" "}
+                {plural(current.length, "consultant")} salarié{current.length > 1 ? "s" : ""} en poste aujourd'hui · salaire brut réel{" "}
                 {eur(currentTotal)} / mois
                 {currentWithSalary > 0 && <> · moyenne {eur(currentTotal / currentWithSalary)} (hypothèse : {eur(H.salaire)})</>}
               </p>
@@ -701,13 +698,12 @@ function InterBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyPr
             <SalaryRoster rows={rows} multiplier={multiplier} total={total} />
           )}
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-            Inter-contrat = consultant salarié sans mission confirmée, active ou terminée sur le mois. Coût = salaire mensuel brut × multiplicateur
-            de charges. Les personnes de structure n'y figurent jamais.
+            Inter-contrat = consultant salarié sans mission confirmée, active ou terminée sur le mois. Coût = salaire mensuel brut (cotisations à part). Les personnes de structure n'y figurent jamais.
           </p>
         </>
       ) : (
         <Formula>
-          <FormulaRow label={<>Salaires consultants chargés</>}>{eur(S.sal[month])}</FormulaRow>
+          <FormulaRow label={<>Salaires consultants (brut)</>}>{eur(S.sal[month])}</FormulaRow>
           <FormulaRow label={<>× (1 − occupation {pct(H.occ / 100)})</>}>{pct(1 - H.occ / 100)}</FormulaRow>
           <FormulaRow total label={<>= Inter-contrats</>}>{eur(total)}</FormulaRow>
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
@@ -719,7 +715,7 @@ function InterBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyPr
           ) : (
             <>
               <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-                {plural(benched.length, "consultant")} sans mission aujourd'hui · coût chargé réel {eur(benchedTotal)} / mois
+                {plural(benched.length, "consultant")} sans mission aujourd'hui · salaire brut réel {eur(benchedTotal)} / mois
               </p>
               <SalaryRoster rows={benched} multiplier={multiplier} total={benchedTotal} monthStart={monthStartOf(year, month)} />
             </>
@@ -1022,7 +1018,7 @@ function SalaryRoster({
           <TableHead>Consultant</TableHead>
           <TableHead>Statut</TableHead>
           <TableHead numeric>Brut / mois</TableHead>
-          <TableHead numeric>Chargé ×{String(multiplier).replace(".", ",")}</TableHead>
+          <TableHead numeric>Brut du mois</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -1042,7 +1038,7 @@ function SalaryRoster({
               <TableCell numeric>{l.salary === null ? <span className="text-xs text-muted-foreground">non renseigné</span> : eur(l.salary)}</TableCell>
               <TableCell numeric>
                 {eur(l.cost)}
-                {l.contractType === "Internship" && <span className="text-xs text-muted-foreground"> ×1,4</span>}
+                {l.contractType === "Internship" && <span className="text-xs text-muted-foreground"> stage</span>}
                 {l.days && <div className="text-xs text-muted-foreground">prorata {dec(l.days[0])}/{dec(l.days[1])} j ouvrés hors structure</div>}
               </TableCell>
             </TableRow>

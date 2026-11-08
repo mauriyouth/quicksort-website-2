@@ -9,7 +9,7 @@ import {
   kEur,
   pct,
 } from "../apps/admin/src/ops/business-plan/model.ts";
-import { aggregateFixedCharges, aggregateVat, isVatRemittance } from "../apps/admin/src/ops/business-plan/actuals.ts";
+import { aggregateFixedCharges, aggregateVat, isVatRemittance, socialCharges } from "../apps/admin/src/ops/business-plan/actuals.ts";
 
 const VENTES = [2, 1, 2, 1, 1, 2, 1, 0, 2, 2, 1, 1];
 const DEPARTS = [0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0];
@@ -26,7 +26,9 @@ function mockup(P, ventes, departs) {
     c = Math.max(0, c + ventes[i] - departs[i]);
     const nf = c * pf, ns = c * (1 - pf);
     const ca = nf * P.jours * P.tjm + ns * P.jours * occ * P.tjm;
-    const prod = nf * P.jours * P.coutFree + ns * P.salaire;
+    // Salaries are gross; employer social charges are added per salaried consultant.
+    const cot = ns * (P.salaire * P.tauxCharges / 100 + P.mutuelle + P.ticketsResto + P.medecine / 12);
+    const prod = nf * P.jours * P.coutFree + ns * P.salaire + cot;
     const varr = ca * P.commFactor / 100 + ventes[i] * P.primeIC + ventes[i] * P.primeChasseur;
     const mb = ca - prod - varr;
     const fix = STRUCTURE + P.fLoyer + P.fOutils + P.fMarketing + P.fHonoraires + P.fDeplacements + P.fDivers;
@@ -51,7 +53,7 @@ test("all-forecast year reproduces the design mockup", () => {
   assert.equal(r.totals.consFin, 18 + 16 - 6);
   assert.equal(r.totals.ventes, 16);
   assert.equal(r.totals.departs, 6);
-  assert.equal(planRows(r).length, 33);
+  assert.equal(planRows(r).length, 41);
 });
 
 test("actual months override the forecast and headcount carries forward", () => {
@@ -519,4 +521,59 @@ test("revenue can be bucketed by issue date instead of period month", () => {
   assert.deepEqual(invoiceLines[1].map((l) => [l.amount, l.byIssueDate]), [[1000.1, false]]);
   assert.equal(months[2].enc, 1000.1); // collections are unaffected
   assert.equal(aggregateActuals(sources(), 2026, 10, new Date(2026, 10, 1)).revenueBasis, "period");
+});
+
+/* ── Social charges ────────────────────────────────────────────────── */
+
+const H_COT = { ...DEFAULT_HYPOTHESES, tauxCharges: 30, mutuelle: 150, ticketsResto: 160, medecine: 120 };
+const sl = (o) => ({ employeeId: "e", name: "", contractType: "CDI", salary: 5000, cost: 5000, staffed: true, exitDate: null, ...o });
+
+test("socialCharges: % of gross plus per-head costs prorated, interns excluded", () => {
+  const c = socialCharges([sl({}), sl({ cost: 2500 }), sl({ contractType: "Internship", salary: 1000, cost: 1000 }), sl({ salary: null, cost: 0 })], H_COT);
+  assert.equal(c.urssaf, 0.3 * 7500);
+  assert.equal(c.mutuelle, 150 * 1.5);
+  assert.equal(c.tickets, 160 * 1.5);
+  assert.equal(c.medecine, 10 * 1.5);
+});
+
+test("default social-charge hypotheses are calibrated on the 2026 accounts", () => {
+  assert.equal(DEFAULT_HYPOTHESES.tauxCharges, 30);
+  assert.equal(DEFAULT_HYPOTHESES.mutuelle, 150);
+  assert.equal(DEFAULT_HYPOTHESES.ticketsResto, 160);
+  assert.equal(DEFAULT_HYPOTHESES.medecine, 120);
+});
+
+test("computePlan: consultant charges in production costs, structure charges in fixed costs", () => {
+  const closed = { cons: 3, ca: 50000, free: 0, sal: 10000, inter: 0, ventes: 0, departs: 0, enc: 0 };
+  const cc = { urssaf: 3000, mutuelle: 300, tickets: 320, medecine: 20 };
+  const cs = { urssaf: 1500, mutuelle: 150, tickets: 160, medecine: 10 };
+  const r = computePlan(H_COT, [{ actual: closed, ventes: 0, departs: 0, structure: 5000, cotConsultants: cc, cotStructure: cs }]);
+  const S = r.series;
+  assert.equal(S.cotc[0], 3640);
+  assert.equal(S.cots[0], 1820);
+  assert.equal(S.prod[0], 10000 + 3640);
+  assert.equal(S.mb[0], 50000 - 13640 - S.varr[0]);
+  assert.equal(S.fix[0], 5000 + 1820 + S.fl[0] + S.fo[0] + S.fm[0] + S.fh[0] + S.fdp[0] + S.fd[0]);
+  assert.equal(S.cu[0], 4500); assert.equal(S.cmu[0], 450); assert.equal(S.ctr[0], 480); assert.equal(S.cme[0], 30);
+  assert.equal(S.cot[0], 5460);
+});
+
+test("computePlan: forecast consultant charges from salaried headcount", () => {
+  const r = computePlan({ ...H_COT, consDebut: 10, pctFree: 40, salaire: 5000 }, [{ actual: null, ventes: 0, departs: 0, structure: 0 }]);
+  const ns = 6;
+  assert.ok(Math.abs(r.series.cotc[0] - ns * (5000 * 0.3 + 150 + 160 + 10)) < 1e-6);
+  assert.equal(r.series.cots[0], 0);
+});
+
+test("planRows: gross salary lines, charge lines and the social-charges section", () => {
+  const rows = planRows(computePlan(H_COT, [forecast(0)]));
+  const labels = rows.map((r) => r.label);
+  assert.ok(labels.includes("Salaires consultants (brut)"));
+  assert.ok(labels.includes("Salaires structure (brut)"));
+  const prodTotal = labels.indexOf("Total coûts de production");
+  assert.equal(labels[prodTotal - 1], "Cotisations sociales consultants");
+  assert.equal(labels[labels.indexOf("Salaires structure (brut)") + 1], "Cotisations sociales structure");
+  const sec = labels.indexOf("Cotisations sociales");
+  assert.deepEqual(labels.slice(sec + 1, sec + 6), ["URSSAF et retraite", "Mutuelle", "Tickets restaurant", "Médecine du travail", "Total cotisations sociales"]);
+  assert.ok(sec > labels.indexOf("Marge d’exploitation (EBIT / CA)") && sec < labels.indexOf("Trésorerie"));
 });

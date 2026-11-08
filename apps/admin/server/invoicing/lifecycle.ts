@@ -25,7 +25,6 @@ export class HttpError extends Error {
 }
 
 type Row = Record<string, any>;
-const SYNC_TTL_MS = 5 * 60 * 1000;
 const NO_EMAIL = "This client has no invoice email in Qonto.";
 const BLOCKER_MESSAGES: Record<string, string> = {
   no_days: "This consultant has no CRA days on this project for that month.",
@@ -330,8 +329,8 @@ async function storeImportedLines(ctx: LifecycleCtx, remote: ProviderInvoice[]) 
 export async function listInvoices(ctx: LifecycleCtx, refresh: boolean) {
   let lastSyncedAt = ctx.settings.lastSyncedAt;
   let syncError: string | null = null;
-  const stale = !lastSyncedAt || ctx.now().getTime() - Date.parse(lastSyncedAt) > SYNC_TTL_MS;
-  if (ctx.settings.hasSecret && (refresh || stale)) {
+  // Qonto sync is manual (Refresh button): it pages through every remote invoice, too slow for each page load.
+  if (ctx.settings.hasSecret && refresh) {
     try { lastSyncedAt = await syncInvoices(ctx); } catch (error) {
       console.error("[invoicing] sync failed", error);
       syncError = error instanceof ProviderError || error instanceof HttpError ? error.message : "Could not refresh invoices from Qonto.";

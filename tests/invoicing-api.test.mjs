@@ -413,6 +413,18 @@ test("sync keeps manual project assignment", async () => {
   assert.equal(r.body.lastSyncedAt, "2026-10-28T09:00:00.000Z");
   assert.equal(r.body.invoices.length, 1);
 });
+test("listing invoices without refresh never calls Qonto, even when the last sync is old", async () => {
+  let calls = 0;
+  const f = fixture({
+    invoices: [craInvoice({ id: "inv-1", provider_invoice_id: "q-1" })],
+    provider: { listInvoices: async () => { calls += 1; return []; } },
+  });
+  f.tables.invoicing_settings[0].last_synced_at = null;
+  const r = await f.request("GET", { query: { resource: "invoices" } });
+  assert.equal(r.code, 200);
+  assert.equal(calls, 0);
+  assert.equal(r.body.invoices.length, 1);
+});
 test("sync imports unknown invoices with the provider and removes vanished drafts", async () => {
   const f = fixture({
     invoices: [craInvoice({ id: "inv-gone", provider_invoice_id: "q-gone" })],

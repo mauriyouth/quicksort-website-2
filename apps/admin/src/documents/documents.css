@@ -1,8 +1,8 @@
-/* Typed documents panel (src/documents/DocumentsPanel.tsx), Documents
- * checklist design (Documents — upload status). Monochrome with lime
- * progress: filed inverts to solid pills, expiring is the strong outlined
- * pill, missing is dashed. Dark design reference (#151515/#1E1E1E/#FAFAFA)
- * maps onto design-system tokens so the panel flips with data-theme.
+/* Documents checklist chrome still used by the employee portal
+ * (src/documents/MyDocuments.tsx) and the HR Documents / payslip pages.
+ * DocumentsPanel, TypeSearchField and PersonPhoto are on @quicksort-sas/ui
+ * and no longer use this file. Monochrome with lime progress: filed inverts
+ * to solid pills, expiring is the strong outlined pill, missing is dashed.
  * Inverted surfaces use --qs-ink on --qs-bg-0, which reproduces the white
  * pill on dark ground and the black pill on light ground. */
 .doc-panel {
@@ -10,35 +10,6 @@
   flex-direction: column;
   gap: 24px;
   min-width: 0;
-}
-.doc-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.doc-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--qs-ink);
-}
-.doc-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--qs-fg-2);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  text-decoration-color: var(--qs-border-strong);
-  white-space: nowrap;
-}
-.doc-link:hover {
-  color: var(--qs-ink);
-  text-decoration-color: var(--qs-fg-3);
 }
 .doc-muted {
   margin: 0;
@@ -84,9 +55,6 @@
 .doc-segment.is-filed {
   background: var(--qs-lime);
 }
-.doc-segment.is-uploading {
-  background: color-mix(in srgb, var(--qs-ink) 40%, transparent);
-}
 
 /* Status pills */
 .doc-pill {
@@ -118,34 +86,6 @@
   background: transparent;
   border: 1px dashed var(--qs-border-strong);
   color: var(--qs-fg-2);
-}
-.doc-pill--uploading {
-  background: transparent;
-  border: 1px solid var(--qs-border-strong);
-  color: var(--qs-fg-2);
-}
-
-/* Missing required documents (alert-driven owners, e.g. projects) */
-.doc-missing {
-  list-style: none;
-  margin: 0;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: 1px dashed var(--qs-border-strong);
-  border-radius: var(--qs-radius-md, 10px);
-}
-.doc-missing li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-.doc-missing-name {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 /* Checklist rows */
@@ -183,12 +123,6 @@
   text-underline-offset: 4px;
   text-decoration-color: var(--qs-border-strong);
 }
-.doc-identity--static {
-  cursor: default;
-}
-.doc-identity--static:hover .doc-row-name {
-  text-decoration: none;
-}
 .doc-medallion {
   flex: none;
   width: 32px;
@@ -215,17 +149,7 @@
 .doc-medallion--missing {
   border: 1.5px dashed var(--qs-border-strong);
 }
-.doc-medallion--uploading {
-  color: var(--qs-ink);
-}
-@keyframes doc-upload-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.doc-medallion--uploading svg {
-  animation: doc-upload-spin 900ms linear infinite;
-}
+
 .doc-identity-text {
   min-width: 0;
   display: flex;
@@ -293,41 +217,6 @@
   flex: 0 0 auto;
   display: flex;
 }
-/* Live upload progress (the uploading row state). */
-.doc-upload-track {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.doc-upload-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-}
-.doc-upload-line .doc-file-name {
-  color: var(--qs-ink);
-}
-.doc-upload-pct {
-  flex: none;
-  color: var(--qs-muted);
-  font-variant-numeric: tabular-nums;
-}
-.doc-progress {
-  height: 4px;
-  border-radius: 999px;
-  background: var(--qs-line);
-  overflow: hidden;
-}
-.doc-progress-bar {
-  display: block;
-  height: 100%;
-  background: var(--qs-ink);
-  border-radius: 999px;
-  transition: width 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
 .doc-actions {
   flex: 0 0 auto;
   display: flex;
@@ -337,7 +226,7 @@
   margin-left: auto;
 }
 
-/* Buttons: inverted solid (upload/download), ghost, icon. */
+/* Buttons: inverted solid (upload/download), icon. */
 .doc-upload {
   height: 36px;
   padding: 0 14px;
@@ -361,30 +250,6 @@
   opacity: 0.5;
   cursor: wait;
 }
-.doc-ghost {
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--qs-border-strong);
-  border-radius: var(--qs-radius-md, 10px);
-  background: transparent;
-  color: var(--qs-ink);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.doc-ghost:hover:not(:disabled) {
-  background: var(--qs-hover);
-  border-color: var(--qs-fg-3);
-}
-.doc-ghost:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 .doc-icon-button {
   display: inline-flex;
   align-items: center;
@@ -403,24 +268,6 @@
 }
 .doc-icon-button:disabled {
   opacity: 0.45;
-  cursor: wait;
-}
-.doc-text-button {
-  align-self: flex-start;
-  border: 0;
-  padding: 2px 0;
-  background: transparent;
-  color: var(--qs-ink);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.doc-text-button:disabled {
-  opacity: 0.5;
   cursor: wait;
 }
 
@@ -447,10 +294,6 @@
   background: var(--qs-hover);
   outline: none;
 }
-.doc-drop.is-busy {
-  opacity: 0.6;
-  cursor: wait;
-}
 .doc-drop-icon {
   width: 40px;
   height: 40px;
@@ -475,9 +318,8 @@
 .doc-drop--form:hover { background: var(--qs-bg-1); }
 .doc-drop-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
 .doc-drop-controls .doc-search-anchor { width: 300px; max-width: 100%; text-align: left; }
-.doc-drop-controls .doc-search-anchor input { width: 100%; height: 40px; padding: 0 12px; box-sizing: border-box; }
 
-/* Folders (generic owners) and history */
+/* Sections */
 .doc-group {
   display: flex;
   flex-direction: column;
@@ -489,424 +331,10 @@
   font-weight: 500;
   color: var(--qs-muted);
 }
-.doc-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-.doc-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 0;
-  border-top: 1px solid var(--qs-line);
-  min-width: 0;
-}
-.doc-row-icon {
-  flex: none;
-  margin-top: 2px;
-  color: var(--qs-fg-3);
-}
-.doc-row-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-}
-.doc-row-main > * {
-  max-width: 100%;
-}
-.doc-row-title {
-  font-size: 14px;
-  color: var(--qs-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.doc-row-title a {
-  color: inherit;
-}
-.doc-row-meta {
-  font-size: 12px;
-  color: var(--qs-muted);
-  overflow-wrap: anywhere;
-}
-.doc-list--history .doc-row-title {
-  color: var(--qs-fg-2);
-}
 
-/* Recent activity (person owners — the hr_events audit trail) */
-.doc-activity {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.doc-activity-title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--qs-ink);
-}
-.doc-activity-card {
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--qs-radius-lg, 16px);
-  background: var(--qs-bg-1);
-  border: 1px solid var(--qs-border);
-  overflow: hidden;
-}
-.doc-activity-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 16px;
-  min-width: 0;
-}
-.doc-activity-dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--qs-fg-3);
-}
-.doc-activity-what {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 13px;
-  color: var(--qs-fg-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.doc-activity-what strong {
-  color: var(--qs-ink);
-  font-weight: 500;
-}
-.doc-activity-when {
-  flex: none;
-  font-size: 13px;
-  color: var(--qs-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Preview dialog */
-.doc-preview {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  box-sizing: border-box;
-}
-.doc-preview-backdrop {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  padding: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(24px);
-  cursor: default;
-}
-.doc-preview-dialog {
-  position: relative;
-  width: 100%;
-  max-width: 1040px;
-  max-height: calc(100vh - 48px);
-  overflow: auto;
-  display: flex;
-  flex-wrap: wrap;
-  border-radius: var(--qs-radius-xl, 20px);
-  background: var(--qs-bg-1);
-  border: 1px solid var(--qs-border);
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55), 0 8px 16px rgba(0, 0, 0, 0.35);
-}
-.doc-preview-viewer {
-  flex: 999 1 520px;
-  min-width: 0;
-  background: var(--qs-bg-2);
-  display: flex;
-  flex-direction: column;
-}
-.doc-preview-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--qs-border);
-}
-.doc-preview-ext {
-  flex: none;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: var(--qs-hover);
-  display: inline-flex;
-  align-items: center;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--qs-fg-2);
-}
-.doc-preview-file {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 13px;
-  color: var(--qs-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.doc-preview-tools {
-  flex: none;
-  display: flex;
-}
-.doc-preview-stage {
-  flex: 1 1 auto;
-  min-height: 420px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 24px;
-  box-sizing: border-box;
-}
-.doc-preview-frame {
-  width: 100%;
-  height: 60vh;
-  min-height: 420px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--qs-bg-0);
-}
-.doc-preview-image {
-  max-width: 100%;
-  max-height: 60vh;
-  border-radius: 6px;
-  box-shadow: var(--qs-shadow-3, 0 24px 48px rgba(0, 0, 0, 0.55));
-}
-.doc-preview-loading {
-  font-size: 13px;
-  color: var(--qs-muted);
-}
-.doc-preview-fallback {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--qs-muted);
-  text-align: center;
-}
-.doc-preview-fallback p {
-  margin: 0;
-}
-.doc-preview-details {
-  flex: 1 1 300px;
-  min-width: 0;
-  padding: 24px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.doc-preview-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-.doc-preview-title {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-}
-.doc-preview-title h2 {
-  margin: 0;
-  font-family: var(--qs-font-display);
-  font-size: 24px;
-  font-weight: 400;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
-  color: var(--qs-ink);
-}
-.doc-preview-title .doc-pill {
-  align-self: flex-start;
-}
-.doc-preview-note {
-  margin: 0;
-  display: flex;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: var(--qs-radius-lg, 16px);
-  border: 1px solid var(--qs-border-strong);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--qs-fg-2);
-}
-.doc-preview-facts {
-  margin: 0;
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 10px 16px;
-  font-size: 13px;
-}
-.doc-preview-facts dt {
-  color: var(--qs-muted);
-}
-.doc-preview-facts dd {
-  margin: 0;
-  color: var(--qs-ink);
-  overflow-wrap: anywhere;
-}
-.doc-preview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.doc-preview-nav {
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 16px;
-  border-top: 1px solid var(--qs-border);
-  font-size: 13px;
-  color: var(--qs-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Upload / file form */
-.doc-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--qs-line);
-  border-radius: var(--qs-radius-md, 10px);
-  background: var(--qs-bg-1);
-}
-.doc-form-file {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--qs-ink);
-  overflow-wrap: anywhere;
-}
-.doc-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  font-size: 13px;
-  color: var(--qs-muted);
-}
-.doc-field input,
-.doc-field select {
-  width: 100%;
-  min-width: 0;
-  height: 40px;
-  padding: 0 12px;
-  border-radius: var(--qs-radius-md, 10px);
-  background: var(--qs-bg);
-  border: 1px solid var(--qs-line);
-  color: var(--qs-ink);
-  font: inherit;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-.doc-field input:focus-visible,
-.doc-field select:focus-visible {
-  outline: none;
-  border-color: var(--qs-lime);
-  box-shadow: 0 0 0 1px var(--qs-lime);
-}
-.doc-field .date-field-trigger {
-  height: 40px;
-  padding: 0 12px;
-  background: var(--qs-bg);
-  border-color: var(--qs-line);
-}
-/* Searchable type picker (combobox dropdown over the form) */
+/* Sizing hook of the type picker (TypeSearchField) inside the portal controls. */
 .doc-search-anchor {
   position: relative;
-}
-.doc-search-list {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  max-height: 232px;
-  overflow-y: auto;
-  background: var(--qs-bg-1);
-  border: 1px solid var(--qs-line);
-  border-radius: var(--qs-radius-md, 10px);
-  box-shadow: 0 8px 24px rgb(0 7 16 / 0.14);
-}
-.doc-search-list li {
-  padding: 8px 10px;
-  border-radius: var(--qs-radius-sm, 6px);
-  font-size: 14px;
-  color: var(--qs-ink);
-  cursor: pointer;
-}
-.doc-search-list li.on,
-.doc-search-list li:hover {
-  background: var(--qs-hover);
-}
-.doc-search-list li[aria-selected="true"] {
-  font-weight: 600;
-}
-.doc-search-empty,
-.doc-search-empty:hover {
-  background: transparent;
-  color: var(--qs-muted);
-  cursor: default;
-}
-.doc-field-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-}
-.doc-form-actions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 14px;
-}
-.doc-primary {
-  height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--qs-radius-md, 10px);
-  background: var(--qs-lime);
-  color: var(--qs-rich-black, #000710);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.doc-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--qs-lime), var(--qs-rich-black, #000710) 12%);
-}
-.doc-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* HR → Documents alerts page (src/documents/DocumentAlerts.tsx). Uses the
@@ -956,25 +384,3 @@
   display: inline-block;
   margin-top: 8px;
 }
-
-/* Editable person photo: the avatar becomes a button with a camera overlay. */
-.person-photo-edit { position: relative; display: inline-flex; flex-shrink: 0; }
-.person-photo-button { position: relative; display: inline-flex; padding: 0; border: 0; background: none; border-radius: 12px; cursor: pointer; }
-.person-photo-button:disabled { cursor: progress; }
-.person-photo-button:focus-visible { outline: 2px solid var(--qs-lime); outline-offset: 2px; }
-.person-photo-overlay {
-  position: absolute; inset: 0; border-radius: inherit;
-  display: flex; align-items: center; justify-content: center;
-  background: rgb(0 0 0 / 0.5); color: #fff; font-size: 12px; font-weight: 600;
-  opacity: 0; transition: opacity 120ms ease;
-}
-.person-photo-button:hover .person-photo-overlay,
-.person-photo-button:focus-visible .person-photo-overlay,
-.person-photo-overlay.is-busy { opacity: 1; }
-.person-photo-error {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: max-content; max-width: 280px;
-  display: flex; gap: 8px; align-items: flex-start;
-  padding: 6px 8px; border: 1px solid var(--qs-danger); border-radius: 8px;
-  background: var(--qs-bg-0); color: var(--qs-danger); font-size: 12px; line-height: 1.4;
-}
-.person-photo-error button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0; font-size: 14px; line-height: 1; }

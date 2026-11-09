@@ -69,10 +69,10 @@ test("fillTemplate: copies, batch-updates, re-reads, exports", async () => {
   assert.equal(calls[0][1], "/files/t1/copy");
   assert.deepEqual(calls[0][2].body, { name: "Contrat", parents: ["fold"] });
   assert.equal(calls[0][2].query.supportsAllDrives, "true");
-  assert.match(calls[1][1], /documents\/copy1$/);
+  assert.match(calls[1][1], /documents\/copy1\?includeTabsContent=true$/);
   assert.match(calls[2][1], /documents\/copy1:batchUpdate$/);
   assert.deepEqual(JSON.parse(calls[2][3]).requests[0].replaceAllText, { containsText: { text: "{{prenom}}", matchCase: true }, replaceText: "Jean" });
-  assert.match(calls[3][1], /documents\/copy1$/);
+  assert.match(calls[3][1], /documents\/copy1\?includeTabsContent=true$/);
   assert.match(calls[4][1], /files\/copy1\/export\?mimeType=application%2Fpdf/);
 });
 
@@ -95,6 +95,24 @@ test("readDocText includes headers, footers, footnotes and nested tables", async
   };
   const text = await readDocText(SA, "d", { fetch: async () => json(doc), token: async () => "t" });
   for (const part of ["nested", "{{a}}", "{{b}}", "{{c}}"]) assert.ok(text.includes(part), part);
+});
+
+const tabbed = (...tabs) => ({ tabs });
+const tab = (doc, childTabs = []) => ({ documentTab: doc, childTabs });
+
+test("readDocText reads every tab, child tabs included", async () => {
+  const doc = tabbed(tab(tmpl("Premier onglet {{prenom}}")), tab(tmpl("Second {{salaire_brut_mensuel}}", footer("{{matricule}}")), [tab(tmpl("Annexe {{clause}}"))]));
+  const text = await readDocText(SA, "d", { fetch: async () => json(doc), token: async () => "t" });
+  for (const part of ["{{prenom}}", "{{salaire_brut_mensuel}}", "{{matricule}}", "{{clause}}"]) assert.ok(text.includes(part), part);
+});
+
+test("fillTemplate: a placeholder left in a second tab throws", async () => {
+  const fetcher = async (url) => String(url).includes(":batchUpdate") ? json({})
+    : json(tabbed(tab(tmpl("Bonjour J")), tab(tmpl("Salaire {{salaire_brut_mensuel}}"))));
+  await assert.rejects(
+    fillTemplate(SA, { templateDocId: "t", folderId: "f", name: "n", values: { prenom: "J" } }, { driveApi: async () => ({ id: "c" }), fetch: fetcher, token: async () => "tok" }),
+    /salaire_brut_mensuel/,
+  );
 });
 
 test("fillTemplate: leftover footer placeholder throws and the copy is trashed", async () => {

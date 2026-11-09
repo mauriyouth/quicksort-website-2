@@ -52,17 +52,34 @@ function collect(content: Structural[] | undefined, out: string[]) {
 }
 
 type Segment = { content?: Structural[] };
-type Doc = { body?: Segment; headers?: Record<string, Segment>; footers?: Record<string, Segment>; footnotes?: Record<string, Segment> };
+type Segments = { body?: Segment; headers?: Record<string, Segment>; footers?: Record<string, Segment>; footnotes?: Record<string, Segment> };
+type Tab = { documentTab?: Segments; childTabs?: Tab[] };
+type Doc = Segments & { tabs?: Tab[] };
 
-export async function readDocText(sa: ServiceAccount, docId: string, deps: GoogleDocsDeps = {}): Promise<string> {
-  const doc = await docsApi<Doc>(sa, `documents/${docId}`, {}, deps);
-  const parts: string[] = [];
+function collectSegments(doc: Segments | undefined, parts: string[]) {
+  if (!doc) return;
   collect(doc.body?.content, parts);
   for (const group of [doc.headers, doc.footers, doc.footnotes])
     for (const segment of Object.values(group || {})) {
       parts.push("\n");
       collect(segment.content, parts);
     }
+}
+
+function collectTabs(tabs: Tab[], parts: string[]) {
+  for (const tab of tabs) {
+    parts.push("\n");
+    collectSegments(tab.documentTab, parts);
+    collectTabs(tab.childTabs || [], parts);
+  }
+}
+
+/** Every tab's text (with child tabs); a response without tabs is read in the legacy single-tab shape. */
+export async function readDocText(sa: ServiceAccount, docId: string, deps: GoogleDocsDeps = {}): Promise<string> {
+  const doc = await docsApi<Doc>(sa, `documents/${docId}?includeTabsContent=true`, {}, deps);
+  const parts: string[] = [];
+  if (doc.tabs) collectTabs(doc.tabs, parts);
+  else collectSegments(doc, parts);
   return parts.join("");
 }
 

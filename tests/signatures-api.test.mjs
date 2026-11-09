@@ -1,0 +1,402 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { createSignaturesHandler } from "../apps/admin/api/signatures.ts";
+import { encryptSignatureCredentials } from "../apps/admin/server/signatures/settings.ts";
+import { DocAccessError } from "../apps/admin/server/signatures/google-docs.ts";
+import { YoutrustError } from "../apps/admin/server/signatures/youtrust.ts";
+
+process.env.SUPABASE_URL = "https://example.supabase.co";
+process.env.SUPABASE_PUBLISHABLE_KEY = "test-public-key";
+process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
+process.env.AI_SETTINGS_ENCRYPTION_KEY = "ab".repeat(32);
+
+const API_KEY = "youtrust-api-key-secret";
+const WEBHOOK_SECRET = "youtrust-webhook-secret";
+const PERSON = "22222222-2222-4222-8222-222222222222";
+const EMP = "33333333-3333-4333-8333-333333333333";
+const TEMPLATE = "44444444-4444-4444-8444-444444444444";
+const QS_TEMPLATE = "55555555-5555-4555-8555-555555555555";
+const SA = { client_email: "sa@proj.iam.gserviceaccount.com", private_key: "unused" };
+const PDF = new Uint8Array([...Buffer.from("%PDF-1.7 synthetic contract")]);
+const DOC_TEXT = "Contrat de {{prenom}} {{nom}}. Salaire : {{salaire_brut_mensuel}}. {{clause_speciale}}";
+
+// In-memory Supabase (copied from tests/invoicing-api.test.mjs): tables are arrays,
+// filters are applied, writes are logged in `ops`. Ids are UUIDs; rpc also files register_signed_document.
+function memoryClient(tables, ops, { failures = {} } = {}) {
+  let seq = 0;
+  const nextId = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`;
+  const copy = (r) => ({ ...r });
+  return {
+    async rpc(name, args) {
+      if (name === "sync_clerk_profile") return { data: "user-1", error: null };
+      if (name === "register_signed_document") {
+        ops.push({ op: "rpc", table: name, value: args });
+        const row = { id: nextId(), status: "active", ...args.document };
+        (tables.documents ??= []).push(row);
+        return { data: copy(row), error: null };
+      }
+      return { data: null, error: { message: `unknown rpc ${name}` } };
+    },
+    from(table) {
+      const filters = [];
+      let mode = "select", payload, options, returning = false, single = null, orderBy = null;
+      const cmp = (fn) => (c, v) => { filters.push((r) => fn(r[c], v)); return q; };
+      const q = {
+        select() { if (mode !== "select") returning = true; return q; },
+        eq: cmp((a, b) => a === b), neq: cmp((a, b) => a !== b), in: cmp((a, b) => b.includes(a)),
+        gte: cmp((a, b) => a != null && a >= b), lte: cmp((a, b) => a != null && a <= b),
+        is: cmp((a, b) => (a ?? null) === b),
+        order(c, o = {}) { orderBy = { c, asc: o.ascending !== false }; return q; },
+        limit() { return q; },
+        insert(v) { mode = "insert"; payload = v; return q; },
+        update(v) { mode = "update"; payload = v; return q; },
+        upsert(v, o) { mode = "upsert"; payload = v; options = o; return q; },
+        delete() { mode = "delete"; return q; },
+        single() { single = "one"; return q; },
+        maybeSingle() { single = "maybe"; return q; },
+        then(resolve, reject) { try { resolve(run()); } catch (e) { reject(e); } },
+      };
+      function shape(list) {
+        if (!single) return { data: list, error: null };
+        if (list.length === 1) return { data: list[0], error: null };
+        if (single === "maybe" && list.length === 0) return { data: null, error: null };
+        return { data: null, error: { message: "single row expected", code: "PGRST116" } };
+      }
+      function run() {
+        const rows = (tables[table] ??= []);
+        const match = (r) => filters.every((f) => f(r));
+        if (mode !== "select") ops.push({ op: mode, table, value: payload, options });
+        const failure = failures[`${table}.${mode}`];
+        if (failure) return { data: null, error: failure };
+        if (mode === "select") {
+          const list = rows.filter(match).map(copy);
+          if (orderBy) list.sort((a, b) => ((a[orderBy.c] ?? "") < (b[orderBy.c] ?? "") ? -1 : (a[orderBy.c] ?? "") > (b[orderBy.c] ?? "") ? 1 : 0) * (orderBy.asc ? 1 : -1));
+          return shape(list);
+        }
+        if (mode === "insert") {
+          const added = [];
+          for (const v of Array.isArray(payload) ? payload : [payload]) {
+            const row = { id: nextId(), created_at: new Date(Date.UTC(2026, 10, 9, 0, 0, seq)).toISOString(), ...v };
+            rows.push(row);
+            added.push(copy(row));
+          }
+          return returning ? shape(added) : { data: null, error: null };
+        }
+        if (mode === "update") {
+          const changed = rows.filter(match);
+          for (const r of changed) Object.assign(r, payload);
+          return returning ? shape(changed.map(copy)) : { data: null, error: null };
+        }
+        if (mode === "upsert") {
+          const keys = (options?.onConflict ?? "id").split(",");
+          for (const v of Array.isArray(payload) ? payload : [payload]) {
+            const found = rows.find((r) => keys.every((k) => r[k] === v[k]));
+            if (found) { if (!options?.ignoreDuplicates) Object.assign(found, v); }
+            else rows.push({ id: nextId(), ...v });
+          }
+          return { data: null, error: null };
+        }
+        tables[table] = rows.filter((r) => !match(r));
+        return { data: null, error: null };
+      }
+      return q;
+    },
+  };
+}
+
+function fixture({ admin = true, youtrust: overrides = {}, readDocText } = {}) {
+  const tables = {
+    user_roles: [{ user_id: "user-1", role: admin ? "admin" : "hr" }],
+    hr_people: [{ id: PERSON, full_name: "Ada Lovelace", email: "ada@example.test" }],
+    employees: [{ id: EMP, person_id: PERSON, role: "Data Engineer", start_date: "2026-01-05", status: "active", probation_end: null, offer_id: null, matricule: "M001" }],
+    employee_salaries: [{ employee_id: EMP, rate_kind: "monthly", salary_monthly: 3500, daily_rate: null, start_date: "2026-01-01", end_date: null }],
+    document_types: [
+      { code: "EMPLOYMENT_CONTRACT", label: "Contrat de travail", owner_kinds: ["person"], folder: "contrat_travail", requires_expiry: false },
+      { code: "OTHER", label: "Autre", owner_kinds: ["person", "client", "project"], folder: "divers", requires_expiry: false },
+    ],
+    document_folders: [],
+    documents: [],
+    signature_settings: [{
+      id: "default",
+      options: { staging: true, signatory_name: "Mohamed Nah", signatory_email: "mohamed@quicksort.test" },
+      encrypted_credentials: encryptSignatureCredentials({ apiKey: API_KEY, webhookSecret: WEBHOOK_SECRET }),
+    }],
+    signature_templates: [
+      { id: TEMPLATE, name: "CDI standard", google_doc_id: "doc-cdi", signers: "person_and_quicksort", type_code: "EMPLOYMENT_CONTRACT", active: true },
+      { id: QS_TEMPLATE, name: "Attestation", google_doc_id: "doc-att", signers: "quicksort", type_code: "OTHER", active: true },
+    ],
+    signature_requests: [],
+  };
+  const ops = [];
+  const calls = [];
+  const log = (name, fn) => async (...args) => { calls.push({ name, args }); return fn(...args); };
+  const client = memoryClient(tables, ops);
+  const youtrust = {
+    createRequest: log("createRequest", overrides.createRequest ?? (async () => ({ requestId: "yt-1", documentId: "ytd-1" }))),
+    getStatus: log("getStatus", overrides.getStatus ?? (async () => ({ status: "ongoing", signers: [] }))),
+    cancel: log("cancel", overrides.cancel ?? (async () => {})),
+    downloadSigned: log("downloadSigned", overrides.downloadSigned ?? (async () => PDF)),
+    downloadAuditTrail: log("downloadAuditTrail", overrides.downloadAuditTrail ?? (async () => PDF)),
+  };
+  let fileSeq = 0;
+  const storage = {
+    provider: "gdrive",
+    ensureFolder: async (root, path) => ({ id: `${root}:${path.join("|")}`, name: path.at(-1), link: null }),
+    ensureChild: async (parent, name) => ({ id: `${parent.id}>${name}`, name, link: null }),
+    uploadFile: log("uploadFile", async (folder, file, bytes) => ({
+      id: `file-${++fileSeq}`, name: file.name, mimeType: file.mimeType, size: bytes.byteLength, modifiedAt: null,
+      link: `https://drive.test/file-${fileSeq}`, folderIds: [folder.id], sha256: "abc", isFolder: false,
+    })),
+    download: log("download", async () => new Response(PDF)),
+    trash: log("trash", async () => {}),
+  };
+  const docs = {
+    readDocText: log("readDocText", readDocText ?? (async () => DOC_TEXT)),
+    fillTemplate: log("fillTemplate", async () => ({ docCopyId: "copy-1", pdf: PDF })),
+  };
+  const handler = createSignaturesHandler({
+    createClient: () => client,
+    createYoutrust: () => youtrust,
+    docs,
+    storage: async () => storage,
+    loadServiceAccount: async () => SA,
+    now: () => new Date("2026-11-09T09:00:00Z"),
+  });
+  const count = (name) => calls.filter((c) => c.name === name).length;
+  return { tables, ops, calls, count, async post(body) {
+    const response = { code: 0, body: null, setHeader() {}, status(code) { this.code = code; return this; }, json(b) { this.body = b; return this; } };
+    await handler({ method: "POST", body, headers: { authorization: "Bearer t", origin: "https://admin.quicksort.test" } }, response);
+    return response;
+  } };
+}
+
+const templatePreview = (values = {}) => ({
+  action: "preview", personId: PERSON, templateId: TEMPLATE,
+  values: { prenom: "Ada", nom: "Lovelace", salaire_brut_mensuel: "3 500,00 €", clause_speciale: "Télétravail 2 jours", ...values },
+  signers: [{ role: "person", name: "Ada Lovelace", email: "ada@example.test" }],
+});
+
+async function draft(f) {
+  const r = await f.post(templatePreview());
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  return r.body.request;
+}
+
+test("a non-admin gets 403 for every action", async () => {
+  const actions = ["get-settings", "save-settings", "list-templates", "save-template", "list-requests", "prepare", "preview", "send", "refresh", "cancel", "discard-draft"];
+  for (const action of actions) {
+    const f = fixture({ admin: false });
+    const r = await f.post({ action });
+    assert.equal(r.code, 403, action);
+    assert.equal(r.body.error, "Admin access is required.");
+    assert.equal(f.ops.length, 0);
+  }
+});
+
+test("get-settings never returns the API key or webhook secret", async () => {
+  const r = await fixture().post({ action: "get-settings" });
+  assert.equal(r.code, 200);
+  assert.equal(r.body.hasApiKey, true);
+  assert.equal(r.body.hasWebhookSecret, true);
+  assert.equal(r.body.signatoryName, "Mohamed Nah");
+  assert.equal(r.body.serviceAccountEmail, SA.client_email);
+  assert.equal(r.body.webhookUrl, "https://admin.quicksort.test/api/youtrust-webhook");
+  const json = JSON.stringify(r.body);
+  assert.ok(!json.includes(API_KEY) && !json.includes(WEBHOOK_SECRET) && !json.includes("encrypted"));
+  assert.ok(!("apiKey" in r.body) && !("webhookSecret" in r.body));
+});
+
+test("save-settings keeps the stored secrets when they are absent", async () => {
+  const f = fixture();
+  const before = f.tables.signature_settings[0].encrypted_credentials;
+  const r = await f.post({ action: "save-settings", staging: false, signatoryName: "M. Nah", signatoryEmail: "m@quicksort.test" });
+  assert.equal(r.code, 200);
+  assert.equal(r.body.hasApiKey, true);
+  assert.equal(r.body.staging, false);
+  assert.equal(f.tables.signature_settings[0].encrypted_credentials, before);
+  assert.ok(!JSON.stringify(r.body).includes(API_KEY));
+});
+
+test("save-template with a Doc the service account cannot read → 400 naming the service account", async () => {
+  const f = fixture({ readDocText: async (sa) => { throw new DocAccessError(sa.client_email); } });
+  const r = await f.post({
+    action: "save-template", name: "CDD", googleDocUrl: "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUv/edit",
+    signers: "person_and_quicksort", typeCode: "EMPLOYMENT_CONTRACT", active: true,
+  });
+  assert.equal(r.code, 400);
+  assert.match(r.body.error, /sa@proj\.iam\.gserviceaccount\.com/);
+  assert.equal(f.tables.signature_templates.length, 2);
+});
+
+test("save-template parses the Doc ID and returns its fields", async () => {
+  const f = fixture();
+  const r = await f.post({
+    action: "save-template", name: "CDD", googleDocUrl: "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUv/edit",
+    signers: "person", typeCode: "EMPLOYMENT_CONTRACT", active: true,
+  });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.equal(r.body.template.google_doc_id, "1AbCdEfGhIjKlMnOpQrStUv");
+  assert.equal(f.calls.find((c) => c.name === "readDocText").args[1], "1AbCdEfGhIjKlMnOpQrStUv");
+  assert.deepEqual(r.body.fields, ["prenom", "nom", "salaire_brut_mensuel", "clause_speciale"]);
+});
+
+test("prepare marks known fields filled and unknown ones empty", async () => {
+  const r = await fixture().post({ action: "prepare", personId: PERSON, templateId: TEMPLATE });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  const salary = r.body.fields.find((x) => x.name === "salaire_brut_mensuel");
+  assert.equal(salary.known, true);
+  assert.equal(salary.value.replace(/[  ]/g, " "), "3 500,00 €");
+  assert.deepEqual(r.body.fields.find((x) => x.name === "clause_speciale"), { name: "clause_speciale", value: "", known: false });
+});
+
+test("signer order: person then signatory, or the signatory alone", async () => {
+  const f = fixture();
+  const both = await f.post({ action: "prepare", personId: PERSON, templateId: TEMPLATE });
+  assert.deepEqual(both.body.signers, [
+    { role: "person", name: "Ada Lovelace", email: "ada@example.test", order: 0 },
+    { role: "quicksort", name: "Mohamed Nah", email: "mohamed@quicksort.test", order: 1 },
+  ]);
+  const only = await f.post({ action: "prepare", personId: PERSON, templateId: QS_TEMPLATE });
+  assert.deepEqual(only.body.signers, [{ role: "quicksort", name: "Mohamed Nah", email: "mohamed@quicksort.test", order: 1 }]);
+});
+
+test("preview refuses an empty value before filling the template", async () => {
+  const f = fixture();
+  const r = await f.post(templatePreview({ clause_speciale: "  " }));
+  assert.equal(r.code, 400);
+  assert.match(r.body.error, /Fill in: clause_speciale/);
+  assert.equal(f.count("fillTemplate"), 0);
+  assert.equal(f.tables.signature_requests.length, 0);
+});
+
+test("preview fills the template into the person's folder and stores a draft", async () => {
+  const f = fixture();
+  const r = await f.post(templatePreview({ prenom: "Adèle" }));
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  const fill = f.calls.find((c) => c.name === "fillTemplate").args[1];
+  assert.equal(fill.templateDocId, "doc-cdi");
+  assert.ok(fill.folderId.startsWith("people:"), fill.folderId);
+  assert.equal(fill.values.prenom, "Adèle");
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.status, "draft");
+  assert.equal(row.doc_copy_file_id, "copy-1");
+  assert.equal(row.pdf_file_id, "file-1");
+  assert.equal(row.pdf_folder_id, fill.folderId);
+  assert.equal(row.created_by, "user-1");
+  assert.equal(r.body.request.id, row.id);
+  assert.equal(Buffer.from(r.body.pdfBase64, "base64").toString(), Buffer.from(PDF).toString());
+});
+
+test("preview of a custom upload that is not a PDF → 400", async () => {
+  const f = fixture();
+  const r = await f.post({
+    action: "preview", personId: PERSON, title: "Avenant", typeCode: "EMPLOYMENT_CONTRACT",
+    pdfBase64: Buffer.from("not a pdf at all").toString("base64"),
+    signers: [{ role: "person", name: "Ada Lovelace", email: "ada@example.test" }, { role: "quicksort", name: "x", email: "x@x.test" }],
+  });
+  assert.equal(r.code, 400);
+  assert.equal(f.count("uploadFile"), 0);
+});
+
+test("preview of a custom PDF stores a draft with the settings signatory", async () => {
+  const f = fixture();
+  const r = await f.post({
+    action: "preview", personId: PERSON, title: "Avenant", typeCode: "EMPLOYMENT_CONTRACT", pdfBase64: Buffer.from(PDF).toString("base64"),
+    signers: [{ role: "person", name: "Ada L.", email: "ada@example.test" }, { role: "quicksort", name: "Someone", email: "evil@example.test" }],
+  });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.template_id, null);
+  assert.deepEqual(row.signers, [
+    { role: "person", name: "Ada L.", email: "ada@example.test", order: 0 },
+    { role: "quicksort", name: "Mohamed Nah", email: "mohamed@quicksort.test", order: 1 },
+  ]);
+});
+
+test("send twice: Youtrust is called once, the second send is 409", async () => {
+  const f = fixture();
+  const request = await draft(f);
+  const first = await f.post({ action: "send", requestId: request.id });
+  assert.equal(first.code, 200, JSON.stringify(first.body));
+  const second = await f.post({ action: "send", requestId: request.id });
+  assert.equal(second.code, 409);
+  assert.equal(second.body.error, "Already sent.");
+  assert.equal(f.count("createRequest"), 1);
+  const input = f.calls.find((c) => c.name === "createRequest").args[0];
+  assert.equal(input.externalId, request.id);
+  assert.deepEqual(input.signers, [
+    { name: "Ada Lovelace", email: "ada@example.test", order: 0 },
+    { name: "Mohamed Nah", email: "mohamed@quicksort.test", order: 1 },
+  ]);
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.status, "sent");
+  assert.equal(row.youtrust_request_id, "yt-1");
+  assert.equal(row.youtrust_document_id, "ytd-1");
+});
+
+test("send when Youtrust fails → status error and 502", async () => {
+  const f = fixture({ youtrust: { createRequest: async () => { throw new YoutrustError("Youtrust POST /signature_requests failed (500)", 500); } } });
+  const request = await draft(f);
+  const r = await f.post({ action: "send", requestId: request.id });
+  assert.equal(r.code, 502);
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.status, "error");
+  assert.match(row.error, /failed \(500\)/);
+});
+
+test("refresh moves to signed_by_person, then files once on completion", async () => {
+  let remote = { status: "ongoing", signers: [{ email: "ADA@example.test", status: "signed" }] };
+  const f = fixture({ youtrust: { getStatus: async () => remote } });
+  const request = await draft(f);
+  await f.post({ action: "send", requestId: request.id });
+  const signed = await f.post({ action: "refresh", requestId: request.id });
+  assert.equal(signed.code, 200, JSON.stringify(signed.body));
+  assert.equal(f.tables.signature_requests[0].status, "signed_by_person");
+
+  remote = { status: "done", signers: [] };
+  const done = await f.post({ action: "refresh", requestId: request.id });
+  assert.equal(done.code, 200, JSON.stringify(done.body));
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.status, "completed");
+  const [contract, audit] = f.tables.documents;
+  assert.equal(row.signed_document_id, contract.id);
+  assert.equal(row.audit_document_id, audit.id);
+  assert.equal(contract.type_code, "EMPLOYMENT_CONTRACT");
+  assert.equal(contract.issued_on, "2026-11-09");
+  assert.equal(audit.type_code, "OTHER");
+  assert.equal(audit.parent_document_id, contract.id);
+
+  await f.post({ action: "refresh", requestId: request.id });
+  assert.equal(f.tables.documents.length, 2);
+  assert.equal(f.count("downloadSigned"), 1);
+});
+
+test("refresh never moves a cancelled request", async () => {
+  const f = fixture({ youtrust: { getStatus: async () => ({ status: "done", signers: [] }) } });
+  const request = await draft(f);
+  await f.post({ action: "send", requestId: request.id });
+  const cancelled = await f.post({ action: "cancel", requestId: request.id });
+  assert.equal(cancelled.code, 200);
+  assert.equal(f.count("cancel"), 1);
+  await f.post({ action: "refresh", requestId: request.id });
+  assert.equal(f.tables.signature_requests[0].status, "cancelled");
+  assert.equal(f.count("downloadSigned"), 0);
+});
+
+test("discard-draft trashes the draft's files and deletes the row", async () => {
+  const f = fixture();
+  const request = await draft(f);
+  const r = await f.post({ action: "discard-draft", requestId: request.id });
+  assert.equal(r.code, 200);
+  assert.deepEqual(f.calls.filter((c) => c.name === "trash").map((c) => c.args[0]).sort(), ["copy-1", "file-1"]);
+  assert.equal(f.tables.signature_requests.length, 0);
+});
+
+test("list-requests returns the person's requests, newest first", async () => {
+  const f = fixture();
+  const a = await draft(f);
+  const b = await draft(f);
+  const r = await f.post({ action: "list-requests", personId: PERSON });
+  assert.equal(r.code, 200);
+  assert.deepEqual(r.body.requests.map((x) => x.id), [b.id, a.id]);
+});

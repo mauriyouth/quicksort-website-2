@@ -54,6 +54,7 @@ function apiRoutes(): Plugin {
     '/api/recruitment-cv': '/api/recruitment-cv.ts',
     '/api/documents': '/api/documents.ts',
     '/api/documents-extract': '/api/documents-extract.ts',
+    '/api/signatures': '/api/signatures.ts',
     '/api/accounts': '/api/accounts.ts',
     '/api/impersonate': '/api/impersonate.ts',
   };

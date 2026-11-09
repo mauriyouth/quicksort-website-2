@@ -107,7 +107,7 @@ export function createYoutrustClient(
       if (!requestId) throw new YoutrustError("Youtrust did not return a signature request id.", 502);
       try {
         const form = new FormData();
-        form.append("file", new Blob([pdf], { type: "application/pdf" }), fileName);
+        form.append("file", new Blob([new Uint8Array(pdf)], { type: "application/pdf" }), fileName);
         form.append("nature", "signable_document");
         const doc = await callJson("POST", `/signature_requests/${requestId}/documents`, form);
         const documentId: string | undefined = doc?.id;

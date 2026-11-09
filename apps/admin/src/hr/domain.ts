@@ -15,16 +15,13 @@ export type Exit = { id: string; employee_id: string; kind: string; status: 'ope
 export type ExitItem = { id: string; offboarding_id: string; title: string; required: boolean; completed_at: string | null; version: number; created_at: string };
 export type Assignment = { id: string; employee_id: string; project_id: string; position: string; pricing_line: string; allocation_pct: number; start_date: string; end_date: string | null; status: AssignmentStatus; version: number; created_at: string; updated_at: string };
 export type Event = { id: number; person_id: string; application_id: string | null; employee_id: string | null; kind: string; previous_state: string; next_state: string; actor_id: string; actor_email: string; rationale: string; request_id: string; created_at: string };
-export type Contract = { id: string; offer_id: string | null; candidate_id: string; person_id: string | null; application_id: string | null; employee_id: string | null; title: string; storage_path: string; document_sha256: string; created_at: string };
-export type Signature = { contract_id: string; candidate_id: string; signer_name: string; consent_text: string; document_sha256: string; signed_at: string };
-export type Countersignature = { contract_id: string; actor_id: string; signer_name: string; document_sha256: string; signed_at: string };
 export type SuggestionKind = 'interview_prep' | 'profile_summary' | 'onboarding_plan' | 'staffing_match' | 'handover' | 'alumni_reconnect' | 'job_description';
 export type Suggestion = { id: string; person_id: string | null; application_id: string | null; employee_id: string | null; opportunity_id: string | null; kind: SuggestionKind; payload: unknown; sources: unknown; input_version: number; model: string; status: 'draft' | 'accepted' | 'dismissed' | 'stale'; reviewed_by: string | null; reviewed_at: string | null; created_at: string };
 export type StaffingProject = { id: string; version: number; title: string; client_id: string | null; status: string; start_date: string | null; end_date: string | null; pricing_model: string; currency: string; tjm_profiles?: unknown };
 export type StaffingClient = { id: string; name: string };
 export type Account = { profile_id: string; person_id: string; linked_by: string; linked_at: string };
 export type Capabilities = { recruit: boolean; approve_offer: boolean; approve_direction: boolean; staff: boolean; admin: boolean };
-export type Workspace = { jobs: { id: string; title: string; published: boolean }[]; people: Person[]; applications: Application[]; employees: Employee[]; salaries: Salary[]; opportunities: Opportunity[]; interviews: Interview[]; offers: Offer[]; tasks: JourneyTask[]; reviews: Review[]; exits: Exit[]; exitItems: ExitItem[]; assignments: Assignment[]; events: Event[]; contracts: Contract[]; signatures: Signature[]; countersignatures: Countersignature[]; suggestions: Suggestion[]; projects: StaffingProject[]; clients: StaffingClient[]; accounts: Account[]; capabilities: Capabilities };
+export type Workspace = { jobs: { id: string; title: string; published: boolean }[]; people: Person[]; applications: Application[]; employees: Employee[]; salaries: Salary[]; opportunities: Opportunity[]; interviews: Interview[]; offers: Offer[]; tasks: JourneyTask[]; reviews: Review[]; exits: Exit[]; exitItems: ExitItem[]; assignments: Assignment[]; events: Event[]; suggestions: Suggestion[]; projects: StaffingProject[]; clients: StaffingClient[]; accounts: Account[]; capabilities: Capabilities };
 export type Requirement = { key: string; label: string; done: boolean };
 export type ProfileInput = Pick<Person, 'full_name'> & Partial<Pick<Person, 'email' | 'phone' | 'headline' | 'location' | 'skills' | 'languages' | 'degrees' | 'certifications' | 'notes' | 'source' | 'owner_email' | 'contact_allowed'>>;
 type Versioned = { expected_version: number };
@@ -67,7 +64,6 @@ export type CommandIntent =
  | ({ kind: 'create_requisition' } & RequisitionInput)
  | ({ kind: 'update_requisition'; opportunity_id: string } & Versioned & RequisitionInput)
  | ({ kind: 'publish_requisition'; opportunity_id: string; job_id: string } & Versioned)
- | { kind: 'countersign_contract'; contract_id: string; signer_name: string }
  | { kind: 'save_suggestion'; person_id?: string | null; application_id?: string | null; employee_id?: string | null; opportunity_id?: string | null; suggestion_kind: SuggestionKind; payload: unknown; sources: unknown; input_version: number; model: string }
  | { kind: 'review_suggestion'; suggestion_id: string; status: 'accepted' | 'dismissed' }
  | ({ kind: 'import_person'; external_source: string; external_id: string; employment?: { role: string; start_date: string; end_date?: string | null }; rationale: string } & ProfileInput);

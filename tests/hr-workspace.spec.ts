@@ -38,11 +38,26 @@ async function mock(page: Page, {
   failFirstTask = false,
   staleSuggestion = false,
   payslips = false,
+  admin = false,
+  contractStage = false,
+  signed = true,
+  signatureRequests = [] as Array<Record<string, unknown>>,
 } = {}) {
   const suggestions: Suggestion[] = [];
   const snapshot = { ...structuredClone(seed), suggestions, salaries: [] as never[] };
   const requests: Request[] = [];
+  const signatureCalls: Array<Record<string, unknown>> = [];
   if (staffingOnly) snapshot.capabilities = { recruit: false, approve_offer: false, approve_direction: false, staff: true, admin: false };
+  if (admin) snapshot.capabilities = { ...snapshot.capabilities, admin: true };
+  // Sam's latest application, still open at the Contract stage.
+  if (contractStage) Object.assign(snapshot.applications[0], { status: 'active', stage: 'contract' });
+  await page.route('**/api/signatures', async (route) => {
+    const body = route.request().postDataJSON();
+    signatureCalls.push(body);
+    if (body.action === 'list-requests') return reply(route, { requests: signatureRequests });
+    if (body.action === 'list-templates') return reply(route, { templates: [] });
+    return reply(route, {}, 400);
+  });
   if (staleSuggestion) {
     const employee = snapshot.employees.find((item) => item.status === 'preboarding');
     const person = snapshot.people.find((item) => item.id === employee?.person_id);
@@ -87,7 +102,7 @@ async function mock(page: Page, {
     if (url.pathname.endsWith('/rpc/hr_workspace_snapshot')) return reply(route, snapshot);
     if (url.pathname.endsWith('/rpc/hr_application_requirements')) return reply(route, [
       { key: 'screening', label: 'Screening evidence reviewed', done: true },
-      { key: 'signatures', label: 'Contract signed by the candidate and employer', done: true },
+      { key: 'signatures', label: 'The contract is signed in Youtrust', done: signed },
     ]);
     if (url.pathname.endsWith('/profiles')) return reply(route, snapshot.people.map((person) => ({ id: person.id, full_name: person.full_name, email: person.email })));
     if (url.pathname.endsWith('/rpc/hr_command')) {
@@ -108,7 +123,7 @@ async function mock(page: Page, {
     }
     return reply(route, []);
   });
-  return { snapshot, requests, rpcs, moves };
+  return { snapshot, requests, rpcs, moves, signatureCalls };
 }
 
 test('all connected HR views render at desktop and mobile widths without page overflow', async ({ page }, info) => {
@@ -146,7 +161,7 @@ test('a rehire record retains both application and employment histories', async 
   await page.getByRole('button', { name: /Sam Rivera/ }).click();
   await page.getByRole('tab', { name: /Applications/ }).click();
   await expect(page.getByLabel('Application history').locator('option')).toHaveCount(2);
-  await expect(page.getByText('Both signatures recorded', { exact: true })).toBeVisible();
+  await expect(page.getByText('Signed in Youtrust', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /Employment/ }).click();
   await expect(page.getByLabel('Employment period').locator('option')).toHaveCount(2);
   await expect(page.getByRole('heading', { name: 'Journey checklist' })).toBeVisible();
@@ -348,4 +363,50 @@ test('moving a payslip confirms the target, calls the API with toPersonId and of
   await expect(page.getByText("Reset Sam Rivera's matricule to 00026?")).toHaveCount(0);
   expect(rpcs).toHaveLength(1);
   expect(rpcs[0]).toMatchObject({ employee_id: SAM_EMPLOYEE, matricule: '00026' });
+});
+
+const SAM_APPLICATION = seed.applications[0].id;
+const signatureRequest = (title: string, application_id: string | null) => ({
+  id: crypto.randomUUID(), person_id: SAM, template_id: null, title, type_code: 'CONTRACT_CDI', signers: [], supersedes: null,
+  status: 'sent', error: '', youtrust_request_id: 'yt-1', signed_document_id: null, audit_document_id: null, application_id,
+  created_at: '2026-11-02T10:00:00Z', updated_at: '2026-11-02T10:00:00Z',
+});
+
+async function openSamApplication(page: Page) {
+  await page.goto(`${harness.url}?view=people`);
+  await page.getByRole('button', { name: /Sam Rivera/ }).click();
+  await page.getByRole('tab', { name: /Applications/ }).click();
+}
+
+test('an admin sends the hiring contract from the application at the Contract stage', async ({ page }) => {
+  const { signatureCalls } = await mock(page, {
+    admin: true, contractStage: true,
+    signatureRequests: [signatureRequest('Contrat CDI Sam', SAM_APPLICATION), signatureRequest('Avenant télétravail', null)],
+  });
+  await openSamApplication(page);
+  await expect(page.getByRole('heading', { name: 'Contract signature' })).toBeVisible();
+  await expect(page.getByText('The hiring contract for this application. Once signed in Youtrust, the person can be hired.')).toBeVisible();
+  // Only the request sent from this application is listed; amendments from the employment page are not.
+  await expect(page.getByRole('row', { name: /Contrat CDI Sam/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Avenant télétravail/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Send for signature' })).toBeVisible();
+  expect(signatureCalls.find((call) => call.action === 'list-requests')).toMatchObject({ personId: SAM });
+  await expect(page.getByText('Countersign as employer')).toHaveCount(0);
+});
+
+test('an HR user sees whether the contract is signed but cannot send it', async ({ page }) => {
+  await mock(page, { contractStage: true, signed: false });
+  await openSamApplication(page);
+  await expect(page.getByRole('heading', { name: 'Contract signature' })).toBeVisible();
+  await expect(page.getByText('Not signed yet. An admin sends the contract from this page.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send for signature' })).toHaveCount(0);
+  await expect(page.getByText('Countersign as employer')).toHaveCount(0);
+});
+
+test('the hire prerequisites include the Youtrust signature', async ({ page }) => {
+  await mock(page, { contractStage: true });
+  await openSamApplication(page);
+  await expect(page.getByRole('heading', { name: 'Hire and start preboarding' })).toBeVisible();
+  await expect(page.getByText('The contract is signed in Youtrust')).toBeVisible();
+  await expect(page.getByText('Countersign as employer')).toHaveCount(0);
 });

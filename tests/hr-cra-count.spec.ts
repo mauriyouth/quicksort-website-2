@@ -53,7 +53,7 @@ const employee = {
 };
 function workspace() {
   return {
-    jobs: [], people: [person], applications: [], employees: [employee], opportunities: [], interviews: [], offers: [], tasks: [], reviews: [], exits: [], exitItems: [], assignments: [], events: [], contracts: [], signatures: [], countersignatures: [], suggestions: [], projects: [], clients: [], accounts: [],
+    jobs: [], people: [person], applications: [], employees: [employee], opportunities: [], interviews: [], offers: [], tasks: [], reviews: [], exits: [], exitItems: [], assignments: [], events: [], suggestions: [], projects: [], clients: [], accounts: [],
     capabilities: { recruit: true, approve_offer: false, approve_direction: false, staff: true, admin: true },
   };
 }

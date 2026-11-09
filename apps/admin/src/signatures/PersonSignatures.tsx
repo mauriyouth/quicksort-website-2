@@ -61,8 +61,19 @@ const errorText = (e: unknown, fallback: string) => (e instanceof Error && e.mes
  * signature" panel: choose a template or upload a PDF, fill the values the
  * record doesn't know, build the PDF preview (a draft in the person's Drive
  * folder), then send it. The signed copy is filed by the webhook or Refresh.
+ * With `applicationId`, it lists only that application's requests and sends
+ * new ones for it: the hiring contract that the hire step waits for.
  */
-export function PersonSignatures({ personId, person }: { personId: string; /** Prefills the signer of a custom PDF. */ person?: { name: string; email: string } }) {
+export function PersonSignatures({
+  personId,
+  person,
+  applicationId,
+}: {
+  personId: string;
+  /** Prefills the signer of a custom PDF. */
+  person?: { name: string; email: string };
+  applicationId?: string;
+}) {
   const [requests, setRequests] = useState<SignatureRequest[] | null>(null);
   const [composing, setComposing] = useState(false);
   const [busyId, setBusyId] = useState("");
@@ -72,8 +83,8 @@ export function PersonSignatures({ personId, person }: { personId: string; /** P
 
   const reload = useCallback(async () => {
     const result = await postSignatures<{ requests: SignatureRequest[] }>({ action: "list-requests", personId });
-    setRequests(result.requests);
-  }, [personId]);
+    setRequests(applicationId ? result.requests.filter((r) => r.application_id === applicationId) : result.requests);
+  }, [personId, applicationId]);
 
   useEffect(() => {
     setRequests(null);
@@ -211,6 +222,7 @@ export function PersonSignatures({ personId, person }: { personId: string; /** P
         <SendPanel
           personId={personId}
           person={person}
+          applicationId={applicationId}
           onClose={() => setComposing(false)}
           onSent={(email) => {
             setComposing(false);
@@ -253,7 +265,19 @@ function pdfBlobUrl(base64: string) {
   return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
 }
 
-function SendPanel({ personId, person: record, onClose, onSent }: { personId: string; person?: { name: string; email: string }; onClose: () => void; onSent: (email: string) => void }) {
+function SendPanel({
+  personId,
+  person: record,
+  applicationId,
+  onClose,
+  onSent,
+}: {
+  personId: string;
+  person?: { name: string; email: string };
+  applicationId?: string;
+  onClose: () => void;
+  onSent: (email: string) => void;
+}) {
   const [templates, setTemplates] = useState<SignatureTemplate[]>([]);
   const [types, setTypes] = useState<DocumentTypeRecord[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -367,6 +391,7 @@ function SendPanel({ personId, person: record, onClose, onSent }: { personId: st
       const result = await postSignatures<{ request: SignatureRequest; previewUrl: string; pdfBase64?: string | null }>({
         action: "preview",
         personId,
+        ...(applicationId ? { applicationId } : {}),
         signers: signerInput,
         supersedes: supersedes || null,
         ...(custom

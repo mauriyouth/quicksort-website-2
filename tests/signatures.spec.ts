@@ -7,6 +7,7 @@ const PERSON = '54000000-0000-4000-8000-0000000000a1';
 const TEMPLATE = '54000000-0000-4000-8000-0000000000b1';
 const DRAFT = '54000000-0000-4000-8000-0000000000c1';
 const OLD_CONTRACT = '54000000-0000-4000-8000-0000000000d1';
+const APPLICATION = '54000000-0000-4000-8000-0000000000f1';
 
 let harness: Awaited<ReturnType<typeof startComponentHarness>>;
 test.beforeAll(async () => {
@@ -15,6 +16,8 @@ test.beforeAll(async () => {
     import { PersonSignatures } from '@app/signatures/PersonSignatures';
     const screen = location.pathname === '/person'
       ? <PersonSignatures personId="${PERSON}" />
+      : location.pathname === '/application'
+      ? <PersonSignatures personId="${PERSON}" applicationId="${APPLICATION}" />
       : <SettingsPage section="signatures" isOwner isAdmin email="admin@quicksort.test" />;
     createRoot(document.getElementById('root')).render(<main style={{ padding: 24, maxWidth: 800, margin: 'auto' }}>{screen}</main>);
   `);
@@ -185,4 +188,32 @@ test('a failed discard keeps the draft, which can still be sent', async ({ page 
   await expect(page.getByLabel('Template')).toHaveValue(TEMPLATE);
   await expect(page.locator('object[type="application/pdf"]')).toBeVisible();
   expect(calls.filter((call) => call.action === 'discard-draft')).toHaveLength(2);
+});
+
+test('from an application, only its requests are listed and the preview carries the application', async ({ page }) => {
+  const calls = await mock(page, [
+    request('sent', { title: 'Contrat CDI (application)', application_id: APPLICATION }),
+    request('completed', { title: 'Avenant (employment page)', application_id: null }),
+  ]);
+  await page.goto(new URL('/application', harness.url).href);
+  await expect(page.getByRole('row', { name: /Contrat CDI \(application\)/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Avenant/ })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Send for signature' }).click();
+  await page.getByLabel('Template').selectOption({ label: 'Contrat CDI' });
+  await page.getByLabel('clause_speciale').fill('Aucune');
+  await page.getByRole('button', { name: 'Build preview' }).click();
+  await expect(page.locator('object[type="application/pdf"]')).toBeVisible();
+  expect(calls.find((call) => call.action === 'preview')).toMatchObject({ personId: PERSON, applicationId: APPLICATION });
+});
+
+test('from the employment page, the preview carries no application', async ({ page }) => {
+  const calls = await mock(page);
+  await page.goto(new URL('/person', harness.url).href);
+  await page.getByRole('button', { name: 'Send for signature' }).click();
+  await page.getByLabel('Template').selectOption({ label: 'Contrat CDI' });
+  await page.getByLabel('clause_speciale').fill('Aucune');
+  await page.getByRole('button', { name: 'Build preview' }).click();
+  await expect(page.locator('object[type="application/pdf"]')).toBeVisible();
+  expect(calls.find((call) => call.action === 'preview')).not.toHaveProperty('applicationId');
 });

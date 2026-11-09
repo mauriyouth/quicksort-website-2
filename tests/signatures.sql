@@ -137,4 +137,7 @@ select pg_temp.assert_true((select updated_at>now()-interval '1 hour' and status
   'Editing a request bumps updated_at only');
 update public.signature_requests set status='sent';
 select pg_temp.assert_true((select status_changed_at>now()-interval '1 hour' from public.signature_requests),'Status change bumps status_changed_at');
+
+-- Completion filing claims the request (column exists, starts unclaimed).
+select pg_temp.assert_true((select filing_claimed_at is null from public.signature_requests),'A request starts with no filing claim');
 rollback;

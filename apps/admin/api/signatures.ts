@@ -51,7 +51,7 @@ type RequestRow = {
   id: string; person_id: string; template_id: string | null; title: string; type_code: string; signers: Signer[];
   supersedes: string | null; status: RequestStatus; error: string; youtrust_request_id: string | null;
   doc_copy_file_id: string | null; pdf_file_id: string | null; pdf_folder_id: string | null;
-  signed_document_id: string | null; audit_document_id: string | null;
+  signed_document_id: string | null; audit_document_id: string | null; updated_at: string;
 };
 
 class HttpError extends Error {
@@ -63,6 +63,8 @@ class HttpError extends Error {
 }
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
+/** A "sending" row this old was interrupted (functions time out at 60 s). */
+const STALE_SENDING_MS = 2 * 60 * 1000;
 /** Inline previews stay well under the ~4.5 MB serverless response cap once base64-encoded. */
 const INLINE_PREVIEW_BYTES = 3 * 1024 * 1024;
 const uuid = z.uuid();
@@ -321,19 +323,23 @@ export function createSignaturesHandler(deps: Deps = {
             if (!data) throw new HttpError("Choose an active document of the same type to replace.", 400);
           }
 
+          // Refuse missing values before any folder or file is created.
           let fieldValues: Record<string, string> = {};
+          const sa = template ? await serviceAccount() : null;
+          if (template) {
+            const fields = extractFields(await deps.docs.readDocText(sa!, template.google_doc_id));
+            const values = input.values ?? {};
+            const missing = missingFields(fields, values);
+            if (missing.length) throw new HttpError(`Fill in: ${missing.join(", ")}`, 400);
+            fieldValues = Object.fromEntries(fields.map((field) => [field, values[field].trim()]));
+          }
+
           let docCopyId: string | null = null;
           const st = await storage();
           const folder = await personFolder(client, st, person.id, typeCode);
           const name = `${title} – ${person.full_name}`;
           if (template) {
-            const sa = await serviceAccount();
-            const fields = extractFields(await deps.docs.readDocText(sa, template.google_doc_id));
-            const values = input.values ?? {};
-            const missing = missingFields(fields, values);
-            if (missing.length) throw new HttpError(`Fill in: ${missing.join(", ")}`, 400);
-            fieldValues = Object.fromEntries(fields.map((field) => [field, values[field].trim()]));
-            const filled = await deps.docs.fillTemplate(sa, { templateDocId: template.google_doc_id, folderId: folder.id, name, values: fieldValues });
+            const filled = await deps.docs.fillTemplate(sa!, { templateDocId: template.google_doc_id, folderId: folder.id, name, values: fieldValues });
             docCopyId = filled.docCopyId;
             pdf = filled.pdf;
           }
@@ -385,10 +391,20 @@ export function createSignaturesHandler(deps: Deps = {
             await moveStatus(row, ["sending"], { status: "error", error: message.slice(0, 1000) });
             return { status: 502, body: { error: message } };
           }
-          const sent = await moveStatus(row, ["sending"], {
-            status: "sent", youtrust_request_id: created.requestId, youtrust_document_id: created.documentId,
-          });
-          return { status: 200, body: { request: sent[0] ?? (await loadRequest(row.id)) } };
+          try {
+            const sent = await moveStatus(row, ["sending"], {
+              status: "sent", youtrust_request_id: created.requestId, youtrust_document_id: created.documentId,
+            });
+            if (!sent.length) throw new Error("The request left the sending status.");
+            return { status: 200, body: { request: sent[0] } };
+          } catch (error) {
+            // Youtrust has a live request we could not record: keep its ids where HR and the logs can find them.
+            const ids = `Youtrust request ${created.requestId}, document ${created.documentId}`;
+            console.error(`signatures: sent ${row.id} to Youtrust but could not store the ids (${ids})`, error);
+            const message = `Sent to Youtrust (${ids}) but the ids could not be saved. Check Youtrust before sending again.`;
+            await moveStatus(row, ["sending"], { status: "error", error: message }).catch(() => undefined);
+            return { status: 502, body: { error: message } };
+          }
         },
 
         async refresh(input) {
@@ -400,7 +416,7 @@ export function createSignaturesHandler(deps: Deps = {
           const next = statusFromYoutrust(remote.status, remote.signers, personEmail, row.status);
           const filed = Boolean(row.signed_document_id && row.audit_document_id);
           if (next === "completed" && (canMoveTo(row.status, "completed") || (row.status === "completed" && !filed))) {
-            await completeRequest(service(), yt, await storage(), row, today());
+            await completeRequest(service(), yt, await storage(), row, deps.now?.() ?? new Date());
           } else if (canMoveTo(row.status, next)) {
             await moveStatus(row, [row.status], { status: next });
           }
@@ -415,7 +431,10 @@ export function createSignaturesHandler(deps: Deps = {
             await (await youtrust()).cancel(row.youtrust_request_id, "Cancelled from the Quicksort admin.");
             await moveStatus(row, ["sent", "signed_by_person"], { status: "cancelled" });
           } else if (row.status === "sending") {
-            throw new HttpError("This request is being sent. Try again in a moment.", 409);
+            // A send that died mid-way (function timeout) would otherwise stay "sending" forever.
+            const age = (deps.now?.() ?? new Date()).getTime() - new Date(row.updated_at).getTime();
+            if (!(age > STALE_SENDING_MS)) throw new HttpError("This request is being sent. Try again in a moment.", 409);
+            await moveStatus(row, ["sending"], { status: "error", error: "The send was interrupted. Check Youtrust before sending again." });
           } else {
             throw new HttpError("This request is already closed.", 409);
           }
@@ -425,13 +444,12 @@ export function createSignaturesHandler(deps: Deps = {
         async "discard-draft"(input) {
           const row = await loadRequest(input.requestId);
           if (row.status !== "draft" && row.status !== "error") throw new HttpError("Only a draft can be discarded.", 409);
-          const ids = [row.doc_copy_file_id, row.pdf_file_id].filter((id): id is string => Boolean(id));
-          if (ids.length) {
-            const st = await storage();
-            for (const id of ids) await st.trash(id);
-          }
-          const { error } = await client.from("signature_requests").delete().eq("id", row.id).in("status", ["draft", "error"]);
+          const st = await storage();
+          // Delete first, conditionally: a draft being sent meanwhile keeps its files.
+          const { data, error } = await client.from("signature_requests").delete().eq("id", row.id).in("status", ["draft", "error"]).select();
           check(error, "Could not delete the draft.");
+          if (!data?.length) throw new HttpError("Only a draft can be discarded.", 409);
+          for (const id of [row.doc_copy_file_id, row.pdf_file_id]) if (id) await st.trash(id);
           return { status: 200, body: { deleted: true } };
         },
       };

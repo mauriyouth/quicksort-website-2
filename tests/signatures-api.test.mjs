@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createSignaturesHandler } from "../apps/admin/api/signatures.ts";
-import { encryptSignatureCredentials } from "../apps/admin/server/signatures/settings.ts";
+import { encryptSignatureCredentials, loadSignatureSettings } from "../apps/admin/server/signatures/settings.ts";
+import { completeRequest } from "../apps/admin/server/signatures/complete.ts";
 import { DocAccessError } from "../apps/admin/server/signatures/google-docs.ts";
 import { YoutrustError } from "../apps/admin/server/signatures/youtrust.ts";
 
@@ -46,6 +47,17 @@ function memoryClient(tables, ops, { failures = {} } = {}) {
         eq: cmp((a, b) => a === b), neq: cmp((a, b) => a !== b), in: cmp((a, b) => b.includes(a)),
         gte: cmp((a, b) => a != null && a >= b), lte: cmp((a, b) => a != null && a <= b),
         is: cmp((a, b) => (a ?? null) === b),
+        // PostgREST logic tree, e.g. `col.is.null,col.lt."2026-…"`.
+        or(expr) {
+          const parts = expr.split(",").map((part) => {
+            const [c, op, ...rest] = part.split(".");
+            const raw = rest.join(".").replace(/^"|"$/g, "");
+            const v = raw === "null" ? null : raw;
+            return (r) => op === "is" ? (r[c] ?? null) === v : op === "lt" ? r[c] != null && r[c] < v : op === "eq" ? r[c] === v : false;
+          });
+          filters.push((r) => parts.some((f) => f(r)));
+          return q;
+        },
         order(c, o = {}) { orderBy = { c, asc: o.ascending !== false }; return q; },
         limit() { return q; },
         insert(v) { mode = "insert"; payload = v; return q; },
@@ -66,7 +78,7 @@ function memoryClient(tables, ops, { failures = {} } = {}) {
         const rows = (tables[table] ??= []);
         const match = (r) => filters.every((f) => f(r));
         if (mode !== "select") ops.push({ op: mode, table, value: payload, options });
-        const failure = failures[`${table}.${mode}`];
+        const failure = typeof failures === "function" ? failures(table, mode, payload) : failures[`${table}.${mode}`];
         if (failure) return { data: null, error: failure };
         if (mode === "select") {
           const list = rows.filter(match).map(copy);
@@ -96,15 +108,16 @@ function memoryClient(tables, ops, { failures = {} } = {}) {
           }
           return { data: null, error: null };
         }
+        const gone = rows.filter(match);
         tables[table] = rows.filter((r) => !match(r));
-        return { data: null, error: null };
+        return returning ? shape(gone.map(copy)) : { data: null, error: null };
       }
       return q;
     },
   };
 }
 
-function fixture({ admin = true, youtrust: overrides = {}, readDocText } = {}) {
+function fixture({ admin = true, youtrust: overrides = {}, readDocText, failures } = {}) {
   const tables = {
     user_roles: [{ user_id: "user-1", role: admin ? "admin" : "hr" }],
     hr_people: [{ id: PERSON, full_name: "Ada Lovelace", email: "ada@example.test" }],
@@ -130,7 +143,7 @@ function fixture({ admin = true, youtrust: overrides = {}, readDocText } = {}) {
   const ops = [];
   const calls = [];
   const log = (name, fn) => async (...args) => { calls.push({ name, args }); return fn(...args); };
-  const client = memoryClient(tables, ops);
+  const client = memoryClient(tables, ops, { failures });
   const youtrust = {
     createRequest: log("createRequest", overrides.createRequest ?? (async () => ({ requestId: "yt-1", documentId: "ytd-1" }))),
     getStatus: log("getStatus", overrides.getStatus ?? (async () => ({ status: "ongoing", signers: [] }))),
@@ -163,7 +176,7 @@ function fixture({ admin = true, youtrust: overrides = {}, readDocText } = {}) {
     now: () => new Date("2026-11-09T09:00:00Z"),
   });
   const count = (name) => calls.filter((c) => c.name === name).length;
-  return { tables, ops, calls, count, async post(body) {
+  return { tables, ops, calls, count, client, youtrust, storage, async post(body) {
     const response = { code: 0, body: null, setHeader() {}, status(code) { this.code = code; return this; }, json(b) { this.body = b; return this; } };
     await handler({ method: "POST", body, headers: { authorization: "Bearer t", origin: "https://admin.quicksort.test" } }, response);
     return response;
@@ -266,6 +279,8 @@ test("preview refuses an empty value before filling the template", async () => {
   assert.equal(r.code, 400);
   assert.match(r.body.error, /Fill in: clause_speciale/);
   assert.equal(f.count("fillTemplate"), 0);
+  assert.equal(f.count("uploadFile"), 0);
+  assert.equal(f.tables.document_folders.length, 0, "no folder is created before the refusal");
   assert.equal(f.tables.signature_requests.length, 0);
 });
 
@@ -329,6 +344,7 @@ test("send twice: Youtrust is called once, the second send is 409", async () => 
     { name: "Mohamed Nah", email: "mohamed@quicksort.test", order: 1 },
   ]);
   const row = f.tables.signature_requests[0];
+  assert.deepEqual(f.calls.filter((c) => c.name === "download").map((c) => c.args[0]), [request.pdf_file_id]);
   assert.equal(row.status, "sent");
   assert.equal(row.youtrust_request_id, "yt-1");
   assert.equal(row.youtrust_document_id, "ytd-1");
@@ -399,4 +415,136 @@ test("list-requests returns the person's requests, newest first", async () => {
   const r = await f.post({ action: "list-requests", personId: PERSON });
   assert.equal(r.code, 200);
   assert.deepEqual(r.body.requests.map((x) => x.id), [b.id, a.id]);
+});
+
+test("save-settings replacing one secret keeps the other", async () => {
+  const f = fixture();
+  const r = await f.post({ action: "save-settings", staging: true, signatoryName: "Mohamed Nah", signatoryEmail: "mohamed@quicksort.test", apiKey: "new-api-key" });
+  assert.equal(r.code, 200);
+  const stored = await loadSignatureSettings(f.client);
+  assert.equal(stored.apiKey, "new-api-key");
+  assert.equal(stored.webhookSecret, WEBHOOK_SECRET);
+});
+
+test("send can be retried from error", async () => {
+  let fail = true;
+  const f = fixture({ youtrust: { createRequest: async () => {
+    if (fail) throw new YoutrustError("Youtrust down", 503);
+    return { requestId: "yt-2", documentId: "ytd-2" };
+  } } });
+  const request = await draft(f);
+  assert.equal((await f.post({ action: "send", requestId: request.id })).code, 502);
+  fail = false;
+  const retry = await f.post({ action: "send", requestId: request.id });
+  assert.equal(retry.code, 200, JSON.stringify(retry.body));
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.status, "sent");
+  assert.equal(row.error, "");
+  assert.equal(row.youtrust_request_id, "yt-2");
+  assert.equal(f.count("createRequest"), 2);
+});
+
+test("send that cannot store the Youtrust ids → error naming them, logged", async () => {
+  const f = fixture({ failures: (table, mode, payload) =>
+    table === "signature_requests" && mode === "update" && payload?.status === "sent" ? { message: "db down", code: "08006" } : null });
+  const request = await draft(f);
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => logged.push(args.join(" "));
+  try {
+    const r = await f.post({ action: "send", requestId: request.id });
+    assert.equal(r.code, 502);
+    assert.match(r.body.error, /yt-1.*ytd-1/);
+  } finally {
+    console.error = original;
+  }
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.status, "error");
+  assert.match(row.error, /Youtrust request yt-1, document ytd-1/);
+  assert.ok(logged.some((line) => line.includes("yt-1") && line.includes("ytd-1")));
+});
+
+test("cancel on a stale sending row marks it interrupted; a recent one is 409", async () => {
+  const f = fixture();
+  const request = await draft(f);
+  const row = f.tables.signature_requests[0];
+  Object.assign(row, { status: "sending", updated_at: "2026-11-09T08:59:00Z" });
+  const recent = await f.post({ action: "cancel", requestId: request.id });
+  assert.equal(recent.code, 409);
+  assert.equal(row.status, "sending");
+  row.updated_at = "2026-11-09T08:57:00Z";
+  const stale = await f.post({ action: "cancel", requestId: request.id });
+  assert.equal(stale.code, 200, JSON.stringify(stale.body));
+  assert.equal(row.status, "error");
+  assert.equal(row.error, "The send was interrupted. Check Youtrust before sending again.");
+  assert.equal(f.count("cancel"), 0);
+});
+
+test("cancelling a draft is local", async () => {
+  const f = fixture();
+  const request = await draft(f);
+  const r = await f.post({ action: "cancel", requestId: request.id });
+  assert.equal(r.code, 200);
+  assert.equal(f.tables.signature_requests[0].status, "cancelled");
+  assert.equal(f.count("cancel"), 0);
+});
+
+test("discard-draft refuses a sent request and keeps its files", async () => {
+  const f = fixture();
+  const request = await draft(f);
+  await f.post({ action: "send", requestId: request.id });
+  const r = await f.post({ action: "discard-draft", requestId: request.id });
+  assert.equal(r.code, 409);
+  assert.equal(f.count("trash"), 0);
+  assert.equal(f.tables.signature_requests.length, 1);
+});
+
+async function sentRequest(f) {
+  const request = await draft(f);
+  await f.post({ action: "send", requestId: request.id });
+  return request;
+}
+
+test("two concurrent completions file the signed document once", async () => {
+  const f = fixture();
+  const request = await sentRequest(f);
+  const now = new Date("2026-11-09T09:00:00Z");
+  await Promise.all([
+    completeRequest(f.client, f.youtrust, f.storage, { id: request.id }, now),
+    completeRequest(f.client, f.youtrust, f.storage, { id: request.id }, now),
+  ]);
+  assert.equal(f.count("downloadSigned"), 1);
+  assert.equal(f.tables.documents.filter((d) => d.type_code === "EMPLOYMENT_CONTRACT").length, 1);
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.status, "completed");
+  assert.equal(row.filing_claimed_at, now.toISOString());
+});
+
+test("a failed filing releases the claim; the retry files only what is missing", async () => {
+  let failAudit = true;
+  const f = fixture({ youtrust: { downloadAuditTrail: async () => { if (failAudit) throw new Error("audit not ready"); return PDF; } } });
+  const request = await sentRequest(f);
+  const now = new Date("2026-11-09T09:00:00Z");
+  await assert.rejects(completeRequest(f.client, f.youtrust, f.storage, { id: request.id }, now), /audit not ready/);
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.filing_claimed_at, null);
+  assert.ok(row.signed_document_id);
+  assert.equal(row.status, "sent");
+  failAudit = false;
+  await completeRequest(f.client, f.youtrust, f.storage, { id: request.id }, now);
+  assert.equal(f.count("downloadSigned"), 1);
+  assert.equal(f.tables.documents.length, 2);
+  assert.equal(row.status, "completed");
+});
+
+test("a live claim held elsewhere makes completion a no-op; an abandoned one is taken over", async () => {
+  const f = fixture();
+  const request = await sentRequest(f);
+  const row = f.tables.signature_requests[0];
+  row.filing_claimed_at = "2026-11-09T08:58:00.000Z";
+  await completeRequest(f.client, f.youtrust, f.storage, { id: request.id }, new Date("2026-11-09T09:00:00Z"));
+  assert.equal(f.count("downloadSigned"), 0);
+  await completeRequest(f.client, f.youtrust, f.storage, { id: request.id }, new Date("2026-11-09T09:04:00Z"));
+  assert.equal(f.count("downloadSigned"), 1);
+  assert.equal(row.status, "completed");
 });

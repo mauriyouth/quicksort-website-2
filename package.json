@@ -1,17 +1,14 @@
 {
-  "name": "quicksort",
+  "name": "quicksort-os",
   "private": true,
   "packageManager": "pnpm@11.19.0",
   "scripts": {
-    "dev:web": "pnpm --filter @quicksort/web dev",
     "dev:admin": "pnpm --filter @quicksort/admin dev",
     "dev": "pnpm --filter @quicksort/admin dev",
     "dev:candidate": "pnpm --filter @quicksort/candidate dev",
-    "dev:business": "pnpm --filter @quicksort/intelligence dev",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
-    "test:seo": "pnpm --filter @quicksort/web test:seo",
     "test:browser": "playwright test",
     "test:hr-db": "node scripts/verify-hr-database.mjs"
   },

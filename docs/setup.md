@@ -60,22 +60,21 @@ The live redirect/SMTP settings must be configured for the final portal domains;
 
 ## Vercel
 
-The two new Vercel projects have been created in the existing website team (`team_msiIWIErbrbRMcWEWv69WUdJ`). Their initial deployments use this checkout:
+The admin Vercel project lives in team `team_msiIWIErbrbRMcWEWv69WUdJ`:
 
-- Admin: https://quicksort-admin.vercel.app
+- Quicksort OS (admin): https://os.quicksort.fr (also https://quicksort-admin.vercel.app)
 
 The former HR portal app (`apps/hr`, package `@quicksort/hr`) was merged into the admin app: one deployment serves both workspaces. Signed-in users with the `admin` role get the back-office (HR, Sales, Ops sections); every other signed-in user gets the candidate self-service portal (application status, documents, contracts, tool access, team photos). The app root picks the shell from the session role — data access stays enforced by Supabase RLS. The standalone `quicksort-hr` Vercel project can be retired (or kept as a duplicate of the same root) once the domain is repointed.
 
 The Vercel account could not connect the GitHub repository to these new projects because its GitHub integration is missing. A repository owner must connect `mauriyouth/quicksort-website-2` in each project's Git settings to enable automatic deployments. The source is already pushed to `feat/workforce-monorepo` in that repository.
 
-The existing website Vercel project is configured to build from `apps/web`, with the public Supabase environment variables set. Merging the monorepo branch into `main` triggers the website production rollout. Enable source files outside each Root Directory so workspace dependencies can be bundled. Use automatic pnpm workspace installation from the committed lockfile.
+The public marketing website is no longer part of this repository. Enable source files outside each Root Directory so workspace dependencies can be bundled. Use automatic pnpm workspace installation from the committed lockfile.
 
 | Project | Root Directory | Build command | Output |
 | --- | --- | --- | --- |
-| Existing `quicksort-website-2` | `apps/web` | `pnpm build` | `dist` |
 | `quicksort-admin` (staff + candidate portal) | `apps/admin` | `pnpm build` | `dist` |
 
-All three Vercel projects have `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` configured for production, preview and development. Use the public publishable key, never a secret/service-role key. Environment changes require a new Vite build.
+Each Vercel project has `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` configured for production, preview and development. Use the public publishable key, never a secret/service-role key. Environment changes require a new Vite build.
 
 The admin project also needs these server-only variables for the Qonto bank sync (never prefix them with `VITE_`):
 
@@ -85,17 +84,14 @@ The admin project also needs these server-only variables for the Qonto bank sync
 
 Deploy order: apply `supabase/migrations/20261207090000_bank_transactions.sql` (`pnpm exec supabase db push --linked`) before deploying the admin app that uses it.
 
-Coordinate changing the existing website Root Directory with merging the monorepo commit. The old website revision cannot build from `apps/web`, and the monorepo revision should not build as the old root app. The local `.vercel` website link lives in `apps/web/.vercel`.
+The portals use SPA rewrites and no-index headers.
 
-The portals use SPA rewrites and no-index headers. The website has narrow rewrites for `/career/:slug` and `/fr/career/:slug`, retaining 404 responses for unrelated unknown routes. Job detail pages return an app shell and mark unavailable jobs noindex after loading; they are not server-rendered job pages.
-
-Suggested domains: existing website domain, `admin.quicksort.fr`, `hr.quicksort.fr`. Domain DNS changes and external tool provisioning are not part of the app code.
+Domain: `os.quicksort.fr` (Quicksort OS). Add it to the Clerk instance's allowed origins, and apply `supabase/migrations/20261220090000_kanban_admin_os_origin.sql` so Kanban admin rights keep working from the new origin. Domain DNS changes and external tool provisioning are not part of the app code.
 
 ## Verification
 
 - `pnpm build`: builds both apps; the admin build includes strict TypeScript checking.
 - `pnpm test`: URL and upload boundary checks.
-- `pnpm test:seo`: static website and EN/FR regression checks.
 - `pnpm test:browser`: mocked browser workflows and responsive layouts.
 - `supabase/tests/access.sql`: transaction-scoped authorization fixtures. Run using SQL Editor/a write-capable connection; the connector's read-only SQL method cannot execute these fixtures. All inserted fixtures are rolled back.
 

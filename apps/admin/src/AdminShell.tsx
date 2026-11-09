@@ -127,8 +127,8 @@ function AdminSidebar({
     <Sidebar collapsible="icon">
       <SidebarHeader className="gap-3 px-3 pt-4">
         <a
-          href="https://www.quicksort.fr"
-          aria-label="Quicksort home"
+          href="/"
+          aria-label="Quicksort OS home"
           className="flex h-8 items-center px-1 text-sidebar-foreground"
         >
           <QuicksortLogo className="group-data-[collapsible=icon]:hidden" />

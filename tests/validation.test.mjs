@@ -4,7 +4,7 @@ import {
   isLinkedInUrl,
   slugify,
   validateFile,
-} from "../packages/db/src/validation.ts";
+} from "../packages/hr-db/src/validation.ts";
 test("LinkedIn application links reject deceptive hosts and unsafe schemes", () => {
   for (const url of [
     "https://www.linkedin.com/jobs/view/123",

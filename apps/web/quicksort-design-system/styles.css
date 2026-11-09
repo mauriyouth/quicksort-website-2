@@ -1,7 +1,0 @@
-/* ─────────────────────────────────────────────────────────────────
-   QUICKSORT DESIGN SYSTEM · ROOT STYLESHEET
-   Single entry point for consumers. Pulls in the full token + type
-   layer. Component-local helpers (preview/_card.css, slides/slide.css)
-   are scoped to their own surfaces and intentionally not imported here.
-   ───────────────────────────────────────────────────────────────── */
-@import url('./colors_and_type.css');

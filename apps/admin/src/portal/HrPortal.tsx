@@ -149,13 +149,16 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
   const [folder, setFolder] = useState<MyRegistryDocument[]>([]);
   const [journeyError, setJourneyError] = useState("");
   const onboardingOpen = employments.some(e => e.status !== "ended");
-  // Employment unlocks the journey; agreements remain available before hiring.
+  // Employment unlocks the journey. Employees sign through Youtrust, so the
+  // application and in-app contract pages only exist before hiring.
   const routes = useMemo(
-    () => (onboardingOpen ? nav : [nav[1], nav[0], ...nav.slice(2)]),
+    () => (onboardingOpen
+      ? nav.filter((n) => n.id !== "application" && n.id !== "contracts")
+      : [nav[1], nav[0], ...nav.slice(2)]),
     [onboardingOpen],
   );
   const visibleNav = onboardingOpen
-    ? nav
+    ? routes
     : routes.filter((n) => !GATED_TABS.includes(n.id) && (n.id !== "cra" || employments.length > 0));
   const [tab, setTab] = usePortalRoute(routes);
   const
@@ -351,9 +354,6 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
       .filter((d) => !filedPaths.has(d.storage_path))
       .map((d) => ({ key: d.id, filed: undefined as MyRegistryDocument | undefined, upload: d as typeof d | undefined, createdAt: d.created_at })),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const unsigned = contracts.filter(
-    (c) => !signatures.some((s) => s.contract_id === c.id),
-  );
   return (
     <AdminShell
       portal="HR"
@@ -377,7 +377,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
         </PageHeading>
         <CraScreen audience="employee" draftOwner={email} basePath="/cra" />
       </>}
-      {tab === "application" && <MyApplicationTab email={email} busy={busy} action={action} applications={applications} events={applicationEvents} offers={offers} employments={employments} journeyError={journeyError} loading={loading} />}
+      {tab === "application" && !onboardingOpen && <MyApplicationTab email={email} busy={busy} action={action} applications={applications} events={applicationEvents} offers={offers} employments={employments} journeyError={journeyError} loading={loading} />}
       {tab === "overview" && onboardingOpen && (
         <>
           <Card>
@@ -394,7 +394,6 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           </Card>
           <StatGroup>
             <PortalStat label="Documents" value={folderRows.length} detail="Securely shared with your team" icon={Upload} />
-            <PortalStat label="To sign" value={unsigned.length} detail="Contracts awaiting your review" icon={FileText} />
             <PortalStat label="Tool requests" value={requests.filter((r) => r.status === "pending").length} detail="Awaiting a team response" icon={KeyRound} />
           </StatGroup>
           <div className="@container grid items-start gap-6 lg:grid-cols-2">
@@ -435,41 +434,6 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
                   {!tasks.some(t => t.employee_id === employment.id) && <p className={QUIET}>Your team is preparing your onboarding plan.</p>}
                 </div>
               ))}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <PortalCardTitle>Waiting for your signature</PortalCardTitle>
-              </CardHeader>
-              <CardContent>
-              {unsigned.length ? (
-                <ul className={LIST}>
-                {unsigned.map((c) => (
-                  <li className={ROW} key={c.id}>
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <h3 className="m-0 text-sm font-medium">{c.title}</h3>
-                      <p className="m-0 text-xs text-muted-foreground">
-                        Shared {formatDate(c.created_at)}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        navigate("contracts");
-                        void openReview(c);
-                      }}
-                    >
-                      Review
-                    </Button>
-                  </li>
-                ))}
-                </ul>
-              ) : (
-                <EmptyState title="You're all caught up">
-                  New contracts will appear here when your team shares them.
-                </EmptyState>
-              )}
               </CardContent>
             </Card>
           </div>
@@ -534,7 +498,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           />
         </>
       )}
-      {tab === "contracts" && (
+      {tab === "contracts" && !onboardingOpen && (
         <>
           <PageHeading title="My contracts" />
           {review && (

@@ -19,6 +19,11 @@ test("verifyWebhook rejects tampering, wrong secret, missing, malformed header",
   assert.equal(verifyWebhook(body, sign(body).slice("sha256=".length), secret), false);
 });
 
+test("verifyWebhook rejects an empty secret even when the body was signed with it", () => {
+  const h = "sha256=" + createHmac("sha256", "").update(body).digest("hex");
+  assert.equal(verifyWebhook(body, h, ""), false);
+});
+
 test("statusFromEvent maps event names", () => {
   const m = (n) => statusFromEvent({ event_name: n, data: {} }, "a@b.c");
   assert.equal(m("signature_request.done"), "completed");

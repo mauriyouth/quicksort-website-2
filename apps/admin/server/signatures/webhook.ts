@@ -13,7 +13,7 @@ export type RequestStatus =
   "draft" | "sending" | "sent" | "signed_by_person" | "completed" | "declined" | "expired" | "cancelled" | "error";
 
 export function verifyWebhook(rawBody: string, header: string | undefined, secret: string): boolean {
-  if (!header) return false;
+  if (!header || !secret) return false;
   const expected = Buffer.from("sha256=" + createHmac("sha256", secret).update(rawBody, "utf8").digest("hex"));
   const given = Buffer.from(header);
   if (given.length !== expected.length) return false;
@@ -39,6 +39,7 @@ export function statusFromEvent(event: { event_name: string; data: unknown }, pe
 }
 
 // Used by Refresh. Statuses that do not map (draft, approval, paused, ...) return `current`.
+// Callers must pass the result through canMoveTo (the "ongoing" branch ignores `current`).
 export function statusFromYoutrust(
   s: YoutrustStatus,
   signers: { email: string; status: string }[],

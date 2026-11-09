@@ -4,22 +4,26 @@ import { Button } from "@quicksort-sas/ui";
 import { SettingsCard, SettingsRow } from "./settings-ui";
 import { AiSettings } from "./AiSettings";
 import { GoogleDriveSettings } from "./GoogleDriveSettings";
+import { SignatureSettings } from "./signatures/SignatureSettings";
 
-export type SettingsSection = "account" | "ai" | "drive";
+export type SettingsSection = "account" | "ai" | "drive" | "signatures";
 
 /**
  * Settings workspace — one SettingsCard per concern (settings-ui.tsx, on
  * @quicksort-sas/ui). The top-bar tabs (Account / AI configuration /
- * Google Drive contracts) are rendered by the shared SectionHeader in
+ * Google Drive contracts / Signatures) are rendered by the shared SectionHeader in
  * App.tsx; this component renders only the active section's cards.
  */
 export function SettingsPage({
   section,
   isOwner,
+  isAdmin = false,
   email,
 }: {
   section: SettingsSection;
   isOwner: boolean;
+  /** Signatures (Youtrust) is admin-only; the API answers 403 to anyone else. */
+  isAdmin?: boolean;
   email: string;
 }) {
   return (
@@ -27,6 +31,7 @@ export function SettingsPage({
       {section === "account" && <AccountCard email={email} />}
       {section === "ai" && <AiSettings isOwner={isOwner} />}
       {section === "drive" && <GoogleDriveSettings isOwner={isOwner} />}
+      {section === "signatures" && isAdmin && <SignatureSettings />}
     </div>
   );
 }

@@ -143,6 +143,7 @@ const SETTINGS_TABS: SectionTab[] = [
   { id: "account", href: "/settings", label: "Account" },
   { id: "ai", href: "/settings/ai", label: "AI configuration" },
   { id: "drive", href: "/settings/drive", label: "Google Drive contracts" },
+  { id: "signatures", href: "/settings/signatures", label: "Signatures" },
 ];
 // Pre-merge HR screens, kept as redirects so old links and bookmarks work.
 const LEGACY_RECRUITING_PATHS = [
@@ -423,7 +424,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     ? "ai"
     : location.pathname.startsWith("/settings/drive")
       ? "drive"
-      : "account";
+      : location.pathname.startsWith("/settings/signatures")
+        ? "signatures"
+        : "account";
   // Spotlight deep-links: open a page pointed at an exact record
   // (?candidate=, ?account=, or a person record under /hr/people/<id>/<tab>).
   // Pages follow the router location, so navigating suffices whether or not
@@ -531,7 +534,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
       : isOps
         ? OPS_TABS
         : tab === "account"
-          ? SETTINGS_TABS
+          ? role === "admin" ? SETTINGS_TABS : SETTINGS_TABS.filter((t) => t.id !== "signatures")
           : [];
   return (
     <AdminShell
@@ -1142,6 +1145,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/settings" element={<SettingsPage section="account" isOwner={isOwner} email={email} />} />
         <Route path="/settings/ai" element={<SettingsPage section="ai" isOwner={isOwner} email={email} />} />
         <Route path="/settings/drive" element={<SettingsPage section="drive" isOwner={isOwner} email={email} />} />
+        {role === "admin" && <Route path="/settings/signatures" element={<SettingsPage section="signatures" isOwner={isOwner} isAdmin email={email} />} />}
       </Routes>
       )}
       {loading && (

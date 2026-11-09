@@ -47,6 +47,7 @@ import { CraScreen } from '../cra/CraScreen';
 import { countryName, countryOptions, needsResidencePermit } from './countries';
 import { DocumentsPanel } from '../documents/DocumentsPanel';
 import { MatriculeEdit, PersonPayslips } from '../payslips/PersonPayslips';
+import { PersonSignatures } from '../signatures/PersonSignatures';
 // PersonPayslips does not import its own stylesheet; it is loaded here.
 import { Action, Empty, Field, Form, SearchField, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
 export const stages: ApplicationStage[] = ['application', 'screening', 'hr_interview', 'technical_interview', 'client_presentation', 'decision', 'offer', 'contract'];
@@ -1234,6 +1235,9 @@ export function EmploymentDetail({
         excludeTypeCodes={[...(freelance ? [] : COMPANY_DOC_TYPES), 'PAYSLIP']}
         hideFiledTypeCodes={['PAYSLIP']}
       />
+    </EmpSection>}
+    {workspace.capabilities.admin && <EmpSection title="Contracts & signatures" detail="Contracts sent for e-signature through Youtrust. Signed copies are filed in Documents.">
+      <PersonSignatures personId={employee.person_id} person={{ name: person.full_name, email: person.email }} />
     </EmpSection>}
     {workspace.capabilities.recruit && !freelance && <EmpSection title="Payslips" detail="Silae payslips filed for this person, newest first.">
       <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">

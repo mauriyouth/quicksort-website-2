@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createSignaturesHandler } from "../apps/admin/api/signatures.ts";
 import { encryptSignatureCredentials, loadSignatureSettings } from "../apps/admin/server/signatures/settings.ts";
-import { completeRequest } from "../apps/admin/server/signatures/complete.ts";
+import { completeRequest, SUPERSEDES_CHANGED_NOTE } from "../apps/admin/server/signatures/complete.ts";
 import { DocAccessError } from "../apps/admin/server/signatures/google-docs.ts";
 import { YoutrustError } from "../apps/admin/server/signatures/youtrust.ts";
 
@@ -32,6 +32,8 @@ function memoryClient(tables, ops, { failures = {} } = {}) {
       if (name === "sync_clerk_profile") return { data: "user-1", error: null };
       if (name === "register_signed_document") {
         ops.push({ op: "rpc", table: name, value: args });
+        const failure = typeof failures === "function" ? failures(name, "rpc", args) : failures[`${name}.rpc`];
+        if (failure) return { data: null, error: failure };
         const row = { id: nextId(), status: "active", ...args.document };
         (tables.documents ??= []).push(row);
         return { data: copy(row), error: null };
@@ -547,4 +549,92 @@ test("a live claim held elsewhere makes completion a no-op; an abandoned one is 
   await completeRequest(f.client, f.youtrust, f.storage, { id: request.id }, new Date("2026-11-09T09:04:00Z"));
   assert.equal(f.count("downloadSigned"), 1);
   assert.equal(row.status, "completed");
+});
+
+test("a document to replace that changed before completion: filed as new, with a note", async () => {
+  const f = fixture();
+  const OLD = "77777777-7777-4777-8777-777777777777";
+  f.tables.documents.push({ id: OLD, person_id: PERSON, type_code: "EMPLOYMENT_CONTRACT", status: "active" });
+  const r = await f.post({ ...templatePreview(), supersedes: OLD });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  await f.post({ action: "send", requestId: r.body.request.id });
+  f.tables.documents[0].status = "superseded";
+
+  await completeRequest(f.client, f.youtrust, f.storage, { id: r.body.request.id }, new Date("2026-11-09T09:00:00Z"));
+  const row = f.tables.signature_requests[0];
+  assert.equal(row.status, "completed");
+  assert.ok(row.signed_document_id);
+  const filed = f.ops.filter((o) => o.op === "rpc" && o.value.document.type_code === "EMPLOYMENT_CONTRACT");
+  assert.equal(filed.length, 1);
+  assert.equal(filed[0].value.supersedes, null);
+  assert.equal(row.error, SUPERSEDES_CHANGED_NOTE);
+});
+
+test("a document to replace that is still active is replaced, and no note is left", async () => {
+  const f = fixture();
+  const OLD = "77777777-7777-4777-8777-777777777777";
+  f.tables.documents.push({ id: OLD, person_id: PERSON, type_code: "EMPLOYMENT_CONTRACT", status: "active" });
+  const r = await f.post({ ...templatePreview(), supersedes: OLD });
+  await f.post({ action: "send", requestId: r.body.request.id });
+  await completeRequest(f.client, f.youtrust, f.storage, { id: r.body.request.id }, new Date("2026-11-09T09:00:00Z"));
+  const filed = f.ops.find((o) => o.op === "rpc" && o.value.document.type_code === "EMPLOYMENT_CONTRACT");
+  assert.equal(filed.value.supersedes, OLD);
+  assert.equal(f.tables.signature_requests[0].error, "");
+});
+
+test("the replacement note survives a failed audit trail and the retry", async () => {
+  let failAudit = true;
+  const f = fixture({ youtrust: { downloadAuditTrail: async () => { if (failAudit) throw new Error("audit not ready"); return PDF; } } });
+  const OLD = "77777777-7777-4777-8777-777777777777";
+  f.tables.documents.push({ id: OLD, person_id: PERSON, type_code: "EMPLOYMENT_CONTRACT", status: "active" });
+  const r = await f.post({ ...templatePreview(), supersedes: OLD });
+  await f.post({ action: "send", requestId: r.body.request.id });
+  f.tables.documents[0].status = "archived";
+  const now = new Date("2026-11-09T09:00:00Z");
+  await assert.rejects(completeRequest(f.client, f.youtrust, f.storage, { id: r.body.request.id }, now), /audit not ready/);
+  const row = f.tables.signature_requests[0];
+  assert.match(row.error, /The document it was meant to replace changed/);
+  assert.match(row.error, /audit not ready/);
+  failAudit = false;
+  await completeRequest(f.client, f.youtrust, f.storage, { id: r.body.request.id }, now);
+  assert.equal(row.status, "completed");
+  assert.equal(row.error, SUPERSEDES_CHANGED_NOTE);
+});
+
+test("a failing completion writes its reason to error; a later success clears it", async () => {
+  let fail = true;
+  const f = fixture({ youtrust: { downloadSigned: async () => { if (fail) throw new Error("Youtrust is down"); return PDF; } } });
+  const request = await sentRequest(f);
+  const now = new Date("2026-11-09T09:00:00Z");
+  await assert.rejects(completeRequest(f.client, f.youtrust, f.storage, { id: request.id }, now), /Youtrust is down/);
+  const row = f.tables.signature_requests[0];
+  assert.match(row.error, /Filing the signed documents failed: Youtrust is down/);
+  assert.equal(row.status, "sent");
+  fail = false;
+  await completeRequest(f.client, f.youtrust, f.storage, { id: request.id }, now);
+  assert.equal(row.status, "completed");
+  assert.equal(row.error, "");
+});
+
+test("a database refusal (P0001) while filing surfaces as 400 with its message", async () => {
+  const f = fixture({
+    youtrust: { getStatus: async () => ({ status: "done", signers: [] }) },
+    failures: (table, mode) => table === "register_signed_document" && mode === "rpc"
+      ? { message: "This person is archived.", code: "P0001" } : null,
+  });
+  const request = await sentRequest(f);
+  const r = await f.post({ action: "refresh", requestId: request.id });
+  assert.equal(r.code, 400);
+  assert.deepEqual(r.body, { error: "This person is archived." });
+  assert.match(f.tables.signature_requests[0].error, /This person is archived/);
+});
+
+test("discard-draft succeeds even when trashing its files fails", async () => {
+  const f = fixture();
+  const request = await draft(f);
+  f.storage.trash = async () => { throw new Error("Drive is down"); };
+  const r = await f.post({ action: "discard-draft", requestId: request.id });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body, { deleted: true });
+  assert.equal(f.tables.signature_requests.length, 0);
 });

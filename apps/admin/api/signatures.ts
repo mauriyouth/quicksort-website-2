@@ -449,7 +449,8 @@ export function createSignaturesHandler(deps: Deps = {
           const { data, error } = await client.from("signature_requests").delete().eq("id", row.id).in("status", ["draft", "error"]).select();
           check(error, "Could not delete the draft.");
           if (!data?.length) throw new HttpError("Only a draft can be discarded.", 409);
-          for (const id of [row.doc_copy_file_id, row.pdf_file_id]) if (id) await st.trash(id);
+          // The row is gone: a file left behind is untidy, not a failure.
+          for (const id of [row.doc_copy_file_id, row.pdf_file_id]) if (id) await st.trash(id).catch(() => undefined);
           return { status: 200, body: { deleted: true } };
         },
       };
@@ -465,6 +466,8 @@ export function createSignaturesHandler(deps: Deps = {
       // Errors with a message but no database code are user-safe (Drive sharing,
       // unknown document type); database errors stay generic.
       const err = error as { message?: string; code?: string; status?: number } | null;
+      // Refusals raised by the database (e.g. register_signed_document) carry a user-safe message.
+      if (err?.code === "P0001" && err.message) return res.status(400).json({ error: err.message });
       if (err?.message && !err.code) {
         const status = err.status === 400 || err.status === 404 || err.status === 409 ? err.status : 502;
         return res.status(status).json({ error: err.message });

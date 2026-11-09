@@ -12,7 +12,7 @@ export type PersonFacts = {
   matricule: string | null;
 };
 
-const FIELD = /\{\{\s*([^{}\s]+)\s*\}\}/g;
+const FIELD = /\{\{\s*([a-z0-9_]+)\s*\}\}/g;
 
 /** Unique placeholder names in order of first appearance. */
 export function extractFields(text: string): string[] {
@@ -22,7 +22,7 @@ export function extractFields(text: string): string[] {
 }
 
 const euro = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
-const money = (value: number | null) => (value === null ? "" : euro.format(value));
+const money = (value: number | null) => (value === null || !Number.isFinite(value) ? "" : euro.format(value));
 const date = (iso: string | null) => {
   const match = iso ? /^(\d{4})-(\d{2})-(\d{2})/.exec(iso) : null;
   return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
@@ -52,7 +52,11 @@ export function missingFields(fields: string[], values: Record<string, string>):
   return fields.filter((name) => !(values[name] ?? "").trim());
 }
 
-const num = (value: unknown) => (value === null || value === undefined ? null : Number(value));
+const num = (value: unknown) => {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
 
 export async function loadPersonFacts(client: SupabaseClient, personId: string): Promise<PersonFacts> {
   const { data: person, error: personError } = await client

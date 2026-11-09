@@ -4,6 +4,7 @@ import { extractFields } from "./fields.ts";
 
 type ServiceAccount = Pick<DriveSettings, "client_email" | "private_key">;
 
+const PLACEHOLDER = /\{\{\s*([a-z0-9_]+)\s*\}\}/g;
 const DOCS_BASE = "https://docs.googleapis.com/v1";
 const DRIVE_BASE = "https://www.googleapis.com/drive/v3";
 
@@ -50,16 +51,25 @@ function collect(content: Structural[] | undefined, out: string[]) {
   }
 }
 
+type Segment = { content?: Structural[] };
+type Doc = { body?: Segment; headers?: Record<string, Segment>; footers?: Record<string, Segment>; footnotes?: Record<string, Segment> };
+
 export async function readDocText(sa: ServiceAccount, docId: string, deps: GoogleDocsDeps = {}): Promise<string> {
-  const doc = await docsApi<{ body?: { content?: Structural[] } }>(sa, `documents/${docId}`, {}, deps);
+  const doc = await docsApi<Doc>(sa, `documents/${docId}`, {}, deps);
   const parts: string[] = [];
   collect(doc.body?.content, parts);
+  for (const group of [doc.headers, doc.footers, doc.footnotes])
+    for (const segment of Object.values(group || {})) {
+      parts.push("\n");
+      collect(segment.content, parts);
+    }
   return parts.join("");
 }
 
 export function assertNoPlaceholders(text: string): void {
   const left = extractFields(text);
   if (left.length) throw new Error(`These fields were not filled: ${left.join(", ")}`);
+  if (text.includes("{{")) throw new Error("Some {{…}} placeholders were left in the document.");
 }
 
 export async function fillTemplate(
@@ -79,20 +89,32 @@ export async function fillTemplate(
     if (isAccess(statusOf(error))) throw new DocAccessError(sa.client_email);
     throw error;
   }
-  await docsApi(sa, `documents/${copy.id}:batchUpdate`, {
-    method: "POST",
-    body: {
-      requests: Object.entries(input.values).map(([key, value]) => ({
-        replaceAllText: { containsText: { text: `{{${key}}}`, matchCase: true }, replaceText: value },
-      })),
-    },
-  }, deps);
-  assertNoPlaceholders(await readDocText(sa, copy.id, deps));
-  const token = await (deps.token || driveToken)(sa);
-  const response = await (deps.fetch || fetch)(
-    `${DRIVE_BASE}/files/${copy.id}/export?mimeType=${encodeURIComponent("application/pdf")}&supportsAllDrives=true`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (!response.ok) throw new Error(`Google Drive could not export the document as PDF (status ${response.status}).`);
-  return { docCopyId: copy.id, pdf: new Uint8Array(await response.arrayBuffer()) };
+  try {
+    // Replace every spelling actually present ({{ nom }} as well as {{nom}}).
+    const present = await readDocText(sa, copy.id, deps);
+    const spellings = new Map<string, Set<string>>();
+    for (const match of present.matchAll(PLACEHOLDER)) {
+      if (!(match[1] in input.values)) continue;
+      spellings.set(match[1], (spellings.get(match[1]) || new Set([`{{${match[1]}}}`])).add(match[0]));
+    }
+    const requests = Object.entries(input.values).flatMap(([key, value]) =>
+      [...(spellings.get(key) || [`{{${key}}}`])].map((text) => ({
+        replaceAllText: { containsText: { text, matchCase: true }, replaceText: value },
+      })));
+    await docsApi(sa, `documents/${copy.id}:batchUpdate`, { method: "POST", body: { requests } }, deps);
+    assertNoPlaceholders(await readDocText(sa, copy.id, deps));
+    const token = await (deps.token || driveToken)(sa);
+    const response = await (deps.fetch || fetch)(
+      `${DRIVE_BASE}/files/${copy.id}/export?mimeType=${encodeURIComponent("application/pdf")}&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) throw new Error(`Google Drive could not export the document as PDF (status ${response.status}).`);
+    return { docCopyId: copy.id, pdf: new Uint8Array(await response.arrayBuffer()) };
+  } catch (error) {
+    // The copy holds personal data: do not leave it behind.
+    try {
+      await drive(sa, `/files/${copy.id}`, { method: "PATCH", query: { supportsAllDrives: "true" }, body: { trashed: true } });
+    } catch { /* keep the original error */ }
+    throw error;
+  }
 }

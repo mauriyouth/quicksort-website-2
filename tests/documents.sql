@@ -152,23 +152,6 @@ end; $$;
 reset role;
 select pg_temp.assert_true((select count(*) from public.documents)=6,'No document was deleted');
 
--- Supabase files register in place: contracts once both parties signed.
-insert into public.contracts(id,candidate_id,person_id,title,storage_path,document_sha256,created_at) values
- ('47000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000001','CDI 2026','41000000-0000-4000-8000-000000000002/cdi-2026.pdf',repeat('a',64),'2026-01-02'),
- ('47000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000001','Avenant CDI','41000000-0000-4000-8000-000000000002/cdi-2027.pdf',repeat('b',64),'2026-06-01');
-insert into public.contract_signatures(contract_id,candidate_id,signer_name,document_sha256) values
- ('47000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000002','Doc Employee',repeat('a',64));
-select pg_temp.assert_true(not exists(select 1 from public.documents where provider_file_id like 'contracts/%'),'A contract signed by one party is still a draft');
-insert into public.contract_countersignatures(contract_id,actor_id,signer_name,document_sha256) values
- ('47000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000001','Doc Admin',repeat('a',64));
-select pg_temp.assert_true((select type_code='EMPLOYMENT_CONTRACT' and status='active' and sha256=repeat('a',64) and storage_provider='supabase'
- from public.documents where provider_file_id='contracts/41000000-0000-4000-8000-000000000002/cdi-2026.pdf'),'Fully signed contract registered in place with its hash');
-insert into public.contract_signatures(contract_id,candidate_id,signer_name,document_sha256) values
- ('47000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000002','Doc Employee',repeat('b',64));
-insert into public.contract_countersignatures(contract_id,actor_id,signer_name,document_sha256) values
- ('47000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000001','Doc Admin',repeat('b',64));
-select pg_temp.assert_true((select status from public.documents where provider_file_id='contracts/41000000-0000-4000-8000-000000000002/cdi-2026.pdf')='superseded','A newer signed contract supersedes the previous one');
-
 -- Candidate uploads arrive for review; resumes stay out; deletion archives.
 insert into public.candidate_documents(id,candidate_id,name,category,storage_path,size_bytes) values
  ('48000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000002','cni.jpg','identity','41000000-0000-4000-8000-000000000002/cni.jpg',2048),

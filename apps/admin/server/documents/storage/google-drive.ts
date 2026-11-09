@@ -76,7 +76,7 @@ function serviceJwt(sa: ServiceAccount) {
   return `${header}.${payload}.${signature}`;
 }
 
-async function driveToken(sa: ServiceAccount) {
+export async function driveToken(sa: ServiceAccount) {
   const hit = tokenCache.get(sa.client_email);
   if (hit && hit.expiresAt > Date.now() + 60_000) return hit.token;
   const response = await fetch(TOKEN_URL, {
@@ -122,7 +122,7 @@ function driveError(status: number, message: string, sa: Pick<DriveSettings, "cl
 async function failure(response: globalThis.Response, sa: ServiceAccount) {
   let message = "";
   try { message = ((await response.json()) as { error?: { message?: string } })?.error?.message || ""; } catch { /* bare status */ }
-  return driveError(response.status, message, sa);
+  return Object.assign(driveError(response.status, message, sa), { status: response.status });
 }
 
 export async function driveApi<T>(sa: ServiceAccount, path: string, opts: { method?: string; query?: Record<string, string>; body?: unknown } = {}): Promise<T> {

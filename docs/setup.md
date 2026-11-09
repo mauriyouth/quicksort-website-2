@@ -86,7 +86,7 @@ Deploy order: apply `supabase/migrations/20261207090000_bank_transactions.sql` (
 
 The portals use SPA rewrites and no-index headers.
 
-Domain: `os.quicksort.fr` (Quicksort OS). Add it to the Clerk instance's allowed origins, and apply `supabase/migrations/20261220090000_kanban_admin_os_origin.sql` so Kanban admin rights keep working from the new origin. Domain DNS changes and external tool provisioning are not part of the app code.
+Domain: `os.quicksort.fr` (Quicksort OS). Add it to the Clerk instance's allowed origins. Domain DNS changes and external tool provisioning are not part of the app code.
 
 ## Verification
 

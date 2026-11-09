@@ -70,6 +70,7 @@ select pg_temp.assert_true((select count(*) from public.my_document_types where 
 select pg_temp.assert_true((select bool_and(relevant) from public.my_document_types where code in ('CNI','TITRE_SEJOUR','CARTE_VITALE','DIPLOMA','JUSTIF_DOMICILE','TRANSPORT_PASS')),'Contract documents and general ones are offered');
 select pg_temp.assert_true((select not bool_or(relevant) from public.my_document_types where code in ('KBIS','URSSAF_VIGILANCE','RC_PRO')),'Freelance company documents are not offered to a salaried employee');
 select pg_temp.assert_true((select not self_upload from public.my_document_types where code='EMPLOYMENT_CONTRACT') and (select self_upload from public.my_document_types where code='CARTE_VITALE'),'Contracts stay HR-filed; the employee files their own papers');
+select pg_temp.assert_true((select not self_upload from public.my_document_types where code='PROBATION_LETTER'),'The probation letter is HR-filed (signed through Youtrust), not self-uploaded');
 -- An upload made for a slot is registered under that type, still for HR to verify.
 insert into public.candidate_documents(candidate_id,name,category,type_code,storage_path,size_bytes) values
  ('61000000-0000-4000-8000-000000000002','vitale.pdf','other','CARTE_VITALE','61000000-0000-4000-8000-000000000002/vitale.pdf',10);

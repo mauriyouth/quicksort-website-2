@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   LayoutDashboard,
   Upload,
-  FileText,
   KeyRound,
   Settings,
   ArrowUpRight,
@@ -13,7 +12,6 @@ import {
 import {
   db,
   downloadFile,
-  saveBlob,
   errorMessage,
   type Row,
 } from "@quicksort/candidate-db";
@@ -36,7 +34,6 @@ const nav = [
   { id: "overview", href: "/onboarding", label: "My onboarding", icon: LayoutDashboard },
   { id: "profile", href: "/profile", label: "My profile", icon: UserRound },
   { id: "documents", href: "/documents", label: "My documents", icon: Upload },
-  { id: "contracts", href: "/contracts", label: "My contracts", icon: FileText },
   { id: "requests", href: "/tool-access", label: "Tool access", icon: KeyRound },
   { id: "account", href: "/account", label: "Account", icon: Settings },
 ];
@@ -61,15 +58,11 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
     [skills, setSkills] = useState<Row<"candidate_skills">[]>([]),
     [projects, setProjects] = useState<Row<"candidate_projects">[]>([]),
     [documents, setDocuments] = useState<Row<"candidate_documents">[]>([]),
-    [contracts, setContracts] = useState<Row<"contracts">[]>([]),
-    [signatures, setSignatures] = useState<Row<"contract_signatures">[]>([]),
     [requests, setRequests] = useState<Row<"tool_requests">[]>([]);
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [message, setMessage] = useState(""),
-    [review, setReview] = useState<Row<"contracts"> | null>(null),
-    [preview, setPreview] = useState("");
+    [message, setMessage] = useState("");
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -84,12 +77,6 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
           .eq("candidate_id", userId)
           .order("created_at", { ascending: false }),
         db()
-          .from("contracts")
-          .select("*")
-          .eq("candidate_id", userId)
-          .order("created_at", { ascending: false }),
-        db().from("contract_signatures").select("*").eq("candidate_id", userId),
-        db()
           .from("tool_requests")
           .select("*")
           .eq("candidate_id", userId)
@@ -101,9 +88,7 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
       setSkills(results[2].data || []);
       setProjects(results[3].data || []);
       setDocuments(results[4].data || []);
-      setContracts(results[5].data || []);
-      setSignatures(results[6].data || []);
-      setRequests(results[7].data || []);
+      setRequests(results[5].data || []);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -114,12 +99,6 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
     document.title = "Quicksort Candidate";
     void load();
   }, [load]);
-  useEffect(
-    () => () => {
-      if (preview) URL.revokeObjectURL(preview);
-    },
-    [preview],
-  );
   async function action(work: () => Promise<void>, success = "Saved.") {
     setBusy(true);
     setError("");
@@ -134,13 +113,11 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
       setBusy(false);
     }
   }
-  useEffect(() => { setError(""); setMessage(""); setReview(null); setPreview(""); }, [tab]);
+  useEffect(() => { setError(""); setMessage(""); }, [tab]);
   function navigate(id: string) {
     setTab(id);
     setError("");
     setMessage("");
-    setReview(null);
-    setPreview("");
   }
   async function upload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -175,37 +152,6 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
       form.reset();
     }, "Document uploaded. Your Quicksort team can now review it.");
   }
-  async function openReview(c: Row<"contracts">) {
-    await action(async () => {
-      const { data, error } = await db()
-        .storage.from("contracts")
-        .download(c.storage_path);
-      if (error) throw error;
-      setPreview(URL.createObjectURL(data));
-      setReview(c);
-    }, "Contract ready to review.");
-  }
-  async function sign(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!review) return;
-    const f = new FormData(e.currentTarget);
-    if (f.get("consent") !== "on") return;
-    const contractId = review.id;
-    await action(async () => {
-      const { error } = await db()
-        .from("contract_signatures")
-        .insert({
-          contract_id: contractId,
-          signer_name: String(f.get("name")).trim(),
-        });
-      if (error) throw error;
-      setReview(null);
-      setPreview("");
-    }, "Your signature has been recorded. You can download the contract and signature receipt below.");
-  }
-  const unsigned = contracts.filter(
-    (c) => !signatures.some((s) => s.contract_id === c.id),
-  );
   return (
     <Shell
       portal="Candidate"
@@ -244,12 +190,6 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
               icon={Upload}
             />
             <Stat
-              label="To sign"
-              value={unsigned.length}
-              detail="Contracts awaiting your review"
-              icon={FileText}
-            />
-            <Stat
               label="Tool requests"
               value={requests.filter((r) => r.status === "pending").length}
               detail="Awaiting a team response"
@@ -271,12 +211,6 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
                   text: "Upload the documents requested by your team.",
                   done: documents.length > 0,
                   target: "documents",
-                },
-                {
-                  title: "Review your agreements",
-                  text: "Read and sign the contracts shared with you.",
-                  done: contracts.length > 0 && !unsigned.length,
-                  target: "contracts",
                 },
                 {
                   title: "Get the right tools",
@@ -304,34 +238,7 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
                 </div>
               ))}
             </section>
-            <section className="panel">
-              <h2>Waiting for your signature</h2>
-              {unsigned.length ? (
-                unsigned.map((c) => (
-                  <div className="list-row" key={c.id}>
-                    <div>
-                      <h3>{c.title}</h3>
-                      <p className="muted small-text">
-                        Shared {formatDate(c.created_at)}
-                      </p>
-                    </div>
-                    <button
-                      className="btn secondary small"
-                      onClick={() => {
-                        navigate("contracts");
-                        void openReview(c);
-                      }}
-                    >
-                      Review
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <Empty title="You’re all caught up">
-                  New contracts will appear here when your team shares them.
-                </Empty>
-              )}
-            </section>
+
           </div>
         </>
       )}
@@ -443,164 +350,6 @@ function Candidate({ userId, email }: { userId: string; email: string }) {
                 </div>
               </div>
             ))}
-          </section>
-        </>
-      )}
-      {tab === "contracts" && (
-        <>
-          <Heading eyebrow="Your agreements" title="My contracts">
-            Read each agreement, add your signature and keep a copy for your
-            records.
-          </Heading>
-          {review && (
-            <section className="panel">
-              <div className="panel-head">
-                <h2>Review: {review.title}</h2>
-                <button
-                  className="btn secondary small"
-                  onClick={() => {
-                    setReview(null);
-                    setPreview("");
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-              <p className="muted">
-                Read the complete PDF before signing. If the preview does not
-                load, download and open it.
-              </p>
-              <object
-                className="contract-preview"
-                data={preview}
-                type="application/pdf"
-              >
-                <p>
-                  PDF preview is unavailable. Use Download PDF to review your
-                  contract.
-                </p>
-              </object>
-              <button
-                className="btn secondary small"
-                disabled={busy}
-                onClick={() =>
-                  void action(
-                    () =>
-                      downloadFile(
-                        "contracts",
-                        review.storage_path,
-                        review.title + ".pdf",
-                      ),
-                    "Contract downloaded.",
-                  )
-                }
-              >
-                Download PDF
-              </button>
-              <form className="form" style={{ marginTop: 22 }} onSubmit={sign}>
-                <label>
-                  Your full legal name
-                  <input
-                    name="name"
-                    required
-                    minLength={2}
-                    maxLength={200}
-                    autoComplete="name"
-                    defaultValue={profile?.full_name}
-                  />
-                </label>
-                <label className="check">
-                  <input type="checkbox" name="consent" required />I have read
-                  this contract and agree to sign it electronically.
-                </label>
-                <p className="muted small-text">
-                  Your typed name, the document fingerprint and the signing time
-                  will be recorded. The original PDF remains available with a
-                  separate signature receipt.
-                </p>
-                <div>
-                  <button className="btn" disabled={busy}>
-                    Sign this contract
-                  </button>
-                </div>
-              </form>
-            </section>
-          )}
-          <section className="panel">
-            {!contracts.length && !loading && (
-              <Empty title="No contracts yet">
-                Your team will share your agreements here when they’re ready.
-              </Empty>
-            )}
-            {contracts.map((c) => {
-              const signature = signatures.find((s) => s.contract_id === c.id);
-              return (
-                <div className="list-row" key={c.id}>
-                  <div>
-                    <h3>{c.title}</h3>
-                    <p className="muted">Shared {formatDate(c.created_at)}</p>
-                    <Pill status={signature ? "signed" : "pending"} />
-                    {signature && (
-                      <>
-                        <p className="signature">{signature.signer_name}</p>
-                        <p className="muted small-text">
-                          Signed {formatDate(signature.signed_at)}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                  <div className="actions">
-                    <button
-                      className="btn secondary small"
-                      disabled={busy}
-                      onClick={() =>
-                        void action(
-                          () =>
-                            downloadFile(
-                              "contracts",
-                              c.storage_path,
-                              c.title + ".pdf",
-                            ),
-                          "Contract downloaded.",
-                        )
-                      }
-                    >
-                      Download PDF
-                    </button>
-                    {signature ? (
-                      <button
-                        className="btn secondary small"
-                        onClick={() =>
-                          saveBlob(
-                            new Blob(
-                              [
-                                JSON.stringify(
-                                  { contract_title: c.title, ...signature },
-                                  null,
-                                  2,
-                                ),
-                              ],
-                              { type: "application/json" },
-                            ),
-                            `signature-${c.id}.json`,
-                          )
-                        }
-                      >
-                        Signature receipt
-                      </button>
-                    ) : (
-                      <button
-                        className="btn small"
-                        disabled={busy}
-                        onClick={() => void openReview(c)}
-                      >
-                        Review & sign
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
           </section>
         </>
       )}

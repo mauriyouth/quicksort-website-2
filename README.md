@@ -44,7 +44,7 @@ Browser tests use an installed Microsoft Edge, mock network records, and do not 
 - **HR:** requisitions, recruiting pipeline with SLA heat and an immutable event log, CV analysis with advisory AI match scores that never auto-reject, people (one record per person: candidate → employee → alumni), onboarding/probation/offboarding journeys, documents, job posts and monthly activity reports (CRA).
 - **Operations:** kanban boards and the business plan, with fixed charges read from synced Qonto bank transactions.
 - **Content and admin:** events, blog posts and job posts for the public website, referentials, accounts, tool requests and settings (account, AI configuration, Google Drive).
-- **Candidate/employee portal:** application status on a timeline (never scores or rankings), AI-use disclosure, GDPR rights, onboarding files, contracts with typed e-signature, CRA and tool access requests.
+- **Candidate/employee portal:** application status on a timeline (never scores or rankings), AI-use disclosure, GDPR rights, onboarding files, contracts signed through Youtrust (sent by HR), CRA and tool access requests.
 
 Signing stores the signer name, server timestamp, consent text and SHA-256 fingerprint in an immutable record. It does not embed a signature in the PDF or integrate an external e-signature provider. Tool approvals record a decision; they do not provision third-party accounts.
 

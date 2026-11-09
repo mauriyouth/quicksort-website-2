@@ -190,7 +190,12 @@ select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a contrac
 update public.signature_requests set application_id='56000000-0000-4000-8000-000000000001',person_id='52000000-0000-4000-8000-000000000002'
  where id='55000000-0000-4000-8000-000000000002';
 select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a contract signed by another person');
-update public.signature_requests set person_id='52000000-0000-4000-8000-000000000003' where id='55000000-0000-4000-8000-000000000002';
+update public.signature_requests set person_id='52000000-0000-4000-8000-000000000003',signed_document_id=null where id='55000000-0000-4000-8000-000000000002';
+select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a completed contract whose signed copy is not filed');
+update public.signature_requests set signed_document_id=(select id from public.documents where provider_file_id='signed-v2'),type_code='OTHER'
+ where id='55000000-0000-4000-8000-000000000002';
+select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a completed, filed request that is not a contract');
+update public.signature_requests set type_code='EMPLOYMENT_CONTRACT' where id='55000000-0000-4000-8000-000000000002';
 select pg_temp.assert_true((select (j->>'done')::boolean from jsonb_array_elements(public.hr_application_requirements('56000000-0000-4000-8000-000000000001','hire')) j
   where j->>'key'='signatures'),'A completed, filed contract linked to the application meets the requirement');
 select pg_temp.hire('56000000-0000-4000-8000-000000000001');

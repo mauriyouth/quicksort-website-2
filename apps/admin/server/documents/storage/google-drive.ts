@@ -1,4 +1,4 @@
-import { createSign, randomUUID } from "node:crypto";
+import { createHash, createSign, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { decryptApiKey } from "../../ai-settings.ts";
@@ -304,6 +304,11 @@ export function createDriveStorage(sa: DriveSettings): DocumentStorage {
         headers: { "Content-Type": file.mimeType || "application/octet-stream" },
         fileId: null,
       };
+    },
+    async uploadFile(folder, file, bytes) {
+      const stored = toStoredFile(await uploadFileContent(sa, { name: file.name, mimeType: file.mimeType, data: Buffer.from(bytes) }, folder.id));
+      // Drive computes the checksum asynchronously; the registry wants one, so hash what we sent.
+      return { ...stored, size: stored.size ?? bytes.byteLength, sha256: stored.sha256 ?? createHash("sha256").update(bytes).digest("hex") };
     },
     async getFile(fileId) {
       return toStoredFile(await driveApi<DriveFile>(sa, `/files/${fileId}`, { query: { fields: FILE_FIELDS, supportsAllDrives: "true" } }));

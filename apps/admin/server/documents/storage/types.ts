@@ -48,6 +48,8 @@ export interface DocumentStorage {
   ensureChild(parent: StorageFolder, name: string): Promise<StorageFolder>;
   /** `origin` is the browser origin that will PUT the bytes (CORS on the upload URL). */
   prepareUpload(folder: StorageFolder, file: { name: string; mimeType: string; size: number }, origin?: string | null): Promise<UploadTarget>;
+  /** Stores bytes the server already holds (generated PDFs) and returns the stored file. */
+  uploadFile(folder: StorageFolder, file: { name: string; mimeType: string }, bytes: Uint8Array): Promise<StoredFile>;
   getFile(fileId: string): Promise<StoredFile>;
   listFiles(folderId: string): Promise<StoredFile[]>;
   /** The file bytes as a fetch Response, for the API to stream to the browser. */

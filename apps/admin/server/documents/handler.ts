@@ -117,12 +117,12 @@ class DocumentError extends Error {
   }
 }
 
-async function defaultStorage(client: SupabaseClient): Promise<DocumentStorage | null> {
+export async function defaultStorage(client: SupabaseClient): Promise<DocumentStorage | null> {
   const settings = await loadDriveSettings(client);
   return settings ? createDriveStorage(settings) : null;
 }
 
-async function loadType(client: SupabaseClient, code: string, owner: Owner, expiresOn: string | null | undefined) {
+export async function loadType(client: SupabaseClient, code: string, owner: Owner, expiresOn: string | null | undefined) {
   const { data, error } = await client.from("document_types").select("code,label,owner_kinds,folder,requires_expiry").eq("code", code).maybeSingle();
   if (error) throw error;
   const type = data as DocumentType | null;
@@ -190,7 +190,7 @@ async function existingBaseFolder(client: SupabaseClient, storage: DocumentStora
 }
 
 /** `sub` nests below the type's folder (e.g. ["Navigo", "2025"]); each level is cached as "<leaf>/<sub…>". */
-async function resolveFolder(client: SupabaseClient, storage: DocumentStorage, owner: Owner, typeFolder: string, sub: string[] = []) {
+export async function resolveFolder(client: SupabaseClient, storage: DocumentStorage, owner: Owner, typeFolder: string, sub: string[] = []) {
   const leafCode = owner.kind === "client" ? "societe" : typeFolder in FOLDER_LABELS ? typeFolder : "divers";
   const target = await cachedFolder(client, storage, owner, [leafCode, ...sub].join("/"));
   if (target) return target;
@@ -232,6 +232,29 @@ const ownerColumns = (owner: Owner) => ({
   project_id: owner.kind === "project" ? owner.id : null,
 });
 
+/** The `document` payload shared by register_document and register_signed_document. */
+export function documentRecord(meta: Omit<Metadata, "fileId" | "supersedes" | "requestId">, provider: string, file: StoredFile, folderId: string) {
+  return {
+    owner_kind: meta.owner.kind,
+    ...ownerColumns(meta.owner),
+    type_code: meta.typeCode,
+    title: meta.title,
+    issued_on: meta.issuedOn ?? null,
+    valid_from: meta.validFrom ?? null,
+    expires_on: meta.expiresOn ?? null,
+    notes: meta.notes ?? "",
+    parent_document_id: meta.parentDocumentId ?? null,
+    extension_id: meta.extensionId ?? null,
+    storage_provider: provider,
+    provider_file_id: file.id,
+    provider_folder_id: folderId,
+    file_name: file.name,
+    mime_type: file.mimeType,
+    size_bytes: file.size,
+    sha256: file.sha256,
+  };
+}
+
 /**
  * Registers a stored file. On refusal the file is undone (`undo`: trash a
  * fresh upload, move a legacy file back) so storage never holds an untracked
@@ -239,25 +262,7 @@ const ownerColumns = (owner: Owner) => ({
  */
 async function registerFile(client: SupabaseClient, storage: DocumentStorage, meta: Metadata, file: StoredFile, folderId: string, undo: () => Promise<unknown>) {
   const registered = await client.rpc("register_document", {
-    document: {
-      owner_kind: meta.owner.kind,
-      ...ownerColumns(meta.owner),
-      type_code: meta.typeCode,
-      title: meta.title,
-      issued_on: meta.issuedOn ?? null,
-      valid_from: meta.validFrom ?? null,
-      expires_on: meta.expiresOn ?? null,
-      notes: meta.notes ?? "",
-      parent_document_id: meta.parentDocumentId ?? null,
-      extension_id: meta.extensionId ?? null,
-      storage_provider: storage.provider,
-      provider_file_id: file.id,
-      provider_folder_id: folderId,
-      file_name: file.name,
-      mime_type: file.mimeType,
-      size_bytes: file.size,
-      sha256: file.sha256,
-    },
+    document: documentRecord(meta, storage.provider, file, folderId),
     supersedes: meta.supersedes ?? null,
     request_id: meta.requestId ?? randomUUID(),
   });

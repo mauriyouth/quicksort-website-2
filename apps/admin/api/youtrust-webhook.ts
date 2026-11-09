@@ -119,9 +119,9 @@ export function createYoutrustWebhookHandler(deps: Deps = { createClient, create
       client.from("signature_webhook_events").delete().eq("event_id", event.event_id).then(() => undefined, () => undefined);
 
     try {
-      const person = await client.from("hr_people").select("email").eq("id", row.person_id).maybeSingle();
-      if (person.error) throw new Error("Could not read the person.");
-      const next = statusFromEvent(event, String(person.data?.email ?? ""));
+      // The email the request was sent to (HR may have overridden the person's), as Send and Refresh use.
+      const personEmail = (row.signers ?? []).find((x) => x.role === "person")?.email ?? "";
+      const next = statusFromEvent(event, personEmail);
 
       if (next === "completed") {
         const filed = row.signed_document_id && row.audit_document_id;

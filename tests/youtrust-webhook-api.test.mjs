@@ -130,7 +130,11 @@ function fixture({ status = "sent", youtrust: overrides = {}, webhookSecret = WE
     }],
     signature_requests: [{
       id: REQUEST, person_id: PERSON, title: "Contrat CDI", type_code: "EMPLOYMENT_CONTRACT", supersedes: null,
-      status, error: "", youtrust_request_id: "yt-1", signed_document_id: null, audit_document_id: null, filing_claimed_at: null,
+      status, error: "", youtrust_request_id: "yt-1",
+      signers: [
+        { role: "person", name: "Ada Lovelace", email: "ada@example.test", order: 0 },
+        { role: "quicksort", name: "Mohamed Nah", email: "mohamed@quicksort.test", order: 1 },
+      ], signed_document_id: null, audit_document_id: null, filing_claimed_at: null,
     }],
     signature_webhook_events: [],
   };
@@ -214,6 +218,17 @@ test("signer.done for the person moves the request to signed_by_person", async (
   assert.equal(r.code, 200, JSON.stringify(r.body));
   assert.equal(f.row.status, "signed_by_person");
   assert.deepEqual(f.tables.signature_webhook_events.map((e) => e.event_id), ["evt-signer.done"]);
+});
+
+test("signer.done matches the signer email the request was sent to, not the person's record", async () => {
+  const f = fixture();
+  f.row.signers[0].email = "ada.personal@example.test";
+  const other = await f.deliver(event("signer.done", { signer: { info: { email: "ada@example.test" } } }, "evt-1"));
+  assert.equal(other.code, 200);
+  assert.equal(f.row.status, "sent");
+  const r = await f.deliver(event("signer.done", { signer: { info: { email: "Ada.Personal@example.test" } } }, "evt-2"));
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.equal(f.row.status, "signed_by_person");
 });
 
 test("signer.done for another signer leaves the status alone", async () => {

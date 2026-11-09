@@ -6,7 +6,8 @@ insert into auth.users(id,email,raw_user_meta_data) values
 update public.user_roles set role='admin' where user_id='51000000-0000-4000-8000-000000000001';
 update public.user_roles set role='hr' where user_id='51000000-0000-4000-8000-000000000003';
 insert into public.hr_people(id,full_name,email) values
- ('52000000-0000-4000-8000-000000000001','Sig Employee','sig-employee@example.invalid');
+ ('52000000-0000-4000-8000-000000000001','Sig Employee','sig-employee@example.invalid'),
+ ('52000000-0000-4000-8000-000000000002','Sig Other','sig-other@example.invalid');
 insert into public.hr_person_accounts(profile_id,person_id,linked_by) values
  ('51000000-0000-4000-8000-000000000002','52000000-0000-4000-8000-000000000001','51000000-0000-4000-8000-000000000001');
 insert into public.employees(id,person_id,start_date,status,contract_type) values
@@ -105,9 +106,17 @@ do $$ begin
   raise exception 'FAILED: filed against an unknown request';
  exception when others then if sqlerrm <> 'Unknown signature request.' then raise; end if; end;
 end; $$;
+do $$ begin
+ begin
+  perform public.register_signed_document('55000000-0000-4000-8000-000000000001',
+   pg_temp.contract('signed-other') || '{"person_id":"52000000-0000-4000-8000-000000000002"}',null);
+  raise exception 'FAILED: filed a document for another person';
+ exception when others then if sqlerrm <> 'Document does not belong to this signature request.' then raise; end if; end;
+end; $$;
 select public.register_signed_document('55000000-0000-4000-8000-000000000001',pg_temp.contract('signed-v2'),
   (select id from public.documents where provider_file_id='contract-v1'));
 reset role;
+select pg_temp.assert_true((select count(*) from public.documents where provider_file_id='signed-other')=0,'A mismatched person files nothing');
 select pg_temp.assert_true((select uploaded_by='51000000-0000-4000-8000-000000000001' and type_code='EMPLOYMENT_CONTRACT' and status='active'
   from public.documents where provider_file_id='signed-v2'),'Signed document is filed as the request creator');
 select pg_temp.assert_true((select status='superseded' and superseded_by=(select id from public.documents where provider_file_id='signed-v2')

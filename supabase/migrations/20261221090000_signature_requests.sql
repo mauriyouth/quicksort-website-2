@@ -173,6 +173,9 @@ declare
 begin
   select * into request from public.signature_requests where id = signature_request;
   if not found then raise exception 'Unknown signature request.'; end if;
+  if document->>'owner_kind' is distinct from 'person' or (document->>'person_id')::uuid is distinct from request.person_id then
+    raise exception 'Document does not belong to this signature request.';
+  end if;
   return private.insert_document(document, supersedes, signature_request, request.created_by);
 end; $$;
 revoke all on function public.register_signed_document(uuid, jsonb, uuid) from public, anon, authenticated;

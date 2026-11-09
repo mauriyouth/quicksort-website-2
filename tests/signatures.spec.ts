@@ -36,7 +36,8 @@ const request = (status: string, extra: Record<string, unknown> = {}) => ({
   created_at: '2026-11-02T10:00:00Z', updated_at: '2026-11-02T10:00:00Z', ...extra,
 });
 
-async function mock(page: Page, requests: unknown[] = []) {
+type Answer = { status?: number; body: unknown };
+async function mock(page: Page, requests: unknown[] = [], answers: Record<string, Answer> = {}) {
   const calls: Array<Record<string, unknown>> = [];
   await page.route(`${fixtureSupabaseURL}/**`, async (route) => {
     const url = new URL(route.request().url());
@@ -53,6 +54,8 @@ async function mock(page: Page, requests: unknown[] = []) {
   await page.route('**/api/signatures', async (route) => {
     const body = route.request().postDataJSON();
     calls.push(body);
+    const answer = answers[body.action];
+    if (answer) return json(route, answer.body, answer.status ?? 200);
     switch (body.action) {
       case 'get-settings': return json(route, {
         staging: true, signatoryName: 'Mohamed Nah', signatoryEmail: 'mohamed@quicksort.test', hasApiKey: true, hasWebhookSecret: false,
@@ -133,4 +136,53 @@ test('request rows show their status labels and actions', async ({ page }) => {
   await expect(page.getByRole('row', { name: /\(sent\)/ }).getByText('Sent', { exact: true })).toBeVisible();
   await expect(page.getByRole('row', { name: /\(sent\)/ }).getByRole('button', { name: 'Cancel' })).toBeVisible();
   await expect(page.getByRole('row', { name: /\(signed_by_person\)/ }).getByText('Signed by person', { exact: true })).toBeVisible();
+});
+
+test('an error row shows its reason and offers Send again and Cancel', async ({ page }) => {
+  const failed = request('error', { id: '54000000-0000-4000-8000-0000000000f1', error: 'Youtrust answered 500.' });
+  const calls = await mock(page, [failed], { send: { body: { request: { ...failed, status: 'sent', error: '' } } } });
+  await page.goto(new URL('/person', harness.url).href);
+  const row = page.getByRole('row', { name: /Contrat CDI \(error\)/ });
+  await expect(row.getByText('Youtrust answered 500.')).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  await row.getByRole('button', { name: 'Send again' }).click();
+  await expect(page.getByText('Sent again for signature.')).toBeVisible();
+  expect(calls.find((call) => call.action === 'send')).toMatchObject({ requestId: failed.id });
+});
+
+test('a filing note shows under the title whatever the status, and a missing audit trail still offers Refresh', async ({ page }) => {
+  await mock(page, [
+    request('completed', { id: '54000000-0000-4000-8000-0000000000f2', title: 'Contrat noted', audit_document_id: '54000000-0000-4000-8000-0000000000e2', error: 'The document it was meant to replace changed; filed as a new document.' }),
+    request('completed', { id: '54000000-0000-4000-8000-0000000000f3', title: 'Contrat half filed', audit_document_id: null }),
+    request('sent', { id: '54000000-0000-4000-8000-0000000000f4', title: 'Contrat failing', error: 'Filing the signed documents failed: Drive is down' }),
+  ]);
+  await page.goto(new URL('/person', harness.url).href);
+  const noted = page.getByRole('row', { name: /Contrat noted/ });
+  await expect(noted.getByText('The document it was meant to replace changed; filed as a new document.')).toBeVisible();
+  await expect(noted.getByRole('button', { name: 'Refresh' })).toHaveCount(0);
+  const half = page.getByRole('row', { name: /Contrat half filed/ });
+  await expect(half.getByRole('button', { name: 'Open signed document' })).toBeVisible();
+  await expect(half.getByRole('button', { name: 'Refresh' })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Contrat failing/ }).getByText('Filing the signed documents failed: Drive is down')).toBeVisible();
+});
+
+test('a failed discard keeps the draft, which can still be sent', async ({ page }) => {
+  const calls = await mock(page, [], { 'discard-draft': { status: 502, body: { error: 'Drive is down.' } } });
+  await page.goto(new URL('/person', harness.url).href);
+  await page.getByRole('button', { name: 'Send for signature' }).click();
+  await page.getByLabel('Template').selectOption({ label: 'Contrat CDI' });
+  await page.getByLabel('clause_speciale').fill('Aucune');
+  await page.getByRole('button', { name: 'Build preview' }).click();
+  await expect(page.locator('object[type="application/pdf"]')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Discard' }).click();
+  await expect(page.getByText('Drive is down.')).toBeVisible();
+  await expect(page.locator('object[type="application/pdf"]')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send for signature' })).toBeEnabled();
+
+  await page.getByLabel('Template').selectOption({ label: 'Custom PDF' });
+  await expect(page.getByText('Drive is down.')).toBeVisible();
+  await expect(page.getByLabel('Template')).toHaveValue(TEMPLATE);
+  await expect(page.locator('object[type="application/pdf"]')).toBeVisible();
+  expect(calls.filter((call) => call.action === 'discard-draft')).toHaveLength(2);
 });

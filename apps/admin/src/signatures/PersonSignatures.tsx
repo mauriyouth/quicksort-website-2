@@ -83,7 +83,7 @@ export function PersonSignatures({ personId, person }: { personId: string; /** P
     });
   }, [reload]);
 
-  async function act(row: SignatureRequest, action: "refresh" | "cancel", done: string) {
+  async function act(row: SignatureRequest, action: "refresh" | "cancel" | "send", done: string) {
     setBusyId(row.id);
     setError("");
     setMessage("");
@@ -93,6 +93,8 @@ export function PersonSignatures({ personId, person }: { personId: string; /** P
       setMessage(done);
     } catch (e) {
       setError(errorText(e, "The signature request failed."));
+      // A failed action may still have changed the row (e.g. a new error message).
+      await reload().catch(() => undefined);
     } finally {
       setBusyId("");
     }
@@ -156,13 +158,15 @@ export function PersonSignatures({ personId, person }: { personId: string; /** P
           <TableBody>
             {requests.map((row) => {
               const busy = busyId === row.id;
-              const filed = row.status === "completed" && !!row.signed_document_id;
+              const signed = row.status === "completed" && !!row.signed_document_id;
+              // Filed means both the signed copy and its audit trail are in the registry.
+              const filed = signed && !!row.audit_document_id;
               const canRefresh = !!row.youtrust_request_id && (row.status === "sent" || row.status === "signed_by_person" || (row.status === "completed" && !filed));
               return (
                 <TableRow key={row.id}>
                   <TableCell className="max-w-[18rem] whitespace-normal">
                     <div className="font-medium">{row.title}</div>
-                    {row.status === "error" && row.error && <div className="text-xs text-destructive">{row.error}</div>}
+                    {row.error && <div className={`text-xs ${filed ? "text-muted-foreground" : "text-destructive"}`}>{row.error}</div>}
                   </TableCell>
                   <TableCell className="text-[13px] text-muted-foreground">
                     {row.status === "draft" ? "Not sent" : formatDay(row.created_at.slice(0, 10))}
@@ -172,7 +176,7 @@ export function PersonSignatures({ personId, person }: { personId: string; /** P
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-1">
-                      {filed && (
+                      {signed && (
                         <Button variant="outline" size="xs" onClick={() => void openSigned(row)}>
                           Open signed document
                         </Button>
@@ -180,6 +184,11 @@ export function PersonSignatures({ personId, person }: { personId: string; /** P
                       {canRefresh && (
                         <Button variant="ghost" size="xs" disabled={busy} onClick={() => void act(row, "refresh", "Status refreshed from Youtrust.")}>
                           Refresh
+                        </Button>
+                      )}
+                      {row.status === "error" && (
+                        <Button variant="ghost" size="xs" disabled={busy} onClick={() => void act(row, "send", "Sent again for signature.")}>
+                          Send again
                         </Button>
                       )}
                       {CANCELLABLE.includes(row.status) && (
@@ -292,27 +301,36 @@ function SendPanel({ personId, person: record, onClose, onSent }: { personId: st
   /** Any edit after the preview means the preview no longer shows what would be sent. */
   const edited = () => { if (draft) setStale(true); };
 
+  /** The draft stays (and can still be sent or discarded) until the server has deleted it. */
   async function discardDraft() {
     if (!draft) return;
-    const id = draft.requestId;
+    await postSignatures({ action: "discard-draft", requestId: draft.requestId });
     setDraft(null);
     setStale(false);
-    await postSignatures({ action: "discard-draft", requestId: id });
   }
 
   async function choose(next: string) {
     setError("");
-    if (draft) await discardDraft().catch(() => undefined);
-    setChoice(next);
-    setFields(null);
-    setSupersedes("");
-    if (!next) return setSigners([]);
-    if (next === "custom") {
-      setSigners([{ role: "person", name: record?.name || "", email: record?.email || "", order: 0 }]);
-      return;
-    }
-    setBusy("prepare");
+    setBusy("choose");
     try {
+      if (draft) {
+        try {
+          await discardDraft();
+        } catch (e) {
+          // Keep the current choice: its draft is still live.
+          setError(errorText(e, "Could not discard the current preview."));
+          return;
+        }
+      }
+      setChoice(next);
+      setFields(null);
+      setSupersedes("");
+      if (!next) return setSigners([]);
+      if (next === "custom") {
+        setSigners([{ role: "person", name: record?.name || "", email: record?.email || "", order: 0 }]);
+        return;
+      }
+      setBusy("prepare");
       const prepared = await postSignatures<{ fields: PreparedField[]; signers: Signer[] }>({ action: "prepare", personId, templateId: next });
       setFields(prepared.fields);
       setSigners(prepared.signers);

@@ -25,12 +25,20 @@
 // - GET .../documents/download (signed PDF; a single document is returned as PDF) and
 //   GET .../audit_trails/download (PDF, only when status is done).
 //   https://developers.youtrust.com/reference/electronic-signature/llms.txt
+// - Webhook signature (for verifyWebhook), https://developers.youtrust.com/docs/use-webhooks-in-your-app :
+//   header `X-Yousign-Signature-256` (header names are case-insensitive) =
+//   "sha256=" + hex(HMAC-SHA256(key = the webhook subscription's secret, message = the RAW request
+//   body bytes, not parsed/re-serialised JSON)). Compare against the header in constant time
+//   (docs samples use timingSafeEqual / hash_equals). Hex encoding is inferred from the docs' code
+//   samples (the prose does not state it). No timestamp scheme is documented; header
+//   `x-yousign-issued-at` exists and payload `event_id` is the recommended dedupe key (retries
+//   reuse event_time).
 // Smart anchors are marked "Available soon" in the reference, so the signature field is placed at
 // a fixed position on the last page.
 
 export type YoutrustSigner = { name: string; email: string; order: number };
 export type YoutrustStatus =
-  "draft" | "ongoing" | "done" | "declined" | "expired" | "canceled" | "approval" | "rejected" | "deleted";
+  "draft" | "ongoing" | "done" | "declined" | "expired" | "canceled" | "approval" | "rejected" | "deleted" | "paused";
 
 export class YoutrustError extends Error {
   status: number;
@@ -95,13 +103,15 @@ export function createYoutrustClient(
       const created = await callJson("POST", "/signature_requests", {
         name, delivery_mode: "email", ordered_signers: true, external_id: externalId,
       });
-      const requestId: string = created.id;
+      const requestId: string | undefined = created?.id;
+      if (!requestId) throw new YoutrustError("Youtrust did not return a signature request id.", 502);
       try {
         const form = new FormData();
         form.append("file", new Blob([pdf], { type: "application/pdf" }), fileName);
         form.append("nature", "signable_document");
         const doc = await callJson("POST", `/signature_requests/${requestId}/documents`, form);
-        const documentId: string = doc.id;
+        const documentId: string | undefined = doc?.id;
+        if (!documentId) throw new YoutrustError("Youtrust did not return a document id.", 502);
         const lastPage: number = doc.total_pages ?? 1;
 
         let previousId: string | null = null;

@@ -154,3 +154,22 @@ test("empty settings are unconfigured", async () => {
   assert.equal(s.hasApiKey, false);
   assert.throws(() => youtrustFromSettings(s), /Connect Youtrust in Settings/);
 });
+
+test("a missing id in the create or upload response fails (and cleans up when a request exists)", async () => {
+  const noCreateId = fakeFetch({ "POST /signature_requests": () => json({}, 201) });
+  await assert.rejects(
+    createYoutrustClient({ apiKey: "k", staging: true }, noCreateId.impl).createRequest(input),
+    (e) => e instanceof YoutrustError,
+  );
+  assert.equal(noCreateId.calls.length, 1);
+
+  const handlers = happyHandlers();
+  handlers["POST /signature_requests/sr1/documents"] = () => json({ total_pages: 1 }, 201);
+  handlers["DELETE /signature_requests/sr1"] = () => new Response(null, { status: 204 });
+  const noDocId = fakeFetch(handlers);
+  await assert.rejects(
+    createYoutrustClient({ apiKey: "k", staging: true }, noDocId.impl).createRequest(input),
+    (e) => e instanceof YoutrustError,
+  );
+  assert.equal(noDocId.calls.at(-1).method, "DELETE");
+});

@@ -355,7 +355,12 @@ function SendPanel({
         return;
       }
       setBusy("prepare");
-      const prepared = await postSignatures<{ fields: PreparedField[]; signers: Signer[] }>({ action: "prepare", personId, templateId: next });
+      const prepared = await postSignatures<{ fields: PreparedField[]; signers: Signer[] }>({
+        action: "prepare",
+        personId,
+        templateId: next,
+        ...(applicationId ? { applicationId } : {}),
+      });
       setFields(prepared.fields);
       setSigners(prepared.signers);
     } catch (e) {

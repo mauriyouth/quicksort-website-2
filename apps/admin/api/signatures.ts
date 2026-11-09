@@ -21,7 +21,9 @@ import type { YoutrustClient } from "../server/signatures/youtrust.ts";
  *   get-settings | save-settings            Youtrust options and write-only credentials.
  *   list-templates | save-template          Google Doc templates (checked readable by the service account).
  *   list-requests { personId }              The person's requests, newest first.
- *   prepare { personId, templateId }        The template's fields, prefilled from data, and the signers.
+ *   prepare { personId, templateId, applicationId? }
+ *                                           The template's fields, prefilled from data (the
+ *                                           application's accepted offer when given), and the signers.
  *   preview { personId, templateId, values, signers, supersedes?, applicationId? }
  *         | { personId, title, typeCode, pdfBase64, signers, supersedes?, applicationId? }
  *                                           Builds the PDF in the person's folder and stores a draft.
@@ -98,7 +100,7 @@ const actionSchema = z.discriminatedUnion("action", [
     active: z.boolean(),
   }),
   z.object({ action: z.literal("list-requests"), personId: uuid }),
-  z.object({ action: z.literal("prepare"), personId: uuid, templateId: uuid }),
+  z.object({ action: z.literal("prepare"), personId: uuid, templateId: uuid, applicationId: uuid.optional() }),
   z.object({
     action: z.literal("preview"),
     personId: uuid,
@@ -194,6 +196,11 @@ export function createSignaturesHandler(deps: Deps = {
         if (!data) throw new HttpError("Person not found.", 404);
         return data as { id: string; full_name: string; email: string | null };
       }
+      async function checkApplication(applicationId: string, personId: string) {
+        const { data, error } = await client.from("hr_applications").select("id,person_id").eq("id", applicationId).maybeSingle();
+        check(error, "Could not read the application.");
+        if (!data || data.person_id !== personId) throw new HttpError("Application does not belong to this person.", 400);
+      }
       async function loadTemplate(id: string) {
         const { data, error } = await client.from("signature_templates").select("*").eq("id", id).maybeSingle();
         check(error, "Could not read the template.");
@@ -278,8 +285,11 @@ export function createSignaturesHandler(deps: Deps = {
 
         async prepare(input) {
           await loadPerson(input.personId);
+          if (input.applicationId) await checkApplication(input.applicationId, input.personId);
           const template = await loadTemplate(input.templateId);
-          const [facts, s, sa] = await Promise.all([loadPersonFacts(client, input.personId), settings(), serviceAccount()]);
+          const [facts, s, sa] = await Promise.all([
+            loadPersonFacts(client, input.personId, input.applicationId), settings(), serviceAccount(),
+          ]);
           const names = extractFields(await deps.docs.readDocText(sa, template.google_doc_id));
           const known = knownValues(facts, today(), s.signatoryName);
           const fields = names.map((name) => {
@@ -324,11 +334,7 @@ export function createSignaturesHandler(deps: Deps = {
             if (!data) throw new HttpError("Choose an active document of the same type to replace.", 400);
           }
 
-          if (input.applicationId) {
-            const { data, error } = await client.from("hr_applications").select("id,person_id").eq("id", input.applicationId).maybeSingle();
-            check(error, "Could not read the application.");
-            if (!data || data.person_id !== person.id) throw new HttpError("Application does not belong to this person.", 400);
-          }
+          if (input.applicationId) await checkApplication(input.applicationId, person.id);
 
           // Refuse missing values before any folder or file is created.
           let fieldValues: Record<string, string> = {};

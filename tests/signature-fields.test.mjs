@@ -203,6 +203,7 @@ test("loadPersonFacts falls back to the latest ended employment and splits daily
       { id: "e2", person_id: "p", role: "R2", start_date: "2021-01-01", status: "ended", probation_end: null, offer_id: null, matricule: "M2" },
     ],
     employee_salaries: [{ employee_id: "e2", rate_kind: "daily", salary_monthly: null, daily_rate: 650, start_date: "2021-01-01", end_date: null }],
+    hr_applications: [],
     offers: [],
   });
   const f = await loadPersonFacts(client, "p");
@@ -246,4 +247,34 @@ test("loadPersonFacts with no employment and no accepted offer is empty", async 
   assert.deepEqual(f, { fullName: "Cand Idate", email: "c@x.test", role: "", contractType: null, salaryMonthly: null, dailyRate: null, startDate: null, probationEnd: null, matricule: null });
   const v = knownValues(f, "2026-11-09", "A");
   for (const k of ["poste", "type_contrat", "salaire_brut_mensuel", "tjm", "date_debut"]) assert.equal(v[k], "", k);
+});
+
+const rehire = (offers) => mockClient({
+  hr_people: [{ id: "p", full_name: "Re Hire", email: "r@x.test" }],
+  employees: [{ id: "e-old", person_id: "p", role: "Old role", start_date: "2020-01-01", status: "ended", probation_end: "2020-04-01", offer_id: "o-old", matricule: "M0" }],
+  employee_salaries: [{ employee_id: "e-old", rate_kind: "monthly", salary_monthly: 2000, daily_rate: null, start_date: "2020-01-01", end_date: null }],
+  hr_applications: [{ id: "a-old", person_id: "p" }, { id: "a-new", person_id: "p" }],
+  offers,
+});
+const oldOffer = { id: "o-old", application_id: "a-old", status: "accepted", title: "Old role", contract_type: "CDD", salary_monthly: 2000, cjm: 0, created_at: "2019-12-01" };
+const newOffer = { id: "o-new", application_id: "a-new", status: "accepted", title: "Lead Engineer", contract_type: "CDI", salary_monthly: 5200, cjm: 0, created_at: "2026-10-01" };
+const rehireFacts = { fullName: "Re Hire", email: "r@x.test", role: "Lead Engineer", contractType: "CDI", salaryMonthly: 5200, dailyRate: null, startDate: null, probationEnd: null, matricule: null };
+
+test("loadPersonFacts with an application reads that application's accepted offer, not the ended employment", async () => {
+  const declined = { id: "o-dec", application_id: "a-new", status: "declined", title: "Declined", contract_type: "CDI", salary_monthly: 9, cjm: 0, created_at: "2026-10-05" };
+  assert.deepEqual(await loadPersonFacts(rehire([oldOffer, newOffer, declined]), "p", "a-new"), rehireFacts);
+});
+
+test("loadPersonFacts with an application only reads that application's offers", async () => {
+  const f = await loadPersonFacts(rehire([oldOffer]), "p", "a-new");
+  assert.deepEqual(f, { fullName: "Re Hire", email: "r@x.test", role: "", contractType: null, salaryMonthly: null, dailyRate: null, startDate: null, probationEnd: null, matricule: null });
+  const freelanceOffer = { id: "o-f", application_id: "a-new", status: "accepted", title: "Consultant", contract_type: "Freelance", salary_monthly: 0, cjm: 700, created_at: "2026-10-01" };
+  const freelance = await loadPersonFacts(rehire([oldOffer, freelanceOffer]), "p", "a-new");
+  assert.equal(freelance.dailyRate, 700);
+  assert.equal(freelance.salaryMonthly, null);
+  assert.equal(freelance.contractType, "Freelance");
+});
+
+test("loadPersonFacts without an application uses the offer when no employment is open", async () => {
+  assert.deepEqual(await loadPersonFacts(rehire([oldOffer, newOffer]), "p"), rehireFacts);
 });

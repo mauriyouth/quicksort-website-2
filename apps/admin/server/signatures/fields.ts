@@ -58,11 +58,53 @@ const num = (value: unknown) => {
   return Number.isFinite(n) ? n : null;
 };
 
-export async function loadPersonFacts(client: SupabaseClient, personId: string): Promise<PersonFacts> {
+type OfferFacts = { role: string; contractType: string; salaryMonthly: number | null; dailyRate: number | null };
+
+/** The newest accepted offer on these applications, or null. */
+async function latestAcceptedOffer(client: SupabaseClient, applicationIds: string[]): Promise<OfferFacts | null> {
+  if (!applicationIds.length) return null;
+  const { data: offers, error } = await client
+    .from("offers").select("title,contract_type,salary_monthly,cjm,created_at")
+    .in("application_id", applicationIds).eq("status", "accepted").order("created_at", { ascending: false });
+  if (error) throw error;
+  const offer = (offers || [])[0];
+  if (!offer) return null;
+  const freelance = offer.contract_type === "Freelance";
+  return {
+    role: offer.title || "",
+    contractType: offer.contract_type,
+    salaryMonthly: freelance ? null : num(offer.salary_monthly),
+    dailyRate: freelance ? num(offer.cjm) : null,
+  };
+}
+
+/** Facts for a hire from an offer: employment-specific facts stay empty. */
+function offerPersonFacts(person: { full_name: string; email: string | null }, offer: OfferFacts | null): PersonFacts {
+  return {
+    fullName: person.full_name,
+    email: person.email || "",
+    role: offer?.role ?? "",
+    contractType: offer?.contractType ?? null,
+    salaryMonthly: offer?.salaryMonthly ?? null,
+    dailyRate: offer?.dailyRate ?? null,
+    startDate: null,
+    probationEnd: null,
+    matricule: null,
+  };
+}
+
+/**
+ * Prefill facts for a person. With an application, they come from that
+ * application's accepted offer, so a rehire never reuses the previous
+ * employment. Without one: the open employment, else the newest accepted
+ * offer, else the latest ended employment.
+ */
+export async function loadPersonFacts(client: SupabaseClient, personId: string, applicationId?: string): Promise<PersonFacts> {
   const { data: person, error: personError } = await client
     .from("hr_people").select("full_name,email").eq("id", personId).maybeSingle();
   if (personError) throw personError;
   if (!person) throw new Error("Person not found.");
+  if (applicationId) return offerPersonFacts(person, await latestAcceptedOffer(client, [applicationId]));
 
   const { data: rows, error: empError } = await client
     .from("employees")
@@ -70,7 +112,16 @@ export async function loadPersonFacts(client: SupabaseClient, personId: string):
     .eq("person_id", personId)
     .order("start_date", { ascending: false });
   if (empError) throw empError;
-  const employee = (rows || []).find((row: { status: string }) => row.status !== "ended") || (rows || [])[0] || null;
+  const open = (rows || []).find((row: { status: string }) => row.status !== "ended") || null;
+
+  // No open employment (a candidate, or someone being rehired): use the latest accepted offer.
+  if (!open) {
+    const { data: apps, error: appError } = await client.from("hr_applications").select("id").eq("person_id", personId);
+    if (appError) throw appError;
+    const offer = await latestAcceptedOffer(client, (apps || []).map((row: { id: string }) => row.id));
+    if (offer) return offerPersonFacts(person, offer);
+  }
+  const employee = open || (rows || [])[0] || null;
 
   const today = new Date().toISOString().slice(0, 10);
   let salary: { rate_kind?: string; salary_monthly?: unknown; daily_rate?: unknown } | null = null;
@@ -91,38 +142,14 @@ export async function loadPersonFacts(client: SupabaseClient, personId: string):
       contractType = offer?.contract_type ?? null;
     }
   }
-  // A candidate with no employment yet: use the latest accepted offer.
-  let offerFacts: { role: string; contractType: string; salaryMonthly: number | null; dailyRate: number | null } | null = null;
-  if (!employee) {
-    const { data: apps, error: appError } = await client.from("hr_applications").select("id").eq("person_id", personId);
-    if (appError) throw appError;
-    const ids = (apps || []).map((row: { id: string }) => row.id);
-    if (ids.length) {
-      const { data: offers, error: offerError } = await client
-        .from("offers").select("title,contract_type,salary_monthly,cjm,created_at")
-        .in("application_id", ids).eq("status", "accepted").order("created_at", { ascending: false });
-      if (offerError) throw offerError;
-      const offer = (offers || [])[0];
-      if (offer) {
-        const freelance = offer.contract_type === "Freelance";
-        offerFacts = {
-          role: offer.title || "",
-          contractType: offer.contract_type,
-          salaryMonthly: freelance ? null : num(offer.salary_monthly),
-          dailyRate: freelance ? num(offer.cjm) : null,
-        };
-      }
-    }
-  }
-  if (offerFacts) contractType = offerFacts.contractType;
   const daily = salary?.rate_kind === "daily";
   return {
     fullName: person.full_name,
     email: person.email || "",
-    role: employee?.role || offerFacts?.role || "",
+    role: employee?.role || "",
     contractType,
-    salaryMonthly: offerFacts ? offerFacts.salaryMonthly : salary && !daily ? num(salary.salary_monthly) : null,
-    dailyRate: offerFacts ? offerFacts.dailyRate : salary && daily ? num(salary.daily_rate) : null,
+    salaryMonthly: salary && !daily ? num(salary.salary_monthly) : null,
+    dailyRate: salary && daily ? num(salary.daily_rate) : null,
     startDate: employee?.start_date ?? null,
     probationEnd: employee?.probation_end ?? null,
     matricule: employee?.matricule ?? null,

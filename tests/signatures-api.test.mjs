@@ -342,6 +342,41 @@ test("preview with another person's application (or none) → 400 and nothing in
   }
 });
 
+const HIRE_TEXT = "{{poste}} {{type_contrat}} {{salaire_brut_mensuel}} {{date_debut}} {{matricule}}";
+const rehireFixture = () => {
+  const f = withApplications(fixture({ readDocText: async () => HIRE_TEXT }));
+  f.tables.employees[0].status = "ended";
+  f.tables.hr_applications.push({ id: OTHER, person_id: PERSON });
+  f.tables.offers = [
+    { id: "o-old", application_id: OTHER, status: "accepted", title: "Data Engineer", contract_type: "CDD", salary_monthly: 3500, cjm: 0, created_at: "2025-12-01" },
+    { id: "o-new", application_id: APP, status: "accepted", title: "Lead Engineer", contract_type: "CDI", salary_monthly: 5200, cjm: 0, created_at: "2026-10-01" },
+  ];
+  return f;
+};
+const fieldMap = (r) => Object.fromEntries(r.body.fields.map((x) => [x.name, x.value.replace(/[  ]/g, " ")]));
+
+test("prepare with an application prefills from its accepted offer, not the ended employment", async () => {
+  const f = rehireFixture();
+  f.tables.offers[1].created_at = "2025-01-01"; // older than the other application's offer: still the one used
+  const r = await f.post({ action: "prepare", personId: PERSON, templateId: TEMPLATE, applicationId: APP });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.deepEqual(fieldMap(r), { poste: "Lead Engineer", type_contrat: "CDI", salaire_brut_mensuel: "5 200,00 €", date_debut: "", matricule: "" });
+});
+
+test("prepare without an application uses the latest accepted offer when no employment is open", async () => {
+  const r = await rehireFixture().post({ action: "prepare", personId: PERSON, templateId: TEMPLATE });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.deepEqual(fieldMap(r), { poste: "Lead Engineer", type_contrat: "CDI", salaire_brut_mensuel: "5 200,00 €", date_debut: "", matricule: "" });
+});
+
+test("prepare with another person's application (or none) → 400", async () => {
+  for (const applicationId of [OTHER_APP, "99999999-9999-4999-8999-999999999999"]) {
+    const r = await rehireFixture().post({ action: "prepare", personId: PERSON, templateId: TEMPLATE, applicationId });
+    assert.equal(r.code, 400);
+    assert.equal(r.body.error, "Application does not belong to this person.");
+  }
+});
+
 test("preview of a custom upload that is not a PDF → 400", async () => {
   const f = fixture();
   const r = await f.post({

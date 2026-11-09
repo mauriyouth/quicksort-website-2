@@ -15,10 +15,19 @@ export function encryptSignatureCredentials(credentials: SignatureCredentials) {
   return encryptSecret(JSON.stringify(credentials), SIGNATURES_AAD);
 }
 
+/**
+ * Credentials that cannot be decrypted (e.g. after the encryption key changed)
+ * are treated as absent, so HR can enter them again in Settings.
+ */
 function decryptCredentials(value: string | null | undefined): SignatureCredentials {
   if (!value) return { apiKey: null, webhookSecret: null };
-  const parsed = JSON.parse(decryptSecret(value, SIGNATURES_AAD));
-  return { apiKey: parsed?.apiKey || null, webhookSecret: parsed?.webhookSecret || null };
+  try {
+    const parsed = JSON.parse(decryptSecret(value, SIGNATURES_AAD));
+    return { apiKey: parsed?.apiKey || null, webhookSecret: parsed?.webhookSecret || null };
+  } catch (error) {
+    console.error("signatures: the stored Youtrust credentials cannot be decrypted; treating them as absent.", (error as Error)?.message);
+    return { apiKey: null, webhookSecret: null };
+  }
 }
 
 export async function loadSignatureSettings(

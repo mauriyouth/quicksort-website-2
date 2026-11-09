@@ -638,3 +638,22 @@ test("discard-draft succeeds even when trashing its files fails", async () => {
   assert.deepEqual(r.body, { deleted: true });
   assert.equal(f.tables.signature_requests.length, 0);
 });
+
+test("credentials that cannot be decrypted read as absent and can be replaced from Settings", async (t) => {
+  const logged = t.mock.method(console, "error", () => {});
+  const f = fixture();
+  f.tables.signature_settings[0].encrypted_credentials = "v1:not-a-valid-ciphertext";
+  const r = await f.post({ action: "get-settings" });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.equal(r.body.hasApiKey, false);
+  assert.equal(r.body.hasWebhookSecret, false);
+  assert.ok(logged.mock.callCount() >= 1);
+  assert.match(String(logged.mock.calls[0].arguments[0]), /cannot be decrypted/);
+
+  const saved = await f.post({ action: "save-settings", staging: true, signatoryName: "Mohamed Nah", signatoryEmail: "mohamed@quicksort.test", apiKey: "new-api-key", webhookSecret: "new-secret" });
+  assert.equal(saved.code, 200, JSON.stringify(saved.body));
+  assert.equal(saved.body.hasApiKey, true);
+  const stored = await loadSignatureSettings(f.client);
+  assert.equal(stored.apiKey, "new-api-key");
+  assert.equal(stored.webhookSecret, "new-secret");
+});

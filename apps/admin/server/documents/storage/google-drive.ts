@@ -1,4 +1,4 @@
-import { createSign, randomUUID } from "node:crypto";
+import { createHash, createSign, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { decryptApiKey } from "../../ai-settings.ts";
@@ -76,7 +76,7 @@ function serviceJwt(sa: ServiceAccount) {
   return `${header}.${payload}.${signature}`;
 }
 
-async function driveToken(sa: ServiceAccount) {
+export async function driveToken(sa: ServiceAccount) {
   const hit = tokenCache.get(sa.client_email);
   if (hit && hit.expiresAt > Date.now() + 60_000) return hit.token;
   const response = await fetch(TOKEN_URL, {
@@ -122,7 +122,7 @@ function driveError(status: number, message: string, sa: Pick<DriveSettings, "cl
 async function failure(response: globalThis.Response, sa: ServiceAccount) {
   let message = "";
   try { message = ((await response.json()) as { error?: { message?: string } })?.error?.message || ""; } catch { /* bare status */ }
-  return driveError(response.status, message, sa);
+  return Object.assign(driveError(response.status, message, sa), { status: response.status });
 }
 
 export async function driveApi<T>(sa: ServiceAccount, path: string, opts: { method?: string; query?: Record<string, string>; body?: unknown } = {}): Promise<T> {
@@ -304,6 +304,11 @@ export function createDriveStorage(sa: DriveSettings): DocumentStorage {
         headers: { "Content-Type": file.mimeType || "application/octet-stream" },
         fileId: null,
       };
+    },
+    async uploadFile(folder, file, bytes) {
+      const stored = toStoredFile(await uploadFileContent(sa, { name: file.name, mimeType: file.mimeType, data: Buffer.from(bytes) }, folder.id));
+      // Drive computes the checksum asynchronously; the registry wants one, so hash what we sent.
+      return { ...stored, size: stored.size ?? bytes.byteLength, sha256: stored.sha256 ?? createHash("sha256").update(bytes).digest("hex") };
     },
     async getFile(fileId) {
       return toStoredFile(await driveApi<DriveFile>(sa, `/files/${fileId}`, { query: { fields: FILE_FIELDS, supportsAllDrives: "true" } }));

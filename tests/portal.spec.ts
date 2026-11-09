@@ -158,6 +158,22 @@ test('pre-hire portal exposes contracts for review and download before onboardin
   expect((await download).suggestedFilename()).toBe('Employment agreement.pdf');
 });
 
+test('employees no longer see in-app contract signing or My application', async ({ page }) => {
+  const state = portalFixture(); addEmployment(state);
+  await portalApi(page, state);
+  await page.goto(new URL('/onboarding', harness.url).href);
+  await expect(page.getByRole('link', { name: 'My onboarding', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My contracts', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'My application', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Waiting for your signature')).toHaveCount(0);
+  await expect(page.getByText('To sign', { exact: true })).toHaveCount(0);
+  await page.goto(new URL('/contracts', harness.url).href);
+  await expect(page.getByText('Page not found').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Review & sign', exact: true })).toHaveCount(0);
+  await page.goto(new URL('/application', harness.url).href);
+  await expect(page.getByText('Page not found').first()).toBeVisible();
+});
+
 test('employees can open My CRA through portal navigation and a direct link', async ({ page }) => {
   const state = portalFixture(); addEmployment(state);
   await portalApi(page, state);

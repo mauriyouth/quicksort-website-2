@@ -1,6 +1,12 @@
 import type { HrTable, HrPerson, HrApplication, HrEmployee, HrEmployeeSalary, HrOpportunity, HrInterview, HrOffer, HrJourneyTask, HrReview, HrExit, HrExitItem, HrAssignment, HrEvent, HrContract, HrSignature, HrCountersignature, HrSuggestion, HrAccount } from "./hr.types";
 import type { BlogRecord, BlogInsert } from "./blog";
 import type { DocumentTypeRecord, DocumentRecord, DocumentFolderRecord, DocumentAlert, DocumentRegistration } from "./documents.types";
+export type SignatureSigner = { role: 'person' | 'quicksort'; name: string; email: string; order: number };
+export type SignatureRequestStatus = 'draft' | 'sending' | 'sent' | 'signed_by_person' | 'completed' | 'declined' | 'expired' | 'cancelled' | 'error';
+// Server-only: never select encrypted_credentials from the browser.
+export type SignatureSettingsRecord = { id: string; options: { staging?: boolean; signatory_name?: string; signatory_email?: string }; encrypted_credentials: string | null; updated_at: string };
+export type SignatureTemplateRecord = { id: string; name: string; google_doc_id: string; signers: 'person_and_quicksort' | 'person' | 'quicksort'; type_code: string; active: boolean; created_by: string | null; created_at: string; updated_at: string };
+export type SignatureRequestRecord = { id: string; person_id: string; template_id: string | null; title: string; type_code: string; signers: SignatureSigner[]; field_values: Record<string, string>; supersedes: string | null; status: SignatureRequestStatus; error: string; youtrust_request_id: string | null; youtrust_document_id: string | null; doc_copy_file_id: string | null; pdf_file_id: string | null; pdf_folder_id: string | null; signed_document_id: string | null; audit_document_id: string | null; filing_claimed_at: string | null; created_by: string; created_at: string; updated_at: string; status_changed_at: string };
 export type Json =
   | string
   | number
@@ -27,6 +33,10 @@ export type Database = {
       document_types: HrTable<DocumentTypeRecord>;
       documents: HrTable<DocumentRecord>;
       document_folders: HrTable<DocumentFolderRecord>;
+      signature_settings: HrTable<SignatureSettingsRecord>;
+      signature_templates: HrTable<SignatureTemplateRecord>;
+      signature_requests: HrTable<SignatureRequestRecord>;
+      signature_webhook_events: HrTable<{ event_id: string; received_at: string }>;
       admin_access_audit: {
         Row: {
           action: string
@@ -1061,6 +1071,7 @@ export type Database = {
       };
       hr_command: { Args: { command: Json }; Returns: Json };
       register_document: { Args: { document: DocumentRegistration; supersedes?: string | null; request_id?: string }; Returns: DocumentRecord };
+      register_signed_document: { Args: { signature_request: string; document: DocumentRegistration; supersedes?: string | null }; Returns: DocumentRecord };
       set_employee_matricule: { Args: { employee_id: string; matricule: string; request_id?: string }; Returns: HrEmployee };
       own_document_download_source: { Args: { document_id: string }; Returns: { provider_file_id: string; file_name: string; mime_type: string; size_bytes: number | null; storage_provider: string; encrypted_credentials: string | null }[] };
       payslip_download_source: { Args: { document_id: string }; Returns: { provider_file_id: string; file_name: string; mime_type: string; size_bytes: number | null; storage_provider: string; encrypted_credentials: string | null }[] };

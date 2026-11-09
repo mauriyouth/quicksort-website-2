@@ -304,6 +304,44 @@ test("preview fills the template into the person's folder and stores a draft", a
   assert.equal(Buffer.from(r.body.pdfBase64, "base64").toString(), Buffer.from(PDF).toString());
 });
 
+const OTHER = "66666666-6666-4666-8666-666666666666";
+const APP = "77777777-7777-4777-8777-777777777777";
+const OTHER_APP = "88888888-8888-4888-8888-888888888888";
+const withApplications = (f) => {
+  f.tables.hr_applications = [{ id: APP, person_id: PERSON }, { id: OTHER_APP, person_id: OTHER }];
+  return f;
+};
+
+test("preview stores the application it was sent from", async () => {
+  const f = withApplications(fixture());
+  const r = await f.post({ ...templatePreview(), applicationId: APP });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.equal(f.tables.signature_requests[0].application_id, APP);
+  const list = await f.post({ action: "list-requests", personId: PERSON });
+  assert.equal(list.body.requests[0].application_id, APP);
+});
+
+test("preview of a custom PDF also stores the application", async () => {
+  const f = withApplications(fixture());
+  const r = await f.post({
+    action: "preview", personId: PERSON, title: "Avenant", typeCode: "EMPLOYMENT_CONTRACT", pdfBase64: Buffer.from(PDF).toString("base64"),
+    signers: [{ role: "person", name: "Ada L.", email: "ada@example.test" }], applicationId: APP,
+  });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.equal(f.tables.signature_requests[0].application_id, APP);
+});
+
+test("preview with another person's application (or none) → 400 and nothing inserted", async () => {
+  for (const applicationId of [OTHER_APP, "99999999-9999-4999-8999-999999999999"]) {
+    const f = withApplications(fixture());
+    const r = await f.post({ ...templatePreview(), applicationId });
+    assert.equal(r.code, 400);
+    assert.match(JSON.stringify(r.body), /Application does not belong to this person\./);
+    assert.equal(f.tables.signature_requests?.length ?? 0, 0);
+    assert.equal(f.count("uploadFile"), 0);
+  }
+});
+
 test("preview of a custom upload that is not a PDF → 400", async () => {
   const f = fixture();
   const r = await f.post({

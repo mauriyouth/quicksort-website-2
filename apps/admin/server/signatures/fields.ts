@@ -91,14 +91,38 @@ export async function loadPersonFacts(client: SupabaseClient, personId: string):
       contractType = offer?.contract_type ?? null;
     }
   }
+  // A candidate with no employment yet: use the latest accepted offer.
+  let offerFacts: { role: string; contractType: string; salaryMonthly: number | null; dailyRate: number | null } | null = null;
+  if (!employee) {
+    const { data: apps, error: appError } = await client.from("hr_applications").select("id").eq("person_id", personId);
+    if (appError) throw appError;
+    const ids = (apps || []).map((row: { id: string }) => row.id);
+    if (ids.length) {
+      const { data: offers, error: offerError } = await client
+        .from("offers").select("title,contract_type,salary_monthly,cjm,created_at")
+        .in("application_id", ids).eq("status", "accepted").order("created_at", { ascending: false });
+      if (offerError) throw offerError;
+      const offer = (offers || [])[0];
+      if (offer) {
+        const freelance = offer.contract_type === "Freelance";
+        offerFacts = {
+          role: offer.title || "",
+          contractType: offer.contract_type,
+          salaryMonthly: freelance ? null : num(offer.salary_monthly),
+          dailyRate: freelance ? num(offer.cjm) : null,
+        };
+      }
+    }
+  }
+  if (offerFacts) contractType = offerFacts.contractType;
   const daily = salary?.rate_kind === "daily";
   return {
     fullName: person.full_name,
     email: person.email || "",
-    role: employee?.role || "",
+    role: employee?.role || offerFacts?.role || "",
     contractType,
-    salaryMonthly: salary && !daily ? num(salary.salary_monthly) : null,
-    dailyRate: salary && daily ? num(salary.daily_rate) : null,
+    salaryMonthly: offerFacts ? offerFacts.salaryMonthly : salary && !daily ? num(salary.salary_monthly) : null,
+    dailyRate: offerFacts ? offerFacts.dailyRate : salary && daily ? num(salary.daily_rate) : null,
     startDate: employee?.start_date ?? null,
     probationEnd: employee?.probation_end ?? null,
     matricule: employee?.matricule ?? null,

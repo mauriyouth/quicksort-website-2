@@ -40,6 +40,8 @@ import {
 /** Custom PDFs travel base64-encoded in a JSON body, under Vercel's ~4.5 MB request cap. */
 const MAX_CUSTOM_PDF_BYTES = 3 * 1024 * 1024;
 const TOO_LARGE = "This PDF is larger than 3 MB. Compress it, or send it from Youtrust directly.";
+/** Hiring requires one of these; an application only sends contracts. */
+const HIRING_CONTRACT_TYPES = ["EMPLOYMENT_CONTRACT", "FREELANCE_CONTRACT"];
 
 const STATUS: Record<RequestStatus, { label: string; variant: "default" | "secondary" | "outline" | "success" | "warning" | "destructive" }> = {
   draft: { label: "Draft", variant: "outline" },
@@ -295,13 +297,17 @@ function SendPanel({
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const offered = (code: string) => !applicationId || HIRING_CONTRACT_TYPES.includes(code);
     postSignatures<{ templates: SignatureTemplate[] }>({ action: "list-templates" }).then(
-      (r) => setTemplates(r.templates.filter((t) => t.active)),
+      (r) => setTemplates(r.templates.filter((t) => t.active && offered(t.type_code))),
       (e) => setError(errorText(e, "Could not load the templates.")),
     );
-    loadDocumentTypes().then((all) => setTypes(all.filter((t) => t.owner_kinds.includes("person"))), () => setTypes([]));
+    loadDocumentTypes().then(
+      (all) => setTypes(all.filter((t) => t.owner_kinds.includes("person") && offered(t.code))),
+      () => setTypes([]),
+    );
     loadOwnerDocuments({ kind: "person", id: personId }).then(setDocuments, () => setDocuments([]));
-  }, [personId]);
+  }, [personId, applicationId]);
 
   // Object URLs for the preview are released when replaced or unmounted.
   useEffect(() => () => { if (draft) URL.revokeObjectURL(draft.pdfUrl); }, [draft]);

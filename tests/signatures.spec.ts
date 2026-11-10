@@ -5,6 +5,7 @@ test.use({ channel: 'chromium' });
 
 const PERSON = '54000000-0000-4000-8000-0000000000a1';
 const TEMPLATE = '54000000-0000-4000-8000-0000000000b1';
+const OTHER_TEMPLATE = '54000000-0000-4000-8000-0000000000b2';
 const DRAFT = '54000000-0000-4000-8000-0000000000c1';
 const OLD_CONTRACT = '54000000-0000-4000-8000-0000000000d1';
 const APPLICATION = '54000000-0000-4000-8000-0000000000f1';
@@ -33,7 +34,7 @@ const SIGNERS = [
 ];
 const request = (status: string, extra: Record<string, unknown> = {}) => ({
   id: `54000000-0000-4000-8000-00000000${status.length.toString().padStart(4, '0')}`, person_id: PERSON, template_id: TEMPLATE,
-  title: `Contrat CDI (${status})`, type_code: 'CONTRACT_CDI', signers: SIGNERS, supersedes: null, status, error: '',
+  title: `Contrat CDI (${status})`, type_code: 'EMPLOYMENT_CONTRACT', signers: SIGNERS, supersedes: null, status, error: '',
   youtrust_request_id: 'yt-1', doc_copy_file_id: null, pdf_file_id: 'pdf-1', pdf_folder_id: 'folder-1',
   signed_document_id: status === 'completed' ? '54000000-0000-4000-8000-0000000000e1' : null, audit_document_id: null,
   created_at: '2026-11-02T10:00:00Z', updated_at: '2026-11-02T10:00:00Z', ...extra,
@@ -46,11 +47,13 @@ async function mock(page: Page, requests: unknown[] = [], answers: Record<string
     const url = new URL(route.request().url());
     if (route.request().method() === 'OPTIONS') return json(route, {});
     if (url.pathname.endsWith('/document_types')) return json(route, [
-      { code: 'CONTRACT_CDI', label: 'CDI contract', owner_kinds: ['person'], position: 1 },
+      { code: 'EMPLOYMENT_CONTRACT', label: 'CDI contract', owner_kinds: ['person'], position: 1 },
       { code: 'KBIS', label: 'Extrait Kbis', owner_kinds: ['company'], position: 2 },
+      { code: 'FREELANCE_CONTRACT', label: 'Freelance contract', owner_kinds: ['person'], position: 3 },
+      { code: 'OTHER', label: 'Autre', owner_kinds: ['person'], position: 4 },
     ]);
     if (url.pathname.endsWith('/documents')) return json(route, [
-      { id: OLD_CONTRACT, type_code: 'CONTRACT_CDI', title: 'Contrat CDI 2024', status: 'active', person_id: PERSON, file_name: 'cdi.pdf', created_at: '2024-01-01T00:00:00Z' },
+      { id: OLD_CONTRACT, type_code: 'EMPLOYMENT_CONTRACT', title: 'Contrat CDI 2024', status: 'active', person_id: PERSON, file_name: 'cdi.pdf', created_at: '2024-01-01T00:00:00Z' },
     ]);
     return json(route, []);
   });
@@ -65,7 +68,8 @@ async function mock(page: Page, requests: unknown[] = [], answers: Record<string
         serviceAccountEmail: 'drive-bot@quicksort.iam.gserviceaccount.com', webhookUrl: 'https://admin.quicksort.test/api/youtrust-webhook',
       });
       case 'list-templates': return json(route, { templates: [
-        { id: TEMPLATE, name: 'Contrat CDI', google_doc_id: '1AbCdEfGhIjKlMnOpQrStUvWxYz', signers: 'person_and_quicksort', type_code: 'CONTRACT_CDI', active: true },
+        { id: TEMPLATE, name: 'Contrat CDI', google_doc_id: '1AbCdEfGhIjKlMnOpQrStUvWxYz', signers: 'person_and_quicksort', type_code: 'EMPLOYMENT_CONTRACT', active: true },
+        { id: OTHER_TEMPLATE, name: 'Attestation', google_doc_id: '2AbCdEfGhIjKlMnOpQrStUvWxYz', signers: 'quicksort', type_code: 'OTHER', active: true },
       ] });
       case 'list-requests': return json(route, { requests });
       case 'prepare': return json(route, {
@@ -204,7 +208,29 @@ test('from an application, only its requests are listed and the preview carries 
   await page.getByLabel('clause_speciale').fill('Aucune');
   await page.getByRole('button', { name: 'Build preview' }).click();
   await expect(page.locator('object[type="application/pdf"]')).toBeVisible();
+  expect(calls.find((call) => call.action === 'prepare')).toMatchObject({ personId: PERSON, templateId: TEMPLATE, applicationId: APPLICATION });
   expect(calls.find((call) => call.action === 'preview')).toMatchObject({ personId: PERSON, applicationId: APPLICATION });
+});
+
+test('from an application, only contract templates and contract types are offered', async ({ page }) => {
+  await mock(page);
+  await page.goto(new URL('/application', harness.url).href);
+  await page.getByRole('button', { name: 'Send for signature' }).click();
+  const templates = page.getByLabel('Template').locator('option');
+  await expect(templates).toHaveText(['Choose a template', 'Contrat CDI', 'Custom PDF']);
+  await expect(page.getByLabel('Template').locator('option', { hasText: 'Attestation' })).toHaveCount(0);
+
+  await page.getByLabel('Template').selectOption({ label: 'Custom PDF' });
+  await expect(page.getByLabel('Document type').locator('option')).toHaveText(['Choose a type', 'CDI contract', 'Freelance contract']);
+});
+
+test('from the employment page, every active template and person type is offered', async ({ page }) => {
+  await mock(page);
+  await page.goto(new URL('/person', harness.url).href);
+  await page.getByRole('button', { name: 'Send for signature' }).click();
+  await expect(page.getByLabel('Template').locator('option')).toHaveText(['Choose a template', 'Contrat CDI', 'Attestation', 'Custom PDF']);
+  await page.getByLabel('Template').selectOption({ label: 'Custom PDF' });
+  await expect(page.getByLabel('Document type').locator('option')).toHaveText(['Choose a type', 'CDI contract', 'Freelance contract', 'Autre']);
 });
 
 test('from the employment page, the preview carries no application', async ({ page }) => {

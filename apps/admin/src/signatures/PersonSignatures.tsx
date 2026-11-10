@@ -40,6 +40,8 @@ import {
 /** Custom PDFs travel base64-encoded in a JSON body, under Vercel's ~4.5 MB request cap. */
 const MAX_CUSTOM_PDF_BYTES = 3 * 1024 * 1024;
 const TOO_LARGE = "This PDF is larger than 3 MB. Compress it, or send it from Youtrust directly.";
+/** Hiring requires one of these; an application only sends contracts. */
+const HIRING_CONTRACT_TYPES = ["EMPLOYMENT_CONTRACT", "FREELANCE_CONTRACT"];
 
 const STATUS: Record<RequestStatus, { label: string; variant: "default" | "secondary" | "outline" | "success" | "warning" | "destructive" }> = {
   draft: { label: "Draft", variant: "outline" },
@@ -61,8 +63,19 @@ const errorText = (e: unknown, fallback: string) => (e instanceof Error && e.mes
  * signature" panel: choose a template or upload a PDF, fill the values the
  * record doesn't know, build the PDF preview (a draft in the person's Drive
  * folder), then send it. The signed copy is filed by the webhook or Refresh.
+ * With `applicationId`, it lists only that application's requests and sends
+ * new ones for it: the hiring contract that the hire step waits for.
  */
-export function PersonSignatures({ personId, person }: { personId: string; /** Prefills the signer of a custom PDF. */ person?: { name: string; email: string } }) {
+export function PersonSignatures({
+  personId,
+  person,
+  applicationId,
+}: {
+  personId: string;
+  /** Prefills the signer of a custom PDF. */
+  person?: { name: string; email: string };
+  applicationId?: string;
+}) {
   const [requests, setRequests] = useState<SignatureRequest[] | null>(null);
   const [composing, setComposing] = useState(false);
   const [busyId, setBusyId] = useState("");
@@ -72,8 +85,8 @@ export function PersonSignatures({ personId, person }: { personId: string; /** P
 
   const reload = useCallback(async () => {
     const result = await postSignatures<{ requests: SignatureRequest[] }>({ action: "list-requests", personId });
-    setRequests(result.requests);
-  }, [personId]);
+    setRequests(applicationId ? result.requests.filter((r) => r.application_id === applicationId) : result.requests);
+  }, [personId, applicationId]);
 
   useEffect(() => {
     setRequests(null);
@@ -211,6 +224,7 @@ export function PersonSignatures({ personId, person }: { personId: string; /** P
         <SendPanel
           personId={personId}
           person={person}
+          applicationId={applicationId}
           onClose={() => setComposing(false)}
           onSent={(email) => {
             setComposing(false);
@@ -253,7 +267,19 @@ function pdfBlobUrl(base64: string) {
   return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
 }
 
-function SendPanel({ personId, person: record, onClose, onSent }: { personId: string; person?: { name: string; email: string }; onClose: () => void; onSent: (email: string) => void }) {
+function SendPanel({
+  personId,
+  person: record,
+  applicationId,
+  onClose,
+  onSent,
+}: {
+  personId: string;
+  person?: { name: string; email: string };
+  applicationId?: string;
+  onClose: () => void;
+  onSent: (email: string) => void;
+}) {
   const [templates, setTemplates] = useState<SignatureTemplate[]>([]);
   const [types, setTypes] = useState<DocumentTypeRecord[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -271,13 +297,17 @@ function SendPanel({ personId, person: record, onClose, onSent }: { personId: st
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const offered = (code: string) => !applicationId || HIRING_CONTRACT_TYPES.includes(code);
     postSignatures<{ templates: SignatureTemplate[] }>({ action: "list-templates" }).then(
-      (r) => setTemplates(r.templates.filter((t) => t.active)),
+      (r) => setTemplates(r.templates.filter((t) => t.active && offered(t.type_code))),
       (e) => setError(errorText(e, "Could not load the templates.")),
     );
-    loadDocumentTypes().then((all) => setTypes(all.filter((t) => t.owner_kinds.includes("person"))), () => setTypes([]));
+    loadDocumentTypes().then(
+      (all) => setTypes(all.filter((t) => t.owner_kinds.includes("person") && offered(t.code))),
+      () => setTypes([]),
+    );
     loadOwnerDocuments({ kind: "person", id: personId }).then(setDocuments, () => setDocuments([]));
-  }, [personId]);
+  }, [personId, applicationId]);
 
   // Object URLs for the preview are released when replaced or unmounted.
   useEffect(() => () => { if (draft) URL.revokeObjectURL(draft.pdfUrl); }, [draft]);
@@ -331,7 +361,12 @@ function SendPanel({ personId, person: record, onClose, onSent }: { personId: st
         return;
       }
       setBusy("prepare");
-      const prepared = await postSignatures<{ fields: PreparedField[]; signers: Signer[] }>({ action: "prepare", personId, templateId: next });
+      const prepared = await postSignatures<{ fields: PreparedField[]; signers: Signer[] }>({
+        action: "prepare",
+        personId,
+        templateId: next,
+        ...(applicationId ? { applicationId } : {}),
+      });
       setFields(prepared.fields);
       setSigners(prepared.signers);
     } catch (e) {
@@ -367,6 +402,7 @@ function SendPanel({ personId, person: record, onClose, onSent }: { personId: st
       const result = await postSignatures<{ request: SignatureRequest; previewUrl: string; pdfBase64?: string | null }>({
         action: "preview",
         personId,
+        ...(applicationId ? { applicationId } : {}),
         signers: signerInput,
         supersedes: supersedes || null,
         ...(custom

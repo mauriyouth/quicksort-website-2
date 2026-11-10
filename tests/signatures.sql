@@ -140,4 +140,82 @@ select pg_temp.assert_true((select status_changed_at>now()-interval '1 hour' fro
 
 -- Completion filing claims the request (column exists, starts unclaimed).
 select pg_temp.assert_true((select filing_claimed_at is null from public.signature_requests),'A request starts with no filing claim');
+
+-- Hiring requires a completed Youtrust contract linked to the application.
+insert into public.hr_people(id,full_name,email) values
+ ('52000000-0000-4000-8000-000000000003','Sig Candidate','sig-candidate@example.invalid'),
+ ('52000000-0000-4000-8000-000000000004','Sig Second','sig-second@example.invalid');
+-- An application at Contract with interviews held and an accepted offer: hireable but for the contract.
+create function pg_temp.hireable_application(id uuid, person uuid, title text) returns uuid language plpgsql as $$
+declare opp uuid;
+begin
+ insert into public.opportunities(title,hiring_mode,status) values(title,'sur_mission','approved') returning opportunities.id into opp;
+ insert into public.hr_applications(id,person_id,opportunity_id,stage) values(id,person,opp,'contract');
+ insert into public.interviews(application_id,kind,scheduled_at,status,scorecard) values
+  (id,'hr',now()-interval '2 days','completed','[{"competency":"Experience","rating":4,"evidence":"Held"}]'),
+  (id,'technical',now()-interval '1 day','completed','[{"competency":"Experience","rating":4,"evidence":"Held"}]');
+ insert into public.offers(application_id,title,contract_type,salary_monthly,cjm,target_tjm,status) values(id,title,'CDI',4000,300,600,'accepted');
+ return id;
+end; $$;
+select pg_temp.hireable_application('56000000-0000-4000-8000-000000000001','52000000-0000-4000-8000-000000000003','Platform Engineer');
+select pg_temp.hireable_application('56000000-0000-4000-8000-000000000002','52000000-0000-4000-8000-000000000003','Data Engineer');
+select pg_temp.hireable_application('56000000-0000-4000-8000-000000000003','52000000-0000-4000-8000-000000000004','Backend Engineer');
+create function pg_temp.hire(app uuid) returns jsonb language sql as $$
+ select public.hr_command(jsonb_build_object('kind','hire','request_id',gen_random_uuid(),'application_id',app,
+  'expected_version',(select version from public.hr_applications where id=app),'start_date',current_date,'role','Engineer'));
+$$;
+create function pg_temp.hire_refused(app uuid, description text) returns void language plpgsql as $$
+begin
+ begin
+  perform pg_temp.hire(app);
+  raise exception 'FAILED: hired %', description;
+ exception when others then
+  if sqlerrm <> 'Hire prerequisites: The contract is signed in Youtrust' then raise exception 'FAILED: % (got %)', description, sqlerrm; end if;
+ end;
+end; $$;
+insert into public.signature_requests(id,person_id,application_id,title,type_code,signers,status,created_by) values
+ ('55000000-0000-4000-8000-000000000002','52000000-0000-4000-8000-000000000003','56000000-0000-4000-8000-000000000001',
+  'Contrat CDI','EMPLOYMENT_CONTRACT','[]','sent','51000000-0000-4000-8000-000000000001');
+select pg_temp.as_user('51000000-0000-4000-8000-000000000001');
+select pg_temp.assert_true((select not (j->>'done')::boolean from jsonb_array_elements(public.hr_application_requirements('56000000-0000-4000-8000-000000000001','hire')) j
+  where j->>'key'='signatures' and j->>'label'='The contract is signed in Youtrust'),'The hire requirement carries the Youtrust label');
+select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a contract still waiting for a signature');
+update public.signature_requests set status='completed',
+  signed_document_id=(select id from public.documents where provider_file_id='signed-v2'),
+  application_id='56000000-0000-4000-8000-000000000002'
+ where id='55000000-0000-4000-8000-000000000002';
+select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a contract signed for another application of the same person');
+update public.signature_requests set application_id=null where id='55000000-0000-4000-8000-000000000002';
+select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a contract sent without an application');
+update public.signature_requests set application_id='56000000-0000-4000-8000-000000000001',person_id='52000000-0000-4000-8000-000000000002'
+ where id='55000000-0000-4000-8000-000000000002';
+select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a contract signed by another person');
+update public.signature_requests set person_id='52000000-0000-4000-8000-000000000003',signed_document_id=null where id='55000000-0000-4000-8000-000000000002';
+select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a completed contract whose signed copy is not filed');
+update public.signature_requests set signed_document_id=(select id from public.documents where provider_file_id='signed-v2'),type_code='OTHER'
+ where id='55000000-0000-4000-8000-000000000002';
+select pg_temp.hire_refused('56000000-0000-4000-8000-000000000001','on a completed, filed request that is not a contract');
+update public.signature_requests set type_code='EMPLOYMENT_CONTRACT' where id='55000000-0000-4000-8000-000000000002';
+select pg_temp.assert_true((select (j->>'done')::boolean from jsonb_array_elements(public.hr_application_requirements('56000000-0000-4000-8000-000000000001','hire')) j
+  where j->>'key'='signatures'),'A completed, filed contract linked to the application meets the requirement');
+select pg_temp.hire('56000000-0000-4000-8000-000000000001');
+select pg_temp.assert_true((select status='hired' from public.hr_applications where id='56000000-0000-4000-8000-000000000001'),'Admin hires on a linked Youtrust contract');
+
+-- HR-role users cannot read signature_requests, yet can hire when the contract is signed.
+insert into public.signature_requests(person_id,application_id,title,type_code,signers,status,signed_document_id,created_by) values
+ ('52000000-0000-4000-8000-000000000004','56000000-0000-4000-8000-000000000003','Contrat CDI','EMPLOYMENT_CONTRACT','[]','completed',
+  (select id from public.documents where provider_file_id='signed-v2'),'51000000-0000-4000-8000-000000000001');
+select pg_temp.as_user('51000000-0000-4000-8000-000000000003');
+set local role authenticated;
+select pg_temp.hire('56000000-0000-4000-8000-000000000003');
+reset role;
+select pg_temp.assert_true((select status='hired' from public.hr_applications where id='56000000-0000-4000-8000-000000000003'),'HR-role user hires on a linked Youtrust contract');
+
+-- The old in-app contract tables are gone, and so are their workspace keys.
+select pg_temp.assert_true(to_regclass('public.contracts') is null,'contracts is dropped');
+select pg_temp.assert_true(to_regclass('public.contract_signatures') is null,'contract_signatures is dropped');
+select pg_temp.assert_true(to_regclass('public.contract_countersignatures') is null,'contract_countersignatures is dropped');
+select pg_temp.as_user('51000000-0000-4000-8000-000000000001');
+select pg_temp.assert_true((select not (s ? 'contracts') and not (s ? 'signatures') and not (s ? 'countersignatures') from public.hr_workspace_snapshot() s),
+  'The workspace snapshot has no old contract keys');
 rollback;

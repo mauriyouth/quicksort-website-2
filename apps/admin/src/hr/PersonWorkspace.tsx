@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useSession } from '@clerk/react';
-import { Check, CheckCircle2, ChevronRight, Circle, Eye, Lock, Plus, Sparkles, AlertCircle, FileText, Search } from 'lucide-react';
+import { Check, CheckCircle2, ChevronRight, Circle, Eye, Lock, Plus, Sparkles, AlertCircle, Search } from 'lucide-react';
 import { db, errorMessage } from '@quicksort/hr-db';
 import {
   Alert,
@@ -716,7 +716,29 @@ export function Readiness({
     </li>)}
   </ul>;
 }
-/** One record (interview, offer, contract) inside an application section. */
+/** Read-only hire prerequisite for users who can't send contracts: is the contract signed in Youtrust? */
+function ContractSigned({ applicationId }: { applicationId: string }) {
+  const [signed, setSigned] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    void loadRequirements(applicationId, 'hire').then(items => {
+      if (!cancelled) setSigned(items.find(item => item.key === 'signatures')?.done ?? false);
+    }).catch(failure => {
+      if (!cancelled) setError(errorMessage(failure));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applicationId]);
+  if (error) return <ErrorText>{error}</ErrorText>;
+  if (signed === null) return <p role="status" className={QUIET}>Checking the signature…</p>;
+  return <p className="m-0 flex items-center gap-2.5 text-sm">
+    {signed ? <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" /> : <Circle className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+    <span>{signed ? 'Signed in Youtrust' : 'Not signed yet. An admin sends the contract from this page.'}</span>
+  </p>;
+}
+/** One record (interview, offer) inside an application section. */
 function RecordCard({ title, meta, badges, children }: { title: ReactNode; meta?: ReactNode; badges?: ReactNode; children?: ReactNode }) {
   return <Card size="sm">
     <CardHeader>
@@ -745,7 +767,6 @@ function ApplicationDetail({
   const opportunity = workspace.opportunities.find(item => item.id === application.opportunity_id);
   const interviews = workspace.interviews.filter(interview => interview.application_id === application.id);
   const offers = workspace.offers.filter(offer => offer.application_id === application.id);
-  const contracts = workspace.contracts.filter(contract => contract.application_id === application.id);
   return <>
     <RecordCard title={opportunity?.title ?? 'Hiring need'} meta={`Application opened ${date(application.created_at)} · ${label(application.source)}`} badges={<>
       <Tag tone={application.status === 'active' ? 'good' : 'quiet'}>
@@ -875,24 +896,10 @@ function ApplicationDetail({
         </Form>
       </Disclosure>}
     </Section>
-    <Section title="Contracts" detail="Hiring requires the accepted offer and signatures linked to this application.">
-      {contracts.map(contract => {
-        const signature = workspace.signatures.find(item => item.contract_id === contract.id);
-        const counter = workspace.countersignatures.find(item => item.contract_id === contract.id);
-        return <RecordCard key={contract.id} title={<><FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><span className="min-w-0 truncate">{contract.title}</span></>} badges={<Tag tone={signature && counter ? 'good' : 'quiet'}>
-            {signature && counter ? 'Both signatures recorded' : 'Awaiting signatures'}
-          </Tag>}>
-          <p className="m-0">Candidate: {signature ? `${signature.signer_name}, ${date(signature.signed_at)}` : 'Pending'} · Employer: {counter ? `${counter.signer_name}, ${date(counter.signed_at)}` : 'Pending'}</p>
-          {!counter && <Form run={run} busy={busy} button="Countersign as employer" success="Employer countersignature recorded." submit={data => ({
-            kind: 'countersign_contract',
-            contract_id: contract.id,
-            signer_name: text(data, 'signer_name')
-          })}>
-            <Field name="signer_name" label="Employer signer's full name" required />
-          </Form>}
-        </RecordCard>;
-      })}
-      {!contracts.length && <Empty>No contract is linked to this application.</Empty>}
+    <Section title="Contract signature" detail="The hiring contract for this application. Once signed in Youtrust, the person can be hired.">
+      {workspace.capabilities.admin
+        ? <PersonSignatures personId={person.id} person={{ name: person.full_name, email: person.email }} applicationId={application.id} />
+        : <ContractSigned key={`signed-${workspace.events.length}`} applicationId={application.id} />}
     </Section>
     {application.status === 'active' && <Section title="Hire and start preboarding" detail="The person keeps all prior applications and employment periods.">
       <div className="grid items-start gap-4 @3xl:grid-cols-[16rem_minmax(0,1fr)]">
@@ -901,7 +908,7 @@ function ApplicationDetail({
             <CardHeading level={3}>Prerequisites</CardHeading>
           </CardHeader>
           <CardContent>
-            <Readiness key={`hire-${workspace.events.length}-${workspace.signatures.length}-${workspace.countersignatures.length}`} applicationId={application.id} stage="hire" />
+            <Readiness key={`hire-${workspace.events.length}`} applicationId={application.id} stage="hire" />
           </CardContent>
         </Card>
         <Card size="sm">

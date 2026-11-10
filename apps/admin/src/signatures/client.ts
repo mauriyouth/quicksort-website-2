@@ -36,6 +36,8 @@ export type RequestStatus = "draft" | "sending" | "sent" | "signed_by_person" | 
 export type SignatureRequest = {
   id: string;
   person_id: string;
+  /** Set when the request was sent from an application's "Contract signature" section. */
+  application_id: string | null;
   template_id: string | null;
   title: string;
   type_code: string;

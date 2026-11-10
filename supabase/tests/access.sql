@@ -8,17 +8,17 @@ update public.user_roles set role='admin' where user_id='10000000-0000-4000-8000
 insert into public.jobs(id,slug,title,location,description,linkedin_url,published) values
 ('20000000-0000-4000-8000-000000000001','rls-public-job','Public role','Paris','Test','https://www.linkedin.com/jobs/view/123',true),
 ('20000000-0000-4000-8000-000000000002','rls-draft-job','Draft role','Paris','Test','https://www.linkedin.com/jobs/view/123',false);
-insert into public.contracts(id,candidate_id,title,storage_path,document_sha256) values
-('30000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','A contract','10000000-0000-4000-8000-000000000001/contract.pdf',repeat('a',64)),
-('30000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000002','B contract','10000000-0000-4000-8000-000000000002/contract.pdf',repeat('b',64));
-insert into storage.objects(bucket_id,name) values
-('contracts','10000000-0000-4000-8000-000000000001/contract.pdf'),
-('contracts','10000000-0000-4000-8000-000000000002/contract.pdf');
+insert into public.hr_people(id,full_name,email) values
+('30000000-0000-4000-8000-000000000001','Candidate A','rls-candidate-a@example.invalid');
+insert into public.signature_requests(id,person_id,title,type_code,signers,status,created_by) values
+('31000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','A contract','EMPLOYMENT_CONTRACT','[]','sent','10000000-0000-4000-8000-000000000003');
 set local role anon;
 do $$ declare denied boolean:=false; begin
  if (select count(*) from public.jobs where slug like 'rls-%')<>1 then raise exception 'Anon can see a draft'; end if;
  begin perform * from public.profiles; exception when insufficient_privilege then denied:=true; end;
  if not denied then raise exception 'Anon can read profiles'; end if;
+ denied:=false; begin perform * from public.signature_requests; exception when insufficient_privilege then denied:=true; end;
+ if not denied then raise exception 'Anon can read signature requests'; end if;
 end $$;
 reset role;
 select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
@@ -26,8 +26,7 @@ set local role authenticated;
 do $$ declare denied boolean; begin
  if (select role from public.user_roles where user_id=auth.uid())<>'candidate' then raise exception 'User metadata granted admin'; end if;
  if (select count(*) from public.profiles where id::text like '10000000-%')<>1 then raise exception 'Cross-candidate profile leak'; end if;
- if (select count(*) from public.contracts where id::text like '30000000-%')<>1 then raise exception 'Cross-candidate contract leak'; end if;
- if (select count(*) from storage.objects where bucket_id='contracts' and name like '10000000-%')<>1 then raise exception 'Cross-candidate storage leak'; end if;
+ if (select count(*) from public.signature_requests where id::text like '31000000-%')<>0 then raise exception 'Non-admin can read signature requests'; end if;
  denied:=false; begin update public.user_roles set role='admin' where user_id=auth.uid(); exception when insufficient_privilege then denied:=true; end;
  if not denied then raise exception 'Candidate changed role'; end if;
  denied:=false; begin insert into public.jobs(slug,title,location,description,linkedin_url) values('rls-forbidden','Forbidden','Paris','Test','https://linkedin.com/jobs/1'); exception when insufficient_privilege then denied:=true; end;
@@ -36,12 +35,6 @@ do $$ declare denied boolean; begin
  if not denied then raise exception 'Candidate assigned document to another'; end if;
  denied:=false; begin insert into storage.objects(bucket_id,name) values('candidate-documents','10000000-0000-4000-8000-000000000002/wrong.pdf'); exception when insufficient_privilege then denied:=true; end;
  if not denied then raise exception 'Candidate uploaded into another folder'; end if;
- denied:=false; begin insert into public.contract_signatures(contract_id,signer_name) values('30000000-0000-4000-8000-000000000002','Wrong person'); exception when others then denied:=true; end;
- if not denied then raise exception 'Candidate signed someone else contract'; end if;
- insert into public.contract_signatures(contract_id,signer_name) values('30000000-0000-4000-8000-000000000001','Candidate A');
- if not exists(select 1 from public.contract_signatures where candidate_id=auth.uid() and document_sha256=repeat('a',64) and signed_at=now()) then raise exception 'Signature not stamped by server'; end if;
- denied:=false; begin update public.contract_signatures set signer_name='Tampered'; exception when insufficient_privilege then denied:=true; end;
- if not denied then raise exception 'Signature mutated'; end if;
  insert into public.tool_requests(tool_name,reason) values('RLS Tool','Test access');
  denied:=false; begin insert into public.tool_requests(tool_name,reason,status) values('RLS Tool','Test','approved'); exception when insufficient_privilege then denied:=true; end;
  if not denied then raise exception 'Candidate self-approved request'; end if;
@@ -57,13 +50,9 @@ do $$ begin
  if not exists(select 1 from public.jobs where slug='rls-draft-job' and published) then raise exception 'Admin publish failed'; end if;
  update public.tool_requests set status='approved' where tool_name='RLS Tool';
  if not exists(select 1 from public.tool_requests where tool_name='RLS Tool' and status='approved') then raise exception 'Admin approval failed'; end if;
- begin
- delete from storage.objects where bucket_id='contracts' and name='10000000-0000-4000-8000-000000000001/contract.pdf';
- exception when insufficient_privilege then null;
- end;
- if not exists(select 1 from storage.objects where bucket_id='contracts' and name='10000000-0000-4000-8000-000000000001/contract.pdf') then raise exception 'Admin deleted signed contract'; end if;
+ if (select count(*) from public.signature_requests where id::text like '31000000-%')<>1 then raise exception 'Admin cannot read signature requests'; end if;
  delete from public.jobs where slug='rls-public-job';
  if exists(select 1 from public.jobs where slug='rls-public-job') then raise exception 'Admin deletion failed'; end if;
 end $$;
 rollback;
-select 'PASS: anonymous access, candidate isolation, role protection, signatures, storage, admin publishing and request decisions' as result;
+select 'PASS: anonymous access, candidate isolation, role protection, admin-only signature requests, storage, admin publishing and request decisions' as result;

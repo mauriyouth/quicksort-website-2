@@ -65,7 +65,7 @@ picks the shell from the role the database returns after sign-in:
 | --- | --- | --- |
 | `admin`, `hr` | `Admin` | Full back-office. Portal owners (`portal_owners`) also get `/admin-access` |
 | `sales` | `StaffingWorkspace` | HR → People only (staffing view) plus account settings |
-| anything else | `HrPortal` (lazy) | Candidate/employee self-service: application, documents, contracts, CRA, tool access, team photos |
+| anything else | `HrPortal` (lazy) | Candidate/employee self-service: application, documents, CRA, tool access, team photos. Contracts are sent from the admin side and signed in Youtrust |
 
 **Back-office sections** (nav in `App.tsx`; tab strips in `SectionHeader.tsx`):
 
@@ -101,7 +101,7 @@ locally. `api/` files stay thin, and the logic lives in `server/`.
 ### `apps/candidate` — candidate portal (`@quicksort/candidate`, port 5175)
 
 A smaller stand-alone portal with onboarding, profile (capability profile),
-documents, contracts, tool access and account pages. It uses
+documents, tool access and account pages. It uses
 `@quicksort/candidate-db`/`candidate-ui`. Its CSP targets the
 `kupbvrnjppcwqxmzxasi` Supabase project. The admin app's `HrPortal` covers the
 same ground for users who sign in to admin without a staff role.
@@ -190,9 +190,10 @@ consuming app's Vite build compiles them, and no package has a build step.
   - **Business:** `business_*` tables plus audit logs.
   - **Content:** `jobs`, blog, events (read by the public website).
   - **Access:** `user_roles`, `portal_owners`, `profiles`.
-- **Storage:** private buckets `candidate-documents` and `contracts` (10 MB,
-  self-folder policies keyed by user id or Clerk `sub`). The newer document
-  registry stores files in **Google Drive**. Supabase holds only the metadata
+- **Storage:** private bucket `candidate-documents` (10 MB, self-folder
+  policies keyed by user id or Clerk `sub`). The newer document
+  registry stores files in **Google Drive**, including contracts signed in
+  Youtrust, which are filed in Documents. Supabase holds only the metadata
   and the folder cache.
 - **Projects:** admin targets `ctgtowqjswbxwiapcvfj`. The candidate CSP
   targets `kupbvrnjppcwqxmzxasi`.

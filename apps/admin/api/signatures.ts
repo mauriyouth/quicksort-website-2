@@ -21,9 +21,11 @@ import type { YoutrustClient } from "../server/signatures/youtrust.ts";
  *   get-settings | save-settings            Youtrust options and write-only credentials.
  *   list-templates | save-template          Google Doc templates (checked readable by the service account).
  *   list-requests { personId }              The person's requests, newest first.
- *   prepare { personId, templateId }        The template's fields, prefilled from data, and the signers.
- *   preview { personId, templateId, values, signers, supersedes? }
- *         | { personId, title, typeCode, pdfBase64, signers, supersedes? }
+ *   prepare { personId, templateId, applicationId? }
+ *                                           The template's fields, prefilled from data (the
+ *                                           application's accepted offer when given), and the signers.
+ *   preview { personId, templateId, values, signers, supersedes?, applicationId? }
+ *         | { personId, title, typeCode, pdfBase64, signers, supersedes?, applicationId? }
  *                                           Builds the PDF in the person's folder and stores a draft.
  *   send | refresh | cancel | discard-draft { requestId }
  * signature_settings has no client grants, so it is read and written with the
@@ -49,7 +51,7 @@ type Signer = { role: "person" | "quicksort"; name: string; email: string; order
 type Template = { id: string; name: string; google_doc_id: string; signers: SignerKind; type_code: string; active: boolean };
 type RequestRow = {
   id: string; person_id: string; template_id: string | null; title: string; type_code: string; signers: Signer[];
-  supersedes: string | null; status: RequestStatus; error: string; youtrust_request_id: string | null;
+  supersedes: string | null; application_id: string | null; status: RequestStatus; error: string; youtrust_request_id: string | null;
   doc_copy_file_id: string | null; pdf_file_id: string | null; pdf_folder_id: string | null;
   signed_document_id: string | null; audit_document_id: string | null; updated_at: string;
 };
@@ -98,12 +100,13 @@ const actionSchema = z.discriminatedUnion("action", [
     active: z.boolean(),
   }),
   z.object({ action: z.literal("list-requests"), personId: uuid }),
-  z.object({ action: z.literal("prepare"), personId: uuid, templateId: uuid }),
+  z.object({ action: z.literal("prepare"), personId: uuid, templateId: uuid, applicationId: uuid.optional() }),
   z.object({
     action: z.literal("preview"),
     personId: uuid,
     signers: signerInput,
     supersedes: uuid.nullish(),
+    applicationId: uuid.optional(),
     templateId: uuid.optional(),
     values: z.record(z.string(), z.string().max(5000)).optional(),
     title: z.string().trim().min(1).max(200).optional(),
@@ -193,6 +196,11 @@ export function createSignaturesHandler(deps: Deps = {
         if (!data) throw new HttpError("Person not found.", 404);
         return data as { id: string; full_name: string; email: string | null };
       }
+      async function checkApplication(applicationId: string, personId: string) {
+        const { data, error } = await client.from("hr_applications").select("id,person_id").eq("id", applicationId).maybeSingle();
+        check(error, "Could not read the application.");
+        if (!data || data.person_id !== personId) throw new HttpError("Application does not belong to this person.", 400);
+      }
       async function loadTemplate(id: string) {
         const { data, error } = await client.from("signature_templates").select("*").eq("id", id).maybeSingle();
         check(error, "Could not read the template.");
@@ -277,8 +285,11 @@ export function createSignaturesHandler(deps: Deps = {
 
         async prepare(input) {
           await loadPerson(input.personId);
+          if (input.applicationId) await checkApplication(input.applicationId, input.personId);
           const template = await loadTemplate(input.templateId);
-          const [facts, s, sa] = await Promise.all([loadPersonFacts(client, input.personId), settings(), serviceAccount()]);
+          const [facts, s, sa] = await Promise.all([
+            loadPersonFacts(client, input.personId, input.applicationId), settings(), serviceAccount(),
+          ]);
           const names = extractFields(await deps.docs.readDocText(sa, template.google_doc_id));
           const known = knownValues(facts, today(), s.signatoryName);
           const fields = names.map((name) => {
@@ -323,6 +334,8 @@ export function createSignaturesHandler(deps: Deps = {
             if (!data) throw new HttpError("Choose an active document of the same type to replace.", 400);
           }
 
+          if (input.applicationId) await checkApplication(input.applicationId, person.id);
+
           // Refuse missing values before any folder or file is created.
           let fieldValues: Record<string, string> = {};
           const sa = template ? await serviceAccount() : null;
@@ -356,7 +369,7 @@ export function createSignaturesHandler(deps: Deps = {
           }
           const inserted = await client.from("signature_requests").insert({
             person_id: person.id, template_id: template?.id ?? null, title, type_code: typeCode, signers, field_values: fieldValues,
-            supersedes: input.supersedes ?? null, status: "draft", doc_copy_file_id: docCopyId, pdf_file_id: file.id,
+            supersedes: input.supersedes ?? null, application_id: input.applicationId ?? null, status: "draft", doc_copy_file_id: docCopyId, pdf_file_id: file.id,
             pdf_folder_id: folder.id, created_by: userId,
           }).select().single();
           if (inserted.error || !inserted.data) {

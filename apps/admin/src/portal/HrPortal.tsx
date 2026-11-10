@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Upload,
@@ -9,14 +9,12 @@ import {
   Check,
   CalendarDays,
   Receipt,
-  X,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useClerk } from "@clerk/react";
 import {
   db,
   downloadFile,
-  saveBlob,
   errorMessage,
   type Row,
 } from "@quicksort/hr-db";
@@ -31,7 +29,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  Badge,
   Button,
   Card,
   CardAction,
@@ -39,7 +36,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Checkbox,
   Field,
   FieldDescription,
   FieldLabel,
@@ -126,7 +122,6 @@ const nav = [
   { id: "application", href: "/application", label: "My application", icon: FileText },
   { id: "documents", href: "/documents", label: "Documents", icon: Upload },
   { id: "payslips", href: "/payslips", label: "Payslips", icon: Receipt },
-  { id: "contracts", href: "/contracts", label: "My contracts", icon: FileText },
   { id: "cra", href: "/cra", label: "My CRA", icon: CalendarDays },
   { id: "requests", href: "/tool-access", label: "Tool access", icon: KeyRound },
   { id: "account", href: "/account", label: "Account", icon: Settings },
@@ -150,10 +145,10 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
   const [journeyError, setJourneyError] = useState("");
   const onboardingOpen = employments.some(e => e.status !== "ended");
   // Employment unlocks the journey. Employees sign through Youtrust, so the
-  // application and in-app contract pages only exist before hiring.
+  // application page only exists before hiring.
   const routes = useMemo(
     () => (onboardingOpen
-      ? nav.filter((n) => n.id !== "application" && n.id !== "contracts")
+      ? nav.filter((n) => n.id !== "application")
       : [nav[1], nav[0], ...nav.slice(2)]),
     [onboardingOpen],
   );
@@ -166,15 +161,11 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
     [documents, setDocuments] = useState<Row<"candidate_documents">[]>([]),
     [docTypes, setDocTypes] = useState<MyDocumentType[]>([]),
     [nameFromHr, setNameFromHr] = useState(false),
-    [contracts, setContracts] = useState<Row<"contracts">[]>([]),
-    [signatures, setSignatures] = useState<Row<"contract_signatures">[]>([]),
     [requests, setRequests] = useState<Row<"tool_requests">[]>([]);
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [message, setMessage] = useState(""),
-    [review, setReview] = useState<Row<"contracts"> | null>(null),
-    [preview, setPreview] = useState("");
+    [message, setMessage] = useState("");
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -219,12 +210,6 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
           .eq("candidate_id", userId)
           .order("created_at", { ascending: false }),
         db()
-          .from("contracts")
-          .select("*")
-          .eq("candidate_id", userId)
-          .order("created_at", { ascending: false }),
-        db().from("contract_signatures").select("*").eq("candidate_id", userId),
-        db()
           .from("tool_requests")
           .select("*")
           .eq("candidate_id", userId)
@@ -233,9 +218,7 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
       for (const r of results) if (r.error) throw r.error;
       setProfile(results[0].data);
       setDocuments(results[1].data || []);
-      setContracts(results[2].data || []);
-      setSignatures(results[3].data || []);
-      setRequests(results[4].data || []);
+      setRequests(results[2].data || []);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -246,12 +229,6 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
     document.title = "Quicksort HR";
     void load();
   }, [load]);
-  useEffect(
-    () => () => {
-      if (preview) URL.revokeObjectURL(preview);
-    },
-    [preview],
-  );
   async function action(work: () => Promise<void>, success = "Saved.") {
     setBusy(true);
     setError("");
@@ -266,13 +243,11 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
       setBusy(false);
     }
   }
-  useEffect(() => { setError(""); setMessage(""); setReview(null); setPreview(""); }, [tab]);
+  useEffect(() => { setError(""); setMessage(""); }, [tab]);
   function navigate(id: string) {
     setTab(id);
     setError("");
     setMessage("");
-    setReview(null);
-    setPreview("");
   }
   async function upload(file: File, typeCode: string | null, category: string) {
     await action(async () => {
@@ -312,34 +287,6 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
       const result = await db().from("candidate_documents").delete().eq("id", upload.id).select("id").single();
       if (result.error) throw result.error;
     }, "Document removed.");
-  }
-  async function openReview(c: Row<"contracts">) {
-    await action(async () => {
-      const { data, error } = await db()
-        .storage.from("contracts")
-        .download(c.storage_path);
-      if (error) throw error;
-      setPreview(URL.createObjectURL(data));
-      setReview(c);
-    }, "Contract ready to review.");
-  }
-  async function sign(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!review) return;
-    const f = new FormData(e.currentTarget);
-    if (f.get("consent") !== "on") return;
-    const contractId = review.id;
-    await action(async () => {
-      const { error } = await db()
-        .from("contract_signatures")
-        .insert({
-          contract_id: contractId,
-          signer_name: String(f.get("name")).trim(),
-        });
-      if (error) throw error;
-      setReview(null);
-      setPreview("");
-    }, "Your signature has been recorded. You can download the contract and signature receipt below.");
   }
   // One list: every HR-folder document, plus own uploads HR has not filed (not
   // linked yet, or a CV). An own upload rides on its registry row; a replaced
@@ -496,148 +443,6 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
             onDownload={(p) => void action(() => downloadOwnPayslip(p), "Payslip downloaded.")}
             onDownloadAll={(rows) => void action(async () => { for (const p of rows) await downloadOwnPayslip(p); }, rows.length === 1 ? "Payslip downloaded." : "Payslips downloaded.")}
           />
-        </>
-      )}
-      {tab === "contracts" && !onboardingOpen && (
-        <>
-          <PageHeading title="My contracts" />
-          {review && (
-            <Card>
-              <CardHeader>
-                <PortalCardTitle>Review: {review.title}</PortalCardTitle>
-                <CardDescription>
-                  Read the complete PDF before signing. If the preview does not
-                  load, download and open it.
-                </CardDescription>
-                <CardAction>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Close"
-                    onClick={() => {
-                      setReview(null);
-                      setPreview("");
-                    }}
-                  >
-                    <X aria-hidden="true" />
-                  </Button>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="flex flex-col items-start gap-4">
-              <object
-                className="h-[70vh] min-h-96 w-full rounded-sm border border-border bg-white"
-                data={preview}
-                type="application/pdf"
-              >
-                <p className="p-4 text-sm text-neutral-600">
-                  PDF preview is unavailable. Use Download PDF to review your
-                  contract.
-                </p>
-              </object>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  void action(
-                    () =>
-                      downloadFile(
-                        "contracts",
-                        review.storage_path,
-                        review.title + ".pdf",
-                      ),
-                    "Contract downloaded.",
-                  )
-                }
-              >
-                Download PDF
-              </Button>
-              <SignForm busy={busy} defaultName={profile?.full_name} onSubmit={sign} />
-              </CardContent>
-            </Card>
-          )}
-          <Card>
-            <CardContent>
-            {!contracts.length && !loading && (
-              <EmptyState title="No contracts yet">
-                Your team will share your agreements here when they're ready.
-              </EmptyState>
-            )}
-            <ul className={LIST}>
-            {contracts.map((c) => {
-              const signature = signatures.find((s) => s.contract_id === c.id);
-              return (
-                <li className={ROW} key={c.id}>
-                  <div className="flex min-w-0 flex-[1_1_16rem] flex-col items-start gap-1">
-                    <h3 className="m-0 text-[15px] font-medium">{c.title}</h3>
-                    <p className={QUIET}>Shared {formatDate(c.created_at)}</p>
-                    <Badge variant={signature ? "success" : "warning"}>{signature ? "signed" : "pending"}</Badge>
-                    {signature && (
-                      <>
-                        <p className="m-0 mt-1 font-serif text-2xl italic">{signature.signer_name}</p>
-                        <p className="m-0 text-xs text-muted-foreground">
-                          Signed {formatDate(signature.signed_at)}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() =>
-                        void action(
-                          () =>
-                            downloadFile(
-                              "contracts",
-                              c.storage_path,
-                              c.title + ".pdf",
-                            ),
-                          "Contract downloaded.",
-                        )
-                      }
-                    >
-                      Download PDF
-                    </Button>
-                    {signature ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          saveBlob(
-                            new Blob(
-                              [
-                                JSON.stringify(
-                                  { contract_title: c.title, ...signature },
-                                  null,
-                                  2,
-                                ),
-                              ],
-                              { type: "application/json" },
-                            ),
-                            `signature-${c.id}.json`,
-                          )
-                        }
-                      >
-                        Signature receipt
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => void openReview(c)}
-                      >
-                        Review & sign
-                      </Button>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-            </ul>
-            </CardContent>
-          </Card>
         </>
       )}
       {tab === "requests" && onboardingOpen && (
@@ -824,42 +629,6 @@ function PortalStat({ label, value, detail, icon: Icon }: { label: string; value
   );
 }
 
-/** Electronic signature: typed legal name and explicit consent. */
-function SignForm({ busy, defaultName, onSubmit }: { busy: boolean; defaultName?: string; onSubmit: (e: FormEvent<HTMLFormElement>) => void }) {
-  const consentId = useId();
-  return (
-    <form className="flex w-full max-w-xl flex-col gap-4 border-t border-border pt-5" onSubmit={onSubmit}>
-      <LabelledField label="Your full legal name">
-        {(id) => <Input
-          id={id}
-          name="name"
-          required
-          minLength={2}
-          maxLength={200}
-          autoComplete="name"
-          defaultValue={defaultName}
-        />}
-      </LabelledField>
-      <Field orientation="horizontal" className="items-start gap-2.5">
-        <Checkbox id={consentId} name="consent" value="on" required />
-        <FieldLabel htmlFor={consentId} className="font-normal leading-snug">
-          I have read this contract and agree to sign it electronically.
-        </FieldLabel>
-      </Field>
-      <p className={QUIET}>
-        Your typed name, the document fingerprint and the signing time
-        will be recorded. The original PDF remains available with a
-        separate signature receipt.
-      </p>
-      <div>
-        <Button type="submit" disabled={busy}>
-          Sign this contract
-        </Button>
-      </div>
-    </form>
-  );
-}
-
 /** Clerk account management (replaces hr-ui <AccountSecurity>). */
 function AccountCard() {
   const clerk = useClerk();
@@ -896,7 +665,7 @@ function MyApplicationTab({
       <PageHeading title="My application" />
       <PageAlerts error={journeyError} />
       {loading && <p className={QUIET} role="status">Loading your applications…</p>}
-      {!loading && !journeyError && !application && <EmptyState title="No application linked yet">Your HR team can link your account to your person record. Your documents and contracts are already available.</EmptyState>}
+      {!loading && !journeyError && !application && <EmptyState title="No application linked yet">Your HR team can link your account to your person record. Your documents are already available.</EmptyState>}
       {application && <>
         <Card>
           <CardContent className="flex flex-col items-start gap-5">

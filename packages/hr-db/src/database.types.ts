@@ -1,4 +1,4 @@
-import type { HrTable, HrPerson, HrApplication, HrEmployee, HrEmployeeSalary, HrOpportunity, HrInterview, HrOffer, HrJourneyTask, HrReview, HrExit, HrExitItem, HrAssignment, HrEvent, HrContract, HrSignature, HrCountersignature, HrSuggestion, HrAccount } from "./hr.types";
+import type { HrTable, HrPerson, HrApplication, HrEmployee, HrEmployeeSalary, HrOpportunity, HrInterview, HrOffer, HrJourneyTask, HrReview, HrExit, HrExitItem, HrAssignment, HrEvent, HrSuggestion, HrAccount } from "./hr.types";
 import type { BlogRecord, BlogInsert } from "./blog";
 import type { DocumentTypeRecord, DocumentRecord, DocumentFolderRecord, DocumentAlert, DocumentRegistration } from "./documents.types";
 export type SignatureSigner = { role: 'person' | 'quicksort'; name: string; email: string; order: number };
@@ -6,7 +6,7 @@ export type SignatureRequestStatus = 'draft' | 'sending' | 'sent' | 'signed_by_p
 // Server-only: never select encrypted_credentials from the browser.
 export type SignatureSettingsRecord = { id: string; options: { staging?: boolean; signatory_name?: string; signatory_email?: string }; encrypted_credentials: string | null; updated_at: string };
 export type SignatureTemplateRecord = { id: string; name: string; google_doc_id: string; signers: 'person_and_quicksort' | 'person' | 'quicksort'; type_code: string; active: boolean; created_by: string | null; created_at: string; updated_at: string };
-export type SignatureRequestRecord = { id: string; person_id: string; template_id: string | null; title: string; type_code: string; signers: SignatureSigner[]; field_values: Record<string, string>; supersedes: string | null; status: SignatureRequestStatus; error: string; youtrust_request_id: string | null; youtrust_document_id: string | null; doc_copy_file_id: string | null; pdf_file_id: string | null; pdf_folder_id: string | null; signed_document_id: string | null; audit_document_id: string | null; filing_claimed_at: string | null; created_by: string; created_at: string; updated_at: string; status_changed_at: string };
+export type SignatureRequestRecord = { id: string; person_id: string; template_id: string | null; title: string; type_code: string; signers: SignatureSigner[]; field_values: Record<string, string>; supersedes: string | null; application_id: string | null; status: SignatureRequestStatus; error: string; youtrust_request_id: string | null; youtrust_document_id: string | null; doc_copy_file_id: string | null; pdf_file_id: string | null; pdf_folder_id: string | null; signed_document_id: string | null; audit_document_id: string | null; filing_claimed_at: string | null; created_by: string; created_at: string; updated_at: string; status_changed_at: string };
 export type Json =
   | string
   | number
@@ -26,7 +26,6 @@ export type Database = {
       hr_people: HrTable<HrPerson>;
       hr_applications: HrTable<HrApplication>;
       hr_events: HrTable<HrEvent>;
-      contract_countersignatures: HrTable<HrCountersignature>;
       hr_ai_suggestions: HrTable<HrSuggestion>;
       hr_person_accounts: HrTable<HrAccount>;
       blog_posts: { Row: BlogRecord; Insert: BlogInsert; Update: Partial<BlogRecord>; Relationships: [] };
@@ -156,8 +155,6 @@ export type Database = {
           },
         ]
       }
-      contract_signatures: HrTable<HrSignature>;
-      contracts: HrTable<HrContract>;
       cra_entries: {
         Row: {
           employee_id: string

@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CalendarDays, Clock3, Plus, RefreshCw, Search, Users, X, ArrowUpRight, MapPin } from 'lucide-react';
+import { CalendarDays, Clock3, Plus, RefreshCw, Search, Users, MapPin, ArrowUpRight } from 'lucide-react';
 import { db, errorMessage } from '@quicksort/hr-db';
 import { cn } from 'cn';
 import {
-  Badge,
   Button,
   Card,
   CardContent,
   Checkbox,
-  DialogTitle,
   Field as UiField,
   FieldLabel,
-  Input,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
@@ -31,14 +28,13 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
-  Textarea,
 } from '@quicksort-sas/ui';
 import { executeCommand, loadWorkspace } from './data';
 import type { CommandResult, Employee, Opportunity, Person, Workspace } from './domain';
 import { AssignForm, PersonWorkspace, available, personName, stages, type PersonTab, type RecordContext } from './PersonWorkspace';
 import { Dialog, Empty, Field, Form, PersonLink, SearchMultiField, Section, Tag, avatarClass, checked, date, initials, label, nullable, text, today, type RunCommand } from './ui';
 import { PageAlerts, PageHeading } from '../ui';
-import type { Application, ApplicationStage } from './domain';
+import type { ApplicationStage } from './domain';
 import { DateField } from '../DateField';
 import { Intake } from './Intake';
 import { CraScreen } from '../cra/CraScreen';
@@ -366,6 +362,7 @@ function PersonPage({
               </span>
               {availability !== null && <span>{availability}% available today</span>}
               {person.location && <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" aria-hidden="true" />{person.location}</span>}
+              {person.linkedin_url && <a className="inline-flex items-center gap-1 font-medium text-foreground" href={person.linkedin_url} target="_blank" rel="noopener noreferrer">LinkedIn profile<ArrowUpRight className="size-3" aria-hidden="true" /></a>}
             </div>
           </div>
         </div>
@@ -735,20 +732,16 @@ function Recruiting({
 }) {
   const {
     workspace,
+    run,
     open
   } = context;
   const [tab, setTab] = useState(() => getParam('recruiting') || 'board');
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [opportunityId, setOpportunityId] = useState('');
-  const [quickView, setQuickView] = useState<{
-    applicationId: string;
-    targetStage?: ApplicationStage;
-  } | null>(null);
   const [overStage, setOverStage] = useState<ApplicationStage | ''>('');
   const [dragId, setDragId] = useState('');
   const applications = workspace.applications.filter(application => application.status === 'active' && (!opportunityId || application.opportunity_id === opportunityId) && `${personName(workspace, application.person_id)} ${workspace.people.find(person => person.id === application.person_id)?.skills ?? ''}`.toLowerCase().includes(query.toLowerCase()));
-  const quickApplication = quickView ? workspace.applications.find(application => application.id === quickView.applicationId && application.status === 'active') ?? null : null;
   return <>
     <ViewTabs label="Recruiting views" value={tab} onChange={value => {
       setTab(value);
@@ -800,10 +793,12 @@ function Recruiting({
             setDragId('');
             const applicationId = event.dataTransfer.getData('text/plain');
             const application = workspace.applications.find(item => item.id === applicationId);
-            if (application && application.stage !== stage) setQuickView({
-              applicationId: application.id,
-              targetStage: stage
-            });
+            if (application && application.stage !== stage) void run({
+              kind: 'move_application',
+              application_id: application.id,
+              expected_version: application.version,
+              to_stage: stage
+            }, `${personName(workspace, application.person_id)} moved to ${label(stage)}.`).catch(() => {});
           }}>
             <h3 className="m-0 flex min-h-11 items-start justify-between gap-2 px-1 pt-1 text-[13px] leading-snug font-medium">
               {label(stage)}
@@ -815,9 +810,7 @@ function Recruiting({
               const person = workspace.people.find(item => item.id === application.person_id);
               const opportunity = workspace.opportunities.find(item => item.id === application.opportunity_id);
               const age = Math.max(0, Math.floor((Date.now() - new Date(application.stage_entered_at).getTime()) / 86400000));
-              const decide = () => setQuickView({
-                applicationId: application.id
-              });
+              const openRecord = () => open(application.person_id, application.id);
               return <div className="flex cursor-grab flex-col gap-3 rounded-lg border border-border bg-card p-3.5 text-card-foreground transition-[border-color,opacity] duration-150 outline-none hover:border-faint focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing data-dragging:opacity-40" key={application.id} tabIndex={0} data-dragging={dragId === application.id ? '' : undefined} draggable onDragStart={event => {
                 event.dataTransfer.setData('text/plain', application.id);
                 event.dataTransfer.effectAllowed = 'move';
@@ -825,10 +818,10 @@ function Recruiting({
               }} onDragEnd={() => {
                 setDragId('');
                 setOverStage('');
-              }} onClick={decide} onKeyDown={event => {
+              }} onClick={openRecord} onKeyDown={event => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  decide();
+                  openRecord();
                 }
               }}>
                 <div className="flex min-w-0 items-center gap-2.5">
@@ -849,12 +842,6 @@ function Recruiting({
                 </p>}
                 <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1"><Clock3 className="size-3" aria-hidden="true" />{age} {age === 1 ? 'day' : 'days'} in stage · {label(application.source)}</span>
-                  <Button variant="link" size="xs" className="text-foreground" onClick={event => {
-                    event.stopPropagation();
-                    decide();
-                  }}>
-                    Decide →
-                  </Button>
                 </div>
               </div>;
             })}
@@ -864,8 +851,7 @@ function Recruiting({
           </section>;
         })}
       </div>
-      <p className="m-0 text-xs text-muted-foreground">Drag a candidate onto the next stage, or click a card for a quick decision without leaving the board. The full record stays one click away.</p>
-      {quickApplication && <ApplicationQuickView key={`${quickApplication.id}-${quickApplication.stage}`} application={quickApplication} context={context} initialStage={quickView?.targetStage} close={() => setQuickView(null)} />}
+      <p className="m-0 text-xs text-muted-foreground">Drag a candidate onto another stage to move them, or click a card to open the full record.</p>
     </>}
     {tab === 'needs' && <Requisitions context={context} />}
     {tab === 'interviews' && <Section title="Interview schedule" detail="Interview status and invitation status are separate facts.">
@@ -950,211 +936,6 @@ function Recruiting({
       </Card> : <Empty>No employment offers yet.</Empty>}
     </Section>}
   </>;
-}
-const RATIONALE_MIN = 20;
-function ApplicationQuickView({
-  application,
-  context,
-  initialStage,
-  close
-}: {
-  application: Application;
-  context: PageContext;
-  initialStage?: ApplicationStage;
-  close: () => void;
-}) {
-  const {
-    workspace,
-    run,
-    busy,
-    open
-  } = context;
-  const person = workspace.people.find(item => item.id === application.person_id);
-  const opportunity = workspace.opportunities.find(item => item.id === application.opportunity_id);
-  const currentIndex = stages.indexOf(application.stage);
-  const [target, setTarget] = useState<ApplicationStage | 'rejected'>(initialStage && initialStage !== application.stage ? initialStage : stages[Math.min(currentIndex + 1, stages.length - 1)]);
-  const [closing, setClosing] = useState(false);
-  const [disposition, setDisposition] = useState<'rejected' | 'withdrawn'>('withdrawn');
-  const [rationale, setRationale] = useState('');
-  const [scheduling, setScheduling] = useState(false);
-  const [interviewKind, setInterviewKind] = useState('hr');
-  const [scheduledAt, setScheduledAt] = useState('');
-  const [panel, setPanel] = useState('');
-  const [location, setLocation] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const rejecting = target === 'rejected';
-  const isClosing = closing && !rejecting;
-  const rationaleLength = rationale.trim().length;
-  const rationaleReady = rationaleLength >= RATIONALE_MIN;
-  const scheduleReady = !!scheduledAt && !!panel.trim();
-  const cannotSubmit = busy || saving || (scheduling ? !scheduleReady : !rationaleReady);
-  const age = Math.max(0, Math.floor((Date.now() - new Date(application.stage_entered_at).getTime()) / 86400000));
-  const summary = scheduling ? `Schedule ${label(interviewKind)} interview` : rejecting ? `${label(application.stage)} → Rejected` : isClosing ? `${label(application.stage)} → ${label(disposition)}` : `${label(application.stage)} → ${label(target)}`;
-  const record = async () => {
-    if (cannotSubmit) return;
-    setSaving(true);
-    setError('');
-    try {
-      if (scheduling) {
-        await run({
-          kind: 'schedule_interview',
-          application_id: application.id,
-          interview_kind: interviewKind,
-          scheduled_at: new Date(scheduledAt).toISOString(),
-          panel: panel.trim(),
-          location: location.trim()
-        }, 'Interview recorded. Send the calendar invitation manually.');
-        close();
-        return;
-      }
-      if (rejecting) {
-        await run({
-          kind: 'dispose_application',
-          application_id: application.id,
-          expected_version: application.version,
-          status: 'rejected',
-          reason: rationale.trim()
-        }, 'Application rejected with its history preserved.');
-      } else if (isClosing) {
-        await run({
-          kind: 'dispose_application',
-          application_id: application.id,
-          expected_version: application.version,
-          status: disposition,
-          reason: rationale.trim()
-        }, 'Application closed with its history preserved.');
-      } else {
-        await run({
-          kind: 'move_application',
-          application_id: application.id,
-          expected_version: application.version,
-          to_stage: target,
-          rationale: rationale.trim()
-        }, 'Application stage updated.');
-      }
-      close();
-    } catch (failure) {
-      setError(errorMessage(failure));
-    } finally {
-      setSaving(false);
-    }
-  };
-  const toggle = (active: boolean) => cn('h-auto px-0 text-[13px] text-muted-foreground hover:text-foreground', active && 'text-foreground decoration-foreground');
-  const sectionHead = 'flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1';
-  const hint = 'text-xs text-muted-foreground';
-  return <Dialog bare className="sm:max-w-[720px]" title={`Stage decision · ${person?.full_name ?? 'Unknown person'}`} close={close}>
-    <div className="flex shrink-0 items-start gap-3.5 border-b border-border px-5 py-4 sm:px-6">
-      <span className={cn(avatarClass, 'size-11 text-sm')} aria-hidden="true">{initials(person?.full_name ?? '?')}</span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <DialogTitle className="text-xl">{person?.full_name ?? 'Unknown person'}</DialogTitle>
-          <Badge variant="outline">{label(application.stage)}</Badge>
-        </div>
-        {person?.headline && <p className="m-0 text-[13px] text-muted-foreground">{person.headline}</p>}
-      </div>
-      <Button variant="ghost" size="icon" aria-label="Close stage decision" onClick={close}>
-        <X aria-hidden="true" />
-      </Button>
-    </div>
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5 sm:px-6 *:shrink-0">
-      <div className="grid grid-cols-2 items-center gap-4 rounded-lg bg-muted p-4 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
-        {[['Hiring need', opportunity?.title ?? 'Hiring need'], ['Applied', date(application.created_at)], ['Source', label(application.source)], ['In stage', `${age} days`]].map(([title, value]) => <div key={title} className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-muted-foreground">{title}</span>
-          <strong className="truncate text-sm font-medium">{value}</strong>
-        </div>)}
-        <Button variant="link" size="sm" className="col-span-2 justify-self-start sm:col-span-1" onClick={() => {
-          close();
-          open(application.person_id, application.id);
-        }}>
-          Full record <ArrowUpRight aria-hidden="true" />
-        </Button>
-      </div>
-      <div className="flex flex-wrap justify-end gap-x-4 gap-y-2">
-        {application.status === 'active' && <Button variant="link" size="sm" aria-pressed={scheduling} className={toggle(scheduling)} onClick={() => {
-          if (scheduling) {
-            setScheduling(false);
-          } else {
-            setScheduling(true);
-            setClosing(false);
-            setTarget(stages[Math.min(currentIndex + 1, stages.length - 1)]);
-          }
-        }}>
-          {scheduling ? 'Cancel scheduling' : 'Schedule interview'}
-        </Button>}
-        <Button variant="link" size="sm" aria-pressed={rejecting} className={toggle(rejecting)} onClick={() => {
-          setScheduling(false);
-          setClosing(false);
-          setTarget(rejecting ? stages[Math.min(currentIndex + 1, stages.length - 1)] : 'rejected');
-        }}>
-          {rejecting ? 'Cancel rejection' : 'Reject candidate'}
-        </Button>
-        <Button variant="link" size="sm" aria-pressed={isClosing} className={toggle(isClosing)} onClick={() => {
-          setScheduling(false);
-          if (isClosing) {
-            setClosing(false);
-          } else {
-            setClosing(true);
-            setTarget(stages[Math.min(currentIndex + 1, stages.length - 1)]);
-          }
-        }}>
-          {isClosing ? 'Cancel close' : 'Close this application'}
-        </Button>
-      </div>
-      {isClosing && <UiField className="gap-1.5 sm:max-w-xs">
-        <FieldLabel htmlFor="hr-quick-disposition">Disposition</FieldLabel>
-        <NativeSelect id="hr-quick-disposition" className="w-full" value={disposition} onChange={event => setDisposition(event.target.value as 'rejected' | 'withdrawn')}>
-          <NativeSelectOption value="withdrawn">Withdrawn</NativeSelectOption>
-          <NativeSelectOption value="rejected">Rejected</NativeSelectOption>
-        </NativeSelect>
-      </UiField>}
-      {scheduling && <div className="flex flex-col gap-3">
-        <div className={sectionHead}>
-          <span className="text-[15px] font-medium">Interview details</span>
-          <span className={hint}>Required · the calendar invitation is still sent manually</span>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <UiField className="gap-1.5">
-            <FieldLabel htmlFor="hr-quick-kind">Interview type</FieldLabel>
-            <NativeSelect id="hr-quick-kind" className="w-full" value={interviewKind} onChange={event => setInterviewKind(event.target.value)}>
-              <NativeSelectOption value="hr">HR</NativeSelectOption>
-              <NativeSelectOption value="technical">Technical</NativeSelectOption>
-              <NativeSelectOption value="client">Client</NativeSelectOption>
-            </NativeSelect>
-          </UiField>
-          <UiField className="gap-1.5">
-            <FieldLabel htmlFor="hr-quick-when">Date and time</FieldLabel>
-            <Input id="hr-quick-when" type="datetime-local" value={scheduledAt} onChange={event => setScheduledAt(event.target.value)} />
-          </UiField>
-          <UiField className="col-span-full gap-1.5">
-            <FieldLabel htmlFor="hr-quick-panel">Interview panel</FieldLabel>
-            <Input id="hr-quick-panel" value={panel} onChange={event => setPanel(event.target.value)} placeholder="Names or email addresses of the interviewers" />
-          </UiField>
-          <UiField className="col-span-full gap-1.5">
-            <FieldLabel htmlFor="hr-quick-location">Meeting link or location</FieldLabel>
-            <Input id="hr-quick-location" value={location} onChange={event => setLocation(event.target.value)} placeholder="Video link or room" />
-          </UiField>
-        </div>
-      </div>}
-      {!scheduling && <div className="flex flex-col gap-2.5">
-        <div className={sectionHead}>
-          <label htmlFor="hr-quick-rationale-input" className="text-[15px] font-medium">Comments</label>
-          <span className={hint}>{rationaleReady ? 'Required · ready' : `Required · ${RATIONALE_MIN - rationaleLength} more characters`}</span>
-        </div>
-        <Textarea id="hr-quick-rationale-input" className="min-h-32 resize-y" value={rationale} onChange={event => setRationale(event.target.value)} placeholder="What did you see that supports this move? Keep it factual. It's stored on the candidate's record." />
-      </div>}
-      {error && <p role="alert" className="m-0 text-[13px] text-destructive">{error}</p>}
-    </div>
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border bg-muted/40 px-5 py-3.5 sm:px-6">
-      <span className="w-full text-[13px] text-muted-foreground sm:mr-auto sm:w-auto">{summary}</span>
-      <div className="ml-auto flex gap-2">
-        <Button variant="outline" disabled={saving} onClick={close}>Cancel</Button>
-        <Button variant={rejecting || isClosing ? 'destructive' : 'default'} disabled={cannotSubmit} onClick={() => void record()}>
-          {saving ? 'Recording…' : scheduling ? 'Schedule interview' : rejecting ? 'Record rejection' : isClosing ? 'Record disposition' : `Move to ${label(target)}`}
-        </Button>
-      </div>
-    </div>
-  </Dialog>;
 }
 function RequisitionForm({
   opportunity,

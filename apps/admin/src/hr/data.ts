@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { db } from "@quicksort/hr-db";
+import { experienceItemSchema } from "../candidate-intake";
 import type { CommandResult, Requirement, Workspace } from "./domain";
 export type * from "./domain";
 const personSchema = z.object({
@@ -17,6 +18,12 @@ const personSchema = z.object({
   source: z.string(),
   owner_email: z.string(),
   contact_allowed: z.boolean(),
+  linkedin_url: z.string().catch(''),
+  // Malformed positions are dropped rather than failing the whole workspace.
+  experience: z.array(z.unknown()).catch([]).transform(items => items.flatMap(item => {
+    const parsed = experienceItemSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  })),
   version: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -32,6 +39,7 @@ const applicationSchema = z.object({
   screening_recommendation: z.string(),
   source: z.string(),
   referrer: z.string(),
+  owner_email: z.string().catch(''),
   stage_entered_at: z.string(),
   version: z.number(),
   created_at: z.string(),

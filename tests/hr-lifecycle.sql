@@ -71,6 +71,18 @@ begin
  req:=(result->>'opportunity_id')::uuid;
  result:=pg_temp.command(jsonb_build_object('kind','create_application','person_id',person,'opportunity_id',req)); app2:=(result->>'application_id')::uuid;
  perform pg_temp.assert_true((select count(*) from public.hr_applications where person_id=person)=2,'One person can have multiple applications');
+ -- Candidate page: LinkedIn and experience on the person, owner and reopen on the application.
+ perform pg_temp.command(jsonb_build_object('kind','update_person','person_id',person,'expected_version',(select version from public.hr_people where id=person),'full_name','Sam Rivera','linkedin_url','https://www.linkedin.com/in/sam-rivera','experience',jsonb_build_array(jsonb_build_object('title','Data Engineer','company','Acme','start','2022-01','end',''))));
+ perform pg_temp.assert_true((select linkedin_url from public.hr_people where id=person)='https://www.linkedin.com/in/sam-rivera','update_person saves the LinkedIn URL');
+ perform pg_temp.assert_true((select experience->0->>'company' from public.hr_people where id=person)='Acme','update_person saves structured experience');
+ perform pg_temp.must_fail(jsonb_build_object('kind','update_person','person_id',person,'expected_version',(select version from public.hr_people where id=person),'full_name','Sam Rivera','experience','not a list'),'list of positions');
+ perform pg_temp.command(jsonb_build_object('kind','assign_application_owner','application_id',app2,'expected_version',(select version from public.hr_applications where id=app2),'owner_email','hr@example.invalid'));
+ perform pg_temp.assert_true((select owner_email from public.hr_applications where id=app2)='hr@example.invalid','Application owner is recorded');
+ perform pg_temp.must_fail(jsonb_build_object('kind','reopen_application','application_id',app2,'expected_version',(select version from public.hr_applications where id=app2)),'rejected or withdrawn');
+ perform pg_temp.command(jsonb_build_object('kind','dispose_application','application_id',app2,'expected_version',(select version from public.hr_applications where id=app2),'status','rejected','reason','Skills gap'));
+ perform pg_temp.command(jsonb_build_object('kind','reopen_application','application_id',app2,'expected_version',(select version from public.hr_applications where id=app2),'rationale','Rejected by mistake'));
+ perform pg_temp.assert_true((select status='active' and reason='' from public.hr_applications where id=app2),'Reopen makes the application active again');
+ perform pg_temp.assert_true((select next_state from public.hr_events where application_id=app2 order by id desc limit 1)='active','Reopen is in the history');
  perform pg_temp.must_fail(jsonb_build_object('kind','move_application','application_id',app,'expected_version',1,'to_stage','offer'),'required evidence');
  stage_time:=(select stage_entered_at from public.hr_applications where id=app);
  perform pg_temp.command(jsonb_build_object('kind','add_note','person_id',person,'application_id',app,'rationale','Follow up tomorrow'));
@@ -225,7 +237,7 @@ perform pg_temp.must_fail(jsonb_build_object('kind','update_employment','employe
  perform pg_temp.must_fail(jsonb_build_object('kind','assign_project','employee_id',emp,'project_id',project,'position','Invalid alumni staffing','allocation_pct',20,'start_date',current_date+61,'status','confirmed'),'employment');
 
  -- Rehire through the ordinary recruitment path, preserving the previous period.
- perform pg_temp.command(jsonb_build_object('kind','update_screening','application_id',app2,'expected_version',1,'screening_summary','Returning colleague, renewed structured assessment','screening_recommendation','Proceed'));
+ perform pg_temp.command(jsonb_build_object('kind','update_screening','application_id',app2,'expected_version',(select version from public.hr_applications where id=app2),'screening_summary','Returning colleague, renewed structured assessment','screening_recommendation','Proceed'));
  foreach interview_kind in array array['hr','technical'] loop
   result:=pg_temp.command(jsonb_build_object('kind','schedule_interview','application_id',app2,'interview_kind',interview_kind,'scheduled_at',now(),'panel','interviewer@example.invalid'));
   perform pg_temp.command(jsonb_build_object('kind','complete_interview','interview_id',result->>'interview_id','expected_version',1,'scorecard',jsonb_build_array(jsonb_build_object('competency','Experience','rating',4,'evidence','New assessment')),'notes','New interview completed'));

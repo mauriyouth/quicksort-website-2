@@ -48,6 +48,7 @@ import { countryName, countryOptions, needsResidencePermit } from './countries';
 import { DocumentsPanel } from '../documents/DocumentsPanel';
 import { MatriculeEdit, PersonPayslips } from '../payslips/PersonPayslips';
 import { PersonSignatures } from '../signatures/PersonSignatures';
+import { CandidateApplication } from './CandidateApplication';
 // PersonPayslips does not import its own stylesheet; it is loaded here.
 import { Action, Empty, Field, Form, SearchField, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
 export const stages: ApplicationStage[] = ['application', 'screening', 'hr_interview', 'technical_interview', 'client_presentation', 'decision', 'offer', 'contract'];
@@ -271,6 +272,7 @@ function Profile({
         phone: text(data, 'phone'),
         headline: text(data, 'headline'),
         location: text(data, 'location'),
+        linkedin_url: text(data, 'linkedin_url'),
         skills: text(data, 'skills'),
         languages: text(data, 'languages'),
         degrees: text(data, 'degrees'),
@@ -376,6 +378,7 @@ function Profile({
           <Field name="email" label="Work email" type="email" value={person.email} />
           <Field name="phone" label="Phone" type="tel" value={person.phone} />
           <Field name="location" label="Location" value={person.location} />
+          <Field name="linkedin_url" label="LinkedIn profile" type="url" value={person.linkedin_url} />
           <UiField className="min-w-0 gap-1.5">
             <FieldLabel htmlFor={`owner-${person.id}`}>Record owner</FieldLabel>
             <InputGroup>
@@ -649,22 +652,7 @@ function Applications({
   context: RecordContext;
   initialId?: string | null;
 }) {
-  const {
-    workspace
-  } = context;
-  const applications = workspace.applications.filter(application => application.person_id === person.id);
-  const [selected, setSelected] = useState(initialId ?? applications[0]?.id ?? '');
-  const current = applications.find(application => application.id === selected) ?? applications[0];
-  if (!current) return <Empty>No application yet. Add this person to a hiring need from Recruitment to start one.</Empty>;
-  return <>
-    <UiField className="max-w-xl gap-1.5">
-      <FieldLabel htmlFor={`applications-${person.id}`}>Application history</FieldLabel>
-      <NativeSelect id={`applications-${person.id}`} className="w-full" value={current.id} onChange={event => setSelected(event.target.value)}>
-        {applications.map(application => <NativeSelectOption value={application.id} key={application.id}>{workspace.opportunities.find(opportunity => opportunity.id === application.opportunity_id)?.title ?? 'Hiring need'} · {label(application.status)} · {date(application.created_at)}</NativeSelectOption>)}
-      </NativeSelect>
-    </UiField>
-    <ApplicationDetail key={current.id} application={current} person={person} context={context} />
-  </>;
+  return <CandidateApplication person={person} context={context} initialId={initialId} records={application => <ApplicationDetail key={application.id} application={application} person={person} context={context} />} />;
 }
 export function Readiness({
   applicationId,
@@ -768,18 +756,6 @@ function ApplicationDetail({
   const interviews = workspace.interviews.filter(interview => interview.application_id === application.id);
   const offers = workspace.offers.filter(offer => offer.application_id === application.id);
   return <>
-    <RecordCard title={opportunity?.title ?? 'Hiring need'} meta={`Application opened ${date(application.created_at)} · ${label(application.source)}`} badges={<>
-      <Tag tone={application.status === 'active' ? 'good' : 'quiet'}>
-        {label(application.status)}
-      </Tag>
-      <Tag>
-        {label(application.stage)}
-      </Tag>
-    </>}>
-      {application.reason && <p className="m-0">
-        {application.reason}
-      </p>}
-    </RecordCard>
     <Section title="Interviews" detail="Scheduling records the interview. Calendar invitations are sent manually.">
       {!interviews.length && <Empty>No interview has been scheduled for this application.</Empty>}
       {interviews.map(interview => <RecordCard key={interview.id} title={`${label(interview.kind)} interview`} meta={`${new Date(interview.scheduled_at).toLocaleString()} · ${interview.panel}`} badges={<Tag>

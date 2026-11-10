@@ -168,6 +168,9 @@ export function Intake({
         headline: text(data, 'headline'),
         location: text(data, 'location'),
         skills: text(data, 'skills'),
+        linkedin_url: text(data, 'linkedin_url'),
+        // Positions are not editable here; they come from the parsed CV and are edited on the record.
+        experience: profile?.experience ?? [],
         notes: text(data, 'notes'),
         source: text(data, 'source'),
         owner_email: text(data, 'owner_email'),
@@ -183,6 +186,7 @@ export function Intake({
         <Field name="email" label="Email" type="email" value={profile?.email} />
         <Field name="phone" label="Phone" type="tel" value={profile?.phone} />
         <Field name="location" label="Location" value={profile?.location} />
+        <Field name="linkedin_url" label="LinkedIn profile" type="url" value={profile?.linkedinUrl} />
         <Field name="owner_email" label="Record owner" type="email" value={actorEmail} />
         <Field name="source" label="Source" value={profile ? 'resume' : 'other'} options={['career_site', 'linkedin', 'referral', 'job_board', 'spontaneous', 'rediscovery', 'resume', 'other'].map(value => ({
           value,

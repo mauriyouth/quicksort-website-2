@@ -19,7 +19,7 @@ import {
   TabsTrigger,
 } from "@quicksort-sas/ui";
 import { EmptyState, PageAlerts, PageHeading } from "../../ui";
-import { monthLabel, parisToday, rowOpener } from "../invoicing/format";
+import { parisToday, rowOpener } from "../invoicing/format";
 import { errorText, useFreelancerInvoicesApi } from "./api";
 import type { InvoiceView, MonthRow, YearResponse } from "./api";
 import { craCheck, dayMonth, euro, statusCell } from "./format";
@@ -57,6 +57,9 @@ function groupsOf(lines: Line[]): Group[] {
   }
   return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name) || a.employeeId.localeCompare(b.employeeId));
 }
+
+/** "Oct 2026": the month column stays narrow. */
+const shortMonth = (month: string) => new Date(`${month.slice(0, 7)}-01T12:00:00`).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
 
 /** Header figures of a freelancer over the year: invoiced HT, still to pay TTC, months missing. */
 function summaryOf(g: Group): string {
@@ -142,12 +145,12 @@ export function FreelancerInvoices() {
       </PageHeading>
 
       <div className="flex items-end justify-between gap-3 border-b border-border">
-        <Tabs value={settingsOpen ? null : filter} onValueChange={(v) => {
+        <Tabs className="min-w-0 flex-1" value={settingsOpen ? null : filter} onValueChange={(v) => {
           if (typeof v !== "string") return;
           setFilter(v as Filter);
           if (settingsOpen) navigate(BASE);
         }}>
-          <TabsList variant="line" aria-label="Invoice status" className="h-10 max-w-full gap-5 overflow-x-auto">
+          <TabsList variant="line" aria-label="Invoice status" className="h-auto min-h-10 max-w-full flex-wrap justify-start gap-x-5 gap-y-1">
             {FILTERS.map(([id, label]) => (
               <TabsTrigger key={id} value={id}>{data ? `${label} (${count(id)})` : label}</TabsTrigger>
             ))}
@@ -173,18 +176,17 @@ export function FreelancerInvoices() {
               <Table aria-label={`Freelancer invoices · ${year}`}>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Month</TableHead>
+                    <TableHead className="hidden @xl:table-cell">Month</TableHead>
                     <TableHead>Invoice</TableHead>
                     <TableHead numeric>Amount</TableHead>
-                    <TableHead>CRA check</TableHead>
-                    <TableHead>Received</TableHead>
+                    <TableHead className="hidden @2xl:table-cell">CRA check</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {groups.map((g) => [
                     <TableRow key={`group:${g.employeeId}`} className="hover:bg-transparent" aria-label={g.name || "Freelancer"}>
-                      <TableCell colSpan={6} className="whitespace-normal bg-muted/40 pt-4">
+                      <TableCell colSpan={5} className="whitespace-normal bg-muted/40 pt-4">
                         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                           <div>
                             <span className="font-medium">{g.name || "—"}</span>
@@ -198,22 +200,28 @@ export function FreelancerInvoices() {
                     const inv = l.invoice;
                     const check = craCheck(l.row);
                     const status = inv ? statusCell(inv) : { text: "Missing", tone: "danger" as const };
-                    const received = inv ? `${inv.source} · ${dayMonth(inv.createdAt)}` : "—";
+                    const monthCell = l.month ? shortMonth(l.month) : <span className="text-warning">No period</span>;
+                    const checkCell = (
+                      <>
+                        {check.text}
+                        {inv?.review === "ok" && check.tone === "warning" && <div className="text-xs text-muted-foreground">Difference accepted</div>}
+                      </>
+                    );
                     return (
                       <TableRow key={l.key} className={cn("cursor-pointer", inv?.display.status === "rejected" && "text-muted-foreground")}
                         aria-label={`${l.name || "Freelancer"} · ${inv ? inv.number || "invoice" : "missing invoice"}`}
                         {...rowOpener(() => setOpen(l.key))}>
-                        <TableCell className="whitespace-nowrap">
-                          {l.month ? monthLabel(l.month) : <span className="text-warning">No period</span>}
-                        </TableCell>
+                        <TableCell className="hidden whitespace-nowrap @xl:table-cell">{monthCell}</TableCell>
                         <TableCell className="whitespace-normal">
+                          <div className="mb-0.5 text-xs font-medium @xl:hidden">{monthCell}</div>
                           {inv ? (
                             <>
-                              <div className={cn("num font-medium", inv.display.status === "rejected" && "line-through")}>{inv.number || "No number"}</div>
-                              <div className="text-xs whitespace-nowrap text-muted-foreground">
+                              <div className={cn("num font-medium break-words", inv.display.status === "rejected" && "line-through")}>{inv.number || "No number"}</div>
+                              <div className="text-xs text-muted-foreground">
                                 {inv.isCreditNote ? "Credit note" : inv.issueDate ? `Issued ${dayMonth(inv.issueDate)}` : "No date"}
                                 {inv.flags.length > 0 && <span className="text-warning"> · {inv.flags.length === 1 ? "1 flag" : `${inv.flags.length} flags`}</span>}
                               </div>
+                              <div className="text-xs text-muted-foreground">{inv.source} · {dayMonth(inv.createdAt)}</div>
                             </>
                           ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
@@ -225,15 +233,12 @@ export function FreelancerInvoices() {
                             </>
                           ) : <span className="text-muted-foreground">—</span>}
                         </TableCell>
-                        <TableCell className={cn("whitespace-normal text-[13px]", toneClass[check.tone])}>
-                          {check.text}
-                          {inv?.review === "ok" && check.tone === "warning" && <div className="text-xs text-muted-foreground">Difference accepted</div>}
-                        </TableCell>
-                        <TableCell className="text-[13px] text-muted-foreground">{received}</TableCell>
+                        <TableCell className={cn("hidden whitespace-normal text-[13px] @2xl:table-cell", toneClass[check.tone])}>{checkCell}</TableCell>
                         <TableCell className={cn("whitespace-normal text-[13px]", toneClass[status.tone])}>
                           {status.text}
                           {inv?.display.status === "paid" && inv.review === "to_check" && <div className="text-xs text-warning">To check</div>}
                           {inv && inv.display.status !== "paid" && inv.suggestions.length > 0 && <div className="text-xs text-muted-foreground">Payment to confirm</div>}
+                          <div className={cn("mt-1 text-xs @2xl:hidden", toneClass[check.tone])}>{checkCell}</div>
                         </TableCell>
                       </TableRow>
                     );

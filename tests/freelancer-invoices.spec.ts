@@ -110,7 +110,7 @@ test('tabs count each kind of invoice and the mismatch shows what the CRA says',
   expect(gets.some((q) => /resource=year&year=\d{4}/.test(q))).toBe(true);
   // One header row per freelancer, with the year's totals; lines carry the month.
   await expect(page.getByRole('row', { name: 'Alice Martin', exact: true })).toContainText('HT invoiced');
-  await expect(page.getByRole('row', { name: /Bob Durand ·/ })).toContainText('October 2026');
+  await expect(page.getByRole('row', { name: /Bob Durand ·/ })).toContainText('Oct 2026');
 
   await expect(page.getByRole('row', { name: /Bob Durand ·/ })).toContainText('CRA says €8,450 (13 d × €650)');
   await expect(page.getByRole('row', { name: /Alice Martin ·/ })).toContainText('✓ 12 d × €700');
@@ -185,6 +185,18 @@ test('no horizontal scroll at 1155px', async ({ page }) => {
   await page.getByRole('row', { name: /Bob Durand ·/ }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('a narrow page folds columns instead of scrolling the table', async ({ page }) => {
+  await mock(page);
+  await page.setViewportSize({ width: 800, height: 900 });
+  await page.goto(new URL('/sales/freelancer-invoices', harness.url).href);
+  const row = page.getByRole('row', { name: /Bob Durand ·/ });
+  await expect(row).toContainText('Oct 2026');
+  await expect(row).toContainText('CRA says €8,450 (13 d × €650)');
+  const fits = (sel: string) => page.locator(sel).first().evaluate((e) => e.scrollWidth <= e.clientWidth);
+  expect(await fits('[data-slot=table-container]')).toBe(true);
+  expect(await fits('[aria-label="Invoice status"]')).toBe(true);
 });
 
 test('one debit can pay several invoices of the same freelancer', async ({ page }) => {

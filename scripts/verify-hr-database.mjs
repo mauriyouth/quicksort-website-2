@@ -38,6 +38,8 @@ try {
   console.log('CRA database checks passed: employee/admin access, all activities, dated projects, atomic saves and version conflicts.');
   psql(readFileSync(resolve(root, 'tests/project-consumption.sql'), 'utf8'));
   console.log('Project consumption checks passed: half-days, per-line attribution by assignment window, current year only and CRA access scoping.');
+  psql(readFileSync(resolve(root, 'tests/freelancer-invoices.sql'), 'utf8'));
+  console.log('Freelancer invoice checks passed: admin-only RLS, duplicate guards, portal status RPC and service-only known senders.');
   psql(readFileSync(resolve(root, 'tests/invoicing.sql'), 'utf8'));
   console.log('Invoicing database checks passed: admin-only RLS, one live invoice per consultant month and CRA lock.');
   psql(readFileSync(resolve(root, 'tests/documents.sql'), 'utf8'));

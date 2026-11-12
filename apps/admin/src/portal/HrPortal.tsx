@@ -59,6 +59,7 @@ import { CraScreen } from '../cra/CraScreen';
 import { downloadOwnDocument, downloadOwnPayslip, previewOwnDocument, previewOwnPayslip } from '../documents/client';
 import { MyPayslips } from '../payslips/MyPayslips';
 import { MyDocuments, type MyDocumentType } from '../documents/MyDocuments';
+import { MyInvoices } from './MyInvoices';
 
 type PortalRoute = { id: string; href: string };
 
@@ -86,7 +87,7 @@ function usePortalRoute(routes: readonly PortalRoute[]) {
 
 const applicationSchema = z.object({ id: z.uuid(), person_id: z.uuid(), opportunity_id: z.uuid(), full_name: z.string(), title: z.string(), stage: z.string(), status: z.string(), created_at: z.string(), updated_at: z.string() });
 const applicationEventSchema = z.object({ id: z.number(), application_id: z.uuid(), to_stage: z.string(), kind: z.string(), created_at: z.string() });
-const employmentSchema = z.object({ id: z.uuid(), person_id: z.uuid(), matricule: z.string(), role: z.string(), start_date: z.string(), end_date: z.string().nullable(), status: z.string(), onboarding_completed_at: z.string().nullable(), probation_status: z.string(), probation_end: z.string().nullable() });
+const employmentSchema = z.object({ id: z.uuid(), person_id: z.uuid(), matricule: z.string(), role: z.string(), start_date: z.string(), end_date: z.string().nullable(), status: z.string(), onboarding_completed_at: z.string().nullable(), probation_status: z.string(), probation_end: z.string().nullable(), contract_type: z.string() });
 const taskSchema = z.object({ id: z.uuid(), employee_id: z.uuid(), phase: z.string(), title: z.string(), assignee: z.string(), due_date: z.string().nullable(), required: z.boolean(), dependency_id: z.uuid().nullable(), evidence: z.string(), completed_at: z.string().nullable(), version: z.number().int() });
 const offerSchema = z.object({ id: z.uuid(), application_id: z.uuid(), title: z.string(), contract_type: z.string(), salary_monthly: z.number(), status: z.string(), shared_at: z.string().nullable(), valid_until: z.string().nullable(), version: z.number().int() });
 const payslipSchema = z.object({ id: z.uuid(), person_id: z.uuid(), title: z.string(), valid_from: z.string().nullable(), file_name: z.string(), size_bytes: z.number().nullable(), created_at: z.string() });
@@ -123,6 +124,7 @@ const nav = [
   { id: "documents", href: "/documents", label: "Documents", icon: Upload },
   { id: "payslips", href: "/payslips", label: "Payslips", icon: Receipt },
   { id: "cra", href: "/cra", label: "My CRA", icon: CalendarDays },
+  { id: "invoices", href: "/invoices", label: "My invoices", icon: Receipt },
   { id: "requests", href: "/tool-access", label: "Tool access", icon: KeyRound },
   { id: "account", href: "/account", label: "Account", icon: Settings },
 ];
@@ -144,6 +146,10 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
   const [folder, setFolder] = useState<MyRegistryDocument[]>([]);
   const [journeyError, setJourneyError] = useState("");
   const onboardingOpen = employments.some(e => e.status !== "ended");
+  // Freelancers send their invoices through the portal, and for 90 days after
+  // their freelance employment ended, for the final one (the API's rule too).
+  const finalInvoiceSince = new Date(Date.now() - 90 * 86_400_000).toLocaleDateString("en-CA");
+  const freelance = employments.some(e => e.contract_type === "Freelance" && (e.status !== "ended" || (!!e.end_date && e.end_date >= finalInvoiceSince)));
   // Employment unlocks the journey. Employees sign through Youtrust, so the
   // application page only exists before hiring.
   const routes = useMemo(
@@ -152,9 +158,10 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
       : [nav[1], nav[0], ...nav.slice(2)]),
     [onboardingOpen],
   );
-  const visibleNav = onboardingOpen
+  const visibleNav = (onboardingOpen
     ? routes
-    : routes.filter((n) => !GATED_TABS.includes(n.id) && (n.id !== "cra" || employments.length > 0));
+    : routes.filter((n) => !GATED_TABS.includes(n.id) && (n.id !== "cra" || employments.length > 0)))
+    .filter((n) => n.id !== "invoices" || freelance);
   const [tab, setTab] = usePortalRoute(routes);
   const
     [profile, setProfile] = useState<Row<"profiles"> | null>(null),
@@ -324,6 +331,10 @@ export function HrPortal({ userId, email }: { userId: string; email: string }) {
         </PageHeading>
         <CraScreen audience="employee" draftOwner={email} basePath="/cra" />
       </>}
+      {tab === "invoices" && freelance && <MyInvoices busy={busy} action={action} />}
+      {tab === "invoices" && !freelance && !loading && (
+        <EmptyState title="For freelancers">Freelancers send their monthly invoices here.</EmptyState>
+      )}
       {tab === "application" && !onboardingOpen && <MyApplicationTab email={email} busy={busy} action={action} applications={applications} events={applicationEvents} offers={offers} employments={employments} journeyError={journeyError} loading={loading} />}
       {tab === "overview" && onboardingOpen && (
         <>

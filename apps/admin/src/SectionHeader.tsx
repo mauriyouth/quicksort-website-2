@@ -16,6 +16,7 @@ export const SALES_TABS: SectionTab[] = [
   { id: "opportunities", href: "/sales/opportunities", label: "Opportunities" },
   { id: "sales-projects", href: "/sales/projects", label: "Projects" },
   { id: "sales-invoicing", href: "/sales/invoicing", label: "Invoicing" },
+  { id: "sales-freelancer-invoices", href: "/sales/freelancer-invoices", label: "Freelancer invoices" },
 ];
 
 export const HR_TABS: SectionTab[] = [

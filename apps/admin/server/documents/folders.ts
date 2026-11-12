@@ -27,6 +27,7 @@ export const FOLDER_LABELS: Record<string, string> = {
   diplomes: "06_Diplomes_Certifications",
   justificatifs: "07_Justificatifs",
   bulletins: "08_Bulletins_de_paie",
+  factures: "09_Factures",
   sortie: "99_Sortie",
   divers: "99_Divers",
   fiscal: "01_Attestation_fiscale",

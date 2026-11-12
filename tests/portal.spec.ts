@@ -35,6 +35,7 @@ type PortalFixture = {
   my_payslips: View<'my_payslips'>[];
   my_documents: View<'my_documents'>[];
   my_document_types: View<'my_document_types'>[];
+  my_freelancer_invoices?: Database['public']['Functions']['my_freelancer_invoices']['Returns'];
 };
 function portalFixture(): PortalFixture {
   return {
@@ -67,7 +68,7 @@ function addPayslips(state: PortalFixture) {
   );
 }
 function addEmployment(state: PortalFixture) {
-  state.my_employment.push({ id: employmentId, person_id: personId, matricule: 'QS-0001', role: 'Platform engineer', start_date: '2026-10-01', end_date: null, status: 'preboarding', onboarding_completed_at: null, probation_status: 'pending', probation_end: '2027-01-01' });
+  state.my_employment.push({ id: employmentId, person_id: personId, matricule: 'QS-0001', role: 'Platform engineer', start_date: '2026-10-01', end_date: null, status: 'preboarding', onboarding_completed_at: null, probation_status: 'pending', probation_end: '2027-01-01', contract_type: 'CDI' });
   state.my_onboarding_items.push(
     { id: ownTaskId, employee_id: employmentId, phase: 'preboarding', title: 'Confirm your emergency contact', assignee: email, due_date: '2026-10-05', required: true, dependency_id: null, evidence: '', completed_at: null, version: 3 },
     { id: hrTaskId, employee_id: employmentId, phase: 'preboarding', title: 'Provision equipment', assignee: 'hr@example.test', due_date: '2026-10-05', required: true, dependency_id: null, evidence: '', completed_at: null, version: 1 },
@@ -84,6 +85,7 @@ async function portalApi(page: Page, state: PortalFixture, failFirstCommand = fa
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' } });
     if (url.pathname.endsWith('/rpc/cra_context')) return reply({ employees: state.my_employment.map(employee => ({ id: employee.id, full_name: 'Alex Morgan', role: employee.role, start_date: employee.start_date, end_date: employee.end_date })), assignments: [] });
     if (url.pathname.endsWith('/rpc/my_name_from_hr')) return reply(state.my_employment.length > 0);
+    if (url.pathname.endsWith('/rpc/my_freelancer_invoices')) return reply(state.my_freelancer_invoices ?? []);
     if (url.pathname.endsWith('/rpc/cra_month_snapshot')) return reply({ version: 0, entries: [], updated_at: null, updated_by: null });
     // Leave-balance strip on the CRA screen: no balances, default accrual rates.
     if (url.pathname.endsWith('/rpc/employee_leave_balances') || url.pathname.endsWith('/leave_accrual_settings')) return reply([]);
@@ -344,6 +346,74 @@ test('an ended employment still sees its payslips', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Payslips', exact: true })).toBeVisible();
   await expect(page.locator('.payslips-person-list li').filter({ hasText: 'Payslip March 2026' })).toBeVisible();
   await expect(page.getByText('Opens when you join')).toHaveCount(0);
+});
+
+test('a freelancer sees their invoices with a portal status and sends a new one', async ({ page }) => {
+  const state = portalFixture(); addEmployment(state);
+  state.my_employment[0].contract_type = 'Freelance';
+  state.my_freelancer_invoices = [
+    { id: 'f1f1f1f1-f1f1-4f1f-8f1f-f1f1f1f1f1f1', number: 'FAC-2026-10', period_month: '2026-10-01', amount_ttc_cents: 1080000, received_at: '2026-11-02T09:00:00Z', portal_status: 'to_pay' },
+    { id: 'f2f2f2f2-f2f2-4f2f-8f2f-f2f2f2f2f2f2', number: 'FAC-2026-09', period_month: '2026-09-01', amount_ttc_cents: 960000, received_at: '2026-10-03T09:00:00Z', portal_status: 'paid' },
+    { id: 'f4f4f4f4-f4f4-4f4f-8f4f-f4f4f4f4f4f4', number: 'FAC-2026-08', period_month: '2026-08-01', amount_ttc_cents: 990000, received_at: '2026-09-03T09:00:00Z', portal_status: 'not_accepted' },
+  ];
+  const bodies: Record<string, unknown>[] = [];
+  const auth: (string | undefined)[] = [];
+  await page.route('**/api/freelancer-invoices', async route => {
+    bodies.push(route.request().postDataJSON());
+    auth.push(route.request().headers().authorization);
+    state.my_freelancer_invoices!.unshift({ id: 'f3f3f3f3-f3f3-4f3f-8f3f-f3f3f3f3f3f3', number: '', period_month: null, amount_ttc_cents: null, received_at: now, portal_status: 'received' });
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ received: true, duplicate: false }) });
+  });
+  await portalApi(page, state);
+  await page.goto(new URL('/onboarding', harness.url).href);
+  await page.getByRole('link', { name: 'My invoices', exact: true }).click();
+  await expect(page).toHaveURL(new URL('/invoices', harness.url).href);
+  const rows = page.getByRole('row');
+  const october = rows.filter({ hasText: 'FAC-2026-10' });
+  await expect(october).toContainText('To pay');
+  await expect(october).toContainText('October 2026');
+  await expect(october).toContainText(/10\s?800,00\s?€/);
+  await expect(rows.filter({ hasText: 'FAC-2026-09' })).toContainText('Paid');
+  // A rejected invoice shows as not accepted, with no review note.
+  await expect(rows.filter({ hasText: 'FAC-2026-08' })).toContainText('Not accepted');
+
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Upload an invoice', exact: true }).click();
+  await (await chooser).setFiles({ name: 'invoice-november.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF') });
+  await expect(page.getByText("Invoice sent. We'll check it against your CRA.")).toBeVisible();
+  expect(bodies).toHaveLength(1);
+  expect(bodies[0]).toEqual({ action: 'portal_upload', fileName: 'invoice-november.pdf', mimeType: 'application/pdf', data: Buffer.from('%PDF-1.4\n%%EOF').toString('base64') });
+  expect(bodies[0]).not.toHaveProperty('employeeId');
+  expect(auth[0]).toBe('Bearer fixture-session');
+  // The new invoice lists as received while it is being read.
+  await expect(page.getByRole('table', { name: 'My invoices' }).locator('tbody tr')).toHaveCount(4);
+  await expect(rows.filter({ hasText: 'Being read' })).toContainText('Received');
+});
+
+test('a freelancer keeps My invoices for 90 days after the employment ends', async ({ page }) => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toLocaleDateString('en-CA');
+  const state = portalFixture(); addEmployment(state);
+  Object.assign(state.my_employment[0], { contract_type: 'Freelance', status: 'ended', end_date: daysAgo(30) });
+  state.my_freelancer_invoices = [];
+  await portalApi(page, state);
+  await page.goto(new URL('/invoices', harness.url).href);
+  await expect(page.getByRole('link', { name: 'My invoices', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Upload an invoice', exact: true })).toBeVisible();
+
+  state.my_employment[0].end_date = daysAgo(120);
+  await page.reload();
+  await expect(page.getByRole('link', { name: 'My invoices', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Upload an invoice', exact: true })).toHaveCount(0);
+});
+
+test('a CDI employee has no My invoices tab', async ({ page }) => {
+  const state = portalFixture(); addEmployment(state);
+  await portalApi(page, state);
+  await page.goto(new URL('/onboarding', harness.url).href);
+  await expect(page.getByRole('link', { name: 'My CRA', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My invoices', exact: true })).toHaveCount(0);
+  await page.goto(new URL('/invoices', harness.url).href);
+  await expect(page.getByRole('button', { name: 'Upload an invoice', exact: true })).toHaveCount(0);
 });
 
 test('public website shows a published job and removes it after unpublication', async ({ page }) => {

@@ -81,6 +81,7 @@ function fixture({ admin = true, qonto = true, kimi = false, extra = {} } = {}) 
     now: () => new Date("2026-11-04T05:00:00Z"),
     fetch: async (url, init) => { fetchCalls.push({ url, init }); return { ok: state.moonshotOk, status: state.moonshotOk ? 200 : 401 }; },
     runBankSync: async (args) => { state.syncCalls++; state.syncArgs = args; return { status: "ok", fetched: 1, classified: 1, remaining: 0 }; },
+    runFreelancerInvoicesCycle: async () => ({ poll: { skipped: "off" }, matched: 0, suggested: 0, reviewed: 0 }),
   };
   const bank = createBankHandler(deps);
   const cron = createBankCronHandler(deps);

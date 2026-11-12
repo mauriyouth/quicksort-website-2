@@ -13,14 +13,16 @@
  * months, come from the hypotheses: there is no ledger to read them from.
  */
 
+import { workingCalendar, type WorkingCalendar } from "./calendar.ts";
+
 export type Hypotheses = {
-  /** Consultants staffed at the start of the year (forecast-only years). */
-  consDebut: number;
   tjm: number;
-  /** Billable working days per month. */
-  jours: number;
-  /** Occupancy rate of salaried consultants, %. */
-  occ: number;
+  /** TACI of salaried consultants: billed days / working days (leave included), yearly %. */
+  taci: number;
+  /** Paid leave per salaried employee, days per year. */
+  congesAn: number;
+  /** RTT per salaried employee, days per year. */
+  rttAn: number;
   /** Share of freelancers among staffed consultants, %. */
   pctFree: number;
   /** Freelance daily buy rate, €. */
@@ -59,7 +61,7 @@ export type HypothesisKey = keyof Hypotheses;
 
 /** The mockup's indicative starting values. */
 export const DEFAULT_HYPOTHESES: Hypotheses = {
-  consDebut: 18, tjm: 650, jours: 18, occ: 90, pctFree: 40,
+  tjm: 650, taci: 75, congesAn: 25, rttAn: 10, pctFree: 40,
   coutFree: 480, salaire: 5000,
   commFactor: 0, primeIC: 500, primeChasseur: 800,
   fLoyer: 4000, fOutils: 3000, fMarketing: 2500, fHonoraires: 1500, fDeplacements: 2000, fDivers: 1000, fAmort: 0,
@@ -69,6 +71,15 @@ export const DEFAULT_HYPOTHESES: Hypotheses = {
 };
 
 export const HYPOTHESIS_KEYS = Object.keys(DEFAULT_HYPOTHESES) as HypothesisKey[];
+
+/** Known hypotheses of a saved plan; plans saved before the TACI carry their occupancy rate (`occ`) over. */
+export function migrateHypotheses(saved: Record<string, unknown> | null | undefined): Partial<Hypotheses> {
+  const out: Partial<Hypotheses> = {};
+  if (!saved) return out;
+  for (const k of HYPOTHESIS_KEYS) if (saved[k] != null) out[k] = saved[k] as number;
+  if (out.taci == null && saved.occ != null) out.taci = saved.occ as number;
+  return out;
+}
 
 /** Measured figures for a closed month. */
 export type ActualMonth = {
@@ -87,6 +98,16 @@ export type ActualMonth = {
   departs: number;
   /** Cash collected (invoices paid during the month), € HT. */
   enc: number;
+  /** Working days of salaried consultants (holidays excluded, prorated on their consultant share). */
+  jo?: number;
+  /** Days billed by salaried consultants (CRA client days). */
+  jfs?: number;
+  /** Days billed, salaried and freelance. */
+  jf?: number;
+  /** Leave days of salaried consultants (paid leave, RTT, unpaid leave). */
+  abs?: number;
+  /** Every salaried consultant filled the CRA for all their working days. */
+  craComplete?: boolean;
 };
 
 export type MonthInput = {
@@ -108,7 +129,7 @@ export type MonthInput = {
 
 export type Series = {
   cons: number[]; ca: number[]; free: number[]; sal: number[]; inter: number[]; prod: number[];
-  fac: number[]; ic: number[]; ch: number[]; varr: number[]; mb: number[]; mbp: number[];
+  fac: number[]; pic: number[]; ch: number[]; varr: number[]; mb: number[]; mbp: number[];
   /** Employer social charges: on consultants (production), on structure (fixed), and by item. */
   cotc: number[]; cots: number[]; cu: number[]; cmu: number[]; ctr: number[]; cme: number[]; cot: number[];
   fs: number[]; fl: number[]; fo: number[]; fm: number[]; fh: number[]; fdp: number[]; fd: number[]; fix: number[];
@@ -116,12 +137,21 @@ export type Series = {
   /** VAT cash effect: collected on collections, paid to suppliers, remitted to the state, net. */
   tvaCol: number[]; tvaDed: number[]; tvaRem: number[]; tva: number[];
   ventes: number[]; departs: number[];
+  /** Days: salaried working, salaried billed, billed (all), salaried leave. */
+  jo: number[]; jfs: number[]; jf: number[]; abs: number[];
+  /** ESN indicators: TACI, TACE, inter-contract rate, realised daily rate, CJM, margin per billed day, structure rate, revenue per consultant. */
+  taci: number[]; tace: number[]; itc: number[]; tjmR: number[]; cjm: number[]; mj: number[]; ts: number[]; cac: number[];
 };
 
 export type PlanResult = {
   series: Series;
   actual: boolean[];
+  /** Working-day calendar of the year (forecast drivers). */
+  calendar: WorkingCalendar;
+  /** Closed months whose CRA is incomplete: their indicators are partial. */
+  craIncomplete: boolean[];
   totals: {
+    taci: number; tace: number; itc: number; cjm: number; tjmR: number; mj: number; ts: number; cac: number;
     ca: number; mb: number; eb: number; ex: number; is: number; rn: number;
     mbPct: number; ebPct: number; exPct: number;
     consFin: number; ventes: number; departs: number;
@@ -130,23 +160,32 @@ export type PlanResult = {
 };
 
 const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
+/** a / b, 0 when b is not positive (empty month, no revenue). */
+const ratio = (a: number, b: number) => (b > 0 ? a / b : 0);
 
-export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
-  const occ = h.occ / 100;
+/**
+ * `consStart`: consultants at the end of the previous year, the base of a
+ * year with no closed month (ignored once a month is closed).
+ */
+export function computePlan(h: Hypotheses, months: MonthInput[], consStart: number, year: number): PlanResult {
+  const cal = workingCalendar(year, h);
   const pf = h.pctFree / 100;
   const S: Series = {
-    cons: [], ca: [], free: [], sal: [], inter: [], prod: [], fac: [], ic: [], ch: [], varr: [], mb: [], mbp: [],
+    jo: [], jfs: [], jf: [], abs: [], taci: [], tace: [], itc: [], tjmR: [], cjm: [], mj: [], ts: [], cac: [],
+    cons: [], ca: [], free: [], sal: [], inter: [], prod: [], fac: [], pic: [], ch: [], varr: [], mb: [], mbp: [],
     cotc: [], cots: [], cu: [], cmu: [], ctr: [], cme: [], cot: [],
     fs: [], fl: [], fo: [], fm: [], fh: [], fdp: [], fd: [], fix: [], eb: [], ebp: [], da: [], ex: [], exp: [], enc: [], treso: [],
     tvaCol: [], tvaDed: [], tvaRem: [], tva: [],
     ventes: [], departs: [],
   };
-  let c = h.consDebut;
-  for (const m of months) {
+  let c = consStart;
+  months.forEach((m, i) => {
     let ca: number, free: number, sal: number, inter: number, ventes: number, departs: number;
+    let jo: number, jfs: number, jf: number, abs: number;
     let cc: SocialCharges;
     if (m.actual) {
       ({ ca, free, sal, inter, ventes, departs } = m.actual);
+      ({ jo = 0, jfs = 0, jf = 0, abs = 0 } = m.actual);
       c = m.actual.cons;
       cc = m.cotConsultants ?? NO_CHARGES;
     } else {
@@ -154,10 +193,12 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
       departs = m.departs;
       c = Math.max(0, c + ventes - departs);
       const nf = c * pf, ns = c * (1 - pf);
-      ca = nf * h.jours * h.tjm + ns * h.jours * occ * h.tjm;
-      free = nf * h.jours * h.coutFree;
+      const d = cal.jo[i] ?? 0, t = cal.taci[i] ?? 0;
+      ca = nf * d * h.tjm + ns * d * t * h.tjm;
+      free = nf * d * h.coutFree;
       sal = ns * h.salaire;
-      inter = sal * (1 - occ);
+      jo = ns * d; jfs = jo * t; jf = jfs + nf * d; abs = ns * (cal.abs[i] ?? 0);
+      inter = sal * (d ? Math.max(0, 1 - t - (cal.abs[i] ?? 0) / d) : 0);
       cc = { urssaf: (sal * h.tauxCharges) / 100, mutuelle: ns * h.mutuelle, tickets: ns * h.ticketsResto, medecine: (ns * h.medecine) / 12 };
     }
     const cs = m.cotStructure ?? NO_CHARGES;
@@ -166,8 +207,8 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
     S.cu.push(cc.urssaf + cs.urssaf); S.cmu.push(cc.mutuelle + cs.mutuelle); S.ctr.push(cc.tickets + cs.tickets); S.cme.push(cc.medecine + cs.medecine);
     S.cot.push(cotc + cots);
     const prod = free + sal + cotc;
-    const fac = (ca * h.commFactor) / 100, ic = ventes * h.primeIC, ch = ventes * h.primeChasseur;
-    const varr = fac + ic + ch;
+    const fac = (ca * h.commFactor) / 100, pic = ventes * h.primeIC, ch = ventes * h.primeChasseur;
+    const varr = fac + pic + ch;
     const mb = ca - prod - varr;
     const fStructure = m.structure ?? 0;
     const fx = m.actual && m.fixed
@@ -176,14 +217,18 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
     const fixMonth = fStructure + cots + fx.loyer + fx.outils + fx.marketing + fx.honoraires + fx.deplacements + fx.divers;
     const eb = mb - fixMonth;
     S.cons.push(c); S.ca.push(ca); S.free.push(free); S.sal.push(sal); S.inter.push(inter); S.prod.push(prod);
-    S.fac.push(fac); S.ic.push(ic); S.ch.push(ch); S.varr.push(varr); S.mb.push(mb); S.mbp.push(ca ? mb / ca : 0);
+    S.fac.push(fac); S.pic.push(pic); S.ch.push(ch); S.varr.push(varr); S.mb.push(mb); S.mbp.push(ca ? mb / ca : 0);
     S.fs.push(fStructure); S.fl.push(fx.loyer); S.fo.push(fx.outils); S.fm.push(fx.marketing); S.fh.push(fx.honoraires); S.fdp.push(fx.deplacements); S.fd.push(fx.divers);
     S.fix.push(fixMonth); S.eb.push(eb); S.ebp.push(ca ? eb / ca : 0);
     // Operating result: EBITDA less depreciation (non-cash, so cash is unchanged).
     const ex = eb - h.fAmort;
     S.da.push(h.fAmort); S.ex.push(ex); S.exp.push(ca ? ex / ca : 0);
     S.ventes.push(ventes); S.departs.push(departs);
-  }
+    S.jo.push(jo); S.jfs.push(jfs); S.jf.push(jf); S.abs.push(abs);
+    S.taci.push(ratio(jfs, jo)); S.tace.push(ratio(jfs, jo - abs)); S.itc.push(ratio(Math.max(0, jo - jfs - abs), jo));
+    S.tjmR.push(ratio(ca, jf)); S.cjm.push(ratio(sal + cotc, jo)); S.mj.push(ratio(ca - prod, jf));
+    S.ts.push(ratio(fixMonth, ca)); S.cac.push(ratio(ca, c));
+  });
   // Cash: closed months use what was really collected; forecast months
   // collect revenue `lag` months later (the first months fall back to the
   // year's first revenue, as in the mockup).
@@ -212,10 +257,16 @@ export function computePlan(h: Hypotheses, months: MonthInput[]): PlanResult {
   // Simplified tax on the positive yearly operating result (no financial items modelled).
   const is = (Math.max(0, ex) * h.tauxIS) / 100;
   const last = months.length - 1;
+  const JO = sum(S.jo), JFS = sum(S.jfs), JF = sum(S.jf), ABS = sum(S.abs);
   return {
     series: S,
     actual: months.map((m) => !!m.actual),
+    calendar: cal,
+    craIncomplete: months.map((m) => !!m.actual && m.actual.craComplete === false),
     totals: {
+      taci: ratio(JFS, JO), tace: ratio(JFS, JO - ABS), itc: ratio(Math.max(0, JO - JFS - ABS), JO),
+      cjm: ratio(sum(S.sal) + sum(S.cotc), JO),
+      tjmR: ratio(ca, JF), mj: ratio(ca - sum(S.prod), JF), ts: ratio(sum(S.fix), ca), cac: ratio(ca, sum(S.cons) / (S.cons.length || 1)),
       ca, mb, eb, ex, is, rn: ex - is,
       mbPct: ca ? mb / ca : 0,
       ebPct: ca ? eb / ca : 0,
@@ -244,14 +295,19 @@ export const VAT_RATE = 0.2;
 /** Real VAT cash flows of a closed month, € (all positive amounts). */
 export type VatActual = { collected: number; deductible: number; remitted: number };
 
+/** P&L rows of the "Cotisations sociales" section, one per item. */
+export type ChargeRowKey = "cu" | "cmu" | "ctr" | "cme";
+
 export type RowKind = "line" | "sub" | "total" | "key" | "pct" | "section";
 export type PlanRow = {
   /** Set on rows that open a drill-down panel. */
-  key?: "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | "cotc" | "cots" | FixedLineKey;
+  key?: "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | "cotc" | "cots" | ChargeRowKey | FixedLineKey;
   kind: RowKind;
   label: string;
   values: number[];
   total: number | null;
+  /** ESN indicator row: partial on closed months whose CRA is incomplete. */
+  indicator?: boolean;
 };
 
 /** The P&L grid rows, same labels and order as the mockup. */
@@ -273,7 +329,7 @@ export function planRows(r: PlanResult): PlanRow[] {
     line("total", "Total coûts de production", S.prod),
     sec("Charges variables"),
     line("line", "Commission factor", S.fac),
-    line("line", "Primes IC", S.ic),
+    line("line", "Primes IC", S.pic),
     line("line", "Primes chasseurs", S.ch),
     line("total", "Total charges variables", S.varr),
     line("key", "Gross margin (marge brute)", S.mb),
@@ -293,17 +349,32 @@ export function planRows(r: PlanResult): PlanRow[] {
     line("line", "Dotations aux amortissements et provisions", S.da),
     line("key", "EBIT (résultat d’exploitation)", S.ex),
     line("pct", "Marge d’exploitation (EBIT / CA)", S.exp, T.exPct),
+    sec("Indicateurs ESN"),
+    { ...line("pct", "TACI (taux d’activité congés inclus)", S.taci, T.taci), indicator: true },
+    { ...line("pct", "TACE (taux d’activité congés exclus)", S.tace, T.tace), indicator: true },
+    { ...line("pct", "Taux d’intercontrat", S.itc, T.itc), indicator: true },
+    { ...line("line", "TJM moyen réalisé", S.tjmR, T.tjmR), indicator: true },
+    { ...line("line", "CJM (coût journalier moyen)", S.cjm, T.cjm), indicator: true },
+    { ...line("line", "Marge par jour facturé", S.mj, T.mj), indicator: true },
+    { ...line("pct", "Taux de structure", S.ts, T.ts), indicator: true },
+    { ...line("line", "CA par consultant", S.cac, T.cac), indicator: true },
     sec("Cotisations sociales"),
-    line("line", "URSSAF et retraite", S.cu),
-    line("line", "Mutuelle", S.cmu),
-    line("line", "Tickets restaurant", S.ctr),
-    line("line", "Médecine du travail", S.cme),
+    { ...line("line", "URSSAF et retraite", S.cu), key: "cu" },
+    { ...line("line", "Mutuelle", S.cmu), key: "cmu" },
+    { ...line("line", "Tickets restaurant", S.ctr), key: "ctr" },
+    { ...line("line", "Médecine du travail", S.cme), key: "cme" },
     line("total", "Total cotisations sociales", S.cot),
     sec("Trésorerie"),
     { ...line("line", "Encaissements clients", S.enc), key: "enc" },
     { ...line("line", "TVA (effet trésorerie)", S.tva), key: "tva" },
     line("total", "Trésorerie fin de mois", S.treso, S.treso[last] ?? 0),
   ];
+}
+
+/** Mention for yearly figures built on closed months whose CRA is incomplete ("" when none). */
+export function craIncompleteNote(r: PlanResult): string {
+  const n = r.craIncomplete.filter(Boolean).length;
+  return n ? `CRA incomplet sur ${n} mois` : "";
 }
 
 /* ── Formatting (fr-FR, ported from the mockup) ─────────────────────── */

@@ -6,6 +6,12 @@ export type SignatureRequestStatus = 'draft' | 'sending' | 'sent' | 'signed_by_p
 // Server-only: never select encrypted_credentials from the browser.
 export type SignatureSettingsRecord = { id: string; options: { staging?: boolean; signatory_name?: string; signatory_email?: string }; encrypted_credentials: string | null; updated_at: string };
 export type SignatureTemplateRecord = { id: string; name: string; google_doc_id: string; signers: 'person_and_quicksort' | 'person' | 'quicksort'; type_code: string; active: boolean; created_by: string | null; created_at: string; updated_at: string };
+export type FreelancerBillingRecord = { employee_id: string; company_name: string; siret: string; iban: string; extra_emails: string[]; updated_by: string | null; updated_at: string };
+export type FreelancerInvoiceRecord = { id: string; employee_id: string; source: 'portal' | 'email'; gmail_message_id: string | null; document_id: string | null; sha256: string; number: string; issue_date: string | null; period_month: string | null; due_date: string | null; amount_ht_cents: number | null; vat_cents: number | null; amount_ttc_cents: number | null; is_credit_note: boolean; review: 'to_check' | 'ok' | 'rejected'; flags: string[]; review_note: string; extraction: Json | null; paid_at: string | null; paid_by_transaction_id: string | null; created_at: string; updated_at: string; version: number };
+export type FreelancerInvoiceMatchRecord = { invoice_id: string; transaction_id: string; kind: 'confident' | 'probable' | 'manual'; state: 'suggested' | 'confirmed' | 'dismissed'; created_at: string; decided_by: string | null };
+export type FreelancerInvoiceEventRecord = { id: string; invoice_id: string; kind: string; actor_email: string | null; detail: Json; created_at: string };
+export type FreelancerMailboxSettingsRecord = { id: 'mailbox'; address: string; backfill_from: string; last_polled_at: string | null; last_error: string | null; locked_until: string | null; updated_by: string | null };
+export type FreelancerMailboxMessageRecord = { message_id: string; status: 'done' | 'failed'; attempts: number; last_error: string | null; internal_date: string | null; processed_at: string };
 export type SignatureRequestRecord = { id: string; person_id: string; template_id: string | null; title: string; type_code: string; signers: SignatureSigner[]; field_values: Record<string, string>; supersedes: string | null; application_id: string | null; status: SignatureRequestStatus; error: string; youtrust_request_id: string | null; youtrust_document_id: string | null; doc_copy_file_id: string | null; pdf_file_id: string | null; pdf_folder_id: string | null; signed_document_id: string | null; audit_document_id: string | null; filing_claimed_at: string | null; created_by: string; created_at: string; updated_at: string; status_changed_at: string };
 export type Json =
   | string
@@ -36,6 +42,12 @@ export type Database = {
       signature_templates: HrTable<SignatureTemplateRecord>;
       signature_requests: HrTable<SignatureRequestRecord>;
       signature_webhook_events: HrTable<{ event_id: string; received_at: string }>;
+      freelancer_billing: HrTable<FreelancerBillingRecord>;
+      freelancer_invoices: HrTable<FreelancerInvoiceRecord>;
+      freelancer_invoice_matches: HrTable<FreelancerInvoiceMatchRecord>;
+      freelancer_invoice_events: HrTable<FreelancerInvoiceEventRecord>;
+      freelancer_mailbox_settings: HrTable<FreelancerMailboxSettingsRecord>;
+      freelancer_mailbox_messages: HrTable<FreelancerMailboxMessageRecord>;
       admin_access_audit: {
         Row: {
           action: string
@@ -1049,7 +1061,7 @@ export type Database = {
     Views: {
       my_applications: HrTable<{ id: string; person_id: string; opportunity_id: string; full_name: string; title: string; stage: string; status: string; created_at: string; updated_at: string }>;
       my_application_events: HrTable<{ id: number; application_id: string; to_stage: string; kind: string; created_at: string }>;
-      my_employment: HrTable<Pick<HrEmployee, 'id' | 'person_id' | 'matricule' | 'role' | 'start_date' | 'end_date' | 'status' | 'onboarding_completed_at' | 'probation_status' | 'probation_end'>>;
+      my_employment: HrTable<Pick<HrEmployee, 'id' | 'person_id' | 'matricule' | 'role' | 'start_date' | 'end_date' | 'status' | 'onboarding_completed_at' | 'probation_status' | 'probation_end' | 'contract_type'>>;
       my_onboarding_items: HrTable<Omit<HrJourneyTask,'completed_by'|'created_at'>>;
       document_alerts: HrTable<DocumentAlert>;
       my_payslips: HrTable<{ id: string; person_id: string; title: string; valid_from: string | null; file_name: string; size_bytes: number | null; created_at: string }>;
@@ -1059,6 +1071,9 @@ export type Database = {
     }
     Functions: {
       cra_context: { Args: Record<PropertyKey, never>; Returns: Json };
+      my_freelancer_invoices: { Args: Record<PropertyKey, never>; Returns: { id: string; number: string; period_month: string | null; amount_ttc_cents: number | null; received_at: string; portal_status: 'received' | 'to_pay' | 'paid' | 'not_accepted' }[] };
+      freelancer_known_senders: { Args: Record<PropertyKey, never>; Returns: { employee_id: string; email: string }[] };
+      freelancer_invoice_mark_paid: { Args: { invoice_ids: string[]; transaction_id: string; match_kind: 'confident' | 'probable' | 'manual'; actor: string; paid_at: string }; Returns: number };
       my_name_from_hr: { Args: Record<PropertyKey, never>; Returns: boolean };
       cra_month_snapshot: { Args: { target_employee: string; target_month: string }; Returns: Json };
       cra_save_month: { Args: { target_employee: string; target_month: string; expected_version: number; entries: Json }; Returns: Json };

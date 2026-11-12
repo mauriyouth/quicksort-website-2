@@ -42,7 +42,7 @@ export const settingsSchema = serviceAccountSchema.extend({
 });
 
 export type DriveSettings = z.infer<typeof settingsSchema>;
-type ServiceAccount = Pick<DriveSettings, "client_email" | "private_key">;
+export type ServiceAccount = Pick<DriveSettings, "client_email" | "private_key">;
 export type DriveFile = {
   id: string;
   name: string;
@@ -59,12 +59,10 @@ const base64url = (value: string) => Buffer.from(value, "utf8").toString("base64
 /** Short-lived access tokens are cached per service account until expiry. */
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
-function serviceJwt(sa: ServiceAccount) {
-  const now = Math.floor(Date.now() / 1000);
+/** Signs an RS256 JWT assertion with the service-account key (Drive, or Gmail via delegation). */
+export function signServiceAccountJwt(sa: ServiceAccount, claims: Record<string, unknown>) {
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = base64url(
-    JSON.stringify({ iss: sa.client_email, scope: DRIVE_SCOPE, aud: TOKEN_URL, iat: now, exp: now + 3600 }),
-  );
+  const payload = base64url(JSON.stringify(claims));
   let signature: string;
   try {
     const signer = createSign("RSA-SHA256");
@@ -74,6 +72,11 @@ function serviceJwt(sa: ServiceAccount) {
     throw new Error("The service-account private_key is not a valid RSA key. Paste the whole JSON key file, including -----BEGIN PRIVATE KEY-----.");
   }
   return `${header}.${payload}.${signature}`;
+}
+
+function serviceJwt(sa: ServiceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  return signServiceAccountJwt(sa, { iss: sa.client_email, scope: DRIVE_SCOPE, aud: TOKEN_URL, iat: now, exp: now + 3600 });
 }
 
 export async function driveToken(sa: ServiceAccount) {

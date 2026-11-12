@@ -9,6 +9,7 @@ import type { Workspace } from "./hr/domain";
 import { Opportunities } from "./sales/Opportunities";
 import { Projects } from "./sales/Projects";
 import { Invoicing } from "./sales/invoicing/Invoicing";
+import { FreelancerInvoices } from "./sales/freelancer-invoices/FreelancerInvoices";
 import { DocumentAlerts } from "./documents/DocumentAlerts";
 import { OpsBoard } from "./ops/OpsBoard";
 import { CompanyAdmin } from "./ops/CompanyAdmin";
@@ -101,6 +102,7 @@ const nav = [
       { id: "opportunities", href: "/sales/opportunities", label: "Opportunities" },
       { id: "sales-projects", href: "/sales/projects", label: "Projects" },
       { id: "sales-invoicing", href: "/sales/invoicing", label: "Invoicing" },
+      { id: "sales-freelancer-invoices", href: "/sales/freelancer-invoices", label: "Freelancer invoices" },
     ],
   },
   {
@@ -504,6 +506,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     "opportunities",
     "sales-projects",
     "sales-invoicing",
+    "sales-freelancer-invoices",
   ];
   const isSales = salesTabIds.includes(tab);
   const hrTabIds = [
@@ -599,6 +602,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/sales/projects" element={<Projects actorEmail={email} />} />
         <Route path="/sales/projects/:projectId" element={<Projects actorEmail={email} />} />
         <Route path="/sales/invoicing/*" element={<Invoicing />} />
+        <Route path="/sales/freelancer-invoices/*" element={<FreelancerInvoices />} />
         <Route path="/operations" element={<OpsBoard actorEmail={email} />} />
         <Route
           path="/operations/business-plan"

@@ -11,8 +11,20 @@
     {
       "path": "/api/bank-transactions-cron",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/freelancer-invoices-cron",
+      "schedule": "0 * * * *"
     }
   ],
+  "functions": {
+    "api/freelancer-invoices-cron.ts": {
+      "maxDuration": 300
+    },
+    "api/freelancer-invoices.ts": {
+      "maxDuration": 300
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

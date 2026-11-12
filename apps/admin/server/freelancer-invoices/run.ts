@@ -334,11 +334,12 @@ async function matchDebits(client: SupabaseClient): Promise<{ matched: number; s
 
   // Debits settled from the day before the oldest open invoice (Paris vs UTC dates).
   const since = addDays(open.map((r) => r.issue_date as string).sort()[0], -1);
-  const debitRows = await all<{ id: string; settled_at: string; amount_cents: number | string; counterparty: string | null; transfer: unknown }>(
+  // The bank sync lists Qonto debits only and keeps Qonto's positive amounts, with the
+  // direction in raw.side: a row is a debit unless Qonto says credit.
+  const debitRows = await all<{ id: string; settled_at: string; amount_cents: number | string; counterparty: string | null; side: string | null; transfer: unknown }>(
     (from, to) => client
       .from("bank_transactions")
-      .select("id,settled_at,amount_cents,counterparty,transfer:raw->transfer")
-      .lt("amount_cents", 0)
+      .select("id,settled_at,amount_cents,counterparty,side:raw->>side,transfer:raw->transfer")
       // Qonto statuses: pending, completed, declined, reversed. Only a completed debit paid anyone.
       .eq("status", "completed")
       .gte("settled_at", `${since}T00:00:00Z`)
@@ -346,10 +347,11 @@ async function matchDebits(client: SupabaseClient): Promise<{ matched: number; s
       .range(from, to),
     "read debits",
   );
-  const debits: Debit[] = debitRows.map((d) => ({
+  const debits: Debit[] = debitRows.filter((d) => d.side !== "credit").map((d) => ({
     id: d.id,
     settledAt: d.settled_at,
-    amountCents: Number(d.amount_cents),
+    // The matcher counts money out as negative.
+    amountCents: -Math.abs(Number(d.amount_cents)),
     counterparty: d.counterparty ?? "",
     iban: debitIban({ transfer: d.transfer }),
   }));

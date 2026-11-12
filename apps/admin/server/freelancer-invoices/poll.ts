@@ -22,7 +22,7 @@ export type PollDeps = {
     /** The full message with its PDFs, for a known sender only. */
     get: (id: string) => Promise<MailMessage>;
   };
-  ingest: (input: IngestInput) => Promise<{ invoiceId: string; duplicate: boolean }>;
+  ingest: (input: IngestInput) => Promise<{ duplicate: boolean; skipped?: boolean }>;
   /** Epoch ms; once passed, the remaining messages are left for the next run. */
   stopAt?: number;
   now?: () => number;
@@ -41,6 +41,8 @@ export type PollResult = {
   /** Invoices created. */
   invoices: number;
   duplicates: number;
+  /** Attachments read as not an invoice (timesheets, contracts), not stored. */
+  notInvoices: number;
   /** Messages not read: already done, or from an unknown or ambiguous sender (recorded done, not opened). */
   skipped: number;
   /** PDFs that could not be filed, messages Gmail would not return, and outcomes that could not be recorded; retried next run. */
@@ -60,7 +62,7 @@ export function senderAddress(from: string): string {
 }
 
 export async function pollMailbox(deps: PollDeps): Promise<PollResult> {
-  const result: PollResult = { messages: 0, invoices: 0, duplicates: 0, skipped: 0, failed: 0, abandoned: 0, partial: false };
+  const result: PollResult = { messages: 0, invoices: 0, duplicates: 0, notInvoices: 0, skipped: 0, failed: 0, abandoned: 0, partial: false };
   // One address can belong to a single freelancer only; a shared one is ambiguous.
   const byAddress = new Map<string, string | null>();
   for (const s of deps.senders) {
@@ -143,7 +145,7 @@ export async function pollMailbox(deps: PollDeps): Promise<PollResult> {
     let error: string | null = null;
     for (const pdf of message.pdfs) {
       try {
-        const { duplicate } = await deps.ingest({
+        const { duplicate, skipped } = await deps.ingest({
           employeeId,
           bytes: pdf.bytes,
           fileName: pdf.fileName,
@@ -151,7 +153,8 @@ export async function pollMailbox(deps: PollDeps): Promise<PollResult> {
           gmailMessageId: id,
           actorEmail: MAILBOX_ACTOR,
         });
-        if (duplicate) result.duplicates++;
+        if (skipped) result.notInvoices++;
+        else if (duplicate) result.duplicates++;
         else result.invoices++;
       } catch (failure) {
         result.failed++;

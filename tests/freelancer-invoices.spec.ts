@@ -70,6 +70,9 @@ const MONTH = {
   unassigned: [],
 };
 
+/** The page reads a whole year; these fixtures are one month of it. */
+const asYear = (m: { rows: unknown[]; unassigned: unknown[] }) => ({ months: [{ month: '2026-10-01', rows: m.rows }], unassigned: m.unassigned });
+
 async function mock(page: Page, answers: Record<string, { status?: number; body: unknown }> = {}) {
   const posts: Array<Record<string, unknown>> = [];
   const gets: string[] = [];
@@ -80,7 +83,7 @@ async function mock(page: Page, answers: Record<string, { status?: number; body:
     if (req.method() === 'GET') {
       gets.push(url.search);
       const resource = url.searchParams.get('resource');
-      if (resource === 'month') return json(route, MONTH);
+      if (resource === 'year') return json(route, asYear(MONTH));
       if (resource === 'events') return json(route, { events: [{ id: 'e1', kind: 'received', actor_email: 'freelancer invoices cycle', detail: {}, created_at: '2026-11-03T09:00:00Z' }] });
       if (resource === 'settings') return json(route, {
         mailbox: 'mohamed@quicksort.fr', backfillFrom: '2026-01-01', lastPolledAt: '2026-11-10T08:00:00Z', lastError: null,
@@ -104,24 +107,27 @@ test('tabs count each kind of invoice and the mismatch shows what the CRA says',
   await expect(page.getByRole('tab', { name: 'To pay (1)' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Paid (1)' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Missing (1)' })).toBeVisible();
-  expect(gets.some((q) => /resource=month&month=\d{4}-\d{2}-01/.test(q))).toBe(true);
+  expect(gets.some((q) => /resource=year&year=\d{4}/.test(q))).toBe(true);
+  // One header row per freelancer, with the year's totals; lines carry the month.
+  await expect(page.getByRole('row', { name: 'Alice Martin', exact: true })).toContainText('HT invoiced');
+  await expect(page.getByRole('row', { name: /Bob Durand ·/ })).toContainText('October 2026');
 
-  await expect(page.getByRole('row', { name: /Bob Durand/ })).toContainText('CRA says €8,450 (13 d × €650)');
-  await expect(page.getByRole('row', { name: /Alice Martin/ })).toContainText('✓ 12 d × €700');
-  await expect(page.getByRole('row', { name: /Alice Martin/ })).toContainText('Paid 8 Nov');
-  await expect(page.getByRole('row', { name: /Alice Martin/ })).toContainText('email · 2 Nov');
-  await expect(page.getByRole('row', { name: /Chloé Petit/ })).toContainText('To pay · due 4 Oct');
-  await expect(page.getByRole('row', { name: /David Roux/ })).toContainText('Missing');
+  await expect(page.getByRole('row', { name: /Bob Durand ·/ })).toContainText('CRA says €8,450 (13 d × €650)');
+  await expect(page.getByRole('row', { name: /Alice Martin ·/ })).toContainText('✓ 12 d × €700');
+  await expect(page.getByRole('row', { name: /Alice Martin ·/ })).toContainText('Paid 8 Nov');
+  await expect(page.getByRole('row', { name: /Alice Martin ·/ })).toContainText('email · 2 Nov');
+  await expect(page.getByRole('row', { name: /Chloé Petit ·/ })).toContainText('To pay · due 4 Oct');
+  await expect(page.getByRole('row', { name: /David Roux ·/ })).toContainText('Missing');
 
   await page.getByRole('tab', { name: 'To check (1)' }).click();
-  await expect(page.getByRole('row', { name: /Bob Durand/ })).toBeVisible();
-  await expect(page.getByRole('row', { name: /Alice Martin/ })).toHaveCount(0);
+  await expect(page.getByRole('row', { name: /Bob Durand ·/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Alice Martin ·/ })).toHaveCount(0);
 });
 
 test('confirming a suggested payment posts both ids', async ({ page }) => {
   const { posts } = await mock(page);
   await page.goto(new URL('/sales/freelancer-invoices', harness.url).href);
-  await page.getByRole('row', { name: /Bob Durand/ }).click();
+  await page.getByRole('row', { name: /Bob Durand ·/ }).click();
   const panel = page.getByRole('dialog');
   await expect(panel.getByText('BOB DURAND CONSEIL')).toBeVisible();
   await panel.getByRole('button', { name: 'Confirm' }).click();
@@ -131,7 +137,7 @@ test('confirming a suggested payment posts both ids', async ({ page }) => {
 test('a refused payment says the debit is already used', async ({ page }) => {
   await mock(page, { confirm_match: { status: 409, body: { error: 'This debit already pays another invoice. Unlink it there first.' } } });
   await page.goto(new URL('/sales/freelancer-invoices', harness.url).href);
-  await page.getByRole('row', { name: /Bob Durand/ }).click();
+  await page.getByRole('row', { name: /Bob Durand ·/ }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Confirm' }).click();
   await expect(page.getByRole('dialog').getByText('This payment is already linked to another invoice. Unlink it there, or record it as one payment for several invoices.')).toBeVisible();
 });
@@ -139,7 +145,7 @@ test('a refused payment says the debit is already used', async ({ page }) => {
 test('accepting a difference needs a note of 3 characters', async ({ page }) => {
   const { posts } = await mock(page);
   await page.goto(new URL('/sales/freelancer-invoices', harness.url).href);
-  await page.getByRole('row', { name: /Bob Durand/ }).click();
+  await page.getByRole('row', { name: /Bob Durand ·/ }).click();
   const panel = page.getByRole('dialog');
   const accept = panel.getByRole('button', { name: 'Accept difference' });
   await expect(accept).toBeDisabled();
@@ -155,9 +161,9 @@ test('without a daily rate the CRA check says so', async ({ page }) => {
   await mock(page);
   const noRate = structuredClone(MONTH);
   Object.assign(noRate.rows[1], { missingRate: true });
-  await page.route('**/api/freelancer-invoices?resource=month**', (route) => json(route, noRate));
+  await page.route('**/api/freelancer-invoices?resource=year**', (route) => json(route, asYear(noRate)));
   await page.goto(new URL('/sales/freelancer-invoices', harness.url).href);
-  await expect(page.getByRole('row', { name: /Bob Durand/ })).toContainText('No TJM on file');
+  await expect(page.getByRole('row', { name: /Bob Durand ·/ })).toContainText('No TJM on file');
 });
 
 test('settings show the mailbox and the delegation setup', async ({ page }) => {
@@ -174,9 +180,9 @@ test('no horizontal scroll at 1155px', async ({ page }) => {
   await mock(page);
   await page.setViewportSize({ width: 1155, height: 900 });
   await page.goto(new URL('/sales/freelancer-invoices', harness.url).href);
-  await expect(page.getByRole('row', { name: /Bob Durand/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Bob Durand ·/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole('row', { name: /Bob Durand/ }).click();
+  await page.getByRole('row', { name: /Bob Durand ·/ }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -186,7 +192,7 @@ test('one debit can pay several invoices of the same freelancer', async ({ page 
   const BOB_SECOND = '72000000-0000-4000-8000-0000000000b2';
   const twoInvoices = structuredClone(MONTH);
   twoInvoices.rows[1].invoices.push(invoice(BOB_SECOND, BOB, { number: 'BD-8', amountHtCents: 100000, vatCents: 20000, amountTtcCents: 120000 }));
-  await page.route('**/api/freelancer-invoices?resource=month**', (route) => json(route, twoInvoices));
+  await page.route('**/api/freelancer-invoices?resource=year**', (route) => json(route, asYear(twoInvoices)));
   await page.goto(new URL('/sales/freelancer-invoices', harness.url).href);
   await page.getByRole('row', { name: /Bob Durand · BD-7/ }).click();
   const panel = page.getByRole('dialog');
@@ -203,7 +209,7 @@ test('an invoice with no period waits under To check; a rejected one does not', 
     { ...invoice('72000000-0000-4000-8000-0000000000e1', ALICE, { number: 'NP-1', periodMonth: null, review: 'to_check', display: { status: 'to_check', warning: true, overdue: false } }), name: 'Alice Martin' },
     { ...invoice('72000000-0000-4000-8000-0000000000e2', ALICE, { number: 'NP-2', periodMonth: null, review: 'rejected', display: { status: 'rejected', warning: true, overdue: false } }), name: 'Alice Martin' },
   ] as never[];
-  await page.route('**/api/freelancer-invoices?resource=month**', (route) => json(route, withUnassigned));
+  await page.route('**/api/freelancer-invoices?resource=year**', (route) => json(route, asYear(withUnassigned)));
   await page.goto(new URL('/sales/freelancer-invoices', harness.url).href);
   await page.getByRole('tab', { name: 'To check (2)' }).click();
   await expect(page.getByRole('row', { name: /Alice Martin · NP-1/ })).toContainText('No period set');
@@ -213,7 +219,7 @@ test('an invoice with no period waits under To check; a rejected one does not', 
 test('an admin uploads the missing invoice from the freelancer panel', async ({ page }) => {
   const { posts } = await mock(page, { upload: { body: { received: true, duplicate: false } } });
   await page.goto(new URL('/sales/freelancer-invoices', harness.url).href);
-  await page.getByRole('row', { name: /David Roux/ }).click();
+  await page.getByRole('row', { name: /David Roux ·/ }).click();
   const panel = page.getByRole('dialog');
   const chooser = page.waitForEvent('filechooser');
   await panel.getByRole('button', { name: 'Upload invoice', exact: true }).click();

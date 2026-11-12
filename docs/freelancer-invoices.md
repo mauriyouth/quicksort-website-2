@@ -1,6 +1,6 @@
 # Freelancer invoices
 
-How the invoices freelancers send us are collected, checked against their CRA, and marked paid from Qonto. Scope: people whose contract type is `Freelance` only. Admin page: Sales → Freelancer invoices.
+How the invoices freelancers send us are collected, checked against their CRA, and marked paid from Qonto. Scope: people whose contract type is `Freelance` only. Admin page: Sales → Freelancer invoices, one section per freelancer for the chosen year (header: invoiced HT, to pay TTC, missing months), newest month first.
 
 ## Intake
 
@@ -14,7 +14,10 @@ Every invoice lands as **To check**, whatever its source.
   - Each listed message is first read as headers only (sender and date). Only a message from a known address that belongs to a single freelancer is opened in full, and only its PDF attachments are downloaded. A message from an unknown or shared address is never opened: it is recorded as done with the reason, so it is not looked at again.
   - The first run goes back to 1 Jan 2026 (the backfill date setting); later runs continue from the last poll. Changing the mailbox or the backfill date starts again from the backfill date.
   - A run reads mail for at most 150 s, then leaves the rest for the next run.
+  - Invoicing tools send from a shared address (Tiime: `no-reply@invoice.tiime.fr`): add it to that freelancer's extra emails. An address shared by two freelancers is never opened.
+  - Adding an extra email makes the next run read again from the backfill date, so that sender's older invoices come in; messages already done are skipped.
   - Each message read is recorded. Done messages are never read again; failed ones are retried on the next runs, up to 5 attempts, then given up with the error kept (file those by hand).
+- **Only invoices from mail.** An email attachment that Kimi reads as not an invoice (a timesheet, a contract) is skipped: not stored, not filed in Drive, counted in the sync result. One whose read failed is kept, flagged `unreadable`. A portal or admin upload is always kept.
 - **Reading the PDF.** Kimi (Moonshot) extracts number, dates, period, HT / VAT / TTC, credit-note flag and issuer IBAN. It uses the key and model saved in the AI settings (Settings → Kimi). If the read fails, the invoice is still stored, flagged `unreadable`, for an admin to complete.
 - **Storage.** The PDF is filed in Drive under the person's folder, in `09_Factures`, as a `FREELANCE_INVOICE` document.
 - **Duplicates.** Same freelancer and invoice number, or same file hash: no new invoice is created; the event is logged on the existing one. A rejected invoice frees its number, so a corrected invoice may reuse it; the rejected file itself is still a duplicate.
@@ -61,7 +64,7 @@ For a freelancer and month:
 
 ## Payment matching
 
-Compares the invoice **TTC** with the absolute amount of completed Qonto debits settled on or after the invoice date. Credit notes, paid and rejected invoices are not matched, and a debit already used or confirmed is never reused.
+Compares the invoice **TTC** with the amount of completed Qonto debits settled on or after the invoice date. The bank sync stores Qonto debits with their positive amount and `raw.side = debit`; a row Qonto marks `credit` is never a payment. Freelancer transfers usually carry no payee name, so the IBAN on file (prefilled from the first invoice) is what matches them. Credit notes, paid and rejected invoices are not matched, and a debit already used or confirmed is never reused.
 
 - **Confident (marked paid automatically)** only when all hold:
   - the invoice has exactly one candidate debit, and that debit is a candidate of exactly one invoice;

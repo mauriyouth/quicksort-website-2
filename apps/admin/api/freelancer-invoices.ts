@@ -172,7 +172,9 @@ async function loadDebit(client: SupabaseClient, id: string): Promise<DebitRow> 
   if (!data) throw new HttpError("Bank transaction not found.", 404);
   const debit = data as DebitRow;
   // Qonto statuses: pending, completed, declined, reversed. Only a completed debit paid anyone.
-  if (!(Number(debit.amount_cents) < 0) || !debit.settled_at || debit.status !== "completed") {
+  // Synced debits keep Qonto's positive amount; the direction is raw.side.
+  const side = (debit.raw as { side?: unknown } | null)?.side;
+  if (Number(debit.amount_cents) === 0 || side === "credit" || !debit.settled_at || debit.status !== "completed") {
     throw new HttpError("Only a completed debit can pay an invoice.", 400);
   }
   return debit;
@@ -352,6 +354,26 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
     };
   },
 
+  /**
+   * Every month of a year up to the current one, for the by-freelancer view:
+   * each month is checked as on its own; invoices without a period are listed once.
+   */
+  async year(ctx) {
+    const year = ctx.query.year ?? "";
+    if (!/^\d{4}$/.test(year)) throw new HttpError("Choose a year (YYYY).", 400);
+    const current = parisDay.format(nowOf(ctx.deps)).slice(0, 7);
+    const months: string[] = [];
+    for (let m = 1; m <= 12; m++) {
+      const month = `${year}-${String(m).padStart(2, "0")}`;
+      if (month <= current) months.push(`${month}-01`);
+    }
+    type Month = { rows: unknown[]; unassigned: { id: string }[] };
+    const loaded = await Promise.all(months.map((month) => resources.month({ ...ctx, query: { month } }) as Promise<Month>));
+    const unassigned = new Map<string, { id: string }>();
+    for (const m of loaded) for (const u of m.unassigned) unassigned.set(u.id, u);
+    return { months: months.map((month, i) => ({ month, rows: loaded[i].rows })), unassigned: [...unassigned.values()] };
+  },
+
   async settings({ client }) {
     const { data, error } = await client.from("freelancer_mailbox_settings").select("address,backfill_from,last_polled_at,last_error").eq("id", "mailbox").maybeSingle();
     check(error, "read mailbox settings");
@@ -502,19 +524,29 @@ const actions: Record<string, (ctx: Ctx, input: any) => Promise<Result>> = {
     check(employee.error, "read employee");
     if (!employee.data) throw new HttpError("Employee not found.", 404);
     if (employee.data.contract_type !== "Freelance") throw new HttpError("Only freelancers have billing details.", 400);
+    const extraEmails = [...new Set(input.extraEmails.map((e) => e.trim().toLowerCase()))];
+    const before = await client.from("freelancer_billing").select("extra_emails").eq("employee_id", input.employeeId).maybeSingle();
+    check(before.error, "read billing");
+    const known = new Set(((before.data as { extra_emails?: string[] } | null)?.extra_emails ?? []).map((e) => e.toLowerCase()));
     const { error } = await client.from("freelancer_billing").upsert(
       {
         employee_id: input.employeeId,
         company_name: input.companyName,
         siret: input.siret,
         iban: input.iban,
-        extra_emails: [...new Set(input.extraEmails.map((e) => e.trim().toLowerCase()))],
+        extra_emails: extraEmails,
         updated_by: email,
         updated_at: stamp(deps),
       },
       { onConflict: "employee_id" },
     );
     check(error, "save billing");
+    // A new sender address: its older mail was never listed, so the next poll reads from backfill_from
+    // again. Messages already done are skipped by freelancer_mailbox_messages.
+    if (extraEmails.some((e) => !known.has(e))) {
+      const reset = await client.from("freelancer_mailbox_settings").update({ last_polled_at: null }).eq("id", "mailbox");
+      check(reset.error, "reset mailbox poll");
+    }
     return { status: 200, body: { saved: true } };
   },
 

@@ -105,6 +105,7 @@ export type MonthRow = {
 };
 export type UnassignedInvoice = InvoiceView & { name: string };
 export type MonthResponse = { rows: MonthRow[]; unassigned: UnassignedInvoice[] };
+export type YearResponse = { months: { month: string; rows: MonthRow[] }[]; unassigned: UnassignedInvoice[] };
 export type InvoiceEvent = { id: string; kind: string; actor_email: string; detail: Record<string, unknown> | null; created_at: string };
 export type MailboxSettingsResponse = {
   mailbox: string;
@@ -114,7 +115,7 @@ export type MailboxSettingsResponse = {
   driveServiceAccountEmail: string | null;
 };
 export type SyncResult = {
-  poll: { messages: number; invoices: number; duplicates: number; skipped: number; failed: number; abandoned: number; partial: boolean } | { skipped: string };
+  poll: { messages: number; invoices: number; duplicates: number; notInvoices?: number; skipped: number; failed: number; abandoned: number; partial: boolean } | { skipped: string };
   matched: number;
   suggested: number;
   reviewed: number;

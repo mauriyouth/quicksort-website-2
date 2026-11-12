@@ -120,7 +120,9 @@ function fixture({ role = "admin", extra = {} } = {}) {
     freelancer_invoice_events: [],
     freelancer_mailbox_settings: [{ id: "mailbox", address: "mohamed@quicksort.fr", backfill_from: "2026-01-01", last_polled_at: null, last_error: null }],
     bank_transactions: [
-      { id: "tx-1", settled_at: "2026-11-08T10:00:00Z", amount_cents: -1008000, status: "completed", counterparty: "ANA LOPEZ CONSEIL", raw: { transfer: { counterparty_account_number: "FR76 3000 4000 0312 3456 7890 143" } } },
+      // As the bank sync stores it: Qonto's positive amount, the direction in raw.side
+      // (`side` stands for the raw->>side column alias the in-memory client cannot resolve).
+      { id: "tx-1", settled_at: "2026-11-08T10:00:00Z", amount_cents: 1008000, status: "completed", counterparty: "ANA LOPEZ CONSEIL", side: "debit", raw: { side: "debit", transfer: { counterparty_account_number: "FR76 3000 4000 0312 3456 7890 143" } } },
     ],
     ...extra,
   };
@@ -198,6 +200,23 @@ test("GET month builds rows, flags a freelancer with CRA and no invoice as missi
   assert.equal((await f.get({ resource: "month", month: "2026-10" })).code, 400);
 });
 
+test("GET year returns each month up to the current one, checked as GET month", async () => {
+  const f = fixture();
+  const res = await f.get({ resource: "year", year: "2026" });
+  assert.equal(res.code, 200);
+  // The fixture clock is 11 Nov 2026: January to November.
+  assert.deepEqual(res.body.months.map((m) => m.month), Array.from({ length: 11 }, (_, i) => `2026-${String(i + 1).padStart(2, "0")}-01`));
+  const october = res.body.months.find((m) => m.month === MONTH);
+  const single = (await f.get({ resource: "month", month: MONTH })).body;
+  assert.deepEqual(october.rows, single.rows);
+  assert.equal((await f.get({ resource: "year", year: "26" })).code, 400);
+});
+
+test("a non-admin GET year is refused (403)", async () => {
+  const f = fixture({ role: "member" });
+  assert.equal((await f.get({ resource: "year", year: "2026" })).code, 403);
+});
+
 test("GET month surfaces a missing TJM", async () => {
   const f = fixture({ extra: { employee_salaries: [] } });
   const res = await f.get({ resource: "month", month: MONTH });
@@ -210,7 +229,7 @@ test("GET month lists suggestions for an unpaid invoice", async () => {
   const res = await f.get({ resource: "month", month: MONTH });
   const ana = res.body.rows.find((r) => r.employeeId === "emp-ana");
   assert.deepEqual(ana.invoices[0].suggestions, [
-    { transactionId: "tx-1", amountCents: -1008000, settledAt: "2026-11-08T10:00:00Z", counterparty: "ANA LOPEZ CONSEIL", why: "probable" },
+    { transactionId: "tx-1", amountCents: 1008000, settledAt: "2026-11-08T10:00:00Z", counterparty: "ANA LOPEZ CONSEIL", why: "probable" },
   ]);
 });
 
@@ -315,6 +334,21 @@ test("save_billing validates IBAN and SIRET; save_mailbox records the admin", as
   assert.equal((await f.post({ action: "save_mailbox", address: "billing@quicksort.fr", backfillFrom: "2026-02-31" })).code, 400);
   assert.equal((await f.post({ action: "save_mailbox", address: "billing@quicksort.fr", backfillFrom: "2026-02-01" })).code, 200);
   assert.equal(f.tables.freelancer_mailbox_settings[0].updated_by, "admin@quicksort.fr");
+});
+
+test("save_billing with a new extra email re-reads the mailbox from the backfill date; same emails do not", async () => {
+  const f = fixture();
+  const base = { action: "save_billing", employeeId: "00000000-0000-4000-8000-0000000000e1", companyName: "", siret: "", iban: "", extraEmails: [] };
+  f.tables.employees.push({ id: base.employeeId, person_id: "p-ana", contract_type: "Freelance", status: "active" });
+  const mailbox = f.tables.freelancer_mailbox_settings[0];
+  mailbox.last_polled_at = "2026-11-10T09:00:00Z";
+  assert.equal((await f.post(base)).code, 200);
+  assert.equal(mailbox.last_polled_at, "2026-11-10T09:00:00Z");
+  assert.equal((await f.post({ ...base, extraEmails: ["No-Reply@invoice.tiime.fr"] })).code, 200);
+  assert.equal(mailbox.last_polled_at, null);
+  mailbox.last_polled_at = "2026-11-12T09:00:00Z";
+  assert.equal((await f.post({ ...base, extraEmails: ["no-reply@invoice.tiime.fr"] })).code, 200);
+  assert.equal(mailbox.last_polled_at, "2026-11-12T09:00:00Z");
 });
 
 test("portal_upload ignores a body employeeId and files under the caller's own freelance employment", async () => {
@@ -589,6 +623,21 @@ test("the cycle only matches completed debits", async () => {
   const paid = await runFreelancerInvoicesCycle(completed.deps.createClient(), { pollMail: false });
   assert.equal(paid.matched, 1);
   assert.equal(completed.tables.freelancer_invoices[0].paid_by_transaction_id, "tx-1");
+});
+
+test("the cycle matches a debit stored with a positive amount, and never a credit", async () => {
+  const { runFreelancerInvoicesCycle } = await import("../apps/admin/server/freelancer-invoices/run.ts");
+  const billing = [{ employee_id: "emp-ana", company_name: "", siret: "", iban: "FR7630004000031234567890143", extra_emails: [] }];
+  const credit = fixture({ extra: { freelancer_billing: billing } });
+  Object.assign(credit.tables.bank_transactions[0], { side: "credit", transfer: { counterparty_account_number: "FR7630004000031234567890143" } });
+  const none = await runFreelancerInvoicesCycle(credit.deps.createClient(), { pollMail: false });
+  assert.equal(none.matched + none.suggested, 0);
+
+  const debit = fixture({ extra: { freelancer_billing: billing } });
+  debit.tables.bank_transactions[0].transfer = { counterparty_account_number: "FR7630004000031234567890143" };
+  const paid = await runFreelancerInvoicesCycle(debit.deps.createClient(), { pollMail: false });
+  assert.equal(paid.matched, 1);
+  assert.equal(debit.tables.freelancer_invoices[0].paid_at, "2026-11-08T10:00:00Z");
 });
 
 test("a PDF read ends 60 s after it starts, and never past the poll budget + 15 s", async () => {

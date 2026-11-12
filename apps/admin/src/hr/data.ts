@@ -341,7 +341,10 @@ export async function loadWorkspace(): Promise<Workspace> {
 }
 export async function executeCommand(input: unknown): Promise<CommandResult> {
  const parsed = commandSchema.parse(input);
- const command = z.json().parse({...parsed,request_id:parsed.request_id ?? crypto.randomUUID()});
+ // Optional fields come back as `undefined` (a freelance rate has no salary_monthly);
+ // z.json() rejects them, and the RPC body would drop them anyway.
+ const present = Object.fromEntries(Object.entries(parsed).filter(([, v]) => v !== undefined));
+ const command = z.json().parse({...present,request_id:parsed.request_id ?? crypto.randomUUID()});
  const result = await db().rpc('hr_command',{command});
  if(result.error) throw result.error;
  return resultSchema.parse(result.data);

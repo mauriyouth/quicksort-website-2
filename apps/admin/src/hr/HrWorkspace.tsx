@@ -1,39 +1,56 @@
-import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, Clock3, Plus, RefreshCw, Search, Users, X, ArrowUpRight, MapPin } from 'lucide-react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { CalendarDays, Clock3, Plus, RefreshCw, Search, Users, MapPin, ArrowUpRight } from 'lucide-react';
 import { db, errorMessage } from '@quicksort/hr-db';
+import { cn } from 'cn';
+import {
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  Field as UiField,
+  FieldLabel,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  NativeSelect,
+  NativeSelectOption,
+  Stat,
+  StatGroup,
+  StatLabel,
+  StatValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@quicksort-sas/ui';
 import { executeCommand, loadWorkspace } from './data';
-import type { Employee, Opportunity, Person, Workspace } from './domain';
+import type { CommandResult, Employee, Opportunity, Person, Workspace } from './domain';
 import { AssignForm, PersonWorkspace, available, personName, stages, type PersonTab, type RecordContext } from './PersonWorkspace';
-import { Action, Dialog, Empty, Field, Form, PersonLink, SearchMultiField, Section, Tag, checked, date, initials, label, nullable, text, today, type RunCommand } from './ui';
-import type { Application, ApplicationStage } from './domain';
+import { Dialog, Empty, Field, Form, PersonLink, SearchMultiField, Section, Tag, avatarClass, checked, date, initials, label, nullable, text, today, type RunCommand } from './ui';
+import { PageAlerts, PageHeading } from '../ui';
+import type { ApplicationStage } from './domain';
 import { DateField } from '../DateField';
 import { Intake } from './Intake';
 import { CraScreen } from '../cra/CraScreen';
 import { loadMonth } from '../cra/data';
 import { balanceFor, fmtDays, useLeaveBalances } from '../cra/balances';
-import { monthDays } from '../cra/domain';
+import { accruesLeave, monthDays } from '../cra/domain';
 import './workspace.css';
+import { DocumentAlertsQueue } from '../documents/DocumentAlerts';
+import { PersonPhoto } from '../documents/PersonPhoto';
+import { PaidLeaveAdjust } from './PaidLeaveAdjust';
 export type HrView = 'overview' | 'recruiting' | 'people' | 'journeys';
-const viewCopy: Record<HrView, {
-  title: string;
-  description: string;
-}> = {
-  overview: {
-    title: 'The next move, clearly.',
-    description: 'Recruitment decisions, new arrivals and departures in one working queue.'
-  },
-  recruiting: {
-    title: 'Build your next team.',
-    description: 'Connect hiring needs, applications, interviews and employment offers.'
-  },
-  people: {
-    title: 'One person. Every chapter.',
-    description: 'Candidates, colleagues and alumni — with staffing capacity and monthly CRA in the same place.'
-  },
-  journeys: {
-    title: 'Make every handoff count.',
-    description: 'Preboarding, onboarding, probation and offboarding with owners and evidence.'
-  }
+const viewTitles: Record<HrView, string> = {
+  overview: 'Overview',
+  recruiting: 'Recruiting',
+  people: 'People',
+  journeys: 'Journeys'
 };
 type OpenPerson = (personId: string, applicationId?: string, employeeId?: string) => void;
 type PageContext = RecordContext & {
@@ -58,13 +75,15 @@ const SEGMENT_TABS: Record<string, PersonTab> = {
   cra: 'cra',
   activity: 'history'
 };
-const personRoute = (): { personId: string; tab: PersonTab } => {
+const personRoute = (): { personId: string; tab: PersonTab; employmentId: string } => {
   // The CRA tab pins the viewed month as extra segments:
   // /hr/people/<id>/cra/2026/10 (the CRA screen owns them; the record
-  // router keeps resolving the tab and ignores the tail).
-  const match = window.location.pathname.match(/^\/hr\/people\/([^/]+?)(?:\/([^/]+?)(?:\/(\d{4})\/(0[1-9]|1[0-2]))?)?\/?$/);
-  if (!match) return { personId: '', tab: 'profile' };
-  return { personId: match[1], tab: SEGMENT_TABS[match[2] ?? ''] ?? 'profile' };
+  // router keeps resolving the tab and ignores the tail). The employments
+  // tab pins the selected employment: /hr/people/<id>/employments/<employmentId>.
+  const match = window.location.pathname.match(/^\/hr\/people\/([^/]+?)(?:\/([^/]+?)(?:\/(\d{4})\/(0[1-9]|1[0-2])|\/([^/]+?))?)?\/?$/);
+  if (!match) return { personId: '', tab: 'profile', employmentId: '' };
+  const tab = SEGMENT_TABS[match[2] ?? ''] ?? 'profile';
+  return { personId: match[1], tab, employmentId: tab === 'employment' ? decodeURIComponent(match[5] ?? '') : '' };
 };
 // The People list keeps its filters (?q=, ?group=) in the URL; carry them
 // through person navigation so closing a record returns to the same list.
@@ -74,11 +93,18 @@ const listFilters = () => {
   for (const key of ['q', 'group']) if (params.get(key)) kept.set(key, params.get(key) ?? '');
   return kept;
 };
-const personUrl = (id: string, tab: PersonTab, params = new URLSearchParams()) => {
+const personUrl = (id: string, tab: PersonTab, params = new URLSearchParams(), employmentId = '') => {
   const segment = TAB_SEGMENTS[tab];
-  const url = new URL(`/hr/people/${id}${segment ? `/${segment}` : ''}`, window.location.origin);
+  const record = tab === 'employment' && employmentId ? `/${encodeURIComponent(employmentId)}` : '';
+  const url = new URL(`/hr/people/${id}${segment ? `/${segment}` : ''}${record}`, window.location.origin);
   url.search = params.toString();
-  return url;
+  return url.pathname + url.search;
+};
+// Rewrite one query param on the current URL (list filters, recruiting tab).
+const withParam = (key: string, value: string) => {
+  const url = new URL(window.location.href);
+  if (value) url.searchParams.set(key, value);else url.searchParams.delete(key);
+  return url.pathname + url.search + url.hash;
 };
 export function HrWorkspace({
   view,
@@ -101,7 +127,9 @@ export function HrWorkspace({
   const [personId, setPersonId] = useState(() => personRoute().personId);
   const [personTab, setPersonTab] = useState<PersonTab>(() => personRoute().tab);
   const [applicationId, setApplicationId] = useState(() => getParam('application'));
-  const [employeeId, setEmployeeId] = useState(() => getParam('employment'));
+  const [employeeId, setEmployeeId] = useState(() => personRoute().employmentId || getParam('employment'));
+  const location = useLocation();
+  const navigate = useNavigate();
   const reload = useCallback(async () => {
     const data = await loadWorkspace();
     setWorkspace(data);
@@ -122,56 +150,43 @@ export function HrWorkspace({
     };
   }, [view]);
   useEffect(() => {
-    // Legacy ?person= deep links (bookmarks, shared links) become paths.
-    const legacy = getParam('person');
-    if (!legacy) return;
-    const application = getParam('application');
+    // Legacy ?person= and ?employment= deep links (bookmarks, shared links)
+    // become paths.
+    const legacy = getParam('person') || personRoute().personId;
     const employment = getParam('employment');
+    if (!getParam('person') && !(legacy && employment)) return;
+    const application = getParam('application');
     const tab: PersonTab = application ? 'applications' : employment ? 'employment' : 'profile';
     const params = listFilters();
     if (application) params.set('application', application);
-    if (employment) params.set('employment', employment);
-    window.history.replaceState(null, '', personUrl(legacy, tab, params));
-    setPersonId(legacy);
-    setPersonTab(tab);
-    setApplicationId(application);
-    setEmployeeId(employment);
+    navigate(personUrl(legacy, tab, params, employment), { replace: true });
   }, []);
+  // The open record follows the URL: react-router owns history, so header
+  // tabs, back/forward and in-page links all land here.
   useEffect(() => {
-    const sync = () => {
-      const route = personRoute();
-      setPersonId(route.personId);
-      setPersonTab(route.tab);
-      setApplicationId(getParam('application'));
-      setEmployeeId(getParam('employment'));
-    };
-    window.addEventListener('popstate', sync);
-    return () => window.removeEventListener('popstate', sync);
-  }, []);
+    const route = personRoute();
+    setPersonId(route.personId);
+    setPersonTab(route.tab);
+    setApplicationId(getParam('application'));
+    setEmployeeId(route.employmentId || getParam('employment'));
+  }, [location.pathname, location.search]);
   const open: OpenPerson = (id, application, employee) => {
     const tab: PersonTab = application ? 'applications' : employee ? 'employment' : 'profile';
     const params = listFilters();
     if (application) params.set('application', application);
-    if (employee) params.set('employment', employee);
-    window.history.pushState(null, '', personUrl(id, tab, params));
-    setPersonId(id);
-    setPersonTab(tab);
-    setApplicationId(application ?? '');
-    setEmployeeId(employee ?? '');
+    navigate(personUrl(id, tab, params, employee));
   };
   const navigatePersonTab = (tab: PersonTab) => {
     if (!personId) return;
-    window.history.pushState(null, '', personUrl(personId, tab, listFilters()));
-    setPersonTab(tab);
-    setApplicationId('');
-    setEmployeeId('');
+    navigate(personUrl(personId, tab, listFilters()));
   };
   const run: RunCommand = async (input, success = 'Saved.') => {
     setBusy(true);
     setError('');
     setMessage('');
+    let result: CommandResult;
     try {
-      await executeCommand(input);
+      result = await executeCommand(input);
     } catch (failure) {
       setBusy(false);
       setError(errorMessage(failure));
@@ -186,6 +201,7 @@ export function HrWorkspace({
     } finally {
       setBusy(false);
     }
+    return result;
   };
   const selectedPerson = workspace?.people.find(person => person.id === personId);
   const selectedEmployees = workspace && selectedPerson ? workspace.employees.filter(employee => employee.person_id === selectedPerson.id) : [];
@@ -203,33 +219,18 @@ export function HrWorkspace({
     open,
     openProject
   } : null;
-  return <div className="hr-workspace" aria-busy={loading}>
-    {!(selectedPerson && canRecruit) && <div className="hr-workspace-head">
-      <div>
-        <div className="hr-eyebrow">People operations · {label(view)}</div>
-        <h1>
-          {viewCopy[view].title}
-        </h1>
-        <p>
-          {viewCopy[view].description}
-        </p>
-      </div>
-      <div className="hr-inline">
-        <button className="btn secondary" disabled={loading || busy} onClick={() => {
+  return <div className="flex min-w-0 flex-col gap-6" aria-busy={loading}>
+    {!(selectedPerson && canRecruit) && <PageHeading eyebrow="People operations" title={viewTitles[view]} action={<div className="flex flex-wrap gap-2">
+        <Button variant="outline" disabled={loading || busy} onClick={() => {
           setLoading(true);
           setError('');
           void reload().catch(failure => setError(errorMessage(failure))).finally(() => setLoading(false));
-        }}><RefreshCw size={15} aria-hidden="true" /> Refresh</button>
-        {canRecruit && <button className="btn" onClick={() => setIntake(true)}><Plus size={16} aria-hidden="true" /> Add person</button>}
-        {!canRecruit && view === 'people' && <button className="btn secondary" onClick={() => setMyCra(true)}><CalendarDays size={15} aria-hidden="true" /> My CRA</button>}
-      </div>
-    </div>}
-    {error && <p className="hr-error" role="alert">
-      {error}
-    </p>}
-    {message && <div className="hr-success" role="status">
-      {message}
-    </div>}
+        }}><RefreshCw aria-hidden="true" /> Refresh</Button>
+        {canRecruit && <Button variant="pivot" onClick={() => setIntake(true)}><Plus aria-hidden="true" /> Add person</Button>}
+        {!canRecruit && view === 'people' && <Button variant="outline" onClick={() => setMyCra(true)}><CalendarDays aria-hidden="true" /> My CRA</Button>}
+      </div>}>
+    </PageHeading>}
+    <PageAlerts error={error} message={message} />
     {loading && !workspace ? <Empty>
       <span role="status">Loading the HR workspace…</span>
     </Empty> : context && (canRecruit || canStaff) ? <>
@@ -238,9 +239,12 @@ export function HrWorkspace({
       {view === 'people' && !selectedPerson && <People context={context} />}
       {view === 'journeys' && !selectedPerson && <Journeys context={context} />}
       {intake && canRecruit && <Dialog title="Add a person" close={() => setIntake(false)}>
-        <Intake actorEmail={actorEmail} run={run} busy={busy} onAdded={() => setIntake(false)} />
+        <Intake actorEmail={actorEmail} run={run} busy={busy} positions={context.workspace.opportunities} onAdded={warning => {
+          setIntake(false);
+          if (warning) setError(warning);
+        }} />
       </Dialog>}
-      {myCra && <Dialog title="My CRA" close={() => setMyCra(false)}>
+      {myCra && <Dialog title="My CRA" className="sm:max-w-5xl" close={() => setMyCra(false)}>
         <CraScreen audience="employee" draftOwner={actorEmail} />
       </Dialog>}
       {selectedPerson && canRecruit && <PersonPage person={selectedPerson} context={context} live={selectedLive} alumni={selectedAlumni} applicationCount={selectedApplicationCount} tab={personTab} onNavigate={navigatePersonTab} initialApplication={applicationId} initialEmployment={employeeId} />}
@@ -319,64 +323,75 @@ function PersonPage({
   const employees = context.workspace.employees.filter(employee => employee.person_id === person.id);
   const lastCra = useLastCra(employees);
   // Remaining leave across every employment period of this person, net of
-  // CRA consumption (CP and RTT accrue per calendar month from each start).
-  const { balances, error: balanceError } = useLeaveBalances(employees.map(employee => employee.id));
-  const cpLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'cp'), 0);
-  const rttLeft = employees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'rtt'), 0);
+  // CRA consumption (per calendar month from each start: CP at month end, RTT at its start).
+  const { balances, error: balanceError, reload: reloadBalances } = useLeaveBalances(employees.map(employee => employee.id));
+  // Paid leave is adjusted on the live employment, else the latest one.
+  const leaveEmployee = live && accruesLeave(live) ? live : [...employees].filter(accruesLeave).sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
+  const [adjustingLeave, setAdjustingLeave] = useState(false);
+  // CP/RTT only accrue on salaried contracts; freelance and internal
+  // employments have no balance.
+  const leaveEmployees = employees.filter(accruesLeave);
+  const cpLeft = leaveEmployees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'cp'), 0);
+  const rttLeft = leaveEmployees.reduce((sum, employee) => sum + balanceFor(balances, employee.id, 'rtt'), 0);
   const day = today();
   // The staffing commitment that currently books this person, highest
   // allocation first — shown as “Client — Project”, like the CRA default.
   const currentAssignment = context.workspace.assignments.filter(assignment => employees.some(employee => employee.id === assignment.employee_id) && ['reserved', 'confirmed', 'active'].includes(assignment.status) && assignment.start_date <= day && (!assignment.end_date || assignment.end_date >= day)).sort((a, b) => b.allocation_pct - a.allocation_pct)[0];
   const assignmentProject = currentAssignment ? context.workspace.projects.find(project => project.id === currentAssignment.project_id) : undefined;
   const assignmentClient = assignmentProject?.client_id ? context.workspace.clients.find(client => client.id === assignmentProject.client_id) : undefined;
-  const defaultAssignment = assignmentProject ? `${assignmentClient ? `${assignmentClient.name} — ` : ''}${assignmentProject.title}` : 'None';
+  const defaultAssignment = assignmentProject ? `${assignmentClient ? `${assignmentClient.name} · ` : ''}${assignmentProject.title}` : 'None';
   const craTally = lastCra && lastCra.filled > 0 && lastCra.workdays > 0 && lastCra.filled < lastCra.workdays ? `${lastCra.filled % 1 ? lastCra.filled.toFixed(1) : lastCra.filled} / ${lastCra.workdays} days` : '';
   const craLabel = !lastCra ? '—' : `${new Date(`${lastCra.month}-01T12:00:00`).toLocaleDateString('en-GB', {
     month: 'short',
     year: 'numeric'
   })}${craTally ? ` · ${craTally}` : lastCra.filled > 0 && lastCra.workdays > 0 ? ' · Complete' : ''}`;
-  return <div className="hr-person-page">
-    <header className="hr-person-hero">
-      <div className="hr-person-sheet">
-        {/* Person header: breadcrumb and title merged, name shown once */}
-        <section className="hr-person-head">
-          <div className="hr-person-lead">
-            <span className="hr-person-avatar" aria-hidden="true">{initials(person.full_name)}</span>
-            <div className="hr-person-id">
-              <h1>{person.full_name}</h1>
-              <div className="hr-person-meta">
-                {person.headline && <span>{person.headline}</span>}
-                <span className="hr-person-status">
-                  <span className="hr-person-dot" aria-hidden="true" />
-                  {status}
-                </span>
-                {availability !== null && <span>{availability}% available today</span>}
-                {person.location && <span className="hr-person-place"><MapPin size={14} aria-hidden="true" />{person.location}</span>}
-              </div>
+  const stat = 'flex min-w-0 flex-col gap-1';
+  return <div className="flex min-w-0 flex-col">
+    <header className="mx-auto w-full max-w-[1120px] border-b border-border pb-5">
+      {/* Person header: breadcrumb and title merged, name shown once */}
+      <section className="flex flex-wrap items-center gap-x-8 gap-y-5">
+        <div className="flex min-w-0 flex-[1_1_auto] items-center gap-4">
+          <PersonPhoto personId={person.id} name={person.full_name} fallback={initials(person.full_name)} className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-foreground object-cover font-heading text-lg font-medium tracking-[-0.02em] text-background" editable />
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <h1 className="m-0 font-heading text-[28px] leading-none font-medium tracking-[-0.02em]">{person.full_name}</h1>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground [&>*:not(:first-child)]:before:mr-2 [&>*:not(:first-child)]:before:text-faint [&>*:not(:first-child)]:before:content-['·']">
+              {person.headline && <span>{person.headline}</span>}
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-foreground">
+                <span className={cn('size-1.5 rounded-full', live ? 'bg-success' : 'bg-faint')} aria-hidden="true" />
+                {status}
+              </span>
+              {availability !== null && <span>{availability}% available today</span>}
+              {person.location && <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" aria-hidden="true" />{person.location}</span>}
+              {person.linkedin_url && <a className="inline-flex items-center gap-1 font-medium text-foreground" href={person.linkedin_url} target="_blank" rel="noopener noreferrer">LinkedIn profile<ArrowUpRight className="size-3" aria-hidden="true" /></a>}
             </div>
           </div>
-          <dl className="hr-person-stats">
-            <div>
-              <dt>Default assignment</dt>
-              <dd>{defaultAssignment}</dd>
-            </div>
-            <div>
-              <dt>Last CRA</dt>
-              <dd>{craLabel}</dd>
-            </div>
-            <div>
-              <dt>CP balance</dt>
-              <dd>{balanceError ? 'unavailable' : employees.length ? `${fmtDays(cpLeft)} days` : '—'}</dd>
-            </div>
-            <div>
-              <dt>RTT balance</dt>
-              <dd>{balanceError ? 'unavailable' : employees.length ? `${fmtDays(rttLeft)} days` : '—'}</dd>
-            </div>
-          </dl>
-        </section>
-      </div>
+        </div>
+        {/* Candidates and talent pool have no employment yet: no assignment, CRA or leave to show. */}
+        {employees.length > 0 && <dl className="m-0 flex flex-wrap gap-x-8 gap-y-3 text-sm">
+          <div className={stat}>
+            <dt className="label-mono">Default assignment</dt>
+            <dd className="m-0 font-medium">{defaultAssignment}</dd>
+          </div>
+          <div className={stat}>
+            <dt className="label-mono">Last CRA</dt>
+            <dd className="m-0 font-medium">{craLabel}</dd>
+          </div>
+          {leaveEmployees.length > 0 && <div className={stat}>
+            <dt className="label-mono">CP balance</dt>
+            <dd className="m-0 flex items-baseline gap-2 font-medium">
+              {balanceError ? 'unavailable' : `${fmtDays(cpLeft)} days`}
+              {leaveEmployee && <Button type="button" variant="link" size="xs" className="text-muted-foreground" onClick={() => setAdjustingLeave(true)}>Adjust</Button>}
+            </dd>
+          </div>}
+          {leaveEmployees.length > 0 && <div className={stat}>
+            <dt className="label-mono">RTT balance</dt>
+            <dd className="m-0 font-medium">{balanceError ? 'unavailable' : `${fmtDays(rttLeft)} days`}</dd>
+          </div>}
+        </dl>}
+      </section>
     </header>
-    <div className="hr-person-sheet">
+    {adjustingLeave && leaveEmployee && <PaidLeaveAdjust employeeId={leaveEmployee.id} personName={person.full_name} close={() => setAdjustingLeave(false)} saved={reloadBalances} />}
+    <div className="mx-auto grid w-full max-w-[1120px] pt-4 pb-16">
       <PersonWorkspace person={person} context={context} tab={tab} onNavigate={onNavigate} initialApplication={initialApplication} initialEmployment={initialEmployment} />
     </div>
   </div>;
@@ -390,13 +405,34 @@ function Metric({
   title: string;
   urgent?: boolean;
 }) {
-  return <div className={`hr-metric ${urgent ? 'is-urgent' : ''}`}>
-    <strong>
+  return <Stat size="sm">
+    <StatValue className={urgent ? 'text-destructive' : undefined}>
       {value}
-    </strong>
-    <span>
+    </StatValue>
+    <StatLabel>
       {title}
-    </span>
+    </StatLabel>
+  </Stat>;
+}
+/** The four-figure rail at the top of Overview and People. */
+function Metrics({ children }: { children: ReactNode }) {
+  return <Card size="sm">
+    <CardContent>
+      <StatGroup>{children}</StatGroup>
+    </CardContent>
+  </Card>;
+}
+/** A bordered list of “title · detail · action” rows (Overview queues, mission endings). */
+function Queue({ children }: { children: ReactNode }) {
+  return <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">{children}</div>;
+}
+function QueueRow({ title, detail, action }: { title: ReactNode; detail: ReactNode; action?: ReactNode }) {
+  return <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+    <div className="flex min-w-0 flex-col gap-1">
+      <strong className="text-sm font-medium">{title}</strong>
+      <p className="m-0 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">{detail}</p>
+    </div>
+    {action}
   </div>;
 }
 function Overview({
@@ -419,97 +455,64 @@ function Overview({
   const reviews = workspace.reviews.filter(review => review.status === 'scheduled').sort((a, b) => a.due_date.localeCompare(b.due_date));
   const exits = workspace.exits.filter(exit => exit.status === 'open');
   return <>
-    <div className="hr-metrics">
+    <Metrics>
       <Metric value={active.length} title="Active applications" />
       <Metric value={arrivals.length} title="Arrivals in the next 30 days" />
       <Metric value={overdue.length} title="Overdue journey tasks" urgent={overdue.length > 0} />
       <Metric value={exits.length} title="Open departures" />
-    </div>
-    <div className="hr-two-column">
-      <div>
+    </Metrics>
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(260px,1fr)]">
+      <div className="flex min-w-0 flex-col gap-6">
         <Section title="Your action queue" detail="Assigned work, ordered by due date.">
-          {myTasks.length ? <div className="hr-queue">
+          {myTasks.length ? <Queue>
             {myTasks.slice(0, 10).map(task => {
               const employee = workspace.employees.find(item => item.id === task.employee_id);
-              return <div key={task.id} className="hr-queue-row">
-                <div>
-                  <strong>
-                    {task.title}
-                  </strong>
-                  <p>{employee ? personName(workspace, employee.person_id) : 'Employment'} · {label(task.phase)} · Due {date(task.due_date)}</p>
-                </div>
-                {employee && <button className="btn secondary" onClick={() => open(employee.person_id, undefined, employee.id)}>Open plan</button>}
-              </div>;
+              return <QueueRow key={task.id} title={task.title} detail={<>{employee ? personName(workspace, employee.person_id) : 'Employment'} · {label(task.phase)} · Due {date(task.due_date)}</>} action={employee && <Button variant="outline" size="sm" onClick={() => open(employee.person_id, undefined, employee.id)}>Open plan</Button>} />;
             })}
-          </div> : <Empty><CheckMessage />No pending tasks assigned to you.</Empty>}
+          </Queue> : <Empty><CheckMessage />No pending tasks assigned to you.</Empty>}
         </Section>
-        <div style={{
-          marginTop: 24
-        }}>
-          <Section title="Offer approvals" detail="Review compensation and the commercial justification before approval.">
-            {offers.length ? <div className="hr-queue">
-              {offers.slice(0, 6).map(offer => {
-                const application = workspace.applications.find(item => item.id === offer.application_id);
-                return <div key={offer.id} className="hr-queue-row">
-                  <div>
-                    <strong>
-                      {offer.title}
-                    </strong>
-                    <p>{application ? personName(workspace, application.person_id) : 'Application'} · {offer.margin_pct.toFixed(1)}% margin · {label(offer.status)}</p>
-                  </div>
-                  {application && <button className="btn secondary" onClick={() => open(application.person_id, application.id)}>Review</button>}
-                </div>;
-              })}
-            </div> : <Empty>No offers waiting for approval.</Empty>}
-          </Section>
-        </div>
+        <Section title="Offer approvals" detail="Review compensation and the commercial justification before approval.">
+          {offers.length ? <Queue>
+            {offers.slice(0, 6).map(offer => {
+              const application = workspace.applications.find(item => item.id === offer.application_id);
+              return <QueueRow key={offer.id} title={offer.title} detail={<>{application ? personName(workspace, application.person_id) : 'Application'} · {offer.margin_pct.toFixed(1)}% margin · {label(offer.status)}</>} action={application && <Button variant="outline" size="sm" onClick={() => open(application.person_id, application.id)}>Review</Button>} />;
+            })}
+          </Queue> : <Empty>No offers waiting for approval.</Empty>}
+        </Section>
       </div>
-      <div>
+      <div className="flex min-w-0 flex-col gap-6">
         <Section title="Upcoming interviews" detail="Send calendar invitations manually after scheduling.">
-          {interviews.length ? <div className="hr-queue">
+          {interviews.length ? <Queue>
             {interviews.slice(0, 5).map(interview => {
               const application = workspace.applications.find(item => item.id === interview.application_id);
-              return <div key={interview.id} className="hr-queue-row">
-                <div>
-                  <strong>
-                    {application ? personName(workspace, application.person_id) : 'Application'}
-                  </strong>
-                  <p><CalendarDays size={12} aria-hidden="true" /> {label(interview.kind)} · {new Date(interview.scheduled_at).toLocaleString()}</p>
-                </div>
-                {application && <button className="btn secondary" onClick={() => open(application.person_id, application.id)}>Open</button>}
-              </div>;
+              return <QueueRow key={interview.id} title={application ? personName(workspace, application.person_id) : 'Application'} detail={<><CalendarDays className="size-3" aria-hidden="true" /> {label(interview.kind)} · {new Date(interview.scheduled_at).toLocaleString()}</>} action={application && <Button variant="outline" size="sm" onClick={() => open(application.person_id, application.id)}>Open</Button>} />;
             })}
-          </div> : <Empty>No upcoming interviews.</Empty>}
+          </Queue> : <Empty>No upcoming interviews.</Empty>}
         </Section>
-        <div style={{
-          marginTop: 24
-        }}>
-          <Section title="Probation and review decisions">
-            {reviews.length ? <div className="hr-queue">
-              {reviews.slice(0, 5).map(review => {
-                const employee = workspace.employees.find(item => item.id === review.employee_id);
-                return <div key={review.id} className="hr-queue-row">
-                  <div>
-                    <strong>
-                      {employee ? personName(workspace, employee.person_id) : 'Employment'}
-                    </strong>
-                    <p>{label(review.kind)} · Due {date(review.due_date)}</p>
-                  </div>
-                  {employee && <button className="btn secondary" onClick={() => open(employee.person_id, undefined, employee.id)}>Review</button>}
-                </div>;
-              })}
-            </div> : <Empty>No pending review decisions.</Empty>}
-          </Section>
-        </div>
+        <Section title="Probation and review decisions">
+          {reviews.length ? <Queue>
+            {reviews.slice(0, 5).map(review => {
+              const employee = workspace.employees.find(item => item.id === review.employee_id);
+              return <QueueRow key={review.id} title={employee ? personName(workspace, employee.person_id) : 'Employment'} detail={<>{label(review.kind)} · Due {date(review.due_date)}</>} action={employee && <Button variant="outline" size="sm" onClick={() => open(employee.person_id, undefined, employee.id)}>Review</Button>} />;
+            })}
+          </Queue> : <Empty>No pending review decisions.</Empty>}
+        </Section>
+        <Section title="Documents to renew" detail="Expired, expiring or missing employee documents.">
+          <DocumentAlertsQueue onOpenPerson={personId => {
+            const employee = workspace.employees.find(item => item.person_id === personId && item.status !== 'ended');
+            open(personId, undefined, employee?.id);
+          }} />
+        </Section>
       </div>
     </div>
   </>;
 }
+/** Secondary line under a table cell value. */
+function Detail({ children }: { children: ReactNode }) {
+  return <small className="mt-1 block text-xs text-muted-foreground">{children}</small>;
+}
 function CheckMessage() {
-  return <Users size={20} aria-hidden="true" style={{
-    display: 'block',
-    margin: '0 auto 10px'
-  }} />;
+  return <Users className="mx-auto mb-2.5 block size-5" aria-hidden="true" />;
 }
 function SearchField({
   value,
@@ -520,10 +523,28 @@ function SearchField({
   change: (value: string) => void;
   placeholder?: string;
 }) {
-  return <label className="hr-search">
-    <Search size={16} aria-hidden="true" />
-    <input aria-label={placeholder} placeholder={placeholder} value={value} onChange={event => change(event.target.value)} />
-  </label>;
+  return <InputGroup className="w-full sm:w-72">
+    <InputGroupAddon>
+      <Search aria-hidden="true" />
+    </InputGroupAddon>
+    <InputGroupInput type="search" aria-label={placeholder} placeholder={placeholder} value={value} onChange={event => change(event.target.value)} />
+  </InputGroup>;
+}
+/** Underline tabs with an optional count; the panels render below, outside the list. */
+function ViewTabs({ label: ariaLabel, value, onChange, items }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  items: { value: string; title: string; count?: number }[];
+}) {
+  return <Tabs value={value} onValueChange={next => onChange(String(next))} className="min-w-0">
+    <TabsList variant="line" aria-label={ariaLabel} className="h-10 w-full justify-start gap-5 overflow-x-auto border-b border-border">
+      {items.map(item => <TabsTrigger key={item.value} value={item.value} className="flex-none gap-1.5 group-data-horizontal/tabs:after:bottom-0">
+        {item.title}
+        {item.count !== undefined && <span className="num text-xs text-muted-foreground">{item.count}</span>}
+      </TabsTrigger>)}
+    </TabsList>
+  </Tabs>;
 }
 function People({
   context
@@ -539,164 +560,167 @@ function People({
   const canRecruit = workspace.capabilities.recruit;
   const canStaff = workspace.capabilities.staff;
   const [query, setQuery] = useState(() => getParam('q'));
-  const [filter, setFilter] = useState(() => getParam('group') || (canRecruit ? 'all' : 'employees'));
+  // Current staff are grouped by contract; 'employees' links from before the split open on Everyone.
+  const [filter, setFilter] = useState(() => {
+    const param = getParam('group');
+    // Applicants live in the Recruitment pipeline, not the People list.
+    return param && param !== 'employees' && param !== 'candidates' && param !== 'talent' ? param : 'all';
+  });
   const [day, setDay] = useState(today());
   const [capacityFilter, setCapacityFilter] = useState('all');
   const [assigning, setAssigning] = useState('');
   const activeOn = (employee: Employee) => employee.status !== 'ended' && employee.start_date <= day && (!employee.end_date || employee.end_date >= day) && (!employee.planned_exit_date || employee.planned_exit_date >= day);
   const employeeOnDate = (person: Person) => workspace.employees.find(employee => employee.person_id === person.id && activeOn(employee));
+  const contractGroups: Record<string, string> = { CDI: 'cdi', CDD: 'cdd', Freelance: 'freelance', Internship: 'interns', Apprenticeship: 'alternants' };
   const stateOf = (person: Person) => {
     const periods = workspace.employees.filter(employee => employee.person_id === person.id);
-    return periods.some(employee => employee.status !== 'ended') ? 'employees' : periods.length ? 'alumni' : workspace.applications.some(application => application.person_id === person.id && application.status === 'active') ? 'candidates' : 'talent';
+    const live = periods.find(employee => employee.status !== 'ended');
+    if (live) return contractGroups[live.contract_type] ?? 'no_contract';
+    return periods.length ? 'alumni' : workspace.applications.some(application => application.person_id === person.id && application.status === 'active') ? 'candidates' : 'talent';
   };
+  // Applicants (an active application, never employed) are managed in the
+  // Recruitment pipeline, so the People list leaves them out entirely.
+  const listed = workspace.people.filter(person => stateOf(person) !== 'candidates');
+  // “Everyone” means people under a live contract (employees and freelancers);
+  // alumni keep their own tab, the talent pool isn't listed.
+  const inGroup = (person: Person, value: string) => value === 'all' ? !['alumni', 'talent', 'candidates'].includes(stateOf(person)) : stateOf(person) === value;
+  const groupCount = (value: string) => listed.filter(person => inGroup(person, value)).length;
   const groups = [{
     value: 'all',
     label: 'Everyone'
   }, {
-    value: 'candidates',
-    label: 'Candidates'
+    value: 'cdi',
+    label: 'CDI'
   }, {
-    value: 'employees',
-    label: 'Employees'
+    value: 'cdd',
+    label: 'CDD'
+  }, {
+    value: 'freelance',
+    label: 'Freelancers'
+  }, {
+    value: 'interns',
+    label: 'Interns'
+  }, {
+    value: 'alternants',
+    label: 'Alternants'
+  }, {
+    value: 'no_contract',
+    label: 'Contract not set'
   }, {
     value: 'alumni',
     label: 'Alumni'
-  }, {
-    value: 'talent',
-    label: 'Talent pool'
-  }];
+  }].filter(group => ['all', 'cdi', 'freelance', 'interns', 'alternants', 'alumni'].includes(group.value) || group.value === filter || groupCount(group.value) > 0);
   const commits = workspace.assignments.filter(assignment => ['reserved', 'confirmed', 'active', 'completed'].includes(assignment.status) && assignment.start_date <= day && (!assignment.end_date || assignment.end_date >= day));
   const employeesOnDate = workspace.employees.filter(activeOn);
   const rolloffs = workspace.assignments.filter(assignment => !['completed', 'cancelled'].includes(assignment.status) && assignment.end_date && assignment.end_date >= day && assignment.end_date <= new Date(new Date(`${day}T12:00:00`).getTime() + 30 * 86400000).toISOString().slice(0, 10));
   const currentCapacity = employeesOnDate.reduce((sum, employee) => sum + available(workspace, employee, day), 0);
-  const people = workspace.people.filter(person => {
-    if (filter !== 'all' && stateOf(person) !== filter) return false;
+  const people = listed.filter(person => {
+    if (!inGroup(person, filter)) return false;
     const employee = employeeOnDate(person);
     if (capacityFilter === 'available' && (!employee || available(workspace, employee, day) <= 0)) return false;
     return `${person.full_name} ${person.email} ${person.skills} ${person.headline} ${person.location}`.toLowerCase().includes(query.toLowerCase());
   });
-  const update = (key: string, value: string) => {
-    const url = new URL(window.location.href);
-    if (value) url.searchParams.set(key, value);else url.searchParams.delete(key);
-    window.history.replaceState(null, '', url);
-  };
+  const navigate = useNavigate();
+  const update = (key: string, value: string) => navigate(withParam(key, value), { replace: true });
   const assigningEmployee = workspace.employees.find(employee => employee.id === assigning);
   return <>
-    <div className="hr-metrics">
+    <Metrics>
       <Metric value={employeesOnDate.length} title="Employed consultants on selected date" />
       <Metric value={(currentCapacity / 100).toFixed(1)} title="Available full-time capacity" />
       <Metric value={commits.length} title="Committed project periods" />
       <Metric value={rolloffs.length} title="Missions ending in the next 30 days" />
-    </div>
-    <div className="hr-toolbar">
+    </Metrics>
+    <div className="flex flex-wrap items-end justify-between gap-3">
       <SearchField value={query} change={value => {
         setQuery(value);
         update('q', value);
       }} />
-      <div className="hr-inline">
-        <label className="hr-field">
-          <span>Availability date</span>
-          <DateField value={day} onChange={setDay} required />
-        </label>
-        <label className="hr-field">
-          <span>Capacity</span>
-          <select value={capacityFilter} onChange={event => setCapacityFilter(event.target.value)}>
-            <option value="all">Everyone</option>
-            <option value="available">Available capacity</option>
-          </select>
-        </label>
+      <div className="flex flex-wrap items-end gap-3">
+        <UiField className="w-auto gap-1.5">
+          <FieldLabel className="text-xs">Availability date</FieldLabel>
+          <DateField value={day} onChange={setDay} required aria-label="Availability date" />
+        </UiField>
+        <UiField className="w-auto gap-1.5">
+          <FieldLabel htmlFor="hr-capacity-filter" className="text-xs">Capacity</FieldLabel>
+          <NativeSelect id="hr-capacity-filter" value={capacityFilter} onChange={event => setCapacityFilter(event.target.value)}>
+            <NativeSelectOption value="all">Everyone</NativeSelectOption>
+            <NativeSelectOption value="available">Available capacity</NativeSelectOption>
+          </NativeSelect>
+        </UiField>
       </div>
     </div>
-    <div className="hr-tabs" role="tablist" aria-label="People relationship">
-      {groups.map(group => <button role="tab" aria-selected={filter === group.value} key={group.value} onClick={() => {
-        setFilter(group.value);
-        update('group', group.value);
-      }}>
-        {group.label}
-        <span>
-          {workspace.people.filter(person => group.value === 'all' || stateOf(person) === group.value).length}
-        </span>
-      </button>)}
-    </div>
-    {people.length ? <div className="hr-table-wrap">
-      <table className="hr-table">
-        <thead>
-          <tr>
-            <th>Person</th>
-            <th>Relationship</th>
-            <th>Available on {date(day)}</th>
-            <th>Commitments</th>
-            <th>Skills</th>
-            <th>Owner</th>
-            {!canRecruit && <th>Staffing</th>}
-          </tr>
-        </thead>
-        <tbody>
+    <ViewTabs label="People relationship" value={filter} onChange={value => {
+      setFilter(value);
+      update('group', value);
+    }} items={groups.map(group => ({ value: group.value, title: group.label, count: groupCount(group.value) }))} />
+    {people.length ? <Card className="py-0">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Person</TableHead>
+            <TableHead>Relationship</TableHead>
+            <TableHead>Available on {date(day)}</TableHead>
+            <TableHead>Commitments</TableHead>
+            <TableHead>Skills</TableHead>
+            <TableHead>Owner</TableHead>
+            {!canRecruit && <TableHead>Staffing</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {people.map(person => {
             const employee = employeeOnDate(person);
             const capacity = employee ? available(workspace, employee, day) : null;
             const periods = employee ? commits.filter(assignment => assignment.employee_id === employee.id) : [];
-            return <tr key={person.id}>
-              <td>
-                {canRecruit ? <PersonLink name={person.full_name} detail={person.headline || person.email} open={() => open(person.id)} /> : <>
-                  <strong>
-                    {person.full_name}
-                  </strong>
-                  <small>
-                    {person.headline || person.email}
-                  </small>
-                </>}
-              </td>
-              <td>
+            return <TableRow key={person.id}>
+              <TableCell className="h-auto py-3">
+                <div className="max-w-64">
+                  {canRecruit ? <PersonLink personId={person.id} name={person.full_name} detail={person.headline || person.email} open={() => open(person.id)} /> : <>
+                    <strong className="block truncate font-medium">
+                      {person.full_name}
+                    </strong>
+                    <small className="mt-1 block truncate text-xs text-muted-foreground">
+                      {person.headline || person.email}
+                    </small>
+                  </>}
+                </div>
+              </TableCell>
+              <TableCell>
                 <Tag tone={employee ? 'good' : 'quiet'}>
-                  {label(stateOf(person))}
+                  {({ cdi: 'CDI', cdd: 'CDD', freelance: 'Freelancer', interns: 'Intern', alternants: 'Alternant', no_contract: 'Contract not set' } as Record<string, string>)[stateOf(person)] ?? label(stateOf(person))}
                 </Tag>
-                {employee && <small>{employee.planned_exit_date ? `Planned exit ${date(employee.planned_exit_date)}` : `Since ${date(employee.start_date)}`}</small>}
-              </td>
-              <td>
-                {capacity === null ? '—' : <>{capacity}%<div className="hr-capacity-track" aria-hidden="true">
-                    <span style={{
+                {employee && <Detail>{employee.planned_exit_date ? `Planned exit ${date(employee.planned_exit_date)}` : `Since ${date(employee.start_date)}`}</Detail>}
+              </TableCell>
+              <TableCell className="num">
+                {capacity === null ? '—' : <>{capacity}%<div className="mt-2 h-1.5 w-32 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                    <span className="block h-full rounded-full bg-foreground" style={{
                       width: `${capacity}%`
                     }} />
                   </div></>}
-              </td>
-              <td>
-                {employee ? periods.length ? periods.map(assignment => <div key={assignment.id}>{workspace.projects.find(project => project.id === assignment.project_id)?.title ?? 'Project'} · {assignment.allocation_pct}%<small>{label(assignment.status)} · Ends {assignment.end_date ? date(assignment.end_date) : 'open-ended'}</small></div>) : 'No committed project' : '—'}
-              </td>
-              <td style={{
-                maxWidth: 230,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-              }} title={person.skills || undefined}>
-                {person.skills || 'Not recorded'}
-              </td>
-              <td>
+              </TableCell>
+              <TableCell>
+                {employee ? periods.length ? periods.map(assignment => <div key={assignment.id}>{workspace.projects.find(project => project.id === assignment.project_id)?.title ?? 'Project'} · {assignment.allocation_pct}%<Detail>{label(assignment.status)} · Ends {assignment.end_date ? date(assignment.end_date) : 'open-ended'}</Detail></div>) : 'No committed project' : '—'}
+              </TableCell>
+              <TableCell title={person.skills || undefined}>
+                <div className="max-w-[230px] truncate">{person.skills || 'Not recorded'}</div>
+              </TableCell>
+              <TableCell>
                 {person.owner_email || 'Unassigned'}
-              </td>
-              {!canRecruit && <td>
-                {employee && canStaff ? <button className="btn secondary" onClick={() => setAssigning(employee.id)}>Assign project</button> : ''}
-              </td>}
-            </tr>;
+              </TableCell>
+              {!canRecruit && <TableCell>
+                {employee && canStaff ? <Button variant="outline" size="sm" onClick={() => setAssigning(employee.id)}>Assign project</Button> : ''}
+              </TableCell>}
+            </TableRow>;
           })}
-        </tbody>
-      </table>
-    </div> : <Empty>No people match these filters. Add a person or adjust the search.</Empty>}
+        </TableBody>
+      </Table>
+    </Card> : <Empty>No people match these filters. Add a person or adjust the search.</Empty>}
     {!!rolloffs.length && <Section title="Upcoming mission endings" detail="Plan the next assignment before the current commitment ends.">
-      <div className="hr-queue">
+      <Queue>
         {rolloffs.map(assignment => {
           const employee = workspace.employees.find(item => item.id === assignment.employee_id);
-          return <div className="hr-queue-row" key={assignment.id}>
-            <div>
-              <strong>
-                {employee ? personName(workspace, employee.person_id) : 'Consultant'}
-              </strong>
-              <p>{workspace.projects.find(project => project.id === assignment.project_id)?.title} · {assignment.allocation_pct}% · Ends {date(assignment.end_date)}</p>
-            </div>
-            {employee && <button className="btn secondary" onClick={() => setAssigning(employee.id)}>Plan next</button>}
-          </div>;
+          return <QueueRow key={assignment.id} title={employee ? personName(workspace, employee.person_id) : 'Consultant'} detail={<>{workspace.projects.find(project => project.id === assignment.project_id)?.title} · {assignment.allocation_pct}% · Ends {date(assignment.end_date)}</>} action={employee && <Button variant="outline" size="sm" onClick={() => setAssigning(employee.id)}>Plan next</Button>} />;
         })}
-      </div>
+      </Queue>
     </Section>}
     {assigningEmployee && <AssignmentDialog employee={assigningEmployee} workspace={workspace} run={run} busy={busy} day={day} close={() => setAssigning('')} />}
   </>;
@@ -708,68 +732,54 @@ function Recruiting({
 }) {
   const {
     workspace,
+    run,
     open
   } = context;
   const [tab, setTab] = useState(() => getParam('recruiting') || 'board');
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [opportunityId, setOpportunityId] = useState('');
-  const [quickView, setQuickView] = useState<{
-    applicationId: string;
-    targetStage?: ApplicationStage;
-  } | null>(null);
   const [overStage, setOverStage] = useState<ApplicationStage | ''>('');
   const [dragId, setDragId] = useState('');
   const applications = workspace.applications.filter(application => application.status === 'active' && (!opportunityId || application.opportunity_id === opportunityId) && `${personName(workspace, application.person_id)} ${workspace.people.find(person => person.id === application.person_id)?.skills ?? ''}`.toLowerCase().includes(query.toLowerCase()));
-  const quickApplication = quickView ? workspace.applications.find(application => application.id === quickView.applicationId && application.status === 'active') ?? null : null;
   return <>
-    <div className="hr-tabs" role="tablist" aria-label="Recruiting views">
-      {[{
-        value: 'board',
-        title: 'Applications',
-        count: workspace.applications.filter(item => item.status === 'active').length
-      }, {
-        value: 'needs',
-        title: 'Hiring needs',
-        count: workspace.opportunities.length
-      }, {
-        value: 'interviews',
-        title: 'Interviews',
-        count: workspace.interviews.filter(item => item.status === 'scheduled').length
-      }, {
-        value: 'offers',
-        title: 'Offers',
-        count: workspace.offers.length
-      }].map(item => <button key={item.value} role="tab" aria-selected={tab === item.value} onClick={() => {
-        setTab(item.value);
-        const url = new URL(window.location.href);
-        url.searchParams.set('recruiting', item.value);
-        window.history.replaceState(null, '', url);
-      }}>
-        {item.title}
-        <span>
-          {item.count}
-        </span>
-      </button>)}
-    </div>
+    <ViewTabs label="Recruiting views" value={tab} onChange={value => {
+      setTab(value);
+      navigate(withParam('recruiting', value), { replace: true });
+    }} items={[{
+      value: 'board',
+      title: 'Applications',
+      count: workspace.applications.filter(item => item.status === 'active').length
+    }, {
+      value: 'needs',
+      title: 'Hiring needs',
+      count: workspace.opportunities.length
+    }, {
+      value: 'interviews',
+      title: 'Interviews',
+      count: workspace.interviews.filter(item => item.status === 'scheduled').length
+    }, {
+      value: 'offers',
+      title: 'Offers',
+      count: workspace.offers.length
+    }]} />
     {tab === 'board' && <>
-      <div className="hr-toolbar">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <SearchField value={query} change={setQuery} placeholder="Search applications by person or skill" />
-        <label className="hr-field">
-          <span className="sr-only">Hiring need</span>
-          <select value={opportunityId} onChange={event => setOpportunityId(event.target.value)}>
-            <option value="">All hiring needs</option>
-            {workspace.opportunities.map(opportunity => <option key={opportunity.id} value={opportunity.id}>
-              {opportunity.title}
-            </option>)}
-          </select>
-        </label>
+        <NativeSelect aria-label="Hiring need" className="w-full sm:w-64" value={opportunityId} onChange={event => setOpportunityId(event.target.value)}>
+          <NativeSelectOption value="">All hiring needs</NativeSelectOption>
+          {workspace.opportunities.map(opportunity => <NativeSelectOption key={opportunity.id} value={opportunity.id}>
+            {opportunity.title}
+          </NativeSelectOption>)}
+        </NativeSelect>
       </div>
-      <div className="hr-board" aria-label="Recruitment stage board" data-dragging={dragId ? '' : undefined}>
+      <div className="group/board flex items-stretch gap-2.5 overflow-x-auto pb-3" aria-label="Recruitment stage board" data-dragging={dragId ? '' : undefined}>
         {stages.map(stage => {
           const stageApplications = applications.filter(application => application.stage === stage);
           const empty = stageApplications.length === 0;
           const slim = empty && !dragId;
-          return <section key={stage} className={`hr-board-column${overStage === stage ? ' drop-target' : ''}${slim ? ' is-slim' : ''}`} onDragOver={event => {
+          const over = overStage === stage;
+          return <section key={stage} className={cn('flex min-h-[360px] flex-col gap-2.5 rounded-xl border border-border bg-muted/50 p-3 transition-[flex-basis,max-width,background-color,border-color] duration-300 ease-out motion-reduce:transition-none', slim ? 'max-w-[148px] flex-[0_0_148px]' : 'max-w-[340px] flex-[1_0_260px]', over && 'border-faint bg-accent')} onDragOver={event => {
             if (event.dataTransfer.types.includes('text/plain')) {
               event.preventDefault();
               event.dataTransfer.dropEffect = 'move';
@@ -783,14 +793,16 @@ function Recruiting({
             setDragId('');
             const applicationId = event.dataTransfer.getData('text/plain');
             const application = workspace.applications.find(item => item.id === applicationId);
-            if (application && application.stage !== stage) setQuickView({
-              applicationId: application.id,
-              targetStage: stage
-            });
+            if (application && application.stage !== stage) void run({
+              kind: 'move_application',
+              application_id: application.id,
+              expected_version: application.version,
+              to_stage: stage
+            }, `${personName(workspace, application.person_id)} moved to ${label(stage)}.`).catch(() => {});
           }}>
-            <h3>
+            <h3 className="m-0 flex min-h-11 items-start justify-between gap-2 px-1 pt-1 text-[13px] leading-snug font-medium">
               {label(stage)}
-              <span>
+              <span className="num text-xs font-normal text-muted-foreground">
                 {stageApplications.length}
               </span>
             </h3>
@@ -798,353 +810,132 @@ function Recruiting({
               const person = workspace.people.find(item => item.id === application.person_id);
               const opportunity = workspace.opportunities.find(item => item.id === application.opportunity_id);
               const age = Math.max(0, Math.floor((Date.now() - new Date(application.stage_entered_at).getTime()) / 86400000));
-              const decide = () => setQuickView({
-                applicationId: application.id
-              });
-              return <div className="hr-card" key={application.id} tabIndex={0} data-dragging={dragId === application.id ? '' : undefined} draggable onDragStart={event => {
+              const openRecord = () => open(application.person_id, application.id);
+              return <div className="flex cursor-grab flex-col gap-3 rounded-lg border border-border bg-card p-3.5 text-card-foreground transition-[border-color,opacity] duration-150 outline-none hover:border-faint focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing data-dragging:opacity-40" key={application.id} tabIndex={0} data-dragging={dragId === application.id ? '' : undefined} draggable onDragStart={event => {
                 event.dataTransfer.setData('text/plain', application.id);
                 event.dataTransfer.effectAllowed = 'move';
                 setDragId(application.id);
               }} onDragEnd={() => {
                 setDragId('');
                 setOverStage('');
-              }} onClick={decide} onKeyDown={event => {
+              }} onClick={openRecord} onKeyDown={event => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  decide();
+                  openRecord();
                 }
               }}>
-                <div className="hr-board-person">
-                  <span className="hr-avatar">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className={cn(avatarClass, 'size-8')} aria-hidden="true">
                     {initials(person?.full_name ?? 'Unknown person')}
                   </span>
-                  <span className="hr-board-identity">
-                    <strong>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate text-sm font-medium">
                       {person?.full_name ?? 'Unknown person'}
                     </strong>
-                    <small>
+                    <small className="mt-0.5 block truncate text-xs text-muted-foreground">
                       {opportunity?.title ?? 'Hiring need'}
                     </small>
                   </span>
                 </div>
-                {person?.headline && <p className="hr-board-headline" title={person.headline}>
+                {person?.headline && <p className="m-0 line-clamp-2 text-xs leading-normal text-muted-foreground" title={person.headline}>
                   {person.headline}
                 </p>}
-                <div className="hr-board-foot">
-                  <span className="hr-aging"><Clock3 size={12} aria-hidden="true" />{age} {age === 1 ? 'day' : 'days'} in stage · {label(application.source)}</span>
-                  <button className="hr-board-decide" onClick={event => {
-                    event.stopPropagation();
-                    decide();
-                  }}>
-                    Decide →
-                  </button>
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1"><Clock3 className="size-3" aria-hidden="true" />{age} {age === 1 ? 'day' : 'days'} in stage · {label(application.source)}</span>
                 </div>
               </div>;
             })}
-            {empty && <div className="hr-board-drop">
-              {dragId ? overStage === stage ? 'Release to move here' : 'Drop here' : slim ? 'Empty' : 'No candidates'}
+            {empty && <div className={cn('flex min-h-14 items-center justify-center rounded-lg border border-dashed border-border px-2 py-3.5 text-center text-xs text-muted-foreground group-data-dragging/board:border-faint', slim ? 'flex-none' : 'flex-1', over && 'text-foreground')}>
+              {dragId ? over ? 'Release to move here' : 'Drop here' : slim ? 'Empty' : 'No candidates'}
             </div>}
           </section>;
         })}
       </div>
-      <p className="hr-source-list">Drag a candidate onto the next stage, or click a card for a quick decision without leaving the board. The full record stays one click away.</p>
-      {quickApplication && <ApplicationQuickView key={`${quickApplication.id}-${quickApplication.stage}`} application={quickApplication} context={context} initialStage={quickView?.targetStage} close={() => setQuickView(null)} />}
+      <p className="m-0 text-xs text-muted-foreground">Drag a candidate onto another stage to move them, or click a card to open the full record.</p>
     </>}
     {tab === 'needs' && <Requisitions context={context} />}
     {tab === 'interviews' && <Section title="Interview schedule" detail="Interview status and invitation status are separate facts.">
-      {workspace.interviews.length ? <div className="hr-table-wrap">
-        <table className="hr-table">
-          <thead>
-            <tr>
-              <th>Person</th>
-              <th>Interview</th>
-              <th>Scheduled</th>
-              <th>Panel</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
+      {workspace.interviews.length ? <Card className="py-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Person</TableHead>
+              <TableHead>Interview</TableHead>
+              <TableHead>Scheduled</TableHead>
+              <TableHead>Panel</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {[...workspace.interviews].sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at)).map(interview => {
               const application = workspace.applications.find(item => item.id === interview.application_id);
-              return <tr key={interview.id}>
-                <td>
+              return <TableRow key={interview.id}>
+                <TableCell className="h-auto py-3">
                   {application && <PersonLink name={personName(workspace, application.person_id)} open={() => open(application.person_id, application.id)} />}
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   {label(interview.kind)}
-                </td>
-                <td>
+                </TableCell>
+                <TableCell className="num text-[13px]">
                   {new Date(interview.scheduled_at).toLocaleString()}
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   {interview.panel}
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   <Tag>
                     {label(interview.status)}
                   </Tag>
-                  <small>Invitation {label(interview.invitation_status)}</small>
-                </td>
-              </tr>;
+                  <Detail>Invitation {label(interview.invitation_status)}</Detail>
+                </TableCell>
+              </TableRow>;
             })}
-          </tbody>
-        </table>
-      </div> : <Empty>Open an application to schedule its first interview.</Empty>}
+          </TableBody>
+        </Table>
+      </Card> : <Empty>Open an application to schedule its first interview.</Empty>}
     </Section>}
     {tab === 'offers' && <Section title="Employment offers" detail="Open the application to draft, approve, share or record a candidate response.">
-      {workspace.offers.length ? <div className="hr-table-wrap">
-        <table className="hr-table">
-          <thead>
-            <tr>
-              <th>Person</th>
-              <th>Offer</th>
-              <th>Salary / month</th>
-              <th>Daily cost / rate</th>
-              <th>Margin</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
+      {workspace.offers.length ? <Card className="py-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Person</TableHead>
+              <TableHead>Offer</TableHead>
+              <TableHead data-numeric="true">Salary / month</TableHead>
+              <TableHead data-numeric="true">Daily cost / rate</TableHead>
+              <TableHead data-numeric="true">Margin</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {workspace.offers.map(offer => {
               const application = workspace.applications.find(item => item.id === offer.application_id);
-              return <tr key={offer.id}>
-                <td>
+              return <TableRow key={offer.id}>
+                <TableCell className="h-auto py-3">
                   {application && <PersonLink name={personName(workspace, application.person_id)} open={() => open(application.person_id, application.id)} />}
-                </td>
-                <td>
+                </TableCell>
+                <TableCell>
                   {offer.title}
-                  <small>
+                  <Detail>
                     {offer.contract_type}
-                  </small>
-                </td>
-                <td>€{offer.salary_monthly.toLocaleString()}</td>
-                <td>€{offer.cjm} / €{offer.target_tjm}</td>
-                <td>{offer.margin_pct.toFixed(1)}%</td>
-                <td>
+                  </Detail>
+                </TableCell>
+                <TableCell data-numeric="true">€{offer.salary_monthly.toLocaleString()}</TableCell>
+                <TableCell data-numeric="true">€{offer.cjm} / €{offer.target_tjm}</TableCell>
+                <TableCell data-numeric="true">{offer.margin_pct.toFixed(1)}%</TableCell>
+                <TableCell>
                   <Tag tone={offer.status === 'accepted' ? 'good' : ''}>
                     {label(offer.status)}
                   </Tag>
-                  <small>Delivery {label(offer.delivery_status)}</small>
-                </td>
-              </tr>;
+                  <Detail>Delivery {label(offer.delivery_status)}</Detail>
+                </TableCell>
+              </TableRow>;
             })}
-          </tbody>
-        </table>
-      </div> : <Empty>No employment offers yet.</Empty>}
+          </TableBody>
+        </Table>
+      </Card> : <Empty>No employment offers yet.</Empty>}
     </Section>}
   </>;
-}
-const RATIONALE_MIN = 20;
-function ApplicationQuickView({
-  application,
-  context,
-  initialStage,
-  close
-}: {
-  application: Application;
-  context: PageContext;
-  initialStage?: ApplicationStage;
-  close: () => void;
-}) {
-  const {
-    workspace,
-    run,
-    busy,
-    open
-  } = context;
-  const person = workspace.people.find(item => item.id === application.person_id);
-  const opportunity = workspace.opportunities.find(item => item.id === application.opportunity_id);
-  const currentIndex = stages.indexOf(application.stage);
-  const [target, setTarget] = useState<ApplicationStage | 'rejected'>(initialStage && initialStage !== application.stage ? initialStage : stages[Math.min(currentIndex + 1, stages.length - 1)]);
-  const [closing, setClosing] = useState(false);
-  const [disposition, setDisposition] = useState<'rejected' | 'withdrawn'>('withdrawn');
-  const [rationale, setRationale] = useState('');
-  const [scheduling, setScheduling] = useState(false);
-  const [interviewKind, setInterviewKind] = useState('hr');
-  const [scheduledAt, setScheduledAt] = useState('');
-  const [panel, setPanel] = useState('');
-  const [location, setLocation] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const rejecting = target === 'rejected';
-  const isClosing = closing && !rejecting;
-  const rationaleLength = rationale.trim().length;
-  const rationaleReady = rationaleLength >= RATIONALE_MIN;
-  const scheduleReady = !!scheduledAt && !!panel.trim();
-  const cannotSubmit = busy || saving || (scheduling ? !scheduleReady : !rationaleReady);
-  const age = Math.max(0, Math.floor((Date.now() - new Date(application.stage_entered_at).getTime()) / 86400000));
-  const summary = scheduling ? `Schedule ${label(interviewKind)} interview` : rejecting ? `${label(application.stage)} → Rejected` : isClosing ? `${label(application.stage)} → ${label(disposition)}` : `${label(application.stage)} → ${label(target)}`;
-  const record = async () => {
-    if (cannotSubmit) return;
-    setSaving(true);
-    setError('');
-    try {
-      if (scheduling) {
-        await run({
-          kind: 'schedule_interview',
-          application_id: application.id,
-          interview_kind: interviewKind,
-          scheduled_at: new Date(scheduledAt).toISOString(),
-          panel: panel.trim(),
-          location: location.trim()
-        }, 'Interview recorded. Send the calendar invitation manually.');
-        close();
-        return;
-      }
-      if (rejecting) {
-        await run({
-          kind: 'dispose_application',
-          application_id: application.id,
-          expected_version: application.version,
-          status: 'rejected',
-          reason: rationale.trim()
-        }, 'Application rejected with its history preserved.');
-      } else if (isClosing) {
-        await run({
-          kind: 'dispose_application',
-          application_id: application.id,
-          expected_version: application.version,
-          status: disposition,
-          reason: rationale.trim()
-        }, 'Application closed with its history preserved.');
-      } else {
-        await run({
-          kind: 'move_application',
-          application_id: application.id,
-          expected_version: application.version,
-          to_stage: target,
-          rationale: rationale.trim()
-        }, 'Application stage updated.');
-      }
-      close();
-    } catch (failure) {
-      setError(errorMessage(failure));
-    } finally {
-      setSaving(false);
-    }
-  };
-  return <Dialog bare className="hr-dialog-quick" title={`Stage decision — ${person?.full_name ?? 'Unknown person'}`} close={close}>
-    <div className="hr-quick-head">
-      <span className="hr-quick-avatar" aria-hidden="true">{initials(person?.full_name ?? '?')}</span>
-      <div className="hr-quick-id">
-        <div className="hr-quick-name-row">
-          <h2>{person?.full_name ?? 'Unknown person'}</h2>
-          <span className="hr-quick-pill">{label(application.stage)}</span>
-        </div>
-        {person?.headline && <p>{person.headline}</p>}
-      </div>
-      <button className="hr-icon-button" aria-label="Close stage decision" onClick={close}>
-        <X size={20} aria-hidden="true" />
-      </button>
-    </div>
-    <div className="hr-quick-body">
-      <div className="hr-quick-summary">
-        <div>
-          <span>Hiring need</span>
-          <strong>{opportunity?.title ?? 'Hiring need'}</strong>
-        </div>
-        <div>
-          <span>Applied</span>
-          <strong>{date(application.created_at)}</strong>
-        </div>
-        <div>
-          <span>Source</span>
-          <strong>{label(application.source)}</strong>
-        </div>
-        <div>
-          <span>In stage</span>
-          <strong>{age} days</strong>
-        </div>
-        <button className="hr-quick-link" onClick={() => {
-          close();
-          open(application.person_id, application.id);
-        }}>
-          Full record <ArrowUpRight size={14} aria-hidden="true" />
-        </button>
-      </div>
-      <div className="hr-quick-reject-row">
-        {application.status === 'active' && <button className={`hr-quick-toggle${scheduling ? ' active' : ''}`} onClick={() => {
-          if (scheduling) {
-            setScheduling(false);
-          } else {
-            setScheduling(true);
-            setClosing(false);
-            setTarget(stages[Math.min(currentIndex + 1, stages.length - 1)]);
-          }
-        }}>
-          {scheduling ? 'Cancel scheduling' : 'Schedule interview'}
-        </button>}
-        <button className={`hr-quick-toggle${rejecting ? ' active' : ''}`} onClick={() => {
-          setScheduling(false);
-          setClosing(false);
-          setTarget(rejecting ? stages[Math.min(currentIndex + 1, stages.length - 1)] : 'rejected');
-        }}>
-          {rejecting ? 'Cancel rejection' : 'Reject candidate'}
-        </button>
-        <button className={`hr-quick-toggle${isClosing ? ' active' : ''}`} onClick={() => {
-          setScheduling(false);
-          if (isClosing) {
-            setClosing(false);
-          } else {
-            setClosing(true);
-            setTarget(stages[Math.min(currentIndex + 1, stages.length - 1)]);
-          }
-        }}>
-          {isClosing ? 'Cancel close' : 'Close this application'}
-        </button>
-      </div>
-      {isClosing && <label className="hr-field hr-quick-disposition">
-        <span>Disposition</span>
-        <select value={disposition} onChange={event => setDisposition(event.target.value as 'rejected' | 'withdrawn')}>
-          <option value="withdrawn">Withdrawn</option>
-          <option value="rejected">Rejected</option>
-        </select>
-      </label>}
-      {scheduling && <div className="hr-quick-schedule">
-        <div className="hr-quick-section-head">
-          <label>Interview details</label>
-          <span className="hr-quick-hint">Required · the calendar invitation is still sent manually</span>
-        </div>
-        <div className="hr-quick-schedule-grid">
-          <label className="hr-field">
-            <span>Interview type</span>
-            <select value={interviewKind} onChange={event => setInterviewKind(event.target.value)}>
-              <option value="hr">HR</option>
-              <option value="technical">Technical</option>
-              <option value="client">Client</option>
-            </select>
-          </label>
-          <label className="hr-field">
-            <span>Date and time</span>
-            <input type="datetime-local" value={scheduledAt} onChange={event => setScheduledAt(event.target.value)} />
-          </label>
-          <label className="hr-field hr-wide">
-            <span>Interview panel</span>
-            <input value={panel} onChange={event => setPanel(event.target.value)} placeholder="Names or email addresses of the interviewers" />
-          </label>
-          <label className="hr-field hr-wide">
-            <span>Meeting link or location</span>
-            <input value={location} onChange={event => setLocation(event.target.value)} placeholder="Video link or room" />
-          </label>
-        </div>
-      </div>}
-      {!scheduling && <div className="hr-quick-rationale">
-        <div className="hr-quick-section-head">
-          <label htmlFor="hr-quick-rationale-input">Comments</label>
-          <span className="hr-quick-hint">{rationaleReady ? 'Required · ready' : `Required · ${RATIONALE_MIN - rationaleLength} more characters`}</span>
-        </div>
-        <textarea id="hr-quick-rationale-input" rows={5} value={rationale} onChange={event => setRationale(event.target.value)} placeholder="What did you see that supports this move? Keep it factual — it’s stored on the candidate’s record." />
-      </div>}
-    </div>
-    <div className="hr-quick-foot">
-      <span className="hr-quick-summary-text">{summary}</span>
-      <button className="btn secondary" disabled={saving} onClick={close}>Cancel</button>
-      <button className={`btn${rejecting || isClosing ? ' hr-quick-reject-btn' : ''}`} disabled={cannotSubmit} onClick={() => void record()}>
-        {saving ? 'Recording…' : scheduling ? 'Schedule interview' : rejecting ? 'Record rejection' : isClosing ? 'Record disposition' : `Move to ${label(target)}`}
-      </button>
-    </div>
-    {error && <p role="alert" className="hr-error hr-quick-error">{error}</p>}
-  </Dialog>;
 }
 function RequisitionForm({
   opportunity,
@@ -1181,21 +972,21 @@ function RequisitionForm({
     client_ids: data.getAll('client_ids').map(String),
     justification: text(data, 'justification')
   })}>
-    <label className="hr-field">
-      <span>
+    <UiField className="min-w-0 gap-1.5">
+      <FieldLabel htmlFor="hr-requisition-job">
         Linked job post
-      </span>
-      <select name="job_id" value={jobId} onChange={event => setJobId(event.target.value)}>
-        <option value="">Not set</option>
-        {workspace.jobs.map(item => <option key={item.id} value={item.id}>
+      </FieldLabel>
+      <NativeSelect id="hr-requisition-job" className="w-full" name="job_id" value={jobId} onChange={event => setJobId(event.target.value)} aria-describedby="hr-requisition-job-hint">
+        <NativeSelectOption value="">Not set</NativeSelectOption>
+        {workspace.jobs.map(item => <NativeSelectOption key={item.id} value={item.id}>
           {`${item.title}${item.published ? ' · Published' : ' · Draft'}`}
-        </option>)}
-      </select>
-      <small>
+        </NativeSelectOption>)}
+      </NativeSelect>
+      <p id="hr-requisition-job-hint" className="m-0 text-xs text-muted-foreground">
         The role title and requirements come from the linked job post.
-      </small>
-    </label>
-    {job ? <p className="hr-source-list hr-wide">Role and requirements are taken from “{job.title}”.</p> : <Field name="title" label="Role to hire" value={opportunity?.title} required hint="Named manually until a job post is linked — the post then provides the title and requirements." />}
+      </p>
+    </UiField>
+    {job ? <p className="col-span-full m-0 text-[13px] text-muted-foreground">Role and requirements are taken from "{job.title}".</p> : <Field name="title" label="Role to hire" value={opportunity?.title} required hint="Named manually until a job post is linked. The post then provides the title and requirements." />}
     <Field name="hiring_mode" label="Hiring mode" value={opportunity?.hiring_mode ?? 'sur_mission'} options={[{
       value: 'sur_mission',
       label: 'For a client mission'
@@ -1229,9 +1020,9 @@ function Requisitions({
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Opportunity | null>(null);
   return <>
-    <div className="hr-toolbar">
-      <span className="hr-source-list">{workspace.opportunities.length} hiring needs · linked to job posts and clients</span>
-      <button className="btn" onClick={() => setCreateOpen(true)}><Plus size={16} aria-hidden="true" /> Create hiring need</button>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <span className="text-[13px] text-muted-foreground">{workspace.opportunities.length} hiring needs · linked to job posts and clients</span>
+      <Button onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" /> Create hiring need</Button>
     </div>
     {createOpen && <Dialog title="Create a hiring need" close={() => setCreateOpen(false)}>
       <RequisitionForm context={context} onSaved={() => setCreateOpen(false)} />
@@ -1240,31 +1031,33 @@ function Requisitions({
       <RequisitionForm opportunity={editing} context={context} onSaved={() => setEditing(null)} />
     </Dialog>}
     {!workspace.opportunities.length && <Empty>Hiring starts with an approved need linked to a mission or a justified profile hire.</Empty>}
+    <div className="flex flex-col gap-3">
     {workspace.opportunities.map(opportunity => {
       const job = workspace.jobs.find(item => item.id === opportunity.job_id);
       const clients = workspace.clients.filter(client => opportunity.client_ids.includes(client.id));
       const editable = ['draft', 'pending_approval', 'approved'].includes(opportunity.status);
-      return <div className="hr-card" key={opportunity.id}>
-        <div className="hr-card-head">
-          <div>
-            <h3>
+      return <Card size="sm" key={opportunity.id}>
+        <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h3 className="m-0 text-[15px] font-medium">
               {opportunity.title}
             </h3>
-            <small>{opportunity.hiring_mode === 'sur_mission' ? 'Client mission' : 'Ahead of demand'} · {opportunity.owner_email || 'Unassigned'} · {workspace.applications.filter(application => application.opportunity_id === opportunity.id).length} applications{job ? ` · Job post: ${job.title}${job.published ? ' (published)' : ' (draft)'}` : ''}{clients.length ? ` · ${clients.length === 1 ? 'Client' : 'Clients'}: ${clients.map(client => client.name).join(', ')}` : ''}</small>
+            <small className="text-xs text-muted-foreground">{opportunity.hiring_mode === 'sur_mission' ? 'Client mission' : 'Ahead of demand'} · {opportunity.owner_email || 'Unassigned'} · {workspace.applications.filter(application => application.opportunity_id === opportunity.id).length} applications{job ? ` · Job post: ${job.title}${job.published ? ' (published)' : ' (draft)'}` : ''}{clients.length ? ` · ${clients.length === 1 ? 'Client' : 'Clients'}: ${clients.map(client => client.name).join(', ')}` : ''}</small>
           </div>
-          <div className="hr-inline">
-            {editable && <button className="btn secondary" onClick={() => setEditing(opportunity)}>Edit</button>}
+          <div className="flex items-center gap-2">
+            {editable && <Button variant="outline" size="sm" onClick={() => setEditing(opportunity)}>Edit</Button>}
             <Tag tone={['approved', 'published'].includes(opportunity.status) ? 'good' : 'quiet'}>
               {label(opportunity.status)}
             </Tag>
           </div>
         </div>
-        {opportunity.client_need && <p>
+        {opportunity.client_need && <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
           {opportunity.client_need}
         </p>}
-        {opportunity.justification && <p>Hiring justification: {opportunity.justification}</p>}
-        {opportunity.status === 'approved' && <details className="hr-disclosure">
-          <summary>Publish the connected job post</summary>
+        {opportunity.justification && <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">Hiring justification: {opportunity.justification}</p>}
+        {opportunity.status === 'approved' && <details className="group/details rounded-lg border border-border p-4">
+          <summary className="cursor-pointer text-[13px] font-medium group-open/details:mb-4">Publish the connected job post</summary>
           <Form run={run} busy={busy} button="Publish job post" success="Connected job post published and requisition updated." submit={data => ({
             kind: 'publish_requisition',
             opportunity_id: opportunity.id,
@@ -1277,8 +1070,10 @@ function Requisitions({
             }))} required hint="Create a public job post in Job posts first, then connect it here." />
           </Form>
         </details>}
-      </div>;
+        </CardContent>
+      </Card>;
     })}
+    </div>
   </>;
 }
 function Journeys({
@@ -1293,72 +1088,68 @@ function Journeys({
   const [query, setQuery] = useState('');
   const people = workspace.employees.filter(employee => personName(workspace, employee.person_id).toLowerCase().includes(query.toLowerCase()) && (tab === 'arrivals' ? employee.status !== 'ended' && employee.status !== 'offboarding' && !employee.onboarding_completed_at : tab === 'probation' ? employee.status !== 'ended' && employee.probation_status !== 'confirmed' : tab === 'departures' ? employee.status === 'offboarding' : employee.status === 'ended'));
   return <>
-    <div className="hr-tabs" role="tablist" aria-label="Journey phases">
-      {[{
-        value: 'arrivals',
-        title: 'Arrivals and onboarding'
-      }, {
-        value: 'probation',
-        title: 'Probation'
-      }, {
-        value: 'departures',
-        title: 'Departures'
-      }, {
-        value: 'completed',
-        title: 'Closed periods'
-      }].map(item => <button key={item.value} role="tab" aria-selected={tab === item.value} onClick={() => setTab(item.value)}>
-        {item.title}
-      </button>)}
-    </div>
-    <div className="hr-toolbar">
+    <ViewTabs label="Journey phases" value={tab} onChange={setTab} items={[{
+      value: 'arrivals',
+      title: 'Arrivals and onboarding'
+    }, {
+      value: 'probation',
+      title: 'Probation'
+    }, {
+      value: 'departures',
+      title: 'Departures'
+    }, {
+      value: 'completed',
+      title: 'Closed periods'
+    }]} />
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <SearchField value={query} change={setQuery} placeholder="Search employee journeys" />
-      <span className="hr-source-list">{people.length} employment periods</span>
+      <span className="text-[13px] text-muted-foreground">{people.length} employment periods</span>
     </div>
-    {people.length ? <div className="hr-table-wrap">
-      <table className="hr-table">
-        <thead>
-          <tr>
-            <th>Person</th>
-            <th>Employment</th>
-            <th>Checklist</th>
-            <th>Probation</th>
-            <th>Next date</th>
-            <th>Journey</th>
-          </tr>
-        </thead>
-        <tbody>
+    {people.length ? <Card className="py-0">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Person</TableHead>
+            <TableHead>Employment</TableHead>
+            <TableHead>Checklist</TableHead>
+            <TableHead>Probation</TableHead>
+            <TableHead>Next date</TableHead>
+            <TableHead>Journey</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {people.map(employee => {
             const tasks = workspace.tasks.filter(task => task.employee_id === employee.id);
             const exit = workspace.exits.find(item => item.employee_id === employee.id);
             const requiredOpen = tasks.filter(task => task.required && !task.completed_at);
-            return <tr key={employee.id}>
-              <td>
-                <PersonLink name={personName(workspace, employee.person_id)} detail={employee.role} open={() => open(employee.person_id, undefined, employee.id)} />
-              </td>
-              <td>
+            return <TableRow key={employee.id}>
+              <TableCell className="h-auto py-3">
+                <PersonLink personId={employee.person_id} name={personName(workspace, employee.person_id)} detail={employee.role} open={() => open(employee.person_id, undefined, employee.id)} />
+              </TableCell>
+              <TableCell>
                 <Tag tone={employee.status === 'ended' ? 'quiet' : 'good'}>
                   {label(employee.status)}
                 </Tag>
-                <small>Started {date(employee.start_date)}</small>
-              </td>
-              <td>{tasks.filter(task => task.completed_at).length}/{tasks.length} tasks<small>{requiredOpen.length} required remaining</small></td>
-              <td>
+                <Detail>Started {date(employee.start_date)}</Detail>
+              </TableCell>
+              <TableCell>{tasks.filter(task => task.completed_at).length}/{tasks.length} tasks<Detail>{requiredOpen.length} required remaining</Detail></TableCell>
+              <TableCell>
                 {label(employee.probation_status)}
-                <small>
+                <Detail>
                   {date(employee.probation_end)}
-                </small>
-              </td>
-              <td>
+                </Detail>
+              </TableCell>
+              <TableCell>
                 {exit ? `Exit ${date(exit.exit_date)}` : employee.status === 'preboarding' ? `Arrival ${date(employee.start_date)}` : `Review ${date(workspace.reviews.find(review => review.employee_id === employee.id && review.status === 'scheduled')?.due_date)}`}
-              </td>
-              <td>
-                <button className="btn secondary" onClick={() => open(employee.person_id, undefined, employee.id)}>Open plan</button>
-              </td>
-            </tr>;
+              </TableCell>
+              <TableCell>
+                <Button variant="outline" size="sm" onClick={() => open(employee.person_id, undefined, employee.id)}>Open plan</Button>
+              </TableCell>
+            </TableRow>;
           })}
-        </tbody>
-      </table>
-    </div> : <Empty>No journeys in this view. New hires automatically start a preboarding plan.</Empty>}
+        </TableBody>
+      </Table>
+    </Card> : <Empty>No journeys in this view. New hires automatically start a preboarding plan.</Empty>}
   </>;
 }
 function AssignmentDialog({
@@ -1376,16 +1167,18 @@ function AssignmentDialog({
   day: string;
   close: () => void;
 }) {
-  return <Dialog title={`Staff ${personName(workspace, employee.person_id)}`} close={close}>
+  return <Dialog title={`Staff ${personName(workspace, employee.person_id)}`} className="sm:max-w-5xl" close={close}>
     <AssignForm employee={employee} workspace={workspace} run={run} busy={busy} />
     <Section title="Assignment history">
-      {workspace.assignments.filter(assignment => assignment.employee_id === employee.id).map(assignment => <div className="hr-card" key={assignment.id}>
-        <div className="hr-card-head">
-          <div>
-            <h3>
+      <div className="flex flex-col gap-3">
+      {workspace.assignments.filter(assignment => assignment.employee_id === employee.id).map(assignment => <Card size="sm" key={assignment.id}>
+        <CardContent className="flex flex-col gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h3 className="m-0 text-[15px] font-medium">
               {workspace.projects.find(project => project.id === assignment.project_id)?.title}
             </h3>
-            <small>{date(assignment.start_date)} to {date(assignment.end_date)} · {assignment.allocation_pct}%</small>
+            <small className="text-xs text-muted-foreground">{date(assignment.start_date)} to {date(assignment.end_date)} · {assignment.allocation_pct}%</small>
           </div>
           <Tag>
             {label(assignment.status)}
@@ -1401,9 +1194,14 @@ function AssignmentDialog({
         })}>
           <Field name="end_date" label="Ends" type="date" value={day} min={assignment.start_date} required />
           <Field name="rationale" label="Reason" required />
-          <label className="hr-checkbox"><input type="checkbox" name="cancel" />Cancel future or proposed period</label>
+          <UiField orientation="horizontal" className="col-span-full gap-2">
+            <Checkbox id={`hr-cancel-${assignment.id}`} name="cancel" value="on" />
+            <FieldLabel htmlFor={`hr-cancel-${assignment.id}`} className="font-normal">Cancel future or proposed period</FieldLabel>
+          </UiField>
         </Form>}
-      </div>)}
+        </CardContent>
+      </Card>)}
+      </div>
     </Section>
   </Dialog>;
 }

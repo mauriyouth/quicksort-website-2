@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@clerk/react";
 import { RefreshCw } from "lucide-react";
-import { Notice } from "@quicksort/hr-ui";
-import "./settings-page.css";
+import { Button, Input, InputGroup, InputGroupAddon, InputGroupText, NativeSelect, NativeSelectOption } from "@quicksort-sas/ui";
+import { PageAlerts } from "./ui";
+import { ConnectionBadge, Hint, SettingsCard, SettingsRow } from "./settings-ui";
 
 type Status = { configured: boolean; source: string; model: string; updatedAt: string | null; canSave: boolean };
 
 /**
- * Settings → AI configuration. Card layout (reference Settings design):
- * ruled header with the connection pill and refresh, an API-key row that
- * flips between the masked saved key and the replacement input, a model
- * row, and a footer whose lime button stays disabled until something is
- * dirty. All state still talks to /api/ai-settings; the saved key is
+ * Settings → AI configuration (SettingsCard on @quicksort-sas/ui): ruled
+ * header with the connection badge and refresh, an API-key row that flips
+ * between the masked saved key and the replacement input, a model row, and
+ * a footer whose lime button stays disabled until something is dirty. All state still talks to /api/ai-settings; the saved key is
  * never displayed again.
  */
 export function AiSettings({ isOwner }: { isOwner: boolean }) {
@@ -87,159 +87,145 @@ export function AiSettings({ isOwner }: { isOwner: boolean }) {
           ? "Replace API key"
           : "Save model";
   return (
-    <div className="settings-stack">
-      <Notice error>{error}</Notice>
-      <Notice>{message}</Notice>
-      <section className="sp-card" aria-label="AI configuration">
-        <header className="sp-card-head sp-card-head--ruled">
-          <div>
-            <h2 className="sp-card-title">AI configuration</h2>
-            <p className="sp-card-desc">Connect OpenAI to power candidate evaluations in the CV analyzer.</p>
-          </div>
-          <div className="sp-head-actions">
-            <span className={`sp-pill${configured ? " sp-pill--ok" : ""}`} role="status">
-              <span className="sp-pill-dot" aria-hidden="true" />
-              {statusLabel}
-            </span>
-            <button
-              type="button"
-              className="sp-icon-btn"
+    <div className="flex flex-col gap-4">
+      <PageAlerts error={error} message={message} />
+      <SettingsCard
+        title="AI configuration"
+        description="Connect OpenAI to run candidate evaluations in the CV analyzer."
+        action={
+          <>
+            <ConnectionBadge tone={configured ? "ok" : "neutral"}>{statusLabel}</ConnectionBadge>
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => void refresh().catch(e => setError(e instanceof Error ? e.message : "Could not refresh status."))}
               disabled={!isOwner}
               title="Refresh status"
               aria-label="Refresh status"
             >
-              <RefreshCw size={14} />
-            </button>
-          </div>
-        </header>
-
+              <RefreshCw />
+            </Button>
+          </>
+        }
+        footer={
+          isOwner && (
+            <>
+              <Hint className="max-w-md">Saving makes no AI request. Test connection sends a small paid request with the entered key, or your saved key if left blank, and checks access.</Hint>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" disabled={busy || !status || (!configured && !keyLooksValid) || !model.trim()} onClick={() => void testConnection()}>
+                  {testing ? "Testing…" : "Test connection"}
+                </Button>
+                <Button variant="pivot" disabled={!canSubmit} onClick={() => void save()}>
+                  {saveLabel}
+                </Button>
+              </div>
+            </>
+          )
+        }
+      >
         {!isOwner ? (
-          <p className="sp-note">Ask a portal owner to configure the shared AI key.</p>
+          <Hint>Ask a portal owner to configure the shared AI key.</Hint>
         ) : (
           <>
-            {/* API key row */}
-            <div className="sp-row">
-              <div>
-                <div className="sp-row-label">OpenAI API key</div>
-                <div className="sp-row-hint">Stored encrypted. The saved key is never displayed again.</div>
-                {status && !status.canSave && (
-                  <div className="sp-row-hint">
-                    Secure storage needs a one-time server setup: configure AI_SETTINGS_ENCRYPTION_KEY before saving a key here.
-                  </div>
-                )}
-              </div>
-              <div className="sp-controls">
-                {showSavedKey && (
-                  <div className="sp-keybox">
-                    <code>sk-••••••••••••••••</code>
-                    <span className="sp-keybox-actions">
-                      <button
-                        type="button"
-                        className="sp-btn-danger"
-                        disabled={busy}
-                        onClick={() => (confirmRemove ? void save(true) : setConfirmRemove(true))}
-                        onBlur={() => setConfirmRemove(false)}
-                      >
-                        {confirmRemove ? "Confirm remove" : "Remove"}
-                      </button>
-                      <button type="button" className="sp-btn-ghost sp-btn-sm" disabled={busy} onClick={() => { setReplacing(true); setConfirmRemove(false); }}>
-                        Replace
-                      </button>
-                    </span>
-                  </div>
-                )}
-                {showKeyInput && (
-                  <div className="sp-inline">
-                    <input
-                      type="password"
-                      className="sp-input sp-grow"
-                      autoComplete="new-password"
-                      spellCheck={false}
-                      maxLength={1000}
-                      value={apiKey}
-                      onChange={e => setApiKey(e.target.value)}
-                      placeholder={configured ? "Paste a replacement key" : "sk-…"}
-                      disabled={busy || loadingModels || !status?.canSave}
-                    />
-                    {configured && (
-                      <button type="button" className="sp-btn-ghost" disabled={busy} onClick={() => { setReplacing(false); setApiKey(""); }}>
-                        Cancel
-                      </button>
-                    )}
-                  </div>
-                )}
-                <a className="sp-link" href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">
-                  Create an OpenAI API key ↗
-                </a>
-              </div>
-            </div>
-
-            {/* Model row */}
-            <div className="sp-row">
-              <div>
-                <div className="sp-row-label">Model</div>
-                <div className="sp-row-hint">Must support PDFs and structured output.</div>
-              </div>
-              <div className="sp-controls">
-                <div className="sp-inline">
-                  {models ? (
-                    <span className="sp-select-wrap sp-grow">
-                      <select
-                        className="sp-select"
-                        value={model}
-                        onChange={e => setModel(e.target.value)}
-                        disabled={busy || !status?.canSave}
-                        aria-label="Model"
-                      >
-                        {(model && !models.includes(model) ? [model, ...models] : models).map(id => <option key={id} value={id}>{id}</option>)}
-                      </select>
-                      <span className="sp-caret" aria-hidden="true">▾</span>
-                    </span>
-                  ) : (
-                    <input
-                      className="sp-input sp-grow"
-                      required
-                      maxLength={120}
-                      pattern="[a-zA-Z0-9._-]+"
-                      value={model}
-                      onChange={e => setModel(e.target.value)}
-                      disabled={busy || !status?.canSave}
-                      aria-label="Model"
-                    />
+            <SettingsRow
+              label="OpenAI API key"
+              hint={
+                <>
+                  Stored encrypted. The saved key is never displayed again.
+                  {status && !status.canSave && (
+                    <span className="mt-1 block">Secure storage needs a one-time server setup: configure AI_SETTINGS_ENCRYPTION_KEY before saving a key here.</span>
                   )}
-                  <button
-                    type="button"
-                    className="sp-btn-ghost"
-                    disabled={busy || loadingModels || !keyLooksValid || !status?.canSave}
-                    onClick={() => void loadModels()}
-                  >
-                    {loadingModels ? "Loading…" : models ? "Reload list" : "Load models"}
-                  </button>
+                </>
+              }
+            >
+              {showSavedKey && (
+                <InputGroup>
+                  <InputGroupAddon align="inline-start"><InputGroupText className="font-mono">sk-••••••••••••••••</InputGroupText></InputGroupAddon>
+                  <InputGroupAddon align="inline-end" className="ml-auto gap-1">
+                    <Button
+                      size="xs"
+                      variant={confirmRemove ? "destructive" : "ghost"}
+                      className={confirmRemove ? undefined : "text-destructive"}
+                      disabled={busy}
+                      onClick={() => (confirmRemove ? void save(true) : setConfirmRemove(true))}
+                      onBlur={() => setConfirmRemove(false)}
+                    >
+                      {confirmRemove ? "Confirm remove" : "Remove"}
+                    </Button>
+                    <Button size="xs" variant="outline" disabled={busy} onClick={() => { setReplacing(true); setConfirmRemove(false); }}>
+                      Replace
+                    </Button>
+                  </InputGroupAddon>
+                </InputGroup>
+              )}
+              {showKeyInput && (
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    className="flex-1"
+                    autoComplete="new-password"
+                    spellCheck={false}
+                    maxLength={1000}
+                    value={apiKey}
+                    onChange={e => setApiKey(e.target.value)}
+                    placeholder={configured ? "Paste a replacement key" : "sk-…"}
+                    disabled={busy || loadingModels || !status?.canSave}
+                    aria-label="OpenAI API key"
+                  />
+                  {configured && (
+                    <Button variant="outline" disabled={busy} onClick={() => { setReplacing(false); setApiKey(""); }}>
+                      Cancel
+                    </Button>
+                  )}
                 </div>
-                <p className="sp-row-hint">
-                  {models
-                    ? `${models.length} models available to your key.`
-                    : "Load the list to pick from the models your key can access."}
-                </p>
-                <Notice error>{modelsError}</Notice>
-              </div>
-            </div>
+              )}
+              <a className="self-start text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground" href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">
+                Create an OpenAI API key ↗
+              </a>
+            </SettingsRow>
 
-            <footer className="sp-foot">
-              <span className="sp-row-hint">Saving makes no AI request. Test connection sends a small paid request with the entered key, or your saved key if left blank, and checks access.</span>
-              <span className="sp-inline">
-                <button type="button" className="sp-btn-ghost" disabled={busy || !status || (!configured && !keyLooksValid) || !model.trim()} onClick={() => void testConnection()}>
-                  {testing ? "Testing…" : "Test connection"}
-                </button>
-                <button type="button" className="sp-btn" disabled={!canSubmit} onClick={() => void save()}>
-                  {saveLabel}
-                </button>
-              </span>
-            </footer>
+            <SettingsRow label="Model" hint="Must support PDFs and structured output.">
+              <div className="flex gap-2">
+                {models ? (
+                  <NativeSelect
+                    className="flex-1"
+                    value={model}
+                    onChange={e => setModel(e.target.value)}
+                    disabled={busy || !status?.canSave}
+                    aria-label="Model"
+                  >
+                    {(model && !models.includes(model) ? [model, ...models] : models).map(id => <NativeSelectOption key={id} value={id}>{id}</NativeSelectOption>)}
+                  </NativeSelect>
+                ) : (
+                  <Input
+                    className="flex-1 font-mono"
+                    required
+                    maxLength={120}
+                    pattern="[a-zA-Z0-9._\-]+"
+                    value={model}
+                    onChange={e => setModel(e.target.value)}
+                    disabled={busy || !status?.canSave}
+                    aria-label="Model"
+                  />
+                )}
+                <Button
+                  variant="outline"
+                  disabled={busy || loadingModels || !keyLooksValid || !status?.canSave}
+                  onClick={() => void loadModels()}
+                >
+                  {loadingModels ? "Loading…" : models ? "Reload list" : "Load models"}
+                </Button>
+              </div>
+              <Hint>
+                {models
+                  ? `${models.length} models available to your key.`
+                  : "Load the list to pick from the models your key can access."}
+              </Hint>
+              <PageAlerts error={modelsError} />
+            </SettingsRow>
           </>
         )}
-      </section>
+      </SettingsCard>
     </div>
   );
 }

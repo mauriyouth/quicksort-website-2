@@ -8,11 +8,12 @@ test.use({ channel: 'chromium' });
 let harness: Awaited<ReturnType<typeof startComponentHarness>>;
 test.beforeAll(async () => {
   harness = await startComponentHarness(`
+    import { BrowserRouter } from '${process.cwd()}/apps/admin/node_modules/react-router-dom';
     import { HrWorkspace } from '@app/hr/HrWorkspace';
     const view = new URLSearchParams(location.search).get('view') || 'overview';
     createRoot(document.getElementById('root')).render(
       <main style={{ padding: 24, maxWidth: 1400, margin: 'auto' }}>
-        <HrWorkspace view={view} actorEmail="hr@example.invalid" role="hr" />
+        <BrowserRouter><HrWorkspace view={view} actorEmail="hr@example.invalid" role="hr" /></BrowserRouter>
       </main>
     );
   `);
@@ -25,15 +26,38 @@ async function reply(route: Route, value: unknown, status = 200) {
   return route.fulfill({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(value) });
 }
 
+const SAM = 'a51da95e-be9a-42b7-81c1-bb2043e41b56';
+const IMPORTED = 'c22e75a8-609e-4dfb-804d-9cc0eda7d1e6';
+const SAM_EMPLOYEE = '825b9051-882b-4e1e-9ae1-8dce434b0b05';
+const payslip = (id: string, title: string, valid_from: string) => ({ id, person_id: SAM, type_code: 'PAYSLIP', title, valid_from, file_name: `${id}.pdf`, status: 'active', created_at: '2026-11-01T10:00:00Z' });
+// Served out of order on purpose: the section must sort the newest period first.
+const SEPTEMBRE = payslip('doc-sep', 'Bulletin de paie Septembre 2026', '2026-09-01');
+const OCTOBRE = payslip('doc-oct', 'Bulletin de paie Octobre 2026', '2026-10-01');
 async function mock(page: Page, {
   staffingOnly = false,
   failFirstTask = false,
   staleSuggestion = false,
+  payslips = false,
+  admin = false,
+  contractStage = false,
+  signed = true,
+  signatureRequests = [] as Array<Record<string, unknown>>,
 } = {}) {
   const suggestions: Suggestion[] = [];
-  const snapshot = { ...structuredClone(seed), suggestions };
+  const snapshot = { ...structuredClone(seed), suggestions, salaries: [] as never[] };
   const requests: Request[] = [];
+  const signatureCalls: Array<Record<string, unknown>> = [];
   if (staffingOnly) snapshot.capabilities = { recruit: false, approve_offer: false, approve_direction: false, staff: true, admin: false };
+  if (admin) snapshot.capabilities = { ...snapshot.capabilities, admin: true };
+  // Sam's latest application, still open at the Contract stage.
+  if (contractStage) Object.assign(snapshot.applications[0], { status: 'active', stage: 'contract' });
+  await page.route('**/api/signatures', async (route) => {
+    const body = route.request().postDataJSON();
+    signatureCalls.push(body);
+    if (body.action === 'list-requests') return reply(route, { requests: signatureRequests });
+    if (body.action === 'list-templates') return reply(route, { templates: [] });
+    return reply(route, {}, 400);
+  });
   if (staleSuggestion) {
     const employee = snapshot.employees.find((item) => item.status === 'preboarding');
     const person = snapshot.people.find((item) => item.id === employee?.person_id);
@@ -48,13 +72,37 @@ async function mock(page: Page, {
       created_at: new Date().toISOString(),
     });
   }
+  const rpcs: Array<Record<string, unknown>> = [];
+  const moves: Array<Record<string, unknown>> = [];
+  if (payslips) {
+    await page.route('**/api/documents', async (route) => {
+      const body = route.request().postDataJSON();
+      if (body.action === 'move-payslip') {
+        moves.push(body);
+        return reply(route, { document: { id: 'doc-moved' }, previousMatricule: { employeeId: SAM_EMPLOYEE, value: '00026' } });
+      }
+      return reply(route, { files: [] });
+    });
+  }
   await page.route(`${fixtureSupabaseURL}/**`, async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() === 'OPTIONS') return reply(route, {});
+    if (payslips && url.pathname.endsWith('/rpc/set_employee_matricule')) {
+      const body = route.request().postDataJSON();
+      rpcs.push(body);
+      if (body.matricule === 'QS-0003') return reply(route, { message: 'Matricule QS-0003 already belongs to Imported Person renamed.' }, 400);
+      return reply(route, null);
+    }
+    if (payslips && url.pathname.endsWith('/employees')) return reply(route, [{ person_id: SAM }, { person_id: IMPORTED }]);
+    if (payslips && url.pathname.endsWith('/hr_people')) return reply(route, [{ id: SAM, full_name: 'Sam Rivera' }, { id: IMPORTED, full_name: 'Imported Person renamed' }]);
+    if (payslips && url.pathname.endsWith('/documents')) {
+      const rows = [OCTOBRE, SEPTEMBRE];
+      return reply(route, url.search.includes('type_code=eq.PAYSLIP') ? rows : rows.map((row) => ({ ...row, status: 'active' })));
+    }
     if (url.pathname.endsWith('/rpc/hr_workspace_snapshot')) return reply(route, snapshot);
     if (url.pathname.endsWith('/rpc/hr_application_requirements')) return reply(route, [
       { key: 'screening', label: 'Screening evidence reviewed', done: true },
-      { key: 'signatures', label: 'Contract signed by the candidate and employer', done: true },
+      { key: 'signatures', label: 'The contract is signed in Youtrust', done: signed },
     ]);
     if (url.pathname.endsWith('/profiles')) return reply(route, snapshot.people.map((person) => ({ id: person.id, full_name: person.full_name, email: person.email })));
     if (url.pathname.endsWith('/rpc/hr_command')) {
@@ -75,7 +123,7 @@ async function mock(page: Page, {
     }
     return reply(route, []);
   });
-  return { snapshot, requests };
+  return { snapshot, requests, rpcs, moves, signatureCalls };
 }
 
 test('all connected HR views render at desktop and mobile widths without page overflow', async ({ page }, info) => {
@@ -113,16 +161,14 @@ test('a rehire record retains both application and employment histories', async 
   await page.getByRole('button', { name: /Sam Rivera/ }).click();
   await page.getByRole('tab', { name: /Applications/ }).click();
   await expect(page.getByLabel('Application history').locator('option')).toHaveCount(2);
-  await expect(page.getByText('Both signatures recorded', { exact: true })).toBeVisible();
+  await expect(page.getByText('Signed in Youtrust', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /Employment/ }).click();
   await expect(page.getByLabel('Employment period').locator('option')).toHaveCount(2);
   await expect(page.getByRole('heading', { name: 'Journey checklist' })).toBeVisible();
   await page.screenshot({ path: info.outputPath('rehire-employment.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Close record', exact: true }).click();
-  await page.goBack();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.keyboard.press('Escape');
+  // The record is a routed page now, not a modal: tabs live in the URL.
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/employments/);
 });
 
 test('failed task completion keeps its evidence and uses the same retry key', async ({ page }) => {
@@ -137,7 +183,7 @@ test('failed task completion keeps its evidence and uses the same retry key', as
   await expect(form.getByRole('alert')).toHaveText('Complete the prerequisite task first.');
   await expect(form.getByLabel('Completion evidence')).toHaveValue('Access verified with the employee.');
   await form.getByRole('button', { name: 'Complete task', exact: true }).click();
-  await expect(page.getByRole('dialog').getByText('Access verified with the employee.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Access verified with the employee.', { exact: true })).toBeVisible();
   const completions = requests.filter((request) => request.kind === 'complete_task');
   expect(completions).toHaveLength(2);
   expect(completions[1].request_id).toBe(completions[0].request_id);
@@ -147,7 +193,8 @@ test('staffing permissions expose assignments without opening confidential perso
   await mock(page, { staffingOnly: true });
   await page.goto(`${harness.url}?view=people`);
   // Staffing-only users land on the employee list and never see person records.
-  await expect(page.getByRole('tab', { name: 'Employees' })).toBeVisible();
+  // People are grouped by contract now; 'Everyone' is the default tab.
+  await expect(page.getByRole('tab', { name: /^Everyone/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add person', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Sam Rivera/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Assign project', exact: true }).first().click();
@@ -267,4 +314,99 @@ test('creating a hiring need takes the role from the linked job post and links c
   expect(requests.map((request) => request.kind)).toEqual(['create_requisition']);
   expect(requests[0]).toMatchObject({ title: job.title, job_id: job.id, client_ids: [client.id] });
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+async function openSamEmployment(page: Page) {
+  await page.goto(`${harness.url}?view=people`);
+  await page.getByRole('button', { name: /Sam Rivera/ }).click();
+  await page.getByRole('tab', { name: /Employment/ }).click();
+}
+
+test('the Payslips section lists the newest period first and the Documents panel leaves payslips out', async ({ page }, info) => {
+  await mock(page, { payslips: true });
+  await page.setViewportSize({ width: 1155, height: 1000 });
+  await openSamEmployment(page);
+  const section = page.locator('section.hr-emp-section').filter({ has: page.getByRole('heading', { name: 'Payslips' }) });
+  const titles = section.locator('.payslips-person-title');
+  // Rows show the period; the 'Bulletin de paie' document type moves to the meta line.
+  await expect(titles).toHaveText(['Octobre 2026', 'Septembre 2026']);
+  const documents = page.locator('section.hr-emp-section').filter({ has: page.getByRole('heading', { name: 'Documents' }) });
+  await expect(documents.getByText('Bulletin de paie')).toHaveCount(0);
+  await section.screenshot({ path: info.outputPath('person-payslips.png') });
+});
+
+test('editing a matricule another person holds shows the server error inline', async ({ page }) => {
+  const { rpcs } = await mock(page, { payslips: true });
+  await openSamEmployment(page);
+  await page.getByRole('button', { name: 'Change', exact: true }).first().click();
+  await expect(page.getByText('Silae employee number for salaried staff')).toBeVisible();
+  await page.getByLabel('Matricule').fill('QS-0003');
+  await page.getByRole('button', { name: 'Save matricule' }).click();
+  await expect(page.getByRole('alert')).toContainText('already belongs to');
+  expect(rpcs).toHaveLength(1);
+  expect(rpcs[0]).toMatchObject({ employee_id: SAM_EMPLOYEE, matricule: 'QS-0003' });
+});
+
+test('moving a payslip confirms the target, calls the API with toPersonId and offers the matricule reset', async ({ page }) => {
+  const { moves, rpcs } = await mock(page, { payslips: true });
+  await openSamEmployment(page);
+  // Moving is a rare correction, so it sits in the row's More actions menu.
+  await page.getByRole('button', { name: 'More actions for Octobre 2026' }).click();
+  await page.getByRole('menuitem', { name: 'Move to another person…' }).click();
+  await page.getByLabel('Move payslip to').selectOption({ label: 'Imported Person renamed' });
+  await expect(page.getByText('Move Bulletin de paie Octobre 2026 from Sam Rivera to Imported Person renamed?')).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm move' }).click();
+  await expect(page.getByText("Reset Sam Rivera's matricule to 00026?")).toBeVisible();
+  expect(moves).toHaveLength(1);
+  expect(moves[0]).toMatchObject({ documentId: 'doc-oct', toPersonId: IMPORTED });
+  await page.getByRole('button', { name: 'Reset matricule' }).click();
+  await expect(page.getByText("Reset Sam Rivera's matricule to 00026?")).toHaveCount(0);
+  expect(rpcs).toHaveLength(1);
+  expect(rpcs[0]).toMatchObject({ employee_id: SAM_EMPLOYEE, matricule: '00026' });
+});
+
+const SAM_APPLICATION = seed.applications[0].id;
+const signatureRequest = (title: string, application_id: string | null) => ({
+  id: crypto.randomUUID(), person_id: SAM, template_id: null, title, type_code: 'CONTRACT_CDI', signers: [], supersedes: null,
+  status: 'sent', error: '', youtrust_request_id: 'yt-1', signed_document_id: null, audit_document_id: null, application_id,
+  created_at: '2026-11-02T10:00:00Z', updated_at: '2026-11-02T10:00:00Z',
+});
+
+async function openSamApplication(page: Page) {
+  await page.goto(`${harness.url}?view=people`);
+  await page.getByRole('button', { name: /Sam Rivera/ }).click();
+  await page.getByRole('tab', { name: /Applications/ }).click();
+}
+
+test('an admin sends the hiring contract from the application at the Contract stage', async ({ page }) => {
+  const { signatureCalls } = await mock(page, {
+    admin: true, contractStage: true,
+    signatureRequests: [signatureRequest('Contrat CDI Sam', SAM_APPLICATION), signatureRequest('Avenant télétravail', null)],
+  });
+  await openSamApplication(page);
+  await expect(page.getByRole('heading', { name: 'Contract signature' })).toBeVisible();
+  await expect(page.getByText('The hiring contract for this application. Once signed in Youtrust, the person can be hired.')).toBeVisible();
+  // Only the request sent from this application is listed; amendments from the employment page are not.
+  await expect(page.getByRole('row', { name: /Contrat CDI Sam/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Avenant télétravail/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Send for signature' })).toBeVisible();
+  expect(signatureCalls.find((call) => call.action === 'list-requests')).toMatchObject({ personId: SAM });
+  await expect(page.getByText('Countersign as employer')).toHaveCount(0);
+});
+
+test('an HR user sees whether the contract is signed but cannot send it', async ({ page }) => {
+  await mock(page, { contractStage: true, signed: false });
+  await openSamApplication(page);
+  await expect(page.getByRole('heading', { name: 'Contract signature' })).toBeVisible();
+  await expect(page.getByText('Not signed yet. An admin sends the contract from this page.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send for signature' })).toHaveCount(0);
+  await expect(page.getByText('Countersign as employer')).toHaveCount(0);
+});
+
+test('the hire prerequisites include the Youtrust signature', async ({ page }) => {
+  await mock(page, { contractStage: true });
+  await openSamApplication(page);
+  await expect(page.getByRole('heading', { name: 'Hire and start preboarding' })).toBeVisible();
+  await expect(page.getByText('The contract is signed in Youtrust')).toBeVisible();
+  await expect(page.getByText('Countersign as employer')).toHaveCount(0);
 });

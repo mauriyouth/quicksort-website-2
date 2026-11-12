@@ -26,7 +26,7 @@ import { db, configured, errorMessage } from "@quicksort/hr-db";
 import type { AuthState } from "@quicksort/hr-db/auth";
 export function Brand() {
   return (
-    <a className="brand" href="https://www.quicksort.fr" aria-label="Quicksort home">
+    <a className="brand" href="/" aria-label="Quicksort OS home">
       {/* Exact geometry and lettering from the live Quicksort.fr header. */}
       <span className="brand-word">Quicksort</span>
       <span className="brand-symbol" aria-hidden="true">

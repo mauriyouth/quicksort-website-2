@@ -1,7 +1,40 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useSession } from '@clerk/react';
-import { Check, CheckCircle2, Circle, Plus, Sparkles, AlertCircle, FileText, Search } from 'lucide-react';
+import { Check, CheckCircle2, ChevronRight, Circle, Eye, Lock, Plus, Sparkles, AlertCircle, Search } from 'lucide-react';
 import { db, errorMessage } from '@quicksort/hr-db';
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Button,
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Field as UiField,
+  FieldDescription,
+  FieldLabel,
+  Input,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  NativeSelect,
+  NativeSelectOption,
+  Stat,
+  StatLabel,
+  StatSource,
+  StatValue,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  Textarea,
+  ToggleGroup,
+  ToggleGroupItem,
+} from '@quicksort-sas/ui';
+import { cn } from 'cn';
 import type { Application, ApplicationStage, Assignment, Employee, JourneyTask, Person, Requirement, StaffingProject, SuggestionKind, Workspace } from './domain';
 import { loadRequirements } from './data';
 import { useYearAvailability } from './availability';
@@ -11,7 +44,13 @@ import { z } from 'zod';
 import { storedPricingLines } from '../sales/pricing-lines';
 import { DateField } from '../DateField';
 import { CraScreen } from '../cra/CraScreen';
-import { Action, Empty, Field, Form, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
+import { countryName, countryOptions, needsResidencePermit } from './countries';
+import { DocumentsPanel } from '../documents/DocumentsPanel';
+import { MatriculeEdit, PersonPayslips } from '../payslips/PersonPayslips';
+import { PersonSignatures } from '../signatures/PersonSignatures';
+import { CandidateApplication } from './CandidateApplication';
+// PersonPayslips does not import its own stylesheet; it is loaded here.
+import { Action, Empty, Field, Form, SearchField, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
 export const stages: ApplicationStage[] = ['application', 'screening', 'hr_interview', 'technical_interview', 'client_presentation', 'decision', 'offer', 'contract'];
 export const personName = (workspace: Workspace, id: string) => workspace.people.find(person => person.id === id)?.full_name ?? 'Unknown person';
 export const available = (workspace: Workspace, employee: Employee, day: string) => {
@@ -22,6 +61,8 @@ const options = (values: string[]) => values.map(value => ({
   value,
   label: label(value)
 }));
+/** Company/freelance-only document types, hidden from salaried employees' filings. */
+const COMPANY_DOC_TYPES = ['KBIS', 'URSSAF_VIGILANCE', 'RC_PRO', 'FREELANCE_CONTRACT'];
 /** Compact daily-rate suffix for pricing-line labels, e.g. "700 EUR/j". */
 const lineRateLabel = (tjm: number, currency: string) => `${Number.isInteger(tjm) ? tjm : tjm.toFixed(2)} ${currency}/j`;
 export type RecordContext = {
@@ -33,6 +74,57 @@ export type RecordContext = {
   openProject?: (projectId: string) => void;
 };
 export type PersonTab = 'profile' | 'applications' | 'employment' | 'projects' | 'cra' | 'history';
+
+/* ---------- Small local building blocks ---------- */
+
+/** Quiet secondary copy under a control or list. */
+const QUIET = 'm-0 text-[13px] leading-relaxed text-muted-foreground';
+/** Inline error under a control. */
+function ErrorText({ children, errorRef }: { children: ReactNode; errorRef?: React.Ref<HTMLParagraphElement> }) {
+  return <p ref={errorRef} tabIndex={errorRef ? -1 : undefined} role="alert" className="m-0 text-[13px] text-destructive outline-none">{children}</p>;
+}
+/** Card title carrying the outline semantics of the old <h2>. */
+function CardHeading({ children, level = 2, className }: { children: ReactNode; level?: 2 | 3; className?: string }) {
+  return <CardTitle role="heading" aria-level={level} className={className}>{children}</CardTitle>;
+}
+/** Native disclosure (keeps its form state while closed), restyled. */
+function Disclosure({ summary, children, className }: { summary: ReactNode; children: ReactNode; className?: string }) {
+  return <details className={cn('group/disclosure rounded-lg border border-border', className)}>
+    <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium select-none [&::-webkit-details-marker]:hidden">
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open/disclosure:rotate-90" aria-hidden="true" />
+      {summary}
+    </summary>
+    <div className="border-t border-border p-4">
+      {children}
+    </div>
+  </details>;
+}
+/** A labelled checkbox that submits "on" like a native one (read with `checked`). */
+function CheckField({ name, defaultChecked, children, className }: { name: string; defaultChecked?: boolean; children: ReactNode; className?: string }) {
+  return <label className={cn('flex cursor-pointer items-center gap-2.5 text-sm', className)}>
+    <Checkbox name={name} value="on" defaultChecked={defaultChecked} />
+    {children}
+  </label>;
+}
+/** Definition-list fact: mono label over its value. */
+function Fact({ term, children, mono = false }: { term: string; children: ReactNode; mono?: boolean }) {
+  return <div className="flex min-w-0 flex-col gap-1">
+    <dt className="label-mono">{term}</dt>
+    <dd className={cn('m-0 text-sm', mono && 'num')}>{children}</dd>
+  </div>;
+}
+/** Status dot list row used by the task, salary, review and exit lists. */
+const ROW = 'flex flex-wrap items-center gap-x-3 gap-y-2 py-3';
+const ROW_MAIN = 'flex min-w-0 flex-1 basis-48 flex-col gap-0.5';
+const ROW_TITLE = 'text-sm font-medium';
+const ROW_META = 'text-[13px] text-muted-foreground';
+/** Inline form opened under a list row. */
+const ROW_FORM = 'basis-full rounded-lg border border-border bg-muted/30 p-4';
+/** Choice tile (project, pricing line, commitment, reason). */
+const CHOICE = 'flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-lg border border-border bg-background px-3.5 py-3 text-left transition-colors hover:border-foreground/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-foreground aria-pressed:ring-1 aria-pressed:ring-foreground disabled:cursor-not-allowed disabled:opacity-50';
+/** Small pill choice (date shortcuts, reasons). */
+const CHIP = 'inline-flex h-7 cursor-pointer items-center rounded-full border border-border bg-background px-3 text-xs transition-colors hover:border-foreground/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background disabled:cursor-not-allowed disabled:opacity-40';
+
 // Number of monthly CRA reports with at least one stored entry, across every
 // employment period of a person. One CRA = one month, so months dedupe.
 function useCraMonthCount(employees: Employee[]) {
@@ -82,11 +174,13 @@ export function PersonWorkspace({
   const tabs = [{
     key: 'profile',
     title: 'Profile'
-  }, {
+  },
+  // Employees with no application on file don't need an empty Applications tab.
+  ...(!isEmployee || applications.length > 0 ? [{
     key: 'applications',
     title: 'Applications',
     count: applications.length
-  }, ...(isEmployee ? [{
+  }] : []), ...(isEmployee ? [{
     key: 'employment',
     title: 'Employment',
     count: employees.length
@@ -103,16 +197,18 @@ export function PersonWorkspace({
     title: 'Activity'
   }];
   const activeTab = tabs.some(item => item.key === tab) ? tab : 'profile';
-  return <>
-    <div className="hr-tabs hr-person-tabs" role="tablist" aria-label="Person record">
-      {tabs.map(item => <button key={item.key} role="tab" aria-selected={activeTab === item.key} onClick={() => onNavigate(item.key as PersonTab)}>
-        {item.title}
-        {'count' in item && <span>
-          {item.count}
-        </span>}
-      </button>)}
-    </div>
-    <div className="hr-record-panels" role="tabpanel">
+  return <div className="@container flex min-w-0 flex-col gap-6">
+    <Tabs value={activeTab} onValueChange={value => onNavigate(value as PersonTab)} className="w-full min-w-0">
+      <TabsList variant="line" aria-label="Person record" className="h-10 w-full justify-start gap-5 overflow-x-auto border-b border-border">
+        {tabs.map(item => <TabsTrigger key={item.key} value={item.key} className="flex-none gap-1.5 group-data-horizontal/tabs:after:bottom-0">
+          {item.title}
+          {'count' in item && <span className="num text-xs text-muted-foreground">
+            {item.count}
+          </span>}
+        </TabsTrigger>)}
+      </TabsList>
+    </Tabs>
+    <div className="flex min-w-0 flex-col gap-6" role="tabpanel" aria-label={tabs.find(item => item.key === activeTab)?.title}>
       {activeTab === 'profile' && <Profile person={person} context={context} onNavigate={onNavigate} craCount={craCount ?? 0} />}
       {activeTab === 'applications' && <Applications person={person} context={context} initialId={initialApplication} />}
       {activeTab === 'employment' && <Employments person={person} context={context} initialId={initialEmployment} />}
@@ -120,7 +216,18 @@ export function PersonWorkspace({
       {activeTab === 'cra' && <PersonCra person={person} context={context} />}
       {activeTab === 'history' && <History person={person} context={context} />}
     </div>
-  </>;
+  </div>;
+}
+function ProfileCard({ id, title, description, children, className }: { id?: string; title: ReactNode; description?: ReactNode; children: ReactNode; className?: string }) {
+  return <Card id={id} className={cn('scroll-mt-20', className)}>
+    <CardHeader>
+      <CardHeading>{title}</CardHeading>
+      {description && <CardDescription>{description}</CardDescription>}
+    </CardHeader>
+    <CardContent className="flex flex-col gap-5">
+      {children}
+    </CardContent>
+  </Card>;
 }
 function Profile({
   person,
@@ -165,6 +272,7 @@ function Profile({
         phone: text(data, 'phone'),
         headline: text(data, 'headline'),
         location: text(data, 'location'),
+        linkedin_url: text(data, 'linkedin_url'),
         skills: text(data, 'skills'),
         languages: text(data, 'languages'),
         degrees: text(data, 'degrees'),
@@ -194,11 +302,11 @@ function Profile({
     n: assignments.length,
     label: 'Projects',
     tab: 'projects'
-  }, {
+  }, ...(!employees.length || applications.length ? [{
     n: applications.length,
     label: 'Applications',
     tab: 'applications'
-  }];
+  }] : [])];
   const skillCount = listed(person.skills).length;
   // Profile completeness: the fields a client CV draws on, plus the portal
   // link. Each unfilled one is a gap the sidebar can jump you to.
@@ -261,144 +369,157 @@ function Profile({
     label: 'Source',
     value: person.source ? label(person.source) : 'Not recorded'
   }];
-  return <div className="hr-two-column hr-profile-columns">
-    <form className="hr-profile-form" onSubmit={event => void onSubmit(event)}>
-      <section className="hr-card hr-profile-card" id="hr-profile-identity" key={`identity-${fieldsKey}`}>
-        <div className="hr-profile-card-head">
-          <h2>Identity and contact</h2>
-          <p>How this person appears across Quicksort, and where notifications go</p>
-        </div>
-        <div className="hr-profile-fields">
+  return <div className="grid min-w-0 items-start gap-6 @3xl:grid-cols-[minmax(0,1fr)_17rem]">
+    <form className="flex min-w-0 flex-col gap-6" onSubmit={event => void onSubmit(event)}>
+      <ProfileCard id="hr-profile-identity" key={`identity-${fieldsKey}`} title="Identity and contact" description="How this person appears across Quicksort, and where notifications go">
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
           <Field name="full_name" label="Full name" value={person.full_name} required />
           <Field name="headline" label="Professional headline" value={person.headline} />
           <Field name="email" label="Work email" type="email" value={person.email} />
           <Field name="phone" label="Phone" type="tel" value={person.phone} />
           <Field name="location" label="Location" value={person.location} />
-          <label className="hr-field hr-owner">
-            <span>Record owner</span>
-            <span className="hr-owner-control">
-              <span className="hr-owner-avatar" aria-hidden="true">{initials(person.owner_email || actorEmail)}</span>
-              <input name="owner_email" type="email" defaultValue={person.owner_email || actorEmail} />
-            </span>
-          </label>
+          <Field name="linkedin_url" label="LinkedIn profile" type="url" value={person.linkedin_url} />
+          <UiField className="min-w-0 gap-1.5">
+            <FieldLabel htmlFor={`owner-${person.id}`}>Record owner</FieldLabel>
+            <InputGroup>
+              <InputGroupAddon>
+                <span className="grid size-6 place-items-center rounded-full bg-muted text-[10px] font-semibold text-foreground" aria-hidden="true">{initials(person.owner_email || actorEmail)}</span>
+              </InputGroupAddon>
+              <InputGroupInput id={`owner-${person.id}`} name="owner_email" type="email" defaultValue={person.owner_email || actorEmail} />
+            </InputGroup>
+          </UiField>
         </div>
-      </section>
-      <section className="hr-card hr-profile-card" id="hr-profile-skills" key={`skills-${fieldsKey}`}>
-        <div className="hr-profile-card-head">
-          <h2>Skills{skillCount > 0 && <small> · {skillCount}</small>}</h2>
-          <p>Matched against project staffing requests</p>
-        </div>
+      </ProfileCard>
+      <ProfileCard id="hr-profile-skills" key={`skills-${fieldsKey}`} title={<>Skills{skillCount > 0 && <span className="num font-normal text-muted-foreground"> · {skillCount}</span>}</>} description="Matched against project staffing requests">
         <SkillListField name="skills" label="Add a skill" hideLabel value={person.skills} placeholder="Type a skill, then press Enter" />
-      </section>
-      <section className="hr-card hr-profile-card" id="hr-profile-credentials" key={`credentials-${fieldsKey}`}>
-        <div className="hr-profile-card-head">
-          <h2>Credentials</h2>
-          <p>Shown on client CVs. Highest qualifications first.</p>
-        </div>
-        <div className="hr-credentials">
-          <div className="hr-credential">
-            <h3>Languages</h3>
-            <p>Spoken and written level, as presented to clients</p>
-            <SkillListField name="languages" label="Add a language" hideLabel value={person.languages} placeholder="e.g. French — native" />
-          </div>
-          <div className="hr-credential">
-            <h3>Education</h3>
-            <p>Degree, school and year</p>
-            <SkillListField name="degrees" label="Add a degree" hideLabel value={person.degrees} placeholder="e.g. Master MIAGE — Dauphine" />
-          </div>
-          <div className="hr-credential">
-            <h3>Certifications</h3>
-            <p>Accreditations with year obtained</p>
-            <SkillListField name="certifications" label="Add a certification" hideLabel value={person.certifications} placeholder="e.g. PSM I — 2023" />
-          </div>
-        </div>
-      </section>
-      <section className="hr-card hr-profile-card" key={`notes-${fieldsKey}`}>
-        <div className="hr-profile-card-head">
-          <h2>Internal notes</h2>
-          <p>Visible to Quicksort staff only. Never exported.</p>
-        </div>
-        <dl className="hr-facts">
-          {facts.map(fact => <div key={fact.label}>
-            <dt>{fact.label}</dt>
-            <dd className={fact.mono ? 'is-mono' : ''}>{fact.value}</dd>
+      </ProfileCard>
+      <ProfileCard id="hr-profile-credentials" key={`credentials-${fieldsKey}`} title="Credentials" description="Shown on client CVs. Highest qualifications first.">
+        <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))]">
+          {[{
+            title: 'Languages',
+            hint: 'Spoken and written level, as presented to clients',
+            name: 'languages',
+            field: 'Add a language',
+            value: person.languages,
+            placeholder: 'e.g. French, native'
+          }, {
+            title: 'Education',
+            hint: 'Degree, school and year',
+            name: 'degrees',
+            field: 'Add a degree',
+            value: person.degrees,
+            placeholder: 'e.g. Master MIAGE, Dauphine'
+          }, {
+            title: 'Certifications',
+            hint: 'Accreditations with year obtained',
+            name: 'certifications',
+            field: 'Add a certification',
+            value: person.certifications,
+            placeholder: 'e.g. PSM I, 2023'
+          }].map(item => <div key={item.name} className="flex min-w-0 flex-col gap-1.5">
+            <h3 className="m-0 text-sm font-medium">{item.title}</h3>
+            <p className={cn(QUIET, 'mb-1 text-xs')}>{item.hint}</p>
+            <div className="mt-auto [&_[data-slot=field-description]]:hidden">
+              <SkillListField name={item.name} label={item.field} hideLabel value={item.value} placeholder={item.placeholder} />
+            </div>
           </div>)}
+        </div>
+      </ProfileCard>
+      <ProfileCard key={`notes-${fieldsKey}`} title="Internal notes" description="Visible to Quicksort staff only. Never exported.">
+        <dl className="m-0 grid gap-x-6 gap-y-4 rounded-lg border border-border bg-muted/30 p-4 [grid-template-columns:repeat(auto-fit,minmax(8rem,1fr))]">
+          {facts.map(fact => <Fact key={fact.label} term={fact.label} mono={fact.mono}>{fact.value}</Fact>)}
         </dl>
-        <Field name="notes" label="Notes" type="textarea" value={person.notes} hint="Context for staffing: preferences, constraints, feedback from clients" />
-        <label className="hr-checkbox hr-wide"><input type="checkbox" name="contact_allowed" defaultChecked={person.contact_allowed} />Contact permitted for future opportunities</label>
-      </section>
-      {error && <p role="alert" className="hr-error">
-        {error}
-      </p>}
-      <div className="hr-profile-save">
-        <span>{message || 'Edits are kept as a draft until you save'}</span>
-        <button type="button" className="hr-person-btn" disabled={busy || saving} onClick={() => {
+        <div className="grid">
+          <Field name="notes" label="Notes" type="textarea" value={person.notes} hint="Context for staffing: preferences, constraints, feedback from clients" />
+        </div>
+        <CheckField name="contact_allowed" defaultChecked={person.contact_allowed}>Contact permitted for future opportunities</CheckField>
+      </ProfileCard>
+      {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
+      <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background/95 p-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85">
+        <span className={cn(QUIET, 'min-w-0 flex-1 basis-48')} role="status">{message || 'Edits are kept as a draft until you save'}</span>
+        <Button type="button" variant="outline" disabled={busy || saving} onClick={() => {
           setFieldsKey(key => key + 1);
           setError('');
           setMessage('');
         }}>
           Discard
-        </button>
-        <button type="submit" className="hr-person-btn is-primary" disabled={busy || saving}>
+        </Button>
+        <Button type="submit" disabled={busy || saving}>
           {saving ? 'Saving…' : 'Save changes'}
-        </button>
+        </Button>
       </div>
     </form>
-    <aside className="hr-profile-aside">
-      <section className="hr-card hr-profile-card hr-health">
-        <div className="hr-profile-card-head hr-portal-head">
-          <h2>Profile completeness</h2>
-          <span className="hr-health-count">{missing.length ? `${missing.length} ${missing.length === 1 ? 'gap' : 'gaps'}` : 'Complete'}</span>
-        </div>
-        <div className="hr-health-bar" aria-hidden="true">
-          {Array.from({ length: segments }, (_, index) => <span key={index} className={index < litSegments ? 'is-lit' : ''} />)}
-        </div>
-        <p className="hr-health-note">{missing.length ? 'Filling these makes the profile ready to send as a client CV.' : 'Everything a client CV draws on is on file.'}</p>
-        {missing.length > 0 && <div className="hr-health-gaps">
-          {missing.map(gap => <div className="hr-health-gap" key={gap.label}>
-            <span>{gap.label}</span>
-            <button type="button" onClick={() => focusSection(gap.anchor)}>{gap.action}</button>
-          </div>)}
-        </div>}
-      </section>
-      <section className="hr-card hr-profile-card">
-        <div className="hr-profile-card-head">
-          <h2>At a glance</h2>
-        </div>
-        <div className="hr-glance">
-          {glance.map(item => <button type="button" key={item.label} className={`hr-glance-tile ${item.n === 0 ? 'is-zero' : ''}`} onClick={() => onNavigate(item.tab as PersonTab)}>
-            <strong>{item.n}</strong>
-            <span>{item.label}</span>
-          </button>)}
-        </div>
-      </section>
-      {employees.length > 0 && <section className="hr-card hr-profile-card">
-        <div className="hr-profile-card-head hr-portal-head">
-          <h2>Employment</h2>
-          <button type="button" className="hr-health-gap-link" onClick={() => onNavigate('employment')}>History</button>
-        </div>
-        <dl className="hr-kvs">
-          {employees.map(employee => <div className="hr-kv-group" key={employee.id}>
-            <div className="hr-kv"><dt>Matricule</dt><dd className="is-mono">{employee.matricule}</dd></div>
-            <div className="hr-kv"><dt>Role</dt><dd>{employee.role}</dd></div>
-            <div className="hr-kv"><dt>Entry date</dt><dd>{date(employee.start_date)}</dd></div>
-            <div className="hr-kv"><dt>Status</dt><dd>{label(employee.status)}{employee.end_date ? ` · to ${date(employee.end_date)}` : ''}</dd></div>
-          </div>)}
-        </dl>
-      </section>}
-      <section className="hr-card hr-profile-card" id="hr-profile-portal">
-        <div className="hr-profile-card-head hr-portal-head">
-          <h2>Portal account</h2>
-          <span className={`hr-portal-state ${account ? 'is-linked' : ''}`}>{account ? 'Linked' : 'Not linked'}</span>
-        </div>
-        {account ? <div className="hr-portal-linked">
-          <p>Profile ID <strong>{account.profile_id}</strong></p>
-          <p>Linked {date(account.linked_at)}</p>
-        </div> : <>
-          <p className="hr-portal-note">Linking an account gives {person.full_name.split(' ')[0] || 'this person'} access to their offers, documents and CRA tasks.</p>
-          <AccountLinker person={person} workspace={workspace} run={run} busy={busy} />
-        </>}
-      </section>
+    <aside className="flex min-w-0 flex-col gap-6">
+      <Card size="sm">
+        <CardHeader>
+          <CardHeading>Profile completeness</CardHeading>
+          <CardAction>
+            <Badge variant={missing.length ? 'outline' : 'success'}>{missing.length ? `${missing.length} ${missing.length === 1 ? 'gap' : 'gaps'}` : 'Complete'}</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="grid grid-cols-12 gap-[3px]" aria-hidden="true">
+            {Array.from({ length: segments }, (_, index) => <span key={index} className={cn('h-1.5 rounded-[2px]', index < litSegments ? 'bg-foreground' : 'bg-foreground/15')} />)}
+          </div>
+          <p className={QUIET}>{missing.length ? 'Filling these makes the profile ready to send as a client CV.' : 'Everything a client CV draws on is on file.'}</p>
+          {missing.length > 0 && <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
+            {missing.map(gap => <li className="flex items-center justify-between gap-2 py-1.5 text-sm" key={gap.label}>
+              <span>{gap.label}</span>
+              <Button type="button" variant="ghost" size="xs" onClick={() => focusSection(gap.anchor)}>{gap.action}</Button>
+            </li>)}
+          </ul>}
+        </CardContent>
+      </Card>
+      <Card size="sm">
+        <CardHeader>
+          <CardHeading>At a glance</CardHeading>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-2">
+            {glance.map(item => <button type="button" key={item.label} className={cn('flex cursor-pointer flex-col items-start gap-0.5 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:border-foreground/40 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', item.n === 0 && 'text-muted-foreground')} onClick={() => onNavigate(item.tab as PersonTab)}>
+              <strong className="num text-xl font-normal">{item.n}</strong>
+              <span className="text-xs text-muted-foreground">{item.label}</span>
+            </button>)}
+          </div>
+        </CardContent>
+      </Card>
+      {employees.length > 0 && <Card size="sm">
+        <CardHeader>
+          <CardHeading>Employment</CardHeading>
+          <CardAction>
+            <Button type="button" variant="ghost" size="xs" onClick={() => onNavigate('employment')}>History</Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col divide-y divide-border">
+            {employees.map(employee => <dl className="m-0 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 py-3 text-sm first:pt-0 last:pb-0" key={employee.id}>
+              <dt className="text-muted-foreground">Matricule</dt><dd className="num m-0">{employee.matricule}</dd>
+              <dt className="text-muted-foreground">Role</dt><dd className="m-0">{employee.role}</dd>
+              <dt className="text-muted-foreground">Entry date</dt><dd className="m-0">{date(employee.start_date)}</dd>
+              <dt className="text-muted-foreground">Status</dt><dd className="m-0">{label(employee.status)}{employee.end_date ? ` · to ${date(employee.end_date)}` : ''}</dd>
+            </dl>)}
+          </div>
+        </CardContent>
+      </Card>}
+      <Card size="sm" id="hr-profile-portal" className="scroll-mt-20">
+        <CardHeader>
+          <CardHeading>Portal account</CardHeading>
+          <CardAction>
+            <Badge variant={account ? 'success' : 'outline'}>{account ? 'Linked' : 'Not linked'}</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {account ? <div className="flex flex-col gap-1 text-sm">
+            <p className="m-0">Profile ID <strong className="num font-medium break-all">{account.profile_id}</strong></p>
+            <p className={QUIET}>Linked {date(account.linked_at)}</p>
+          </div> : <>
+            <p className={QUIET}>Linking an account gives {person.full_name.split(' ')[0] || 'this person'} access to their offers, documents and CRA tasks.</p>
+            <CreatePortalAccount person={person} role={employees.length ? 'employee' : 'candidate'} onCreated={reload} />
+            <p className={cn(QUIET, 'border-t border-border pt-4')}>Or link a sign-in they already made:</p>
+            <AccountLinker person={person} workspace={workspace} run={run} busy={busy} />
+          </>}
+        </CardContent>
+      </Card>
       <AiPanel person={person} workspace={workspace} run={run} reload={reload} kind="alumni_reconnect" />
     </aside>
   </div>;
@@ -412,6 +533,42 @@ const focusSection = (id: string) => {
   section.scrollIntoView({ behavior: 'smooth', block: 'center' });
   section.querySelector<HTMLElement>('input:not([type="hidden"]), textarea')?.focus({ preventScroll: true });
 };
+/** Creates the sign-in for this person from their record (email and name) and links it (api/accounts.ts). */
+function CreatePortalAccount({ person, role, onCreated }: { person: Person; role: 'employee' | 'candidate'; onCreated: () => unknown }) {
+  const { session } = useSession();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const email = (person.email ?? '').trim();
+  async function create() {
+    setSaving(true);
+    setError('');
+    try {
+      const token = await session?.getToken({ template: 'supabase' });
+      if (!token) throw new Error('Sign in again to create accounts.');
+      const response = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personId: person.id, role }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error || 'Could not create the account.');
+      await onCreated();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setSaving(false);
+    }
+  }
+  return <div className="flex flex-col items-start gap-2">
+    {email
+      ? <p className={QUIET}>Creates a sign-in for <strong className="font-medium text-foreground">{email}</strong> as {role === 'employee' ? 'an employee' : 'a candidate'}, named as on this record, and links it.</p>
+      : <p className={QUIET}>Add a work email to this profile to create their portal account.</p>}
+    <Button type="button" size="sm" disabled={!email || saving} onClick={() => void create()}>
+      {saving ? 'Creating…' : 'Create portal account →'}
+    </Button>
+    {error && <ErrorText>{error}</ErrorText>}
+  </div>;
+}
 function AccountLinker({ person, workspace, run, busy }: {
   person: Person; workspace: Workspace; run: RunCommand; busy: boolean;
 }) {
@@ -454,34 +611,35 @@ function AccountLinker({ person, workspace, run, busy }: {
       setSaving(false);
     }
   }
-  return <div className="hr-portal-linker">
-    {loading && <p role="status" className="hr-source-list">Loading portal accounts…</p>}
-    {loadError && <p role="alert" className="hr-error">{loadError}</p>}
+  return <div className="flex flex-col items-stretch gap-3">
+    {loading && <p role="status" className={QUIET}>Loading portal accounts…</p>}
+    {loadError && <ErrorText>{loadError}</ErrorText>}
     {!loading && !loadError && <>
-      <label className="hr-portal-search">
-        <Search size={16} aria-hidden="true" />
-        <span className="hr-visually-hidden">Find this person's account</span>
-        <input type="search" placeholder="Search by name or email" value={query} onChange={event => {
+      <InputGroup>
+        <InputGroupAddon>
+          <Search aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput type="search" aria-label="Find this person's account" placeholder="Search by name or email" value={query} onChange={event => {
           setQuery(event.target.value);
           setSelected('');
         }} />
-      </label>
-      {matches.length ? <div className="hr-portal-matches">
-        {matches.map(profile => <button type="button" key={profile.id} className="hr-portal-match" aria-pressed={selected === profile.id} onClick={() => setSelected(profile.id)}>
-          <span className="hr-portal-avatar" aria-hidden="true">{initials(profile.full_name || profile.email)}</span>
-          <span className="hr-portal-match-id">
-            <strong>{profile.full_name || 'Unnamed account'}</strong>
-            <small>{profile.email}</small>
+      </InputGroup>
+      {matches.length ? <div className="flex flex-col gap-1.5">
+        {matches.map(profile => <button type="button" key={profile.id} className={cn(CHOICE, 'gap-2.5 px-2.5 py-2')} aria-pressed={selected === profile.id} onClick={() => setSelected(profile.id)}>
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-semibold" aria-hidden="true">{initials(profile.full_name || profile.email)}</span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <strong className="truncate text-[13px] font-medium">{profile.full_name || 'Unnamed account'}</strong>
+            <small className="truncate text-xs text-muted-foreground">{profile.email}</small>
           </span>
-          <span className="hr-portal-match-action">{selected === profile.id ? 'Selected' : 'Select'}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{selected === profile.id ? 'Selected' : 'Select'}</span>
         </button>)}
-      </div> : <p className="hr-source-list">No available account matches. The person must sign in to create a portal account first.</p>}
-      <p className="hr-source-list">Linking grants this account access to the person's applications, offers and employment tasks.</p>
-      <button type="button" className="hr-portal-cta" disabled={!selected || busy || saving} onClick={() => void link()}>
+      </div> : <p className={QUIET}>No available account matches. The person must sign in to create a portal account first.</p>}
+      <p className={cn(QUIET, 'text-xs')}>Linking grants this account access to the person's applications, offers and employment tasks.</p>
+      <Button type="button" size="sm" variant="outline" className="self-start" disabled={!selected || busy || saving} onClick={() => void link()}>
         {saving ? 'Linking…' : 'Link account →'}
-      </button>
+      </Button>
     </>}
-    {error && <p role="alert" className="hr-error">{error}</p>}
+    {error && <ErrorText>{error}</ErrorText>}
   </div>;
 }
 
@@ -494,25 +652,7 @@ function Applications({
   context: RecordContext;
   initialId?: string | null;
 }) {
-  const {
-    workspace,
-    run,
-    busy
-  } = context;
-  const applications = workspace.applications.filter(application => application.person_id === person.id);
-  const [selected, setSelected] = useState(initialId ?? applications[0]?.id ?? '');
-  const current = applications.find(application => application.id === selected) ?? applications[0];
-  return <>
-    {current && <>
-      <label className="hr-field">
-        <span>Application history</span>
-        <select value={current.id} onChange={event => setSelected(event.target.value)}>
-          {applications.map(application => <option value={application.id} key={application.id}>{workspace.opportunities.find(opportunity => opportunity.id === application.opportunity_id)?.title ?? 'Hiring need'} · {label(application.status)} · {date(application.created_at)}</option>)}
-        </select>
-      </label>
-      <ApplicationDetail key={current.id} application={current} person={person} context={context} />
-    </>}
-  </>;
+  return <CandidateApplication person={person} context={context} initialId={initialId} records={application => <ApplicationDetail key={application.id} application={application} person={person} context={context} />} />;
 }
 export function Readiness({
   applicationId,
@@ -547,22 +687,55 @@ export function Readiness({
       cancelled = true;
     };
   }, [applicationId, stage, onLoaded]);
-  if (loading) return <p role="status">Checking prerequisites…</p>;
-  if (error) return <p role="alert" className="hr-error">
+  if (loading) return <p role="status" className={QUIET}>Checking prerequisites…</p>;
+  if (error) return <ErrorText>
     {error}
-  </p>;
-  if (!requirements.length) return <p className="hr-source-list">No additional prerequisites for this stage.</p>;
-  return <ul className="hr-requirements">
-    {requirements.map(requirement => <li key={requirement.key} className={requirement.done ? 'complete' : ''}>
-      {requirement.done ? <CheckCircle2 size={16} aria-hidden="true" /> : <Circle size={16} aria-hidden="true" />}
-      <span>
+  </ErrorText>;
+  if (!requirements.length) return <p className={QUIET}>No additional prerequisites for this stage.</p>;
+  return <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+    {requirements.map(requirement => <li key={requirement.key} className="flex items-start gap-2.5 text-sm">
+      {requirement.done ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" /> : <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+      <span className="flex flex-col">
         {requirement.label}
-        <small className="hr-source-list">
+        <small className="text-xs text-muted-foreground">
           {requirement.done ? ' Evidence recorded' : ' Evidence required'}
         </small>
       </span>
     </li>)}
   </ul>;
+}
+/** Read-only hire prerequisite for users who can't send contracts: is the contract signed in Youtrust? */
+function ContractSigned({ applicationId }: { applicationId: string }) {
+  const [signed, setSigned] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    void loadRequirements(applicationId, 'hire').then(items => {
+      if (!cancelled) setSigned(items.find(item => item.key === 'signatures')?.done ?? false);
+    }).catch(failure => {
+      if (!cancelled) setError(errorMessage(failure));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applicationId]);
+  if (error) return <ErrorText>{error}</ErrorText>;
+  if (signed === null) return <p role="status" className={QUIET}>Checking the signature…</p>;
+  return <p className="m-0 flex items-center gap-2.5 text-sm">
+    {signed ? <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" /> : <Circle className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+    <span>{signed ? 'Signed in Youtrust' : 'Not signed yet. An admin sends the contract from this page.'}</span>
+  </p>;
+}
+/** One record (interview, offer) inside an application section. */
+function RecordCard({ title, meta, badges, children }: { title: ReactNode; meta?: ReactNode; badges?: ReactNode; children?: ReactNode }) {
+  return <Card size="sm">
+    <CardHeader>
+      <CardHeading level={3} className="flex min-w-0 items-center gap-2">{title}</CardHeading>
+      {meta && <CardDescription>{meta}</CardDescription>}
+      {badges && <CardAction className="flex flex-wrap justify-end gap-1.5">{badges}</CardAction>}
+    </CardHeader>
+    {children && <CardContent className="flex flex-col gap-4 text-sm">{children}</CardContent>}
+  </Card>;
 }
 function ApplicationDetail({
   application,
@@ -582,76 +755,49 @@ function ApplicationDetail({
   const opportunity = workspace.opportunities.find(item => item.id === application.opportunity_id);
   const interviews = workspace.interviews.filter(interview => interview.application_id === application.id);
   const offers = workspace.offers.filter(offer => offer.application_id === application.id);
-  const contracts = workspace.contracts.filter(contract => contract.application_id === application.id);
   return <>
-    <div className="hr-card">
-      <div className="hr-card-head">
-        <div>
-          <h3>
-            {opportunity?.title ?? 'Hiring need'}
-          </h3>
-          <small>Application opened {date(application.created_at)} · {label(application.source)}</small>
-        </div>
-        <div className="hr-inline">
-          <Tag tone={application.status === 'active' ? 'good' : 'quiet'}>
-            {label(application.status)}
-          </Tag>
-          <Tag>
-            {label(application.stage)}
-          </Tag>
-        </div>
-      </div>
-      {application.reason && <p>
-        {application.reason}
-      </p>}
-    </div>
     <Section title="Interviews" detail="Scheduling records the interview. Calendar invitations are sent manually.">
       {!interviews.length && <Empty>No interview has been scheduled for this application.</Empty>}
-      {interviews.map(interview => <div key={interview.id} className="hr-card">
-        <div className="hr-card-head">
-          <div>
-            <h3>{label(interview.kind)} interview</h3>
-            <small>{new Date(interview.scheduled_at).toLocaleString()} · {interview.panel}</small>
-          </div>
-          <Tag>
-            {label(interview.status)}
-          </Tag>
-        </div>
-        <p>{interview.location || 'Location not set'} · Invitation {label(interview.invitation_status)}</p>
-        {interview.notes && <p>
+      {interviews.map(interview => <RecordCard key={interview.id} title={`${label(interview.kind)} interview`} meta={`${new Date(interview.scheduled_at).toLocaleString()} · ${interview.panel}`} badges={<Tag>
+          {label(interview.status)}
+        </Tag>}>
+        <p className="m-0">{interview.location || 'Location not set'} · Invitation {label(interview.invitation_status)}</p>
+        {interview.notes && <p className="m-0 text-muted-foreground">
           {interview.notes}
         </p>}
-        {interview.status === 'scheduled' && <details className="hr-disclosure">
-          <summary>Record interview outcome</summary>
-          <Form run={run} busy={busy} button="Complete interview" success="Interview and reviewed scorecard recorded." submit={data => ({
-            kind: 'complete_interview',
-            interview_id: interview.id,
-            expected_version: interview.version,
-            notes: text(data, 'notes'),
-            scorecard: ['Technical skills', 'Communication', 'Motivation'].map((competency, index) => ({
-              competency,
-              rating: number(data, `rating_${index}`),
-              evidence: text(data, `evidence_${index}`)
-            }))
-          })}>
-            {['Technical skills', 'Communication', 'Motivation'].map((competency, index) => <div className="hr-wide hr-fields" key={competency}>
-              <Field name={`rating_${index}`} label={`${competency} rating (1–5)`} type="number" min={1} max={5} required />
-              <Field name={`evidence_${index}`} label={`${competency} evidence`} required />
-            </div>)}
-            <Field name="notes" label="Interviewer notes" type="textarea" required />
-          </Form>
-          <Form run={run} busy={busy} button="Cancel interview" success="Interview cancelled." submit={data => ({
-            kind: 'cancel_interview',
-            interview_id: interview.id,
-            expected_version: interview.version,
-            rationale: text(data, 'rationale')
-          })}>
-            <Field name="rationale" label="Cancellation reason" required />
-          </Form>
-        </details>}
-      </div>)}
-      {application.status === 'active' && <details className="hr-disclosure">
-        <summary>Schedule an interview</summary>
+        {interview.status === 'scheduled' && <Disclosure summary="Record interview outcome">
+          <div className="flex flex-col gap-6">
+            <Form run={run} busy={busy} button="Complete interview" success="Interview and reviewed scorecard recorded." submit={data => ({
+              kind: 'complete_interview',
+              interview_id: interview.id,
+              expected_version: interview.version,
+              notes: text(data, 'notes'),
+              scorecard: ['Technical skills', 'Communication', 'Motivation'].map((competency, index) => ({
+                competency,
+                rating: number(data, `rating_${index}`),
+                evidence: text(data, `evidence_${index}`)
+              }))
+            })}>
+              {['Technical skills', 'Communication', 'Motivation'].map((competency, index) => <div className="col-span-full grid gap-4 @md:grid-cols-[10rem_minmax(0,1fr)]" key={competency}>
+                <Field name={`rating_${index}`} label={`${competency} rating (1-5)`} type="number" min={1} max={5} required />
+                <Field name={`evidence_${index}`} label={`${competency} evidence`} required />
+              </div>)}
+              <Field name="notes" label="Interviewer notes" type="textarea" required />
+            </Form>
+            <div className="border-t border-border pt-6">
+              <Form run={run} busy={busy} button="Cancel interview" success="Interview cancelled." submit={data => ({
+                kind: 'cancel_interview',
+                interview_id: interview.id,
+                expected_version: interview.version,
+                rationale: text(data, 'rationale')
+              })}>
+                <Field name="rationale" label="Cancellation reason" required />
+              </Form>
+            </div>
+          </div>
+        </Disclosure>}
+      </RecordCard>)}
+      {application.status === 'active' && <Disclosure summary="Schedule an interview">
         <Form run={run} busy={busy} button="Schedule interview" success="Interview recorded. Send the calendar invitation manually." submit={data => ({
           kind: 'schedule_interview',
           application_id: application.id,
@@ -665,30 +811,20 @@ function ApplicationDetail({
           <Field name="panel" label="Interview panel" required hint="Names or email addresses of the interviewers." />
           <Field name="location" label="Meeting link or location" />
         </Form>
-      </details>}
-      <div style={{
-        marginTop: 20
-      }}>
-        <AiPanel person={person} workspace={workspace} run={run} reload={reload} application={application} kind="interview_prep" />
-      </div>
+      </Disclosure>}
+      <AiPanel person={person} workspace={workspace} run={run} reload={reload} application={application} kind="interview_prep" />
     </Section>
     <Section title="Employment offers" detail="Compensation and margin use deterministic calculations. Approvals use your actual permissions.">
-      {offers.map(offer => <div key={offer.id} className="hr-card">
-        <div className="hr-card-head">
-          <h3>
-            {offer.title}
-          </h3>
-          <Tag tone={offer.status === 'accepted' ? 'good' : ''}>
-            {label(offer.status)}
-          </Tag>
+      {offers.map(offer => <RecordCard key={offer.id} title={offer.title} badges={<Tag tone={offer.status === 'accepted' ? 'good' : ''}>
+          {label(offer.status)}
+        </Tag>}>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 @xl:grid-cols-4">
+          <Stat size="sm"><StatValue className="group-data-[size=sm]/stat:text-xl">€{offer.salary_monthly.toLocaleString()}</StatValue><StatLabel>Monthly salary</StatLabel></Stat>
+          <Stat size="sm"><StatValue className="group-data-[size=sm]/stat:text-xl">€{offer.cjm}</StatValue><StatLabel>Daily cost</StatLabel></Stat>
+          <Stat size="sm"><StatValue className="group-data-[size=sm]/stat:text-xl">€{offer.target_tjm}</StatValue><StatLabel>Target daily rate</StatLabel></Stat>
+          <Stat size="sm"><StatValue className="group-data-[size=sm]/stat:text-xl">{offer.margin_pct.toFixed(1)}%</StatValue><StatLabel>Gross margin</StatLabel></Stat>
         </div>
-        <div className="hr-stat-line">
-          <div><small>Monthly salary</small>€{offer.salary_monthly.toLocaleString()}</div>
-          <div><small>Daily cost</small>€{offer.cjm}</div>
-          <div><small>Target daily rate</small>€{offer.target_tjm}</div>
-          <div><small>Gross margin</small>{offer.margin_pct.toFixed(1)}%</div>
-        </div>
-        <p>{offer.contract_type} · Valid until {date(offer.valid_until)} · Delivery {label(offer.delivery_status)}</p>
+        <p className={QUIET}>{offer.contract_type} · Valid until {date(offer.valid_until)} · Delivery {label(offer.delivery_status)}</p>
         {['pending_approval', 'pending_direction'].includes(offer.status) && (offer.status !== 'pending_direction' || workspace.capabilities.approve_direction) && <Form run={run} busy={busy} button={offer.status === 'pending_direction' ? 'Record direction approval' : 'Approve offer'} success="Offer approval recorded." submit={data => ({
           kind: 'approve_offer',
           offer_id: offer.id,
@@ -697,7 +833,7 @@ function ApplicationDetail({
         })}>
           <Field name="note" label="Approval rationale" required />
         </Form>}
-        {offer.status === 'pending_direction' && !workspace.capabilities.approve_direction && <p>Awaiting direction approval from an administrator.</p>}
+        {offer.status === 'pending_direction' && !workspace.capabilities.approve_direction && <p className={QUIET}>Awaiting direction approval from an administrator.</p>}
         {offer.status === 'approved' && <Action run={run} disabled={busy} input={{
           kind: 'share_offer',
           offer_id: offer.id,
@@ -713,11 +849,10 @@ function ApplicationDetail({
           <Field name="response" label="Candidate response" options={options(['accepted', 'declined'])} required />
           <Field name="rationale" label="Response evidence" type="textarea" required hint="Record when and how the candidate responded." />
         </Form>}
-      </div>)}
+      </RecordCard>)}
       {!offers.length && <Empty>No employment offer yet.</Empty>}
-      {application.status === 'active' && application.stage !== 'decision' && <p className="hr-source-list">Complete the interview evidence and move to Decision before drafting an employment offer.</p>}
-      {application.status === 'active' && application.stage === 'decision' && <details className="hr-disclosure">
-        <summary>Draft an employment offer</summary>
+      {application.status === 'active' && application.stage !== 'decision' && <p className={QUIET}>Complete the interview evidence and move to Decision before drafting an employment offer.</p>}
+      {application.status === 'active' && application.stage === 'decision' && <Disclosure summary="Draft an employment offer">
         <Form run={run} busy={busy} button="Create offer draft" success="Offer drafted for approval." submit={data => ({
           kind: 'create_offer',
           application_id: application.id,
@@ -735,60 +870,43 @@ function ApplicationDetail({
           <Field name="target_tjm" label="Target daily rate (€)" type="number" min={1} step="0.01" value={opportunity?.target_tjm} required />
           <Field name="valid_until" label="Valid until" type="date" />
         </Form>
-      </details>}
+      </Disclosure>}
     </Section>
-    <Section title="Contracts" detail="Hiring requires the accepted offer and signatures linked to this application.">
-      {contracts.map(contract => {
-        const signature = workspace.signatures.find(item => item.contract_id === contract.id);
-        const counter = workspace.countersignatures.find(item => item.contract_id === contract.id);
-        return <div className="hr-card" key={contract.id}>
-          <div className="hr-card-head">
-            <div className="hr-inline">
-              <FileText size={18} aria-hidden="true" />
-              <h3>
-                {contract.title}
-              </h3>
-            </div>
-            <Tag tone={signature && counter ? 'good' : 'quiet'}>
-              {signature && counter ? 'Both signatures recorded' : 'Awaiting signatures'}
-            </Tag>
-          </div>
-          <p>Candidate: {signature ? `${signature.signer_name}, ${date(signature.signed_at)}` : 'Pending'} · Employer: {counter ? `${counter.signer_name}, ${date(counter.signed_at)}` : 'Pending'}</p>
-          {!counter && <Form run={run} busy={busy} button="Countersign as employer" success="Employer countersignature recorded." submit={data => ({
-            kind: 'countersign_contract',
-            contract_id: contract.id,
-            signer_name: text(data, 'signer_name')
-          })}>
-            <Field name="signer_name" label="Employer signer's full name" required />
-          </Form>}
-        </div>;
-      })}
-      {!contracts.length && <Empty>No contract is linked to this application.</Empty>}
-      <p>
-        <a href={`/hr/contracts?person=${encodeURIComponent(person.id)}&application=${encodeURIComponent(application.id)}`}>Share a contract for this application</a>
-      </p>
+    <Section title="Contract signature" detail="The hiring contract for this application. Once signed in Youtrust, the person can be hired.">
+      {workspace.capabilities.admin
+        ? <PersonSignatures personId={person.id} person={{ name: person.full_name, email: person.email }} applicationId={application.id} />
+        : <ContractSigned key={`signed-${workspace.events.length}`} applicationId={application.id} />}
     </Section>
     {application.status === 'active' && <Section title="Hire and start preboarding" detail="The person keeps all prior applications and employment periods.">
-      <div className="hr-two-column">
-        <div className="hr-card">
-          <Readiness key={`hire-${workspace.events.length}-${workspace.signatures.length}-${workspace.countersignatures.length}`} applicationId={application.id} stage="hire" />
-        </div>
-        <Form run={run} busy={busy} button="Confirm hire" success="Hire recorded and preboarding plan created." submit={data => ({
-          kind: 'hire',
-          application_id: application.id,
-          expected_version: application.version,
-          start_date: text(data, 'start_date'),
-          role: text(data, 'role'),
-          manager_email: text(data, 'manager_email'),
-          parrain: text(data, 'parrain'),
-          probation_end: nullable(data, 'probation_end')
-        })}>
-          <Field name="role" label="Employment role" value={opportunity?.title ?? person.headline} required />
-          <Field name="start_date" label="Start date" type="date" required />
-          <Field name="manager_email" label="Manager email" type="email" />
-          <Field name="parrain" label="Buddy" />
-          <Field name="probation_end" label="Probation end date" type="date" />
-        </Form>
+      <div className="grid items-start gap-4 @3xl:grid-cols-[16rem_minmax(0,1fr)]">
+        <Card size="sm">
+          <CardHeader>
+            <CardHeading level={3}>Prerequisites</CardHeading>
+          </CardHeader>
+          <CardContent>
+            <Readiness key={`hire-${workspace.events.length}`} applicationId={application.id} stage="hire" />
+          </CardContent>
+        </Card>
+        <Card size="sm">
+          <CardContent>
+            <Form run={run} busy={busy} button="Confirm hire" success="Hire recorded and preboarding plan created." submit={data => ({
+              kind: 'hire',
+              application_id: application.id,
+              expected_version: application.version,
+              start_date: text(data, 'start_date'),
+              role: text(data, 'role'),
+              manager_email: text(data, 'manager_email'),
+              parrain: text(data, 'parrain'),
+              probation_end: nullable(data, 'probation_end')
+            })}>
+              <Field name="role" label="Employment role" value={opportunity?.title ?? person.headline} required />
+              <Field name="start_date" label="Start date" type="date" required />
+              <Field name="manager_email" label="Manager email" type="email" />
+              <Field name="parrain" label="Buddy" />
+              <Field name="probation_end" label="Probation end date" type="date" />
+            </Form>
+          </CardContent>
+        </Card>
       </div>
     </Section>}
   </>;
@@ -830,36 +948,35 @@ function EngageDirectly({
     busy
   } = context;
   if (!workspace.capabilities.recruit) return null;
-  return <details className="hr-disclosure">
-    <summary>Engage directly — no application</summary>
-    <p className="hr-source-list">For people hired outside the pipeline (freelancers, direct contracts). Skips offers and contracts — an optional rationale is recorded as audit evidence.</p>
-    <Form run={run} busy={busy} button="Record engagement" success="Engagement recorded. The person can be staffed on projects right away." submit={data => {
-      const contractType = text(data, 'contract_type');
-      const dailyRateText = text(data, 'daily_rate');
-      return {
-        kind: 'engage_person' as const,
-        person_id: person.id,
-        role: text(data, 'role'),
-        contract_type: contractType,
-        start_date: text(data, 'start_date'),
-        manager_email: text(data, 'manager_email'),
-        rationale: text(data, 'rationale'),
-        ...(contractType === 'Freelance' && dailyRateText ? { daily_rate: Number(dailyRateText) } : {})
-      };
-    }}>
-      <Field name="role" label="Engagement role" value={person.headline} required />
-      <Field name="contract_type" label="Contract type" value="Freelance" options={options(['Freelance', 'CDI', 'CDD', 'Internship', 'Apprenticeship'])} required />
-      <Field name="daily_rate" label="Daily rate — TJM (€/day)" type="number" min={0} step="0.01" hint="Freelance only: recorded as the first daily-rate entry in the compensation history." />
-      <Field name="start_date" label="Start date" type="date" value={today()} required />
-      <Field name="manager_email" label="Manager email" type="email" />
-      <Field name="rationale" label="Engagement rationale" type="textarea" hint="Optional — why this person is engaged without the application pipeline." />
-    </Form>
-  </details>;
+  return <Disclosure summary="Engage directly (no application)">
+    <div className="flex flex-col gap-4">
+      <p className={QUIET}>For people hired outside the pipeline (freelancers, direct contracts). Skips offers and contracts. An optional rationale is recorded as audit evidence.</p>
+      <Form run={run} busy={busy} button="Record engagement" success="Engagement recorded. The person can be staffed on projects right away." submit={data => {
+        const contractType = text(data, 'contract_type');
+        const dailyRateText = text(data, 'daily_rate');
+        return {
+          kind: 'engage_person' as const,
+          person_id: person.id,
+          role: text(data, 'role'),
+          contract_type: contractType,
+          start_date: text(data, 'start_date'),
+          manager_email: text(data, 'manager_email'),
+          rationale: text(data, 'rationale'),
+          ...(contractType === 'Freelance' && dailyRateText ? { daily_rate: Number(dailyRateText) } : {})
+        };
+      }}>
+        <Field name="role" label="Engagement role" value={person.headline} required />
+        <Field name="contract_type" label="Contract type" value="Freelance" options={options(['Freelance', 'CDI', 'CDD', 'Internship', 'Apprenticeship'])} required />
+        <Field name="daily_rate" label="Daily rate (TJM, €/day)" type="number" min={0} step="0.01" hint="Freelance only: recorded as the first daily-rate entry in the compensation history." />
+        <Field name="start_date" label="Start date" type="date" value={today()} required />
+        <Field name="manager_email" label="Manager email" type="email" />
+        <Field name="rationale" label="Engagement rationale" type="textarea" hint="Optional. Why this person is engaged without the application pipeline." />
+      </Form>
+    </div>
+  </Disclosure>;
 }
-/** Rail-and-body section used across the Employment tab. Design reference:
-   Employee · Employment (minimal) — a 240px rail carries the section title
-   and a one-line rationale, hairlines separate sections, and the content
-   sits borderless on the right. */
+/** One Employment-tab section: a card whose header carries the section title,
+   its one-line rationale and any side controls (period picker, notes). */
 function EmpSection({
   title,
   detail,
@@ -871,16 +988,16 @@ function EmpSection({
   rail?: ReactNode;
   children: ReactNode;
 }) {
-  return <section className="hr-emp-section">
-    <div className="hr-emp-side">
-      <h2>{title}</h2>
-      {detail && <p>{detail}</p>}
-      {rail}
-    </div>
-    <div className="hr-emp-body">{children}</div>
-  </section>;
+  return <Card>
+    <CardHeader>
+      <CardHeading>{title}</CardHeading>
+      {detail && <CardDescription className="max-w-prose">{detail}</CardDescription>}
+      {rail && <CardAction className="max-w-[16rem]">{rail}</CardAction>}
+    </CardHeader>
+    <CardContent className="flex min-w-0 flex-col gap-4">{children}</CardContent>
+  </Card>;
 }
-/** Compact journey-task composer — one rounded bar (title, phase, due date,
+/** Compact journey-task composer — one row (title, phase, due date,
    Add) instead of the full field grid. The owner defaults to the signed-in
    recruiter and new tasks are required, matching journey enforcement. */
 function TaskComposer({
@@ -924,23 +1041,36 @@ function TaskComposer({
       setSaving(false);
     }
   }
-  return <div>
-    <form className="hr-emp-composer" onSubmit={event => void onSubmit(event)}>
-      <input name="title" placeholder="Add a task…" aria-label="New task" required maxLength={300} className="hr-emp-composer-input" />
-      <select name="phase" defaultValue="onboarding" aria-label="Phase" className="hr-emp-composer-select">
-        {(['preboarding', 'onboarding', 'probation'] as const).map(phase => <option key={phase} value={phase}>
+  return <div className="flex flex-col gap-1.5">
+    <form className="flex flex-wrap items-center gap-2" onSubmit={event => void onSubmit(event)}>
+      <Input name="title" placeholder="Add a task…" aria-label="New task" required maxLength={300} className="min-w-48 flex-[1_1_14rem]" />
+      <NativeSelect name="phase" defaultValue="onboarding" aria-label="Phase">
+        {(['preboarding', 'onboarding', 'probation'] as const).map(phase => <NativeSelectOption key={phase} value={phase}>
           {label(phase)}
-        </option>)}
-      </select>
-      <input name="due_date" type="date" aria-label="Due date" className="hr-emp-composer-date" />
-      <button type="submit" className="hr-emp-add" disabled={busy || saving}>
+        </NativeSelectOption>)}
+      </NativeSelect>
+      <Input name="due_date" type="date" aria-label="Due date" className="w-auto" />
+      <Button type="submit" disabled={busy || saving}>
         {saving ? 'Adding…' : 'Add'}
-      </button>
+      </Button>
     </form>
-    <p className="hr-source-list">Owner: {actorEmail} · Required</p>
-    {error && <p role="alert" className="hr-error">
+    <p className={cn(QUIET, 'text-xs')}>Owner: {actorEmail} · Required</p>
+    {error && <ErrorText>
       {error}
-    </p>}
+    </ErrorText>}
+  </div>;
+}
+/** Round completion check at the start of a task row. */
+function TaskCheck({ done, ...props }: { done: boolean } & React.ComponentProps<'button'>) {
+  return <button type="button" className={cn('grid size-[22px] shrink-0 cursor-pointer place-items-center rounded-full border p-0 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-default', done ? 'border-foreground bg-foreground text-background' : 'border-input text-transparent enabled:hover:border-foreground enabled:hover:text-foreground')} {...props}>
+    <Check className="size-3" aria-hidden="true" />
+  </button>;
+}
+/** Empty line inside an Employment section, with an optional action. */
+function EmpEmpty({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+    <span>{children}</span>
+    {action}
   </div>;
 }
 export function EmploymentDetail({
@@ -970,6 +1100,8 @@ export function EmploymentDetail({
   const ended = employee.status === 'ended';
   const canEdit = !ended && workspace.capabilities.recruit;
   const [editingPeople, setEditingPeople] = useState(false);
+  const [editingContract, setEditingContract] = useState(false);
+  const [editingNationality, setEditingNationality] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState('');
   const [editingTaskId, setEditingTaskId] = useState('');
   const [recordingReviewId, setRecordingReviewId] = useState('');
@@ -979,64 +1111,50 @@ export function EmploymentDetail({
   const [startingExit, setStartingExit] = useState(false);
   const [cancellingHire, setCancellingHire] = useState(false);
   const completeCount = tasks.filter(task => task.completed_at).length;
-  const periodRail = periods && onSelectPeriod ? <label className="hr-field hr-emp-period">
-    <span>Period</span>
-    <select value={employee.id} onChange={event => onSelectPeriod(event.target.value)} aria-label="Employment period">
-      {periods.map(period => <option value={period.id} key={period.id}>
-        {date(period.start_date)} – {period.end_date ? date(period.end_date) : 'present'}
-      </option>)}
-    </select>
-  </label> : undefined;
-  const managerBuddy = (value: string, emptyLabel: string) => value ? <span className="hr-emp-value">
+  const periodRail = periods && onSelectPeriod ? <UiField className="gap-1">
+    <FieldLabel htmlFor={`period-${employee.id}`} className="text-xs font-normal text-muted-foreground">Period</FieldLabel>
+    <NativeSelect id={`period-${employee.id}`} size="sm" value={employee.id} onChange={event => onSelectPeriod(event.target.value)} aria-label="Employment period">
+      {periods.map(period => <NativeSelectOption value={period.id} key={period.id}>
+        {date(period.start_date)} to {period.end_date ? date(period.end_date) : 'present'}
+      </NativeSelectOption>)}
+    </NativeSelect>
+  </UiField> : undefined;
+  const change = (onClick: () => void) => canEdit && <Button type="button" variant="ghost" size="xs" onClick={onClick}>
+    Change
+  </Button>;
+  const assign = (onClick: () => void, caption: string) => <Button type="button" variant="outline" size="xs" onClick={onClick}>
+    <Plus data-icon="inline-start" aria-hidden="true" />
+    {caption}
+  </Button>;
+  const managerBuddy = (value: string, emptyLabel: string) => value ? <span className="inline-flex flex-wrap items-center gap-1.5">
       {value}
-      {canEdit && <button type="button" className="hr-emp-mini" onClick={() => setEditingPeople(open => !open)}>
-        Change
-      </button>}
-    </span> : canEdit ? <button type="button" className="hr-emp-assign" onClick={() => setEditingPeople(open => !open)}>
-      <Plus size={13} aria-hidden="true" />
-      {emptyLabel}
-    </button> : 'Not set';
+      {change(() => setEditingPeople(open => !open))}
+    </span> : canEdit ? assign(() => setEditingPeople(open => !open), emptyLabel) : 'Not set';
   return <>
     <EmpSection title="Employment" rail={periodRail}>
-      <dl className="hr-emp-facts">
-        <div>
-          <dt>Status</dt>
-          <dd>
-            <Tag tone={ended ? 'quiet' : 'good'}>
-              {label(employee.status)}
-            </Tag>
-          </dd>
-        </div>
-        <div>
-          <dt>Matricule</dt>
-          <dd>{employee.matricule}</dd>
-        </div>
-        <div>
-          <dt>Contract</dt>
-          <dd>{employee.contract_type ? label(employee.contract_type) : 'Not recorded'}</dd>
-        </div>
-        <div>
-          <dt>Entry date</dt>
-          <dd>{date(employee.start_date)}</dd>
-        </div>
-        <div>
-          <dt>Onboarding</dt>
-          <dd>{employee.onboarding_completed_at ? `Completed ${date(employee.onboarding_completed_at)}` : employee.status === 'preboarding' ? 'Not started' : 'In progress'}</dd>
-        </div>
-        <div>
-          <dt>Probation</dt>
-          <dd>{employee.probation_end ? `${label(employee.probation_status)} · ${date(employee.probation_end)}` : label(employee.probation_status)}</dd>
-        </div>
-        <div>
-          <dt>Manager</dt>
-          <dd>{managerBuddy(employee.manager_email, 'Assign manager')}</dd>
-        </div>
-        <div>
-          <dt>Buddy</dt>
-          <dd>{managerBuddy(employee.parrain, 'Assign buddy')}</dd>
-        </div>
+      <dl className="m-0 grid gap-x-6 gap-y-5 [grid-template-columns:repeat(auto-fill,minmax(11rem,1fr))]">
+        <Fact term="Status">
+          <Tag tone={ended ? 'quiet' : 'good'}>
+            {label(employee.status)}
+          </Tag>
+        </Fact>
+        <Fact term="Matricule" mono>{workspace.capabilities.recruit ? <MatriculeEdit key={employee.id + employee.matricule} employeeId={employee.id} current={employee.matricule} onSaved={reload} /> : employee.matricule}</Fact>
+        <Fact term="Contract">{employee.contract_type ? <span className="inline-flex flex-wrap items-center gap-1.5">
+            {label(employee.contract_type)}
+            {change(() => setEditingContract(open => !open))}
+          </span> : canEdit ? assign(() => setEditingContract(open => !open), 'Set contract') : 'Not recorded'}</Fact>
+        <Fact term="Nationality">{employee.nationality ? <span className="inline-flex flex-wrap items-center gap-1.5">
+            {countryName(employee.nationality)}
+            {needsResidencePermit(employee.nationality) && <Tag>Titre de séjour required</Tag>}
+            {change(() => setEditingNationality(open => !open))}
+          </span> : canEdit ? assign(() => setEditingNationality(open => !open), 'Set nationality') : 'Not recorded'}</Fact>
+        <Fact term="Entry date">{date(employee.start_date)}</Fact>
+        <Fact term="Onboarding">{employee.onboarding_completed_at ? `Completed ${date(employee.onboarding_completed_at)}` : employee.status === 'preboarding' ? 'Not started' : 'In progress'}</Fact>
+        <Fact term="Probation">{employee.probation_end ? `${label(employee.probation_status)} · ${date(employee.probation_end)}` : label(employee.probation_status)}</Fact>
+        <Fact term="Manager">{managerBuddy(employee.manager_email, 'Assign manager')}</Fact>
+        <Fact term="Buddy">{managerBuddy(employee.parrain, 'Assign buddy')}</Fact>
       </dl>
-      {!ended && <div className="hr-emp-actions">
+      {!ended && <div className="flex flex-wrap items-start gap-2 border-t border-border pt-4">
         {employee.status === 'preboarding' && <Action run={run} disabled={busy} input={{
           kind: 'start_onboarding',
           employee_id: employee.id,
@@ -1047,11 +1165,11 @@ export function EmploymentDetail({
           employee_id: employee.id,
           expected_version: employee.version
         }} success="Onboarding completed. Probation remains a separate decision.">Complete onboarding</Action>}
-        {employee.status === 'preboarding' && <button type="button" className="hr-emp-ghost plain" onClick={() => setCancellingHire(open => !open)}>
-          Cancel hire — candidate renounced
-        </button>}
+        {employee.status === 'preboarding' && <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => setCancellingHire(open => !open)}>
+          Cancel hire (candidate renounced)
+        </Button>}
       </div>}
-      {editingPeople && canEdit && <Form run={run} busy={busy} button="Save manager and buddy" success="Manager and buddy updated." submit={data => ({
+      {editingPeople && canEdit && <div className={ROW_FORM}><Form run={run} busy={busy} button="Save manager and buddy" success="Manager and buddy updated." submit={data => ({
         kind: 'update_employment',
         employee_id: employee.id,
         expected_version: employee.version,
@@ -1060,41 +1178,83 @@ export function EmploymentDetail({
       })}>
         <Field name="manager_email" label="Manager email" type="email" value={employee.manager_email} />
         <Field name="parrain" label="Buddy" value={employee.parrain} />
-      </Form>}
-      {cancellingHire && employee.status === 'preboarding' && <Form run={run} busy={busy} title="Cancel hire" button="Cancel hire" success="Hire cancelled. Employment closed, application withdrawn and commitments released." submit={data => ({
+      </Form></div>}
+      {editingContract && canEdit && <div className={ROW_FORM}><Form run={run} busy={busy} button="Save contract" success="Contract type updated." submit={data => ({
+        kind: 'update_employment',
+        employee_id: employee.id,
+        expected_version: employee.version,
+        contract_type: text(data, 'contract_type')
+      })}>
+        <Field name="contract_type" label="Contract type" value={employee.contract_type || 'CDI'} options={options(['CDI', 'CDD', 'Freelance', 'Internship', 'Apprenticeship'])} required />
+      </Form></div>}
+      {editingNationality && canEdit && <div className={ROW_FORM}><Form run={run} busy={busy} button="Save nationality" success="Nationality updated." submit={data => ({
+        kind: 'update_employment',
+        employee_id: employee.id,
+        expected_version: employee.version,
+        nationality: text(data, 'nationality')
+      })}>
+        <SearchField name="nationality" label="Nationality" value={employee.nationality} options={countryOptions} placeholder="Search a country…" hint="Outside the EU, EEA and Switzerland, a titre de séjour becomes a required document." />
+      </Form></div>}
+      {cancellingHire && employee.status === 'preboarding' && <div className={ROW_FORM}><Form run={run} busy={busy} title="Cancel hire" button="Cancel hire" success="Hire cancelled. Employment closed, application withdrawn and commitments released." submit={data => ({
         kind: 'cancel_hire',
         employee_id: employee.id,
         expected_version: employee.version,
         rationale: text(data, 'rationale')
       })}>
         <Field name="rationale" label="Renunciation rationale" type="textarea" required />
-      </Form>}
+      </Form></div>}
     </EmpSection>
-    <EmpSection title={freelance ? 'Daily rate (TJM)' : 'Salary'} detail={freelance ? 'Dated daily-rate history. A new entry closes the previous one the day before it starts; freelance engagements and hires seed the first entry.' : 'Dated monthly salary history. A new entry closes the previous one the day before it starts; hiring seeds the first entry from the accepted offer.'}>
-      {!salaries.length && <div className="hr-emp-empty">
-        <span>{freelance ? 'No daily rate recorded' : 'No salary recorded'}</span>
+    {workspace.capabilities.recruit && <EmpSection title="Documents" detail={ended
+      ? 'Documents kept from this employment. Nothing is required any more.'
+      : `Required for ${employee.contract_type ? label(employee.contract_type) : 'this employment'}${needsResidencePermit(employee.nationality) ? ' and a non-EU nationality' : ''}. Identity and social-security files are stored in the HR-only Drive folder.`}>
+      {!ended && <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5"><Lock className="size-3.5" aria-hidden="true" /> Visible to the employee, HR and admins</span>
+        <span className="inline-flex items-center gap-1.5"><Eye className="size-3.5" aria-hidden="true" /> Every view and download is logged</span>
       </div>}
-      {!!salaries.length && <ul className="hr-emp-tasks">
+      <DocumentsPanel
+        owner={{ kind: 'person', id: employee.person_id }}
+        title=""
+        requirements={ended ? [] : [employee.contract_type, ...(needsResidencePermit(employee.nationality) ? ['non_eu'] : [])].filter(Boolean)}
+        excludeTypeCodes={[...(freelance ? [] : COMPANY_DOC_TYPES), 'PAYSLIP']}
+        hideFiledTypeCodes={['PAYSLIP']}
+      />
+    </EmpSection>}
+    {workspace.capabilities.admin && <EmpSection title="Contracts & signatures" detail="Contracts sent for e-signature through Youtrust. Signed copies are filed in Documents.">
+      <PersonSignatures personId={employee.person_id} person={{ name: person.full_name, email: person.email }} />
+    </EmpSection>}
+    {workspace.capabilities.recruit && !freelance && <EmpSection title="Payslips" detail="Silae payslips filed for this person, newest first.">
+      <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
+        <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden="true" />
+        <div className="flex flex-col gap-0.5">
+          <strong className="text-sm font-medium">Visible to the employee, HR and admins</strong>
+          <span className="text-[13px] text-muted-foreground">Every view and download is logged against your name.</span>
+        </div>
+      </div>
+      <PersonPayslips personId={employee.person_id} personName={person.full_name} onChanged={reload} />
+    </EmpSection>}
+    <EmpSection title={freelance ? 'Daily rate (TJM)' : 'Salary'} detail={freelance ? 'Dated daily-rate history. A new entry closes the previous one the day before it starts; freelance engagements and hires seed the first entry.' : 'Dated monthly salary history. A new entry closes the previous one the day before it starts; hiring seeds the first entry from the accepted offer.'}>
+      {!salaries.length && <EmpEmpty>{freelance ? 'No daily rate recorded' : 'No salary recorded'}</EmpEmpty>}
+      {!!salaries.length && <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
         {salaries.map(entry => {
           const editing = editingSalaryId === entry.id;
-          return <li key={entry.id} className="hr-emp-task">
-            <div className="hr-emp-task-main">
-              <span className="hr-emp-task-title">
+          return <li key={entry.id} className={ROW}>
+            <div className={ROW_MAIN}>
+              <span className={cn(ROW_TITLE, 'num')}>
                 €{(entry.rate_kind === 'daily' ? entry.daily_rate : entry.salary_monthly)?.toLocaleString()} / {entry.rate_kind === 'daily' ? 'day' : 'month'}
               </span>
-              <span className="hr-emp-task-meta">
-                {date(entry.start_date)} – {entry.end_date ? date(entry.end_date) : 'ongoing'}
+              <span className={ROW_META}>
+                {date(entry.start_date)} to {entry.end_date ? date(entry.end_date) : 'ongoing'}
                 {entry.rationale ? ` · ${entry.rationale}` : ''}
               </span>
             </div>
             {!entry.end_date && <Tag tone="good">Current</Tag>}
-            {canEdit && <button type="button" className="hr-emp-mini" onClick={() => {
+            {canEdit && <Button type="button" variant="ghost" size="xs" onClick={() => {
               setEditingSalaryId(editing ? '' : entry.id);
               setAddingSalary(false);
             }}>
               {editing ? 'Close' : 'Edit'}
-            </button>}
-            {editing && canEdit && <div className="hr-emp-task-form">
+            </Button>}
+            {editing && canEdit && <div className={ROW_FORM}>
               <Form run={run} busy={busy} button="Save entry" success="Entry updated." submit={data => ({
                 kind: 'save_salary',
                 employee_id: employee.id,
@@ -1107,7 +1267,7 @@ export function EmploymentDetail({
                 end_date: nullable(data, 'end_date'),
                 rationale: text(data, 'rationale')
               })}>
-                <Field name={entry.rate_kind === 'daily' ? 'daily_rate' : 'salary_monthly'} label={entry.rate_kind === 'daily' ? 'Daily rate — TJM (€)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" value={(entry.rate_kind === 'daily' ? entry.daily_rate : entry.salary_monthly) ?? undefined} required />
+                <Field name={entry.rate_kind === 'daily' ? 'daily_rate' : 'salary_monthly'} label={entry.rate_kind === 'daily' ? 'Daily rate (TJM, €)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" value={(entry.rate_kind === 'daily' ? entry.daily_rate : entry.salary_monthly) ?? undefined} required />
                 <Field name="start_date" label="Effective from" type="date" value={entry.start_date} required />
                 <Field name="end_date" label="Effective until (empty = ongoing)" type="date" value={entry.end_date} />
                 <Field name="rationale" label="Change rationale" type="textarea" required />
@@ -1116,14 +1276,11 @@ export function EmploymentDetail({
           </li>;
         })}
       </ul>}
-      {canEdit && !addingSalary && <button type="button" className="hr-emp-assign" onClick={() => {
+      {canEdit && !addingSalary && <div>{assign(() => {
         setAddingSalary(true);
         setEditingSalaryId('');
-      }}>
-        <Plus size={13} aria-hidden="true" />
-        {freelance ? 'Record rate change' : 'Record salary change'}
-      </button>}
-      {canEdit && addingSalary && <Form run={run} busy={busy} button="Record change" success="Change recorded." submit={data => ({
+      }, freelance ? 'Record rate change' : 'Record salary change')}</div>}
+      {canEdit && addingSalary && <div className={ROW_FORM}><Form run={run} busy={busy} button="Record change" success="Change recorded." submit={data => ({
         kind: 'save_salary',
         employee_id: employee.id,
         rate_kind: freelance ? 'daily' : 'monthly',
@@ -1132,50 +1289,48 @@ export function EmploymentDetail({
         start_date: text(data, 'start_date'),
         rationale: text(data, 'rationale')
       })}>
-        <Field name={freelance ? 'daily_rate' : 'salary_monthly'} label={freelance ? 'Daily rate — TJM (€)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" required />
+        <Field name={freelance ? 'daily_rate' : 'salary_monthly'} label={freelance ? 'Daily rate (TJM, €)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" required />
         <Field name="start_date" label="Effective from" type="date" value={today()} required />
-        <Field name="rationale" label="Rationale" type="textarea" hint="Raise, correction, indexation — recorded as audit evidence." />
-      </Form>}
+        <Field name="rationale" label="Rationale" type="textarea" hint="Raise, correction, indexation. Recorded as audit evidence." />
+      </Form></div>}
     </EmpSection>
     <EmpSection title="Journey checklist" detail={tasks.length ? `${completeCount} of ${tasks.length} complete. Required tasks are enforced when the journey closes.` : 'Required tasks are enforced when the journey closes.'}>
-      {!tasks.length && <div className="hr-emp-empty">
-        <span>No tasks yet</span>
-      </div>}
-      {!!tasks.length && <ul className="hr-emp-tasks">
+      {!tasks.length && <EmpEmpty>No tasks yet</EmpEmpty>}
+      {!!tasks.length && <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
         {tasks.map(task => {
           const overdue = !task.completed_at && !!task.due_date && task.due_date < today();
           const completing = completingTaskId === task.id;
           const editing = editingTaskId === task.id;
-          return <li key={task.id} className={`hr-emp-task ${task.completed_at ? 'is-done' : ''}`}>
-            <button type="button" className="hr-emp-check" aria-label={task.completed_at ? `${task.title} — completed` : `Complete ${task.title}`} aria-expanded={completing} disabled={ended || !!task.completed_at} onClick={() => {
+          return <li key={task.id} className={ROW}>
+            <TaskCheck done={!!task.completed_at} aria-label={task.completed_at ? `${task.title}, completed` : `Complete ${task.title}`} aria-expanded={completing} disabled={ended || !!task.completed_at} onClick={() => {
               setCompletingTaskId(completing ? '' : task.id);
               setEditingTaskId('');
-            }}>
-              <Check size={12} aria-hidden="true" />
-            </button>
-            <div className="hr-emp-task-main">
-              <span className="hr-emp-task-title">
+            }} />
+            <div className={ROW_MAIN}>
+              <span className={cn(ROW_TITLE, task.completed_at && 'text-muted-foreground line-through decoration-foreground/30')}>
                 {task.title}
               </span>
-              <span className="hr-emp-task-meta">
+              <span className={ROW_META}>
                 {label(task.phase)} · {task.assignee || 'Unassigned'} · {task.due_date ? `Due ${date(task.due_date)}` : 'No due date'}
                 {task.dependency_id && ` · After ${tasks.find(item => item.id === task.dependency_id)?.title ?? 'another task'}`}
               </span>
-              {task.evidence && <span className="hr-emp-task-meta">
+              {task.evidence && <span className={ROW_META}>
                 {task.evidence}
               </span>}
             </div>
-            {task.required && <Tag>Required</Tag>}
-            <Tag tone={task.completed_at ? 'good' : overdue ? 'urgent' : 'quiet'}>
-              {task.completed_at ? 'Complete' : overdue ? 'Overdue' : 'Open'}
-            </Tag>
-            {!task.completed_at && canEdit && <button type="button" className="hr-emp-mini" onClick={() => {
+            <span className="flex flex-wrap items-center gap-1.5">
+              {task.required && <Tag>Required</Tag>}
+              <Tag tone={task.completed_at ? 'good' : overdue ? 'urgent' : 'quiet'}>
+                {task.completed_at ? 'Complete' : overdue ? 'Overdue' : 'Open'}
+              </Tag>
+            </span>
+            {!task.completed_at && canEdit && <Button type="button" variant="ghost" size="xs" onClick={() => {
               setEditingTaskId(editing ? '' : task.id);
               setCompletingTaskId('');
             }}>
               {editing ? 'Close' : 'Edit'}
-            </button>}
-            {completing && canEdit && <div className="hr-emp-task-form">
+            </Button>}
+            {completing && canEdit && <div className={ROW_FORM}>
               <Form run={run} busy={busy} button="Complete task" success="Task evidence recorded." submit={data => ({
                 kind: 'complete_task',
                 task_id: task.id,
@@ -1185,7 +1340,7 @@ export function EmploymentDetail({
                 <Field name="evidence" label="Completion evidence" value={task.evidence} required />
               </Form>
             </div>}
-            {editing && canEdit && <div className="hr-emp-task-form">
+            {editing && canEdit && <div className={ROW_FORM}>
               <Form run={run} busy={busy} button="Save task changes" success="Task ownership and schedule updated." submit={data => ({
                 kind: 'save_task',
                 employee_id: employee.id,
@@ -1207,10 +1362,9 @@ export function EmploymentDetail({
                   value: item.id,
                   label: item.title
                 }))} />
-                <label className="hr-checkbox">
-                  <input type="checkbox" name="required" defaultChecked={task.required} />
+                <CheckField name="required" defaultChecked={task.required} className="self-end pb-2">
                   Required before completion
-                </label>
+                </CheckField>
                 <Field name="evidence" label="Progress evidence" type="textarea" value={task.evidence} />
               </Form>
             </div>}
@@ -1220,35 +1374,32 @@ export function EmploymentDetail({
       {canEdit && <TaskComposer employee={employee} context={context} />}
       {canEdit && <AiPanel person={person} employee={employee} workspace={workspace} run={run} reload={reload} kind="onboarding_plan" bare cta="Draft plan with AI" />}
     </EmpSection>
-    <EmpSection title="Reviews" detail="A held review records the outcome. Onboarding alone doesn’t confirm probation.">
-      {!reviews.length && <div className="hr-emp-empty">
-        <span>No reviews scheduled</span>
-        {!ended && <button type="button" className="hr-emp-ghost" onClick={() => setSchedulingReview(open => !open)}>
+    <EmpSection title="Reviews" detail="A held review records the outcome. Onboarding alone doesn't confirm probation.">
+      {!reviews.length && <EmpEmpty action={!ended && <Button type="button" variant="outline" size="sm" onClick={() => setSchedulingReview(open => !open)}>
           Schedule review
-        </button>}
-      </div>}
-      {!!reviews.length && <ul className="hr-emp-tasks">
+        </Button>}>No reviews scheduled</EmpEmpty>}
+      {!!reviews.length && <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
         {reviews.map(review => {
           const recording = recordingReviewId === review.id;
-          return <li key={review.id} className="hr-emp-task">
-            <div className="hr-emp-task-main">
-              <span className="hr-emp-task-title">
+          return <li key={review.id} className={ROW}>
+            <div className={ROW_MAIN}>
+              <span className={ROW_TITLE}>
                 {label(review.kind)} review
               </span>
-              <span className="hr-emp-task-meta">
+              <span className={ROW_META}>
                 {review.status === 'held' && review.held_at ? `Held ${date(review.held_at)}` : `Due ${date(review.due_date)}`}
               </span>
-              {review.status === 'held' && <span className="hr-emp-task-meta">
+              {review.status === 'held' && <span className={ROW_META}>
                 {label(review.outcome)} · {review.rationale}
               </span>}
             </div>
             <Tag tone={review.status === 'held' ? 'good' : 'quiet'}>
               {label(review.status)}
             </Tag>
-            {!ended && review.status !== 'held' && <button type="button" className="hr-emp-mini" onClick={() => setRecordingReviewId(recording ? '' : review.id)}>
+            {!ended && review.status !== 'held' && <Button type="button" variant="ghost" size="xs" onClick={() => setRecordingReviewId(recording ? '' : review.id)}>
               {recording ? 'Close' : 'Record outcome'}
-            </button>}
-            {recording && review.status !== 'held' && !ended && <div className="hr-emp-task-form">
+            </Button>}
+            {recording && review.status !== 'held' && !ended && <div className={ROW_FORM}>
               <Form run={run} busy={busy} button="Record held review" success="Review decision recorded." submit={data => ({
                 kind: 'record_review',
                 review_id: review.id,
@@ -1265,12 +1416,12 @@ export function EmploymentDetail({
           </li>;
         })}
       </ul>}
-      {!!reviews.length && !ended && <div className="hr-emp-actions">
-        <button type="button" className="hr-emp-ghost" onClick={() => setSchedulingReview(open => !open)}>
+      {!!reviews.length && !ended && <div>
+        <Button type="button" variant="outline" size="sm" onClick={() => setSchedulingReview(open => !open)}>
           Schedule review
-        </button>
+        </Button>
       </div>}
-      {schedulingReview && !ended && <Form run={run} busy={busy} button="Schedule review" success="Review scheduled." submit={data => ({
+      {schedulingReview && !ended && <div className={ROW_FORM}><Form run={run} busy={busy} button="Schedule review" success="Review scheduled." submit={data => ({
         kind: 'schedule_review',
         employee_id: employee.id,
         review_kind: text(data, 'review_kind'),
@@ -1278,17 +1429,14 @@ export function EmploymentDetail({
       })}>
         <Field name="review_kind" label="Review type" value="probation" options={options(['probation', 'annual'])} required />
         <Field name="due_date" label="Due date" type="date" value={employee.probation_end} required />
-      </Form>}
+      </Form></div>}
     </EmpSection>
     <EmpSection title={exit ? 'Departure and handover' : 'Offboarding'} detail="Closes assignments and keeps the employment period on record.">
       {!exit && <>
-        <div className="hr-emp-empty">
-          <span>No exit in progress</span>
-          {!ended && <button type="button" className="hr-emp-ghost plain" onClick={() => setStartingExit(open => !open)}>
+        <EmpEmpty action={!ended && <Button type="button" variant="ghost" size="sm" onClick={() => setStartingExit(open => !open)}>
             Start exit workflow →
-          </button>}
-        </div>
-        {startingExit && !ended && <Form run={run} busy={busy} button="Open offboarding" success="Offboarding opened and employment state updated." submit={data => ({
+          </Button>}>No exit in progress</EmpEmpty>
+        {startingExit && !ended && <div className={ROW_FORM}><Form run={run} busy={busy} button="Open offboarding" success="Offboarding opened and employment state updated." submit={data => ({
           kind: 'open_exit',
           employee_id: employee.id,
           expected_version: employee.version,
@@ -1297,14 +1445,14 @@ export function EmploymentDetail({
           notice_end: nullable(data, 'notice_end'),
           rationale: text(data, 'rationale')
         })}>
-          <Field name="exit_kind" label="Exit type" options={options(['resignation', 'rupture_conventionnelle', 'dismissal', 'probation_end', 'cdd_end'])} required />
+          <Field name="exit_kind" label="Exit type" options={options(['resignation', 'rupture_conventionnelle', 'dismissal', 'probation_end', 'cdd_end', 'internship_end'])} required />
           <Field name="exit_date" label="Exit date" type="date" required />
           <Field name="notice_end" label="Notice end" type="date" />
           <Field name="rationale" label="Reason" type="textarea" required />
-        </Form>}
+        </Form></div>}
       </>}
       {exit && <>
-        <div className="hr-emp-empty">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 text-sm">
           <span>
             {label(exit.kind)} · {date(exit.exit_date)}
           </span>
@@ -1313,10 +1461,10 @@ export function EmploymentDetail({
           </Tag>
         </div>
         {exit.status === 'completed' && <>
-          <p className="hr-emp-note">
+          <p className="m-0 text-sm whitespace-pre-wrap">
             {exit.handover_plan}
           </p>
-          <p className="hr-emp-note">
+          <p className={QUIET}>
             Rehire {exit.rehire_eligible === null ? 'not assessed' : exit.rehire_eligible ? 'eligible' : 'ineligible'} · {exit.rehire_rationale}
           </p>
         </>}
@@ -1343,33 +1491,32 @@ export function EmploymentDetail({
             }]} />
             <Field name="rehire_rationale" label="Rehire rationale" type="textarea" value={exit.rehire_rationale} />
           </Form>
-          <ul className="hr-emp-tasks">
-            {workspace.exitItems.filter(item => item.offboarding_id === exit.id).map(item => <li className={`hr-emp-task ${item.completed_at ? 'is-done' : ''}`} key={item.id}>
-              <button type="button" className="hr-emp-check" aria-label={item.completed_at ? `${item.title} — completed` : `Complete ${item.title}`} disabled={!!item.completed_at}>
-                <Check size={12} aria-hidden="true" />
-              </button>
-              <div className="hr-emp-task-main">
-                <span className="hr-emp-task-title">
+          <ul className="m-0 flex list-none flex-col divide-y divide-border border-t border-border p-0">
+            {workspace.exitItems.filter(item => item.offboarding_id === exit.id).map(item => <li className={ROW} key={item.id}>
+              {/* Status mark only: completing goes through the form below. */}
+              <span className={cn('grid size-[22px] shrink-0 place-items-center rounded-full border', item.completed_at ? 'border-foreground bg-foreground text-background' : 'border-input text-transparent')} role="img" aria-label={item.completed_at ? `${item.title}, completed` : `${item.title}, open`}>
+                <Check className="size-3" aria-hidden="true" />
+              </span>
+              <div className={ROW_MAIN}>
+                <span className={cn(ROW_TITLE, item.completed_at && 'text-muted-foreground line-through decoration-foreground/30')}>
                   {item.title}
                 </span>
-
               </div>
               <Tag tone={item.completed_at ? 'good' : 'quiet'}>
                 {item.completed_at ? 'Complete' : item.required ? 'Required' : 'Optional'}
               </Tag>
-              {!item.completed_at && <div className="hr-emp-task-form">
+              {!item.completed_at && <div className={ROW_FORM}>
                 <Form run={run} busy={busy} button="Complete exit task" success="Exit task completed." submit={() => ({
                   kind: 'complete_exit_item',
                   item_id: item.id,
                   expected_version: item.version
                 })}>
-                  <p className="hr-emp-note">Mark this task as done when completed.</p>
+                  <p className={cn(QUIET, 'col-span-full')}>Mark this task as done when completed.</p>
                 </Form>
               </div>}
             </li>)}
           </ul>
-          <details className="hr-disclosure">
-            <summary>Add an exit task</summary>
+          <Disclosure summary="Add an exit task">
             <Form run={run} busy={busy} button="Add exit task" success="Exit task added." submit={data => ({
               kind: 'save_exit_item',
               exit_id: exit.id,
@@ -1377,17 +1524,16 @@ export function EmploymentDetail({
               required: checked(data, 'required')
             })}>
               <Field name="title" label="Task" required />
-              <label className="hr-checkbox">
-                <input type="checkbox" name="required" defaultChecked />
+              <CheckField name="required" defaultChecked className="self-end pb-2">
                 Required before closing exit
-              </label>
+              </CheckField>
             </Form>
-          </details>
+          </Disclosure>
           <AiPanel person={person} employee={employee} workspace={workspace} run={run} reload={reload} kind="handover" bare cta="Draft handover" />
-          <p className="hr-emp-note">
+          <p className={QUIET}>
             Complete required tasks, record a handover and a rehire decision before closing. Existing assignments will end at the exit date.
           </p>
-          <div className="hr-emp-actions">
+          <div>
             <Action run={run} disabled={busy} input={{
               kind: 'complete_exit',
               exit_id: exit.id,
@@ -1464,11 +1610,11 @@ function BuilderStep({
   note?: ReactNode;
   children: ReactNode;
 }) {
-  return <section className="hr-builder-step">
-    <div className="hr-builder-step-head">
-      <span className="hr-builder-step-num" aria-hidden="true">{index}</span>
-      <h4>{title}</h4>
-      {note && <span className="hr-builder-step-note">{note}</span>}
+  return <section className="flex min-w-0 flex-col gap-3 border-b border-border pb-6 last:border-b-0 last:pb-0">
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+      <span className="num grid size-6 shrink-0 place-items-center rounded-full border border-input text-xs text-muted-foreground" aria-hidden="true">{index}</span>
+      <h4 className="m-0 text-sm font-medium">{title}</h4>
+      {note && <span className="text-xs text-muted-foreground">{note}</span>}
     </div>
     {children}
   </section>;
@@ -1476,8 +1622,8 @@ function BuilderStep({
 /**
  * Staffing composer (reference: “Assign to project — employee”, Main.dc.html).
  *
- * Five numbered steps on the left — project, pricing line, allocation, period,
- * commitment — and a preview rail on the right that prices the draft and plots
+ * Five numbered steps — project, pricing line, allocation, period,
+ * commitment — and a preview that prices the draft and plots
  * the monthly load it would add, with the submit button as its last line. Every
  * rule the database enforces (project window, employment window, capacity) is
  * mirrored here so the panel refuses what `hr_command` would reject.
@@ -1613,164 +1759,175 @@ export function AssignForm({
       setSaving(false);
     }
   }
-  return <form className="hr-builder" onSubmit={event => void onSubmit(event)}>
-    <div className="hr-builder-steps">
+  const quiet = 'text-xs text-muted-foreground';
+  return <form className="@container grid min-w-0" onSubmit={event => void onSubmit(event)}>
+    <div className="grid min-w-0 items-start gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
+    <div className="flex min-w-0 flex-col gap-6">
       <BuilderStep index={1} title="Project">
-        {projects.length > 4 && <div className="hr-builder-search">
-          <Search size={16} aria-hidden="true" />
-          <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search a project or client…" aria-label="Search projects" />
-        </div>}
-        <div className="hr-builder-projects">
+        {projects.length > 4 && <InputGroup>
+          <InputGroupAddon>
+            <Search aria-hidden="true" />
+          </InputGroupAddon>
+          <InputGroupInput value={query} onChange={event => setQuery(event.target.value)} placeholder="Search a project or client…" aria-label="Search projects" />
+        </InputGroup>}
+        <div className="flex max-h-[19rem] flex-col gap-2 overflow-y-auto p-px">
           {matches.map(item => {
             const client = workspace.clients.find(entry => entry.id === item.client_id)?.name;
             const elapsed = item.start_date && item.end_date && item.end_date > item.start_date
               ? Math.max(0, Math.min(100, Math.round(100 * (new Date(`${day}T12:00:00`).getTime() - new Date(`${item.start_date}T12:00:00`).getTime()) / (new Date(`${item.end_date}T12:00:00`).getTime() - new Date(`${item.start_date}T12:00:00`).getTime()))))
               : null;
             const left = item.end_date ? workingDaysBetween(day > (item.start_date ?? day) ? day : item.start_date ?? day, item.end_date).length : null;
-            return <button type="button" key={item.id} className="hr-builder-project" aria-pressed={item.id === projectId} onClick={() => pickProject(item)}>
-              <span className="hr-builder-radio" aria-hidden="true" />
-              <span className="hr-builder-project-main">
-                <span className="hr-builder-project-top">
-                  <span className="hr-builder-code">{item.title}</span>
-                  {client && <span className="hr-builder-chip">{client}</span>}
-                  <span className="hr-builder-quiet">{label(item.pricing_model)} · {item.currency}</span>
+            const pressed = item.id === projectId;
+            return <button type="button" key={item.id} className={CHOICE} aria-pressed={pressed} onClick={() => pickProject(item)}>
+              <span className={cn('relative size-[18px] shrink-0 rounded-full border-[1.5px]', pressed ? 'border-foreground after:absolute after:inset-[3px] after:rounded-full after:bg-foreground' : 'border-input')} aria-hidden="true" />
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-sm font-medium">{item.title}</span>
+                  {client && <Badge variant="outline">{client}</Badge>}
+                  <span className={quiet}>{label(item.pricing_model)} · {item.currency}</span>
                 </span>
-                <span className="hr-builder-project-span">
-                  <span className="hr-builder-quiet">{[item.start_date ? date(item.start_date) : null, item.end_date ? date(item.end_date) : 'open-ended'].filter(Boolean).join(' → ')}</span>
-                  {elapsed !== null && <span className="hr-builder-elapsed" aria-hidden="true"><span style={{ width: `${elapsed}%` }} /></span>}
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className={cn(quiet, 'shrink-0')}>{[item.start_date ? date(item.start_date) : null, item.end_date ? date(item.end_date) : 'open-ended'].filter(Boolean).join(' → ')}</span>
+                  {elapsed !== null && <span className="h-1 max-w-56 flex-1 overflow-hidden rounded-full bg-foreground/15" aria-hidden="true"><span className="block h-full rounded-full bg-foreground/40" style={{ width: `${elapsed}%` }} /></span>}
                 </span>
               </span>
-              {left !== null && <span className="hr-builder-project-right">
-                <strong>{left}</strong>
-                <span>working days left</span>
+              {left !== null && <span className="flex shrink-0 flex-col items-end">
+                <strong className="num text-base font-normal">{left}</strong>
+                <span className={cn(quiet, 'whitespace-nowrap')}>working days left</span>
               </span>}
             </button>;
           })}
-          {!matches.length && <p className="hr-builder-quiet">{projects.length ? `No open project matches “${query.trim()}”.` : 'No open project to staff on yet.'}</p>}
+          {!matches.length && <p className={QUIET}>{projects.length ? `No open project matches "${query.trim()}".` : 'No open project to staff on yet.'}</p>}
         </div>
       </BuilderStep>
       {profiles.length > 0 && <BuilderStep index={2} title="Pricing line" note="The TJM profile this person is billed on">
-        <div className="hr-builder-lines">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))]">
           {profiles.map(item => {
             const staffed = workspace.assignments.filter(assignment => assignment.project_id === projectId && assignment.pricing_line === item.name && !['completed', 'cancelled'].includes(assignment.status)).length;
-            return <button type="button" key={item.name} className="hr-builder-line" aria-pressed={item.name === line?.name} onClick={() => setLineName(item.name)}>
-              <span className="hr-builder-line-main">
-                <strong>{item.name}</strong>
-                <span className="hr-builder-quiet">{staffed ? `${staffed} already staffed` : 'Nobody staffed yet'}</span>
+            return <button type="button" key={item.name} className={CHOICE} aria-pressed={item.name === line?.name} onClick={() => setLineName(item.name)}>
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <strong className="text-sm font-medium">{item.name}</strong>
+                <span className={quiet}>{staffed ? `${staffed} already staffed` : 'Nobody staffed yet'}</span>
               </span>
-              <span className="hr-builder-rate">{lineRateLabel(item.tjm, project?.currency ?? 'EUR')}</span>
+              <span className="num shrink-0 text-sm">{lineRateLabel(item.tjm, project?.currency ?? 'EUR')}</span>
             </button>;
           })}
         </div>
       </BuilderStep>}
       <BuilderStep index={profiles.length > 0 ? 3 : 2} title="Allocation">
-        <div className="hr-builder-alloc">
-          <div className="hr-builder-presets" role="group" aria-label="Allocation presets">
-            {ALLOCATION_PRESETS.map(preset => <button type="button" key={preset} aria-pressed={allocation === preset} onClick={() => setAllocation(preset)}>
+        <div className="flex flex-wrap items-center gap-3">
+          <ToggleGroup variant="outline" aria-label="Allocation presets" value={[String(allocation)]} onValueChange={values => {
+            const next = Number(values[0]);
+            if (next) setAllocation(next);
+          }} className="flex-wrap">
+            {ALLOCATION_PRESETS.map(preset => <ToggleGroupItem key={preset} value={String(preset)} className="num">
               {preset}%
-            </button>)}
-          </div>
-          <label className="hr-builder-custom">
+            </ToggleGroupItem>)}
+          </ToggleGroup>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Custom
-            <input type="number" min={1} max={100} step={1} value={allocation} aria-label="Allocation (%)" onChange={event => setAllocation(Math.max(1, Math.min(100, Number(event.target.value) || 0)))} />
-            %
+            <InputGroup className="w-24">
+              <InputGroupInput type="number" min={1} max={100} step={1} value={allocation} aria-label="Allocation (%)" className="num" onChange={event => setAllocation(Math.max(1, Math.min(100, Number(event.target.value) || 0)))} />
+              <InputGroupAddon align="inline-end">%</InputGroupAddon>
+            </InputGroup>
           </label>
         </div>
-        <p className="hr-builder-quiet">
-          {allocation === 100 ? 'Full time on this project — no capacity left for another.' : `${allocation}% of her week here, ${100 - allocation}% free for other projects.`}
+        <p className={QUIET}>
+          {allocation === 100 ? 'Full time on this project. No capacity left for another.' : `${allocation}% of the week here, ${100 - allocation}% free for other projects.`}
         </p>
       </BuilderStep>
       <BuilderStep index={profiles.length > 0 ? 4 : 3} title="Period" note={windowHint ? `Project window: ${windowHint}` : 'This project has no delivery dates yet.'}>
-        <div className="hr-builder-dates">
-          <div className="hr-builder-date">
-            <span className="hr-builder-label">Starts</span>
+        <div className="grid gap-4 @xl:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-2">
+            <span className="text-xs text-muted-foreground">Starts</span>
             <DateField name="start_date" value={start} min={startMin} max={windowEnd ?? undefined} onChange={setStart} aria-label="Starts" required />
-            <div className="hr-builder-chips">
-              <button type="button" onClick={() => setStart(day)}>Today</button>
-              <button type="button" onClick={() => setStart(nextMonday(day))}>Next Monday</button>
-              {windowStart && <button type="button" onClick={() => setStart(windowStart)}>Project start</button>}
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" className={CHIP} onClick={() => setStart(day)}>Today</button>
+              <button type="button" className={CHIP} onClick={() => setStart(nextMonday(day))}>Next Monday</button>
+              {windowStart && <button type="button" className={CHIP} onClick={() => setStart(windowStart)}>Project start</button>}
             </div>
           </div>
-          <div className="hr-builder-date">
-            <span className="hr-builder-label">Ends</span>
+          <div className="flex min-w-0 flex-col gap-2">
+            <span className="text-xs text-muted-foreground">Ends</span>
             <DateField name="end_date" value={endDay} min={start} max={windowEnd ?? undefined} onChange={value => { setEnd(value); setOpenRequested(false); }} aria-label="Ends, if known" />
-            <div className="hr-builder-chips">
-              {windowEnd && <button type="button" aria-pressed={end === windowEnd} onClick={() => { setEnd(windowEnd); setOpenRequested(false); }}>Project end</button>}
-              <button type="button" aria-pressed={openEnded} disabled={!!windowEnd} title={windowEnd ? 'The project ends on a fixed date, so the assignment needs one too.' : undefined} onClick={() => { setOpenRequested(current => !current); setEnd(''); }}>Open-ended</button>
+            <div className="flex flex-wrap gap-1.5">
+              {windowEnd && <button type="button" className={CHIP} aria-pressed={end === windowEnd} onClick={() => { setEnd(windowEnd); setOpenRequested(false); }}>Project end</button>}
+              <button type="button" className={CHIP} aria-pressed={openEnded} disabled={!!windowEnd} title={windowEnd ? 'The project ends on a fixed date, so the assignment needs one too.' : undefined} onClick={() => { setOpenRequested(current => !current); setEnd(''); }}>Open-ended</button>
             </div>
           </div>
         </div>
-        {outsideWindow && <p role="alert" className="hr-builder-alert">
-          <AlertCircle size={16} aria-hidden="true" />
-          These dates fall outside the project window{windowHint ? ` (${windowHint})` : ''}. Move them inside, or extend the contract first.
-        </p>}
-        {!outsideWindow && outsideEmployment && <p role="alert" className="hr-builder-alert">
-          <AlertCircle size={16} aria-hidden="true" />
-          These dates fall outside this employment period ({date(employee.start_date)} → {employee.planned_exit_date ? date(employee.planned_exit_date) : 'open-ended'}).
-        </p>}
-        {!outsideWindow && !outsideEmployment && <p className="hr-builder-quiet">
-          {openEnded ? 'Open-ended — capacity counts it until someone ends it.' : `${workDays} working days in this period.`}
+        {outsideWindow && <Alert variant="destructive" role="alert">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription>These dates fall outside the project window{windowHint ? ` (${windowHint})` : ''}. Move them inside, or extend the contract first.</AlertDescription>
+        </Alert>}
+        {!outsideWindow && outsideEmployment && <Alert variant="destructive" role="alert">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription>These dates fall outside this employment period ({date(employee.start_date)} → {employee.planned_exit_date ? date(employee.planned_exit_date) : 'open-ended'}).</AlertDescription>
+        </Alert>}
+        {!outsideWindow && !outsideEmployment && <p className={QUIET}>
+          {openEnded ? 'Open-ended. Capacity counts it until someone ends it.' : `${workDays} working days in this period.`}
         </p>}
       </BuilderStep>
       <BuilderStep index={profiles.length > 0 ? 5 : 4} title="Commitment">
-        <div className="hr-builder-commits">
-          {COMMITMENTS.map(item => <button type="button" key={item.value} className="hr-builder-commit" aria-pressed={status === item.value} onClick={() => setStatus(item.value)}>
-            <strong>{label(item.value)}</strong>
-            <span className="hr-builder-quiet">{item.hint}</span>
+        <div className="grid gap-2 @xl:grid-cols-2">
+          {COMMITMENTS.map(item => <button type="button" key={item.value} className={cn(CHOICE, 'flex-col items-start gap-0.5')} aria-pressed={status === item.value} onClick={() => setStatus(item.value)}>
+            <strong className="text-sm font-medium">{label(item.value)}</strong>
+            <span className={quiet}>{item.hint}</span>
           </button>)}
         </div>
       </BuilderStep>
     </div>
-    <aside className="hr-builder-preview" aria-label="Assignment preview">
-      <div className="hr-builder-preview-head">
-        <span className="hr-builder-eyebrow">Preview</span>
-        <strong>{personName(workspace, employee.person_id)} → {project?.title ?? 'no project'}</strong>
-        <span className="hr-builder-quiet">{[line?.name, rate ? lineRateLabel(rate, project?.currency ?? 'EUR') : null, label(status)].filter(Boolean).join(' · ')}</span>
+    <aside className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4 @4xl:sticky @4xl:top-20" aria-label="Assignment preview">
+      <div className="flex flex-col gap-1">
+        <span className="label-mono">Preview</span>
+        <strong className="text-sm font-medium">{personName(workspace, employee.person_id)} → {project?.title ?? 'no project'}</strong>
+        <span className={quiet}>{[line?.name, rate ? lineRateLabel(rate, project?.currency ?? 'EUR') : null, label(status)].filter(Boolean).join(' · ')}</span>
       </div>
-      <div className="hr-builder-tiles">
-        <div className="hr-builder-tile">
-          <span className="hr-builder-quiet">Staffed days</span>
-          <strong>{openEnded || !workDays ? '—' : halfDays(staffedDays)}</strong>
-          <span className="hr-builder-quiet">{openEnded ? 'No end date yet' : `${allocation}% × ${workDays} working days`}</span>
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr))]">
+        <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-background p-3">
+          <span className={quiet}>Staffed days</span>
+          <strong className="num text-xl font-normal">{openEnded || !workDays ? '—' : halfDays(staffedDays)}</strong>
+          <span className={quiet}>{openEnded ? 'No end date yet' : `${allocation}% × ${workDays} working days`}</span>
         </div>
-        <div className="hr-builder-tile">
-          <span className="hr-builder-quiet">Billable value</span>
-          <strong>{rate && !openEnded && workDays ? amount(staffedDays * rate, project?.currency ?? 'EUR') : '—'}</strong>
-          <span className="hr-builder-quiet">{rate ? 'If every day lands in the CRA' : 'No daily rate on this line'}</span>
+        <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-background p-3">
+          <span className={quiet}>Billable value</span>
+          <strong className="num text-xl font-normal break-words">{rate && !openEnded && workDays ? amount(staffedDays * rate, project?.currency ?? 'EUR') : '—'}</strong>
+          <span className={quiet}>{rate ? 'If every day lands in the CRA' : 'No daily rate on this line'}</span>
         </div>
       </div>
-      {load.length > 0 && <div className="hr-builder-load">
-        <div className="hr-builder-load-top">
-          <span>Her load per month</span>
-          <span className="hr-builder-quiet">{months.length} {months.length === 1 ? 'month' : 'months'}</span>
+      {load.length > 0 && <div className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-2 text-xs">
+          <span className="font-medium">Load per month</span>
+          <span className="text-muted-foreground">{months.length > load.length ? `First ${load.length} of ${months.length} months` : `${months.length} ${months.length === 1 ? 'month' : 'months'}`}</span>
         </div>
-        <div className="hr-builder-chart" aria-hidden="true">
-          <span className="hr-builder-ceiling">100%</span>
+        <div className="relative flex h-24 items-end gap-1.5 border-t border-dashed border-input pt-2 pl-8" aria-hidden="true">
+          <span className="num absolute top-0.5 left-0 text-[10px] leading-none text-muted-foreground">100%</span>
           {load.map(month => {
             const total = Math.min(100, month.booked + month.draft);
-            return <span className="hr-builder-column" key={month.key}>
-              <span className="hr-builder-bar" style={{ height: `${Math.max(2, total)}%` }}>
-                <span className="hr-builder-bar-draft" style={{ height: `${total ? Math.round(100 * Math.min(month.draft, total) / total) : 0}%` }} />
+            return <span className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5" key={month.key}>
+              <span className="flex w-full max-w-10 flex-col justify-start overflow-hidden rounded-t-md rounded-b-[2px] bg-foreground/20" style={{ height: `${Math.max(2, total)}%` }}>
+                <span className="block w-full rounded-t-md bg-pivot" style={{ height: `${total ? Math.round(100 * Math.min(month.draft, total) / total) : 0}%` }} />
               </span>
-              <span className="hr-builder-quiet">{month.label}</span>
+              <span className="text-[11px] text-muted-foreground">{month.label}</span>
             </span>;
           })}
         </div>
-        <span className="hr-builder-quiet">
-          {clash ? 'Some days are already booked — the save will be refused above 100%.' : counts ? 'Shaded is already booked, bright is this draft.' : 'Proposed work is not counted against capacity.'}
+        <span className={quiet}>
+          {clash ? 'Some days are already booked. The save will be refused above 100%.' : counts ? 'Shaded is already booked, bright is this draft.' : 'Proposed work is not counted against capacity.'}
         </span>
       </div>}
-      {error && <p ref={errorRef} tabIndex={-1} role="alert" className="hr-error">{error}</p>}
-      {message && <p role="status" className="hr-source-list">{message}</p>}
-      <div className="hr-builder-submit">
-        <button className="btn" type="submit" disabled={busy || saving || invalid}>
+      {error && <ErrorText errorRef={errorRef}>{error}</ErrorText>}
+      {message && <p role="status" className={QUIET}>{message}</p>}
+      <div className="flex flex-col gap-1.5">
+        <Button type="submit" className="w-full" disabled={busy || saving || invalid}>
           {saving ? 'Saving…' : 'Create assignment'}
-        </button>
-        <span className="hr-builder-quiet">
-          {invalid ? 'Pick a project and a period inside its window.' : `It shows on her CRA from ${date(start)}.`}
+        </Button>
+        <span className={cn(quiet, 'text-center')}>
+          {invalid ? 'Pick a project and a period inside its window.' : `It shows on the CRA from ${date(start)}.`}
         </span>
       </div>
     </aside>
+    </div>
   </form>;
 }
 function Assignments({
@@ -1788,6 +1945,8 @@ function Assignments({
 }) {
   const periods = workspace.employees.filter(employee => employee.person_id === person.id);
   const live = periods.filter(employee => employee.status !== 'ended');
+  // Offboarding closes the door to new project work (mirrors hr_command).
+  const assignable = live.filter(employee => employee.status === 'preboarding' || employee.status === 'active');
   const day = today();
   const assignments = workspace.assignments
     .filter(assignment => periods.some(employee => employee.id === assignment.employee_id))
@@ -1826,93 +1985,103 @@ function Assignments({
     label: 'Cancelled',
     count: history.filter(assignment => assignment.status === 'cancelled').length
   }];
+  const projectTitle = (id: string) => workspace.projects.find(project => project.id === id)?.title ?? 'Project';
   return <>
-    <section className="hr-person-metrics" aria-label="Staffing overview">
-      <div className="hr-person-metric is-wide">
-        <div className="hr-person-metric-top">
-          <span>Booked today</span>
-          <span>{availableToday}% available</span>
+    <Card role="region" aria-label="Staffing overview">
+      <CardContent>
+        <div className="grid grid-cols-1 gap-x-6 gap-y-6 @lg:grid-cols-2 @4xl:grid-cols-[1.4fr_1fr_1fr_1.4fr]">
+          <Stat size="sm" className="min-w-0">
+            <StatLabel>Booked today</StatLabel>
+            <StatValue className="flex flex-wrap items-baseline gap-x-2">
+              <span>{bookedToday}%</span>
+              {!!draftToday && <span className="text-sm text-muted-foreground">→ {bookedPreview}% with this draft</span>}
+            </StatValue>
+            <div className="relative mt-1 h-1.5 overflow-hidden rounded-full bg-foreground/15" aria-hidden="true">
+              {!!draftToday && <span className="absolute inset-y-0 left-0 rounded-full bg-foreground/35" style={{
+                width: `${bookedPreview}%`
+              }} />}
+              <span className="absolute inset-y-0 left-0 rounded-full bg-foreground" style={{
+                width: `${Math.min(100, bookedToday)}%`
+              }} />
+            </div>
+            <StatSource>{availableToday}% available</StatSource>
+          </Stat>
+          <Stat size="sm" className="min-w-0">
+            <StatLabel>Next availability</StatLabel>
+            <StatValue>{nextAvailability ? date(nextAvailability.day) : '—'}</StatValue>
+            <StatSource>{nextAvailability?.after ? `After ${nextAvailability.after}` : nextAvailability ? 'Open capacity' : live.length ? 'Fully booked' : 'Not employed'}</StatSource>
+          </Stat>
+          <Stat size="sm" className="min-w-0">
+            <StatLabel>Days on projects</StatLabel>
+            <StatValue>{daysOnProjects}</StatValue>
+            <StatSource>Across {projectCount} {projectCount === 1 ? 'project' : 'projects'}</StatSource>
+          </Stat>
+          <Stat size="sm" className="min-w-0">
+            <StatLabel>Available this year</StatLabel>
+            <StatValue>{availability.ready ? fmtDays(availability.availableDays) : '…'}</StatValue>
+            <StatSource>
+              {availability.error ? `CRA unavailable: ${availability.error}` : availability.ready ? `${fmtDays(availability.openDays)} open days − ${fmtDays(availability.projectDays)} project − ${fmtDays(availability.paidLeaveDays)} CP − ${fmtDays(availability.rttDays)} RTT · usable for internal` : 'Reading the CRA…'}
+            </StatSource>
+          </Stat>
         </div>
-        <div className="hr-person-metric-figure">
-          <strong>{bookedToday}%</strong>
-          {!!draftToday && <span className="hr-person-metric-delta">→ {bookedPreview}% with this draft</span>}
-        </div>
-        <div className="hr-person-meter" aria-hidden="true">
-          {!!draftToday && <span className="is-draft" style={{
-            width: `${bookedPreview}%`
-          }} />}
-          <span style={{
-            width: `${Math.min(100, bookedToday)}%`
-          }} />
-        </div>
+      </CardContent>
+    </Card>
+    <section className="flex min-w-0 flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="m-0 font-heading text-lg leading-tight font-medium tracking-[-0.02em]">Active assignments</h2>
+        {!!assignable.length && !assignOpen && <Button type="button" aria-expanded={assignOpen} onClick={() => setAssignOpen(true)}>
+          <Plus data-icon="inline-start" aria-hidden="true" /> Assign to project
+        </Button>}
       </div>
-      <div className="hr-person-metric">
-        <span className="hr-person-metric-label">Next availability</span>
-        <strong className="hr-person-metric-value">{nextAvailability ? date(nextAvailability.day) : '—'}</strong>
-        <span className="hr-person-metric-note">{nextAvailability?.after ? `After ${nextAvailability.after}` : nextAvailability ? 'Open capacity' : live.length ? 'Fully booked' : 'Not employed'}</span>
-      </div>
-      <div className="hr-person-metric">
-        <span className="hr-person-metric-label">Days on projects</span>
-        <strong className="hr-person-metric-value">{daysOnProjects}</strong>
-        <span className="hr-person-metric-note">Across {projectCount} {projectCount === 1 ? 'project' : 'projects'}</span>
-      </div>
-      <div className="hr-person-metric">
-        <span className="hr-person-metric-label">Available this year</span>
-        <strong className="hr-person-metric-value">{availability.ready ? fmtDays(availability.availableDays) : '…'}</strong>
-        <span className="hr-person-metric-note">
-          {availability.error ? `CRA unavailable — ${availability.error}` : availability.ready ? `${fmtDays(availability.openDays)} open days − ${fmtDays(availability.projectDays)} project − ${fmtDays(availability.paidLeaveDays)} CP − ${fmtDays(availability.rttDays)} RTT · usable for internal` : 'Reading the CRA…'}
-        </span>
-      </div>
-    </section>
-    <section>
-      <div className="hr-person-section-head">
-        <h2>Active assignments</h2>
-        {!!live.length && !assignOpen && <button type="button" className="btn hr-person-assign-btn" aria-expanded={assignOpen} onClick={() => setAssignOpen(true)}>
-          <Plus size={16} aria-hidden="true" /> Assign to project
-        </button>}
-      </div>
-      {assignOpen && live.map(employee => <div className="hr-assign-panel" key={employee.id}>
-        <div className="hr-assign-panel-head">
-          <div>
-            <h3>New assignment · {employee.role}</h3>
-            <p>Staff {person.full_name.split(' ')[0]} on a project's pricing line. Dates must fit the project window.</p>
-          </div>
-          <button type="button" className="hr-assign-panel-cancel" onClick={() => { setAssignOpen(false); setDraft(null); }}>Cancel</button>
-        </div>
-        <AssignForm employee={employee} workspace={workspace} run={run} busy={busy} onDraft={setDraft} />
-      </div>)}
+      {assignOpen && assignable.map(employee => <Card key={employee.id}>
+        <CardHeader>
+          <CardHeading level={3}>New assignment · {employee.role}</CardHeading>
+          <CardDescription>Staff {person.full_name.split(' ')[0]} on a project's pricing line. Dates must fit the project window.</CardDescription>
+          <CardAction>
+            <Button type="button" variant="ghost" size="sm" onClick={() => { setAssignOpen(false); setDraft(null); }}>Cancel</Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <AssignForm employee={employee} workspace={workspace} run={run} busy={busy} onDraft={setDraft} />
+        </CardContent>
+      </Card>)}
       {open.map(assignment => <AssignmentCard key={assignment.id} assignment={assignment} workspace={workspace} run={run} busy={busy} openProject={openProject} />)}
-      {!open.length && <Empty>No active assignment. Use “Assign to project” above to commit this person to a project.</Empty>}
+      {!open.length && <Empty>No active assignment. Use "Assign to project" above to commit this person to a project.</Empty>}
     </section>
-    <Section title="Past assignments" detail="Ended and cancelled periods, including repeats." action={history.length ? <div className="hr-segmented" role="group" aria-label="Filter history">
-      {filters.map(item => <button key={item.key} aria-pressed={filter === item.key} onClick={() => setFilter(item.key)}>
+    <Section title="Past assignments" detail="Ended and cancelled periods, including repeats.">
+      {!!history.length && <ToggleGroup aria-label="Filter history" className="self-start" value={[filter]} onValueChange={values => {
+      if (values[0]) setFilter(values[0] as typeof filter);
+    }}>
+      {filters.map(item => <ToggleGroupItem key={item.key} value={item.key} size="sm" className="gap-1.5">
         {item.label}
         {' '}
-        {item.count}
-      </button>)}
-    </div> : undefined}>
-      {filtered.map(assignment => <div className="hr-card" key={assignment.id}>
-        <div className="hr-card-head">
-          <div>
-            <h3 className="hr-assign-title">
-              {openProject ? <button type="button" className="hr-project-link" onClick={() => openProject(assignment.project_id)} title="Open project in Sales">{workspace.projects.find(project => project.id === assignment.project_id)?.title ?? 'Project'}</button> : workspace.projects.find(project => project.id === assignment.project_id)?.title ?? 'Project'}
-            </h3>
-            <div className="hr-assign-meta">
-              {assignment.pricing_line
-                ? <span className="hr-assign-line">{assignment.pricing_line}</span>
-                : <span>{assignment.position}</span>}
-              <span>{assignment.allocation_pct}% allocation</span>
-              <span>{date(assignment.start_date)} → {assignment.end_date ? date(assignment.end_date) : 'open-ended'}</span>
+        <span className="num text-xs text-muted-foreground">{item.count}</span>
+      </ToggleGroupItem>)}
+    </ToggleGroup>}
+      {!!filtered.length && <Card size="sm" className="py-0">
+        <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
+          {filtered.map(assignment => <li className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3" key={assignment.id}>
+            <div className="flex min-w-0 flex-col gap-1">
+              <h3 className="m-0 text-sm font-medium">
+                {openProject ? <button type="button" className="cursor-pointer text-left underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => openProject(assignment.project_id)} title="Open project in Sales">{projectTitle(assignment.project_id)}</button> : projectTitle(assignment.project_id)}
+              </h3>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+                {assignment.pricing_line
+                  ? <Badge variant="outline">{assignment.pricing_line}</Badge>
+                  : <span>{assignment.position}</span>}
+                <span>{assignment.allocation_pct}% allocation</span>
+                <span>{date(assignment.start_date)} → {assignment.end_date ? date(assignment.end_date) : 'open-ended'}</span>
+              </div>
             </div>
-          </div>
-          <div className="hr-inline">
-            <span className="hr-source-list">{durationLabel(assignment, day)}</span>
-            <Tag tone={assignment.status === 'cancelled' ? 'quiet' : ''}>
-              {label(assignment.status)}
-            </Tag>
-          </div>
-        </div>
-      </div>)}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{durationLabel(assignment, day)}</span>
+              <Tag tone={assignment.status === 'cancelled' ? 'quiet' : ''}>
+                {label(assignment.status)}
+              </Tag>
+            </div>
+          </li>)}
+        </ul>
+      </Card>}
       {!filtered.length && <Empty>{history.length ? 'Nothing matches this filter.' : 'None yet. Assignments move here once they end or are cancelled.'}</Empty>}
     </Section>
     {!!live.length && <AiPanel person={person} employee={live[0]} workspace={workspace} run={run} reload={reload} kind="staffing_match" />}
@@ -1959,6 +2128,10 @@ function AssignmentCard({
 }) {
   const day = today();
   const project = workspace.projects.find(item => item.id === assignment.project_id);
+  const employee = workspace.employees.find(item => item.id === assignment.employee_id);
+  // During offboarding the assignment is already capped at the exit date; it
+  // can still be ended earlier, but no longer edited.
+  const exitDate = employee && employee.status !== 'preboarding' && employee.status !== 'active' ? employee.planned_exit_date ?? employee.end_date : null;
   const [editing, setEditing] = useState(false);
   const [closing, setClosing] = useState(false);
   const overdue = !!assignment.end_date && assignment.end_date < day && !['completed', 'cancelled'].includes(assignment.status);
@@ -1973,53 +2146,70 @@ function AssignmentCard({
   const limePct = endTime === null ? 0 : overdue
     ? Math.max(0, Math.min(100, Math.round(100 * plannedDays / Math.max(1, elapsedDays))))
     : Math.max(0, Math.min(100, Math.round(100 * Math.min(elapsedDays, plannedDays) / plannedDays)));
-  return <article className="hr-assign-card">
-    <div className="hr-assign-top">
-      <div className="hr-assign-info">
-        <div className="hr-assign-name-row">
-          <span className="hr-assign-project">
-            {project && openProject ? <button type="button" className="hr-project-link" onClick={() => openProject(project.id)} title="Open project in Sales">{project.title}</button> : project?.title ?? 'Project'}
-          </span>
-          <span className="hr-assign-pill">{label(assignment.status)}</span>
-          {overdue && <span className="hr-assign-pill is-urgent">End overdue</span>}
-        </div>
-        <div className="hr-assign-meta">
-          {assignment.pricing_line
-            ? <span className="hr-assign-line">{assignment.pricing_line}</span>
-            : <span>{assignment.position}</span>}
-          <span aria-hidden="true">·</span>
-          <span>{assignment.allocation_pct}%</span>
-          <span aria-hidden="true">·</span>
-          <span>{date(assignment.start_date)} → {assignment.end_date ? date(assignment.end_date) : 'open-ended'}</span>
-        </div>
-      </div>
-      <div className="hr-assign-actions">
-        <button type="button" className="btn secondary" aria-expanded={editing} onClick={() => { setEditing(current => !current); setClosing(false); }}>
+  return <Card size="sm">
+    <CardHeader>
+      <CardHeading level={3} className="flex min-w-0 flex-wrap items-center gap-2">
+        {project && openProject ? <button type="button" className="cursor-pointer text-left underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => openProject(project.id)} title="Open project in Sales">{project.title}</button> : project?.title ?? 'Project'}
+        <Badge variant="secondary">{label(assignment.status)}</Badge>
+        {overdue && <Badge variant="destructive">End overdue</Badge>}
+      </CardHeading>
+      <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {assignment.pricing_line
+          ? <Badge variant="outline">{assignment.pricing_line}</Badge>
+          : <span>{assignment.position}</span>}
+        <span aria-hidden="true">·</span>
+        <span>{assignment.allocation_pct}%</span>
+        <span aria-hidden="true">·</span>
+        <span>{date(assignment.start_date)} → {assignment.end_date ? date(assignment.end_date) : 'open-ended'}</span>
+      </CardDescription>
+      <div className="flex flex-wrap gap-2 pt-1">
+        {!exitDate && <Button type="button" variant="outline" size="sm" aria-expanded={editing} onClick={() => { setEditing(current => !current); setClosing(false); }}>
           {editing ? 'Close' : 'Edit…'}
-        </button>
-        <button type="button" className="btn secondary" aria-expanded={closing} onClick={() => { setClosing(current => !current); setEditing(false); }}>
+        </Button>}
+        <Button type="button" variant="outline" size="sm" aria-expanded={closing} onClick={() => { setClosing(current => !current); setEditing(false); }}>
           {closing ? 'Close' : 'End or cancel…'}
-        </button>
+        </Button>
       </div>
+    </CardHeader>
+    {(endTime !== null || overdue || exitDate || editing || closing) && <CardContent className="flex flex-col gap-4">
+      {endTime !== null && <div className="flex flex-col gap-2">
+        <div className="relative h-1.5 rounded-full bg-foreground/15" aria-hidden="true">
+          <span className="absolute inset-y-0 left-0 rounded-full bg-foreground/35" style={{ width: `${limePct}%` }} />
+          <span className="absolute -top-1 h-3.5 w-0.5 -translate-x-1/2 rounded-[1px] bg-foreground" style={{ left: `${limePct}%` }} />
+        </div>
+        <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span>{started ? `Started ${date(assignment.start_date)}` : `Starts ${date(assignment.start_date)}`}</span>
+          <span className={cn('text-foreground', overdue && 'text-destructive')}>{overdue ? 'Planned end passed' : `${limePct}% elapsed`}</span>
+          <span>{assignment.end_date ? `Planned end ${date(assignment.end_date)}` : 'Open-ended'}</span>
+        </div>
+      </div>}
+      {overdue && <Alert variant="warning">
+        <AlertCircle aria-hidden="true" />
+        <AlertDescription>Planned end passed <strong>{overdueDays} days ago</strong> and no ending has been recorded. End the assignment below or agree a new end date with the client.</AlertDescription>
+      </Alert>}
+      {exitDate && <Alert variant="warning">
+        <AlertCircle aria-hidden="true" />
+        <AlertDescription>Offboarding in progress: this assignment ends with the employment on <strong>{date(exitDate)}</strong>.</AlertDescription>
+      </Alert>}
+      {editing && <AssignmentEdit assignment={assignment} workspace={workspace} day={day} run={run} busy={busy} onClose={() => setEditing(false)} />}
+      {closing && <AssignmentClose assignment={assignment} day={day} run={run} busy={busy} onClose={() => setClosing(false)} />}
+    </CardContent>}
+  </Card>;
+}
+/** Panel body shared by the edit and close forms under an assignment card. */
+function PanelShell({ title, aside, summary, error, children, actions }: { title: string; aside?: ReactNode; summary: ReactNode; error: string; children: ReactNode; actions: ReactNode }) {
+  return <div className="@container flex flex-col gap-4 border-t border-border pt-4">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h4 className="m-0 text-sm font-medium">{title}</h4>
+      {aside}
     </div>
-    {endTime !== null && <>
-      <div className="hr-assign-track" aria-hidden="true">
-        <span className="hr-assign-fill" style={{ width: `${limePct}%` }} />
-        <span className="hr-assign-marker" style={{ left: `${limePct}%` }} />
-      </div>
-      <div className="hr-assign-scale">
-        <span>{started ? `Started ${date(assignment.start_date)}` : `Starts ${date(assignment.start_date)}`}</span>
-        <span className="hr-assign-progress">{overdue ? 'Planned end passed' : `${limePct}% elapsed`}</span>
-        <span>{assignment.end_date ? `Planned end ${date(assignment.end_date)}` : 'Open-ended'}</span>
-      </div>
-    </>}
-    {overdue && <p className="hr-assignment-note">
-      <span aria-hidden="true">!</span>
-      <span>Planned end passed <strong>{overdueDays} days ago</strong> and no ending has been recorded. End the assignment below or agree a new end date with the client.</span>
-    </p>}
-    {editing && <AssignmentEdit assignment={assignment} workspace={workspace} day={day} run={run} busy={busy} onClose={() => setEditing(false)} />}
-    {closing && <AssignmentClose assignment={assignment} day={day} run={run} busy={busy} onClose={() => setClosing(false)} />}
-  </article>;
+    {children}
+    <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
+      <span className="mr-auto min-w-0 basis-56 text-[13px] text-muted-foreground">{summary}</span>
+      {actions}
+    </div>
+    {error && <ErrorText>{error}</ErrorText>}
+  </div>;
 }
 function AssignmentEdit({
   assignment,
@@ -2103,58 +2293,52 @@ function AssignmentEdit({
       setSaving(false);
     }
   }
-  return <div className="hr-assign-close">
-    <div className="hr-assign-close-head">
-      <h4>Edit this assignment</h4>
-      {project && <small className="hr-assign-summary">{project.title}{windowEnd ? ` · ends ${date(windowEnd)}` : ''}</small>}
-    </div>
-    <div className="hr-assign-grid">
-      {profiles.length > 0 && <div className="hr-assign-field">
-        <span>Pricing line</span>
-        <select className="hr-assign-input" value={pricingLine} onChange={event => setPricingLine(event.target.value)}>
-          <option value="">Whole project</option>
-          {assignment.pricing_line && !profiles.some(line => line.name === assignment.pricing_line) && <option value={assignment.pricing_line}>{assignment.pricing_line} (removed line)</option>}
-          {profiles.map(line => <option key={line.name} value={line.name}>{`${line.name} · ${lineRateLabel(line.tjm, project?.currency ?? 'EUR')}`}</option>)}
-        </select>
-        <small>The TJM profile this assignment bills against.</small>
-      </div>}
-      <div className="hr-assign-field">
-        <span>Allocation (%)</span>
-        <input type="number" className="hr-assign-input" min={1} max={100} value={allocation} onChange={event => setAllocation(event.target.value)} />
-      </div>
-      <div className="hr-assign-field">
-        <span>Commitment</span>
-        <select className="hr-assign-input" value={status} onChange={event => setStatus(event.target.value as typeof status)}>
-          {(['proposed', 'reserved', 'confirmed', 'active'] as const).filter(item => !(cannotPropose && item === 'proposed')).map(item => <option key={item} value={item}>{label(item)}</option>)}
-        </select>
-        {cannotPropose && <small>Started commitments cannot return to proposed.</small>}
-      </div>
-      <div className="hr-assign-field">
-        <span>Starts</span>
-        <input type="date" className="hr-assign-input" value={startDate} min={startMin} max={endMax} onChange={event => setStartDate(event.target.value)} />
-        {startMin && <small>No earlier than {date(startMin)}.</small>}
-      </div>
-      <div className="hr-assign-field">
-        <span>Ends{endRequired ? '' : ', if known'}</span>
-        <input type="date" className="hr-assign-input" value={endDate} min={startDate} max={endMax} onChange={event => setEndDate(event.target.value)} />
+  const id = (field: string) => `edit-${assignment.id}-${field}`;
+  return <PanelShell title="Edit this assignment" aside={project && <small className="text-xs text-muted-foreground">{project.title}{windowEnd ? ` · ends ${date(windowEnd)}` : ''}</small>} summary={summary} error={error} actions={<>
+    <Button type="button" variant="outline" disabled={saving} onClick={onClose}>Discard</Button>
+    <Button type="button" disabled={!ready || busy || saving} onClick={() => void submit()}>
+      {saving ? 'Saving…' : 'Save changes'}
+    </Button>
+  </>}>
+    <div className="grid gap-4 @lg:grid-cols-2">
+      {profiles.length > 0 && <UiField className="gap-1.5">
+        <FieldLabel htmlFor={id('line')}>Pricing line</FieldLabel>
+        <NativeSelect id={id('line')} className="w-full" value={pricingLine} onChange={event => setPricingLine(event.target.value)}>
+          <NativeSelectOption value="">Whole project</NativeSelectOption>
+          {assignment.pricing_line && !profiles.some(line => line.name === assignment.pricing_line) && <NativeSelectOption value={assignment.pricing_line}>{assignment.pricing_line} (removed line)</NativeSelectOption>}
+          {profiles.map(line => <NativeSelectOption key={line.name} value={line.name}>{`${line.name} · ${lineRateLabel(line.tjm, project?.currency ?? 'EUR')}`}</NativeSelectOption>)}
+        </NativeSelect>
+        <FieldDescription className="text-xs">The TJM profile this assignment bills against.</FieldDescription>
+      </UiField>}
+      <UiField className="gap-1.5">
+        <FieldLabel htmlFor={id('allocation')}>Allocation (%)</FieldLabel>
+        <Input id={id('allocation')} type="number" min={1} max={100} value={allocation} onChange={event => setAllocation(event.target.value)} />
+      </UiField>
+      <UiField className="gap-1.5">
+        <FieldLabel htmlFor={id('status')}>Commitment</FieldLabel>
+        <NativeSelect id={id('status')} className="w-full" value={status} onChange={event => setStatus(event.target.value as typeof status)}>
+          {(['proposed', 'reserved', 'confirmed', 'active'] as const).filter(item => !(cannotPropose && item === 'proposed')).map(item => <NativeSelectOption key={item} value={item}>{label(item)}</NativeSelectOption>)}
+        </NativeSelect>
+        {cannotPropose && <FieldDescription className="text-xs">Started commitments cannot return to proposed.</FieldDescription>}
+      </UiField>
+      <UiField className="gap-1.5">
+        <FieldLabel>Starts</FieldLabel>
+        <DateField value={startDate} min={startMin} max={endMax} onChange={setStartDate} aria-label="Starts" required />
+        {startMin && <FieldDescription className="text-xs">No earlier than {date(startMin)}.</FieldDescription>}
+      </UiField>
+      <UiField className="gap-1.5">
+        <FieldLabel>Ends{endRequired ? '' : ', if known'}</FieldLabel>
+        <DateField value={endDate} min={startDate} max={endMax} onChange={setEndDate} aria-label="Ends" required={endRequired} />
         {windowEnd
-          ? <small>The project ends {date(windowEnd)}; an end date is required.</small>
-          : <small>Leave empty for open-ended. Capacity is still checked against overlapping commitments.</small>}
-      </div>
-      <div className="hr-assign-field">
-        <span>Change rationale</span>
-        <textarea className="hr-assign-input" rows={2} placeholder="Why is this changing?" maxLength={5000} value={rationale} onChange={event => setRationale(event.target.value)} />
-      </div>
+          ? <FieldDescription className="text-xs">The project ends {date(windowEnd)}; an end date is required.</FieldDescription>
+          : <FieldDescription className="text-xs">Leave empty for open-ended. Capacity is still checked against overlapping commitments.</FieldDescription>}
+      </UiField>
+      <UiField className="gap-1.5 @lg:col-span-2">
+        <FieldLabel htmlFor={id('rationale')}>Change rationale</FieldLabel>
+        <Textarea id={id('rationale')} className="min-h-16" placeholder="Why is this changing?" maxLength={5000} value={rationale} onChange={event => setRationale(event.target.value)} />
+      </UiField>
     </div>
-    <div className="hr-assign-foot">
-      <span className="hr-assign-summary">{summary}</span>
-      <button type="button" className="btn secondary" disabled={saving} onClick={onClose}>Discard</button>
-      <button type="button" className="btn" disabled={!ready || busy || saving} onClick={() => void submit()}>
-        {saving ? 'Saving…' : 'Save changes'}
-      </button>
-    </div>
-    {error && <p role="alert" className="hr-error">{error}</p>}
-  </div>;
+  </PanelShell>;
 }
 const ASSIGN_REASONS = ['Mission completed', 'Ended early by client', 'Consultant left', 'Replaced', 'Other'];
 function AssignmentClose({
@@ -2190,14 +2374,14 @@ function AssignmentClose({
       ? reason ? `Cancels the ${date(assignment.start_date)} start · ${reason}` : 'Pick a reason to continue'
       : 'Not available for started assignments'
     : reason ? `Ends ${date(endDate)} · ${reason}` : 'Pick a reason to continue';
-  const reasonField = <div className="hr-assign-field">
-    <span>Reason</span>
-    <div className="hr-choice-row">
-      {ASSIGN_REASONS.map(item => <button key={item} type="button" className="hr-choice" aria-pressed={reason === item} onClick={() => setReason(item)}>
+  const reasonField = <div className="flex min-w-0 flex-col gap-2">
+    <span className="text-sm font-medium" id={`reason-${assignment.id}`}>Reason</span>
+    <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby={`reason-${assignment.id}`}>
+      {ASSIGN_REASONS.map(item => <button key={item} type="button" className={CHIP} aria-pressed={reason === item} onClick={() => setReason(item)}>
         {item}
       </button>)}
     </div>
-    <textarea className="hr-assign-input" rows={2} placeholder="Add a note (optional)" maxLength={5000} value={note} onChange={event => setNote(event.target.value)} />
+    <Textarea className="min-h-16" aria-label="Note" placeholder="Add a note (optional)" maxLength={5000} value={note} onChange={event => setNote(event.target.value)} />
   </div>;
   async function submit() {
     if (!ready || saving) return;
@@ -2209,7 +2393,7 @@ function AssignmentClose({
         assignment_id: assignment.id,
         expected_version: assignment.version,
         end_date: isEnd ? endDate : assignment.end_date ?? assignment.start_date,
-        rationale: note.trim() ? `${reason} — ${note.trim()}` : reason,
+        rationale: note.trim() ? `${reason}: ${note.trim()}` : reason,
         cancel: !isEnd
       }, isEnd ? 'Assignment ended with history preserved.' : 'Assignment cancelled with history preserved.');
       onClose();
@@ -2219,44 +2403,40 @@ function AssignmentClose({
       setSaving(false);
     }
   }
-  return <div className="hr-assign-close">
-    <div className="hr-assign-close-head">
-      <h4>Close this assignment</h4>
-      <div className="hr-segmented" role="group" aria-label="Close mode">
-        <button type="button" aria-pressed={isEnd} onClick={() => setMode('end')}>End</button>
-        <button type="button" aria-pressed={!isEnd} onClick={() => setMode('cancel')}>Cancel</button>
-      </div>
-    </div>
-    {isEnd && <div className="hr-assign-grid">
-      <div className="hr-assign-field">
-        <span>Actual end date</span>
-        <div className="hr-choice-row">
-          {assignment.end_date && <button type="button" className="hr-choice" aria-pressed={when === 'planned'} onClick={() => { setWhen('planned'); setCustomDate(''); }}>
-            <strong>{date(assignment.end_date)}</strong>
-            <small>Planned end</small>
+  const whenChoice = 'flex cursor-pointer flex-col items-start gap-0.5 rounded-lg border border-border bg-background px-3 py-2 text-left transition-colors hover:border-foreground/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:border-foreground aria-pressed:ring-1 aria-pressed:ring-foreground';
+  return <PanelShell title="Close this assignment" aside={<ToggleGroup aria-label="Close mode" value={[mode]} onValueChange={values => {
+    if (values[0]) setMode(values[0] as 'end' | 'cancel');
+  }}>
+      <ToggleGroupItem value="end" size="sm">End</ToggleGroupItem>
+      <ToggleGroupItem value="cancel" size="sm">Cancel</ToggleGroupItem>
+    </ToggleGroup>} summary={summary} error={error} actions={<>
+    <Button type="button" variant="outline" disabled={saving} onClick={onClose}>Discard</Button>
+    <Button type="button" variant={isEnd ? 'default' : 'destructive'} disabled={!ready || busy || saving} onClick={() => void submit()}>
+      {saving ? 'Saving…' : isEnd ? 'End assignment' : 'Cancel assignment'}
+    </Button>
+  </>}>
+    {isEnd && <div className="grid gap-5 @lg:grid-cols-2">
+      <div className="flex min-w-0 flex-col gap-2">
+        <span className="text-sm font-medium">Actual end date</span>
+        <div className="flex flex-wrap gap-2">
+          {assignment.end_date && <button type="button" className={whenChoice} aria-pressed={when === 'planned'} onClick={() => { setWhen('planned'); setCustomDate(''); }}>
+            <strong className="text-sm font-medium">{date(assignment.end_date)}</strong>
+            <small className="text-xs text-muted-foreground">Planned end</small>
           </button>}
-          <button type="button" className="hr-choice" aria-pressed={when === 'today'} onClick={() => { setWhen('today'); setCustomDate(''); }}>
-            <strong>{date(day)}</strong>
-            <small>Today</small>
+          <button type="button" className={whenChoice} aria-pressed={when === 'today'} onClick={() => { setWhen('today'); setCustomDate(''); }}>
+            <strong className="text-sm font-medium">{date(day)}</strong>
+            <small className="text-xs text-muted-foreground">Today</small>
           </button>
         </div>
-        <input type="date" className="hr-assign-input" value={customDate} min={assignment.start_date} max={lastAllowedDay} aria-label="Custom end date" onChange={event => { setWhen('custom'); setCustomDate(event.target.value); }} />
+        <DateField value={customDate} min={assignment.start_date} max={lastAllowedDay} placeholder="Custom date" aria-label="Custom end date" onChange={value => { setWhen(value ? 'custom' : 'today'); setCustomDate(value); }} />
       </div>
       {reasonField}
     </div>}
     {!isEnd && cancellable && reasonField}
-    {!isEnd && !cancellable && <div className="hr-assign-info">
+    {!isEnd && !cancellable && <p className={QUIET}>
       Cancelling removes an assignment that never started. This one started on {date(assignment.start_date)}, so it can only be ended.
-    </div>}
-    <div className="hr-assign-foot">
-      <span className="hr-assign-summary">{summary}</span>
-      <button type="button" className="btn secondary" disabled={saving} onClick={onClose}>Discard</button>
-      <button type="button" className="btn" disabled={!ready || busy || saving} onClick={() => void submit()}>
-        {saving ? 'Saving…' : isEnd ? 'End assignment' : 'Cancel assignment'}
-      </button>
-    </div>
-    {error && <p role="alert" className="hr-error">{error}</p>}
-  </div>;
+    </p>}
+  </PanelShell>;
 }
 function PersonCra({
   person,
@@ -2271,12 +2451,12 @@ function PersonCra({
   const current = employees.find(employee => employee.id === selected) ?? preferred;
   if (!current) return <Empty>No employment period yet. The monthly CRA starts with an employment record.</Empty>;
   return <>
-    {employees.length > 1 && <label className="hr-field">
-      <span>Employment period</span>
-      <select value={current.id} onChange={event => setSelected(event.target.value)}>
-        {employees.map(employee => <option value={employee.id} key={employee.id}>{employee.role} · {date(employee.start_date)}{employee.end_date && ` to ${date(employee.end_date)}`} · {label(employee.status)}</option>)}
-      </select>
-    </label>}
+    {employees.length > 1 && <UiField className="max-w-xl gap-1.5">
+      <FieldLabel htmlFor={`cra-period-${person.id}`}>Employment period</FieldLabel>
+      <NativeSelect id={`cra-period-${person.id}`} className="w-full" value={current.id} onChange={event => setSelected(event.target.value)}>
+        {employees.map(employee => <NativeSelectOption value={employee.id} key={employee.id}>{employee.role} · {date(employee.start_date)}{employee.end_date && ` to ${date(employee.end_date)}`} · {label(employee.status)}</NativeSelectOption>)}
+      </NativeSelect>
+    </UiField>}
     <CraScreen audience="admin" draftOwner={context.actorEmail} fixedEmployeeId={current.id} basePath={`/hr/people/${person.id}/cra`} />
   </>;
 }
@@ -2293,24 +2473,28 @@ function History({
 }) {
   const events = workspace.events.filter(event => event.person_id === person.id).sort((a, b) => b.created_at.localeCompare(a.created_at));
   return <>
-    <Form run={run} busy={busy} title="Add an activity note" button="Add note" success="Activity recorded. Recruitment stage aging is unchanged." reset submit={data => ({
-      kind: 'add_note',
-      person_id: person.id,
-      rationale: text(data, 'rationale')
-    })}>
-      <Field name="rationale" label="Note" type="textarea" required />
-    </Form>
+    <Card>
+      <CardContent>
+        <Form run={run} busy={busy} title="Add an activity note" button="Add note" success="Activity recorded. Recruitment stage aging is unchanged." reset submit={data => ({
+          kind: 'add_note',
+          person_id: person.id,
+          rationale: text(data, 'rationale')
+        })}>
+          <Field name="rationale" label="Note" type="textarea" required />
+        </Form>
+      </CardContent>
+    </Card>
     <Section title="Complete lifecycle timeline">
-      {events.length ? <ol className="hr-timeline">
-        {events.map(event => <li key={event.id}>
-          <strong>
+      {events.length ? <ol className="m-0 flex list-none flex-col p-0">
+        {events.map(event => <li key={event.id} className="relative flex flex-col gap-1 border-l border-border pb-6 pl-5 last:pb-0 before:absolute before:top-1.5 before:-left-[5px] before:size-2.5 before:rounded-full before:border before:border-foreground before:bg-background">
+          <strong className="text-sm font-medium">
             {label(event.kind)}
             {event.next_state && ` · ${label(event.next_state)}`}
           </strong>
-          <small>{new Date(event.created_at).toLocaleString()} · {event.actor_email}{event.application_id ? ' · Application' : event.employee_id ? ' · Employment' : ''}</small>
-          <p>
+          <small className="text-xs text-muted-foreground">{new Date(event.created_at).toLocaleString()} · {event.actor_email}{event.application_id ? ' · Application' : event.employee_id ? ' · Employment' : ''}</small>
+          {event.rationale && <p className="m-0 text-sm whitespace-pre-wrap">
             {event.rationale}
-          </p>
+          </p>}
         </li>)}
       </ol> : <Empty>No activity yet.</Empty>}
     </Section>
@@ -2343,7 +2527,7 @@ export function AiPanel({
   run: RunCommand;
   reload: () => Promise<void>;
   kind: AssistanceRequest['kind'];
-  /** Borderless variant for the minimal Employment sections. */
+  /** Borderless variant for the Employment sections. */
   bare?: boolean;
   /** Button label in bare mode. */
   cta?: string;
@@ -2380,28 +2564,26 @@ export function AiPanel({
       setGenerating(false);
     }
   }
-  return <section className={bare ? 'hr-emp-ai' : 'hr-card hr-suggestion'}>
-    <div className={bare ? 'hr-emp-ai-head' : 'hr-card-head'}>
-      <div>
-        <div className="hr-inline">
-          <Sparkles size={16} aria-hidden="true" />
-          <h3>
-            {aiTitles[kind]}
-          </h3>
-        </div>
-        {!bare && <p>AI uses this record's permitted evidence. Review the sources and edit the draft before applying it.</p>}
-      </div>
-      <button className={bare ? 'hr-emp-ghost plain' : 'btn secondary'} disabled={generating} onClick={() => void generate()}>
-        {generating ? 'Preparing draft…' : cta ?? 'Generate draft'}
-      </button>
+  const head = <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
+      <h3 className="m-0 flex items-center gap-2 text-sm font-medium">
+        <Sparkles className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        {aiTitles[kind]}
+      </h3>
+      {!bare && <p className={cn(QUIET, 'text-xs')}>AI uses this record's permitted evidence. Review the sources and edit the draft before applying it.</p>}
     </div>
-    {error && <p role="alert" className="hr-error">
+    <Button type="button" variant={bare ? 'ghost' : 'outline'} size="sm" disabled={generating} onClick={() => void generate()}>
+      {generating ? 'Preparing draft…' : cta ?? 'Generate draft'}
+    </Button>
+  </div>;
+  const body = <>
+    {error && <ErrorText>
       {error}
-    </p>}
+    </ErrorText>}
     {suggestions.slice(0, 3).map(suggestion => {
       const parsed = assistancePayloadSchema.safeParse(suggestion.payload);
       const sources = z.array(assistanceSourceSchema).safeParse(suggestion.sources);
-      if (!parsed.success) return <p role="alert" key={suggestion.id}>This suggestion has an unsupported format and cannot be applied.</p>;
+      if (!parsed.success) return <p role="alert" className="m-0 text-[13px] text-destructive" key={suggestion.id}>This suggestion has an unsupported format and cannot be applied.</p>;
       const payload = parsed.data;
       const targetVersion = person.version;
       const stale = suggestion.status === 'stale' || suggestion.input_version !== targetVersion || !sources.success || sources.data.some(source => {
@@ -2409,35 +2591,31 @@ export function AiPanel({
         const record = records.find(item => item.id === source.id);
         return !record || record.version !== source.version;
       });
-      return <div key={suggestion.id} style={{
-        borderTop: '1px solid var(--qs-line)',
-        paddingTop: 16,
-        marginTop: 16
-      }}>
-        <div className="hr-card-head">
+      return <div key={suggestion.id} className="flex flex-col gap-3 border-t border-border pt-4 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Tag tone={stale ? 'urgent' : suggestion.status === 'accepted' ? 'good' : 'quiet'}>
             {stale ? 'Source changed. Generate a fresh draft.' : label(suggestion.status)}
           </Tag>
-          <small className="hr-source-list">{suggestion.model} · {date(suggestion.created_at)}</small>
+          <small className="text-xs text-muted-foreground">{suggestion.model} · {date(suggestion.created_at)}</small>
         </div>
-        <p>
+        <p className="m-0">
           {payload.summary}
         </p>
-        <ol>
-          {payload.items.map((item, index) => <li key={index}>
-            <strong>
+        <ol className="m-0 flex list-decimal flex-col gap-2.5 pl-5">
+          {payload.items.map((item, index) => <li key={index} className="pl-1">
+            <strong className="font-medium">
               {item.title}
             </strong>
-            <p>
+            <p className="m-0 mt-0.5">
               {item.detail}
             </p>
-            <span className="hr-source-list">
+            <span className="text-xs text-muted-foreground">
               {item.source_ids.map(id => sourceDescription(workspace, id)).join(' · ') || 'No specific source cited'}
             </span>
           </li>)}
         </ol>
-        {sources.success && <div className="hr-source-list">Sources: {sources.data.map(source => `${sourceDescription(workspace, source.id)} (version ${source.version})`).join(' · ')}</div>}
-        {suggestion.status === 'draft' && <div className="hr-inline">
+        {sources.success && <div className="text-xs text-muted-foreground">Sources: {sources.data.map(source => `${sourceDescription(workspace, source.id)} (version ${source.version})`).join(' · ')}</div>}
+        {suggestion.status === 'draft' && <div className="flex flex-wrap items-start gap-2">
           <Action run={run} disabled={stale} input={{
             kind: 'review_suggestion',
             suggestion_id: suggestion.id,
@@ -2449,10 +2627,7 @@ export function AiPanel({
             status: 'dismissed'
           }} success="Suggestion dismissed.">Dismiss</Action>
         </div>}
-        {kind === 'onboarding_plan' && suggestion.status === 'accepted' && !stale && employee && <details className="hr-disclosure" style={{
-          marginTop: 16
-        }}>
-          <summary>Review and add an individual task</summary>
+        {kind === 'onboarding_plan' && suggestion.status === 'accepted' && !stale && employee && <Disclosure summary="Review and add an individual task">
           <Form run={run} button="Add reviewed task" success="Reviewed task added to the plan." submit={data => ({
             kind: 'save_task',
             employee_id: employee.id,
@@ -2470,16 +2645,24 @@ export function AiPanel({
             <Field name="phase" label="Phase" options={options(['preboarding', 'onboarding', 'probation'])} value="onboarding" required />
             <Field name="assignee" label="Owner email" type="email" required />
             <Field name="due_date" label="Due date" type="date" required />
-            <label className="hr-checkbox"><input type="checkbox" name="required" />Required before completion</label>
+            <CheckField name="required" className="self-end pb-2">Required before completion</CheckField>
           </Form>
-        </details>}
-        {kind === 'handover' && suggestion.status === 'accepted' && !stale && employee && <div className="hr-source-list" style={{
-          marginTop: 16
-        }}><AlertCircle size={13} aria-hidden="true" /> Copy and edit the draft in Exit details. Saving it is a separate action.</div>}
+        </Disclosure>}
+        {kind === 'handover' && suggestion.status === 'accepted' && !stale && employee && <p className="m-0 flex items-center gap-1.5 text-xs text-muted-foreground"><AlertCircle className="size-3.5" aria-hidden="true" /> Copy and edit the draft in Exit details. Saving it is a separate action.</p>}
       </div>;
     })}
-    {!suggestions.length && <p className="hr-source-list">No draft generated for this context yet.</p>}
+    {!suggestions.length && <p className={cn(QUIET, 'text-xs')}>No draft generated for this context yet.</p>}
+  </>;
+  if (bare) return <section className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-4">
+    {head}
+    {body}
   </section>;
+  return <Card size="sm" className="border-dashed">
+    <CardContent className="flex flex-col gap-3">
+      {head}
+      {body}
+    </CardContent>
+  </Card>;
 }
 function sourceDescription(workspace: Workspace, id: string) {
   const person = workspace.people.find(item => item.id === id);

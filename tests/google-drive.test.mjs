@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { createGoogleDriveHandler, contractFolderName } from '../apps/admin/server/google-drive.ts';
-import { encryptApiKey } from '../apps/admin/server/ai-settings.ts';
+import { decryptApiKey, encryptApiKey } from '../apps/admin/server/ai-settings.ts';
 
 process.env.SUPABASE_URL = 'https://example.supabase.co';
 process.env.SUPABASE_PUBLISHABLE_KEY = 'public-anon-key';
@@ -47,6 +47,7 @@ function makeClient(overrides = {}) {
       if (table === 'google_drive_settings') return chain(null, { maybeSingle: async () => ({ data: { encrypted_credentials: encrypted, updated_at: '2026-10-23T09:00:00Z' }, error: null }) });
       if (table === 'sales_projects') return chain({ data: { id: projectId, title: 'Refonte CRM', client_id: clientId, drive_folder_id: null, drive_folder_name: null, drive_folder_link: null }, error: null }, overrides);
       if (table === 'sales_clients') return chain({ data: { id: clientId, name: 'Teamwill' }, error: null });
+      if (table === 'document_folders') return chain({ data: null, error: null });
       throw new Error(`unexpected table ${table}`);
     },
   };
@@ -80,7 +81,8 @@ function mockDrive(t, drive, handlers = {}) {
       const u = new URL(target);
       if (init.method === 'POST') return { ok: true, status: 200, json: async () => ({ id: contractFolderId, name: u.searchParams.get('fields') ? 'Teamwill/Refonte CRM' : '', webViewLink: 'https://drive.google.com/drive/folders/contract-folder-id' }) };
       // GET: folder search vs file read, distinguished by the path.
-      if (u.pathname.includes(contractFolderId)) return { ok: true, status: 200, json: async () => ({ id: contractFolderId, name: 'signed-contract.pdf', mimeType: 'application/pdf', size: '12345', modifiedTime: '2026-10-23T10:00:00Z', webViewLink: 'https://drive.google.com/file/d/abc' }) };
+      // driveId: the folder sits in a Shared Drive, which uploads require.
+      if (u.pathname.includes(contractFolderId)) return { ok: true, status: 200, json: async () => ({ id: contractFolderId, name: 'signed-contract.pdf', mimeType: 'application/pdf', size: '12345', modifiedTime: '2026-10-23T10:00:00Z', webViewLink: 'https://drive.google.com/file/d/abc', driveId: 'shared-drive-1' }) };
       return { ok: true, status: 200, json: async () => ({ files: [] }) };
     }
     throw new Error(`unexpected fetch: ${target}`);
@@ -123,6 +125,73 @@ test('PUT saves the service account and resolves the Contrats_Clients root folde
   assert.equal(upserts[0][0].id, 'connection');
   assert.ok(upserts[0][0].encrypted_credentials.startsWith('v1.'));
   assert.equal(upserts[0][0].encrypted_credentials.includes(privateKeyPem), false, 'key stored encrypted');
+});
+
+test('PUT with only the HR folder keeps the saved key and contracts root', async t => {
+  const drive = [];
+  mockDrive(t, drive, {
+    files: async (target) => {
+      const u = new URL(target);
+      if (u.pathname.endsWith(`/files/${rootFolderId}`)) return { ok: true, status: 200, json: async () => ({ id: rootFolderId, name: 'Contrats_Clients' }) };
+      if (u.pathname.endsWith('/files/hr-folder')) return { ok: true, status: 200, json: async () => ({ id: 'hr-folder', name: 'Collaborateurs' }) };
+      throw new Error(`unexpected Drive call ${target}`);
+    },
+  });
+  const upserts = [];
+  const base = makeClient();
+  const client = {
+    ...base,
+    from: (table) => table === 'google_drive_settings'
+      ? chain(null, { upserts, maybeSingle: async () => ({ data: { encrypted_credentials: encrypted }, error: null }) })
+      : base.from(table),
+  };
+  const handler = createGoogleDriveHandler({ createClient: () => client });
+  let res = makeRes();
+  await handler({ method: 'PUT', headers: { authorization: 'Bearer actor' }, body: { peopleRootFolderId: 'hr-folder' } }, res);
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.equal(res.body.rootFolderName, 'Contrats_Clients');
+  assert.equal(res.body.peopleRootFolderName, 'Collaborateurs');
+  assert.ok(!drive.some(d => new URL(d.url).searchParams.get('q')), 'No root folder search: the saved root is reused');
+  const saved = JSON.parse(decryptApiKey(upserts[0][0].encrypted_credentials));
+  assert.equal(saved.private_key, privateKeyPem, 'Saved key kept');
+  assert.equal(saved.people_root_folder_id, 'hr-folder');
+
+  res = makeRes();
+  await handler({ method: 'PUT', headers: { authorization: 'Bearer actor' }, body: { peopleRootFolderId: rootFolderId } }, res);
+  assert.equal(res.code, 400);
+  assert.match(res.body.error, /must be separate from the contracts root/);
+});
+
+test('PUT with only the candidate CVs folder saves it and keeps it separate from the contracts root', async t => {
+  const drive = [];
+  mockDrive(t, drive, {
+    files: async (target) => {
+      const u = new URL(target);
+      if (u.pathname.endsWith(`/files/${rootFolderId}`)) return { ok: true, status: 200, json: async () => ({ id: rootFolderId, name: 'Contrats_Clients' }) };
+      if (u.pathname.endsWith('/files/cv-folder')) return { ok: true, status: 200, json: async () => ({ id: 'cv-folder', name: 'CVs' }) };
+      throw new Error(`unexpected Drive call ${target}`);
+    },
+  });
+  const upserts = [];
+  const base = makeClient();
+  const client = {
+    ...base,
+    from: (table) => table === 'google_drive_settings'
+      ? chain(null, { upserts, maybeSingle: async () => ({ data: { encrypted_credentials: encrypted }, error: null }) })
+      : base.from(table),
+  };
+  const handler = createGoogleDriveHandler({ createClient: () => client });
+  let res = makeRes();
+  await handler({ method: 'PUT', headers: { authorization: 'Bearer actor' }, body: { recruitmentRootFolderId: 'https://drive.google.com/drive/u/1/folders/cv-folder' } }, res);
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.equal(res.body.recruitmentRootFolderName, 'CVs');
+  const saved = JSON.parse(decryptApiKey(upserts[0][0].encrypted_credentials));
+  assert.equal(saved.recruitment_root_folder_id, 'cv-folder');
+
+  res = makeRes();
+  await handler({ method: 'PUT', headers: { authorization: 'Bearer actor' }, body: { recruitmentRootFolderId: rootFolderId } }, res);
+  assert.equal(res.code, 400);
+  assert.match(res.body.error, /candidate CVs folder must be separate/);
 });
 
 test('PUT without a shared root folder explains the share step', async t => {
@@ -234,4 +303,84 @@ test('GET reports the connection without exposing the key', async t => {
   assert.equal(res.body.serviceAccountEmail, serviceAccount.client_email);
   assert.equal(res.body.rootFolderName, 'Contrats_Clients');
   assert.equal(JSON.stringify(res.body).includes('PRIVATE KEY'), false);
+});
+
+/** Drive mock for the archive moves: folders by name, parents per file. */
+function mockArchiveDrive(t, drive, { parents = [rootFolderId], existing = {} } = {}) {
+  let created = 0;
+  mockDrive(t, drive, {
+    files: async (target, init) => {
+      const u = new URL(target);
+      if (init.method === 'POST') {
+        const body = JSON.parse(init.body);
+        const id = `new-${body.name}-${++created}`;
+        existing[`${body.parents[0]}/${body.name}`] = id;
+        return { ok: true, status: 200, json: async () => ({ id, name: body.name }) };
+      }
+      if (init.method === 'PATCH') return { ok: true, status: 200, json: async () => ({ id: contractFolderId, parents: [u.searchParams.get('addParents')] }) };
+      if (u.pathname.endsWith(`/files/${contractFolderId}`)) return { ok: true, status: 200, json: async () => ({ id: contractFolderId, parents }) };
+      const q = u.searchParams.get('q') || '';
+      const parent = /'([^']+)' in parents/.exec(q)?.[1];
+      const name = /name='([^']+)'/.exec(q)?.[1];
+      const id = existing[`${parent}/${name}`];
+      return { ok: true, status: 200, json: async () => ({ files: id ? [{ id, name }] : [] }) };
+    },
+  });
+}
+
+const linkedProject = (over = {}) => ({ data: { id: projectId, title: 'Refonte CRM', client_id: clientId, end_date: '2026-06-30', drive_folder_id: contractFolderId, drive_folder_name: 'Teamwill/Refonte CRM', drive_folder_link: null, ...over }, error: null });
+
+test('archive-folder moves the contract folder into archived/<end year>', async t => {
+  const drive = [];
+  mockArchiveDrive(t, drive);
+  const res = makeRes();
+  await createGoogleDriveHandler({ createClient: () => makeClient({ single: async () => linkedProject() }) })(
+    { method: 'POST', headers: { authorization: 'Bearer actor' }, body: { action: 'archive-folder', projectId, archived: true } },
+    res,
+  );
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.equal(res.body.moved, true);
+  const creates = drive.filter(d => d.method === 'POST').map(d => [d.body.name, d.body.parents[0]]);
+  assert.deepEqual(creates, [['archived', rootFolderId], ['2026', 'new-archived-1']]);
+  const move = new URL(drive.find(d => d.method === 'PATCH').url);
+  assert.equal(move.pathname.endsWith(`/files/${contractFolderId}`), true);
+  assert.equal(move.searchParams.get('addParents'), 'new-2026-2');
+  assert.equal(move.searchParams.get('removeParents'), rootFolderId);
+});
+
+test('archive-folder restores to the root, and is a no-op when already in place or unlinked', async t => {
+  const drive = [];
+  mockArchiveDrive(t, drive, { parents: ['year-folder'] });
+  const res = makeRes();
+  await createGoogleDriveHandler({ createClient: () => makeClient({ single: async () => linkedProject() }) })(
+    { method: 'POST', headers: { authorization: 'Bearer actor' }, body: { action: 'archive-folder', projectId, archived: false } },
+    res,
+  );
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  const move = new URL(drive.find(d => d.method === 'PATCH').url);
+  assert.equal(move.searchParams.get('addParents'), rootFolderId);
+  assert.equal(move.searchParams.get('removeParents'), 'year-folder');
+
+  const again = [];
+  t.mock.restoreAll();
+  mockArchiveDrive(t, again);
+  const res2 = makeRes();
+  await createGoogleDriveHandler({ createClient: () => makeClient({ single: async () => linkedProject() }) })(
+    { method: 'POST', headers: { authorization: 'Bearer actor' }, body: { action: 'archive-folder', projectId, archived: false } },
+    res2,
+  );
+  assert.equal(res2.body.moved, false);
+  assert.equal(again.some(d => d.method === 'PATCH'), false);
+
+  const none = [];
+  t.mock.restoreAll();
+  mockArchiveDrive(t, none);
+  const res3 = makeRes();
+  await createGoogleDriveHandler({ createClient: () => makeClient({ single: async () => linkedProject({ drive_folder_id: null }), maybeSingle: async () => ({ data: null, error: null }) }) })(
+    { method: 'POST', headers: { authorization: 'Bearer actor' }, body: { action: 'archive-folder', projectId, archived: true } },
+    res3,
+  );
+  assert.equal(res3.code, 200, JSON.stringify(res3.body));
+  assert.equal(res3.body.moved, false);
+  assert.equal(none.some(d => d.method === 'PATCH' || d.method === 'POST'), false);
 });

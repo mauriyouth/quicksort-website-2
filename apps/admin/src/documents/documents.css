@@ -1,0 +1,32 @@
+/* Legacy documents chrome still used by the HR Documents alerts page
+ * (src/documents/DocumentAlerts.tsx) and the payslip import page
+ * (src/payslips/PayslipImport.tsx). The portal checklist (MyDocuments),
+ * DocumentsPanel, TypeSearchField and PersonPhoto are on @quicksort-sas/ui. */
+
+/* Sizing hook kept on the type picker wrapper (TypeSearchField). */
+.doc-search-anchor {
+  position: relative;
+}
+
+/* HR → Documents alerts page (src/documents/DocumentAlerts.tsx). Uses the
+ * Projects list chrome (projects-card / projects-toolbar / projects-tabs). */
+
+.docs-empty {
+  margin: 0;
+  padding: 28px 24px;
+  font-size: 14px;
+  color: var(--qs-muted);
+}
+
+.docs-more {
+  color: var(--qs-ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+.docs-more {
+  display: inline-block;
+  margin-top: 8px;
+}

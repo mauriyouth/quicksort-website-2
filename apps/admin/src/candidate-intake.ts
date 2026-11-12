@@ -37,6 +37,8 @@ export const intakeRequest = z
       z.object({ kind: z.literal("pdf"), data: base64Pdf, name: z.string().trim().min(1).max(250) }),
       z.object({ kind: z.literal("storage"), path: z.string().trim().min(1).max(500), name: z.string().trim().min(1).max(250) }),
       z.object({ kind: z.literal("text"), text: z.string().trim().min(50).max(MAX_INTAKE_TEXT_CHARS) }),
+      // The person's newest CV filed on Google Drive (Applications → Import from resume).
+      z.object({ kind: z.literal("drive"), personId: z.string().uuid() }),
       z.object({
         kind: z.literal("linkedin"),
         url: linkedInUrl,
@@ -45,6 +47,25 @@ export const intakeRequest = z
     ]),
   })
   .strict();
+
+/**
+ * One position on a person's record (hr_people.experience), parsed from the
+ * CV or typed by HR. start/end are "YYYY-MM"; end "" means current position.
+ * Every field is required (empty string allowed) so the model's structured
+ * output and the stored value share one shape.
+ */
+export const experienceItemSchema = z.object({
+  title: z.string().max(200),
+  company: z.string().max(200),
+  contract_type: z.string().max(80),
+  start: z.string().max(7),
+  end: z.string().max(7),
+  location: z.string().max(200),
+  summary: z.string().max(1200),
+  skills: z.array(z.string().trim().min(1).max(80)).max(12),
+});
+export type ExperienceItem = z.infer<typeof experienceItemSchema>;
+export const MAX_EXPERIENCE_ITEMS = 30;
 
 export const parsedProfileSchema = z.object({
   fullName: z.string().max(200),
@@ -57,6 +78,7 @@ export const parsedProfileSchema = z.object({
   linkedinUrl: z.string().max(300),
   yearsExperience: z.number().min(0).max(70).nullable(),
   skills: z.array(z.string().trim().min(1).max(80)).max(40),
+  experience: z.array(experienceItemSchema).max(MAX_EXPERIENCE_ITEMS),
   summary: z.string().max(3000),
   confidence: z.enum(["low", "medium", "high"]),
 });
@@ -65,4 +87,4 @@ export type IntakeRequest = z.infer<typeof intakeRequest>;
 export type ParsedProfile = z.infer<typeof parsedProfileSchema>;
 
 export const INTAKE_SYSTEM_INSTRUCTIONS =
-  "You extract candidate profiles for a recruiting CRM. Read the attached resume PDF or the pasted profile text and return only the structured profile. Rules: transcribe names, emails and phone numbers exactly as written; never invent contact details you cannot see; keep the LinkedIn URL only when it literally appears in the source; yearsExperience is total professional experience in years, null when not determinable; skills holds at most 40 concrete skills, tools, technologies or certifications; summary is a neutral 3-5 sentence professional sketch with no opinions, scores or recommendations; confidence reflects how complete and readable the source was.";
+  "You extract candidate profiles for a recruiting CRM. Read the attached resume PDF or the pasted profile text and return only the structured profile. Rules: transcribe names, emails and phone numbers exactly as written; never invent contact details you cannot see; keep the LinkedIn URL only when it literally appears in the source; yearsExperience is total professional experience in years, null when not determinable; skills holds at most 40 concrete skills, tools, technologies or certifications; experience lists every position newest first, with start and end as YYYY-MM (end empty for the current position, month 01 when only the year is known), contract_type as written (e.g. CDI, Freelance, Internship) or empty, a 1-3 sentence factual summary of missions and outcomes, and at most 12 skills used in that position; summary is a neutral 3-5 sentence professional sketch with no opinions, scores or recommendations; confidence reflects how complete and readable the source was.";

@@ -3,6 +3,8 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { loadAiSettings } from "../server/ai-settings.ts";
 import { classifyAiFailure } from "../server/ai-failure.ts";
 import { createClient } from "@supabase/supabase-js";
+import { createDriveStorage, loadDriveSettings } from "../server/documents/storage/google-drive.ts";
+import { personCvs } from "../server/recruitment-cv.ts";
 import {
   intakeRequest,
   INTAKE_SYSTEM_INSTRUCTIONS,
@@ -39,7 +41,16 @@ return async function handler(req: Request, res: Response) {
     configuredModel = aiSettings.model;
     if (!aiSettings.apiKey) return res.status(503).json({ error: "Add an OpenAI API key in Settings → AI configuration." });
     let pdf: Buffer | null = null;
-    if (input.kind === "pdf") {
+    let pdfName = input.kind === "pdf" || input.kind === "storage" ? input.name : "";
+    if (input.kind === "drive") {
+      const sa = await loadDriveSettings(client);
+      if (!sa) return res.status(503).json({ error: "Google Drive is not connected. Set it up in Settings → Google Drive." });
+      const [cv] = await personCvs(sa, input.personId);
+      if (!cv) return res.status(404).json({ error: "No CV is filed on Google Drive for this person." });
+      const download = await createDriveStorage(sa).download(cv.id);
+      pdf = Buffer.from(await download.arrayBuffer());
+      pdfName = cv.name;
+    } else if (input.kind === "pdf") {
       pdf = Buffer.from(input.data, "base64");
     } else if (input.kind === "storage") {
       // RLS decides which bucket paths this user may read — same check as their own browser.
@@ -48,7 +59,7 @@ return async function handler(req: Request, res: Response) {
       pdf = Buffer.from(await download.data.arrayBuffer());
     }
     if (pdf && (pdf.length > MAX_INTAKE_PDF_BYTES || pdf.subarray(0, 5).toString() !== "%PDF-")) return res.status(400).json({ error: "Upload a valid PDF up to 10 MB." });
-    const sourceLabel = input.kind !== "text" && input.kind !== "linkedin" ? `resume PDF "${input.name}"` : input.kind === "linkedin" ? "LinkedIn profile" : "pasted CV text";
+    const sourceLabel = pdf ? `resume PDF "${pdfName}"` : input.kind === "linkedin" ? "LinkedIn profile" : "pasted CV text";
     const { output } = await deps.generateText({
       model: createOpenAI({ apiKey: aiSettings.apiKey })(aiSettings.model),
       instructions: INTAKE_SYSTEM_INSTRUCTIONS,
@@ -57,7 +68,7 @@ return async function handler(req: Request, res: Response) {
         { type: "text", text: `Extract the candidate profile from this ${sourceLabel}.${input.kind === "linkedin" && input.url ? ` Profile URL provided by the recruiter (verify it matches the source): ${input.url}.` : ""}${input.kind === "text" || input.kind === "linkedin" ? "\n\n" + input.text : ""}` },
         ...(pdf ? [{ type: "file" as const, data: pdf, mediaType: "application/pdf" as const }] : []),
       ] }],
-      maxOutputTokens: 1800, maxRetries: 1, abortSignal: AbortSignal.timeout(50000),
+      maxOutputTokens: 4000, maxRetries: 1, abortSignal: AbortSignal.timeout(50000),
       providerOptions: { openai: { store: false } },
     });
     return res.status(200).json({ profile: parsedProfileSchema.parse(output), model: aiSettings.model });

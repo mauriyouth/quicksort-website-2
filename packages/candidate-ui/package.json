@@ -6,8 +6,7 @@
   "exports": {
     ".": "./src/index.tsx",
     "./styles.css": "./src/styles.css",
-    "./brand.css": "./src/brand.css",
-    "./kanban": "./src/KanbanWorkspace.tsx"
+    "./brand.css": "./src/brand.css"
   },
   "dependencies": {
     "@clerk/react": "6.15.1",

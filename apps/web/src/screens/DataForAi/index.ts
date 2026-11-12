@@ -1,1 +1,0 @@
-export { DataForAi } from "./DataForAi";

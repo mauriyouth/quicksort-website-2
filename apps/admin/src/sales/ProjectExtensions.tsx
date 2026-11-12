@@ -2,23 +2,45 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { CalendarPlus, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { db, errorMessage, type Row } from "@quicksort/hr-db";
-import { Notice } from "@quicksort/hr-ui";
+import { cn } from "cn";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Badge,
+  Button,
+  Input,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+  Textarea,
+} from "@quicksort-sas/ui";
+import { PageAlerts } from "../ui";
 import { money } from "./data";
 import { DateField } from "../DateField";
 import {
-  lineDays,
   linesAmount,
   linesDays,
   storedPricingLines,
   type PricingLine,
 } from "./pricing-lines";
-import { proratedBillableDays } from "./billable-cap";
-import "./project-extensions.css";
+import {
+  cappedLineDays,
+  extensionValue,
+  linesCappedAmount,
+  proratedBillableDays,
+} from "./billable-cap";
 
 /**
  * Extensions (renewals) of a delivery project (sales.md §14 Phase 2). Each
@@ -103,6 +125,107 @@ export async function loadProjectExtensions(projectId: string) {
   return (result.data || []) as ProjectExtension[];
 }
 
+/** Tabular figures, no spinner arrows — the number wells of this section. */
+const NUMBER_INPUT =
+  "num [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+/** Quiet 13px caption over a control; a <label> unless `as="div"`. */
+function Field({
+  label,
+  as = "label",
+  wide,
+  children,
+}: {
+  label: string;
+  as?: "label" | "div";
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  const Tag = as;
+  return (
+    <Tag className={cn("flex min-w-0 flex-col gap-1.5", wide && "col-span-full")}>
+      <span className="text-[13px] text-muted-foreground">{label}</span>
+      {children}
+    </Tag>
+  );
+}
+
+/** Signed / Proposed switch: a radiogroup drawn as the package's segmented control. */
+function StatusSwitch({
+  signed,
+  disabled,
+  onSigned,
+  onProposed,
+}: {
+  signed: boolean;
+  disabled?: boolean;
+  onSigned: () => void;
+  onProposed: () => void;
+}) {
+  const item =
+    "flex-1 min-w-0 rounded-md border border-transparent text-[13px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-45 aria-checked:border-input/70 aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-xs dark:aria-checked:border-border";
+  return (
+    <div
+      className="flex h-10 gap-0.5 rounded-lg bg-muted p-[3px]"
+      role="radiogroup"
+      aria-label="Extension status"
+    >
+      <button
+        type="button"
+        role="radio"
+        aria-checked={signed}
+        className={item}
+        disabled={disabled}
+        onClick={onSigned}
+      >
+        Signed
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={!signed}
+        className={item}
+        disabled={disabled}
+        onClick={onProposed}
+      >
+        Proposed
+      </button>
+    </div>
+  );
+}
+
+/** Status chip of an extension (Proposed / Signed / Cancelled). */
+function ExtensionBadge({ status }: { status: string }) {
+  const label = EXTENSION_STATUS_META[status]?.label ?? status;
+  const variant =
+    status === "signed" ? "success" : status === "planned" ? "warning" : "secondary";
+  return (
+    <Badge variant={variant} className="gap-1.5">
+      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+      {label}
+    </Badge>
+  );
+}
+
+/** Sunken card of one extension (or the add form) in the chain. */
+const EXT_CARD =
+  "flex flex-col gap-3.5 rounded-lg border border-border bg-muted/40 px-4 py-4 md:px-[18px]";
+
+/** Numbered disc · name · label · start date · status chip. */
+function ExtensionId({ index, children }: { index: number; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2.5 text-[13px]">
+      <span
+        className="num flex size-[22px] flex-none items-center justify-center rounded-full bg-muted text-[11px] text-muted-foreground"
+        aria-hidden="true"
+      >
+        {index}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 /** Numeric field that commits its draft on blur/Enter, not per keystroke. */
 function CommitNumber({
   value,
@@ -130,8 +253,9 @@ function CommitNumber({
     if (next !== value) onCommit(next);
   };
   return (
-    <input
+    <Input
       type="number"
+      className={NUMBER_INPUT}
       min={min}
       step={step}
       value={draft}
@@ -166,9 +290,11 @@ function cleanLines(drafts: LineDraft[]): PricingLine[] {
 }
 
 /**
- * Flat columns kept in sync from the line set, so the generated `amount`
- * column (tjm × estimated_days) and the day budgets on dashboards stay
- * correct: total days = Σ line volumes, tjm = blended rate.
+ * Flat columns kept in sync from the line set: total days = Σ line
+ * volumes (the day budget), tjm = blended rate (display only). The
+ * generated `amount` column stays a by-product of these (mean rate ×
+ * days) — contract value is always recomputed per line from
+ * linesCappedAmount(), caps included, never read from `amount`.
  */
 function linesToFlat(
   lines: PricingLine[],
@@ -244,14 +370,19 @@ function LinesEditor({
   };
   const set = (i: number, patch: Partial<LineDraft>) =>
     setDrafts((list) => list.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const grid =
+    "grid grid-cols-2 items-start gap-2 @xl/lines:grid-cols-[minmax(120px,1.2fr)_minmax(110px,0.9fr)_minmax(110px,0.9fr)_minmax(90px,0.7fr)_minmax(80px,0.7fr)_32px]";
   return (
-    <div className="pe-lines">
-      <div className="pe-lines-head" aria-hidden="true">
+    <div className="@container/lines flex flex-col gap-2">
+      <div
+        className={cn(grid, "hidden px-0.5 text-xs text-muted-foreground @xl/lines:grid")}
+        aria-hidden="true"
+      >
         <span>Profile</span>
         <span>Rate</span>
         <span>End date</span>
         <span>Cap / year</span>
-        <span className="pe-right">Subtotal</span>
+        <span className="text-right">Subtotal</span>
         <span />
       </div>
       {drafts.map((line, i) => {
@@ -260,7 +391,9 @@ function LinesEditor({
           tjm: 0,
           end_date: null,
         };
-        const value = cleaned.tjm * lineDays(cleaned, windowStart, windowEnd);
+        const value =
+          cleaned.tjm *
+          cappedLineDays(cleaned, windowStart, windowEnd);
         // Live prorata caption, same rule as the contract lines.
         const capNumber = Number(line.cap) || 0;
         const capThisYear =
@@ -273,8 +406,15 @@ function LinesEditor({
               )
             : null;
         return (
-          <div className="pe-lines-row" key={i}>
-            <input
+          <div
+            className={cn(
+              grid,
+              "border-b border-border pb-3 last-of-type:border-0 @xl/lines:border-0 @xl/lines:pb-0",
+            )}
+            key={i}
+          >
+            <Input
+              className="col-span-2 @xl/lines:col-span-1"
               aria-label={`Profile ${i + 1} name`}
               placeholder="Data Engineer"
               value={line.name}
@@ -283,8 +423,9 @@ function LinesEditor({
               onChange={(e) => set(i, { name: e.target.value })}
               onBlur={() => commit(drafts)}
             />
-            <span className="pe-affix">
-              <input
+            <InputGroup>
+              <InputGroupInput
+                className={NUMBER_INPUT}
                 aria-label={`Profile ${i + 1} daily rate`}
                 type="number"
                 min="0"
@@ -294,10 +435,12 @@ function LinesEditor({
                 onChange={(e) => set(i, { tjm: e.target.value })}
                 onBlur={() => commit(drafts)}
               />
-              <span className="pe-affix-suffix">
-                {currencySymbol(currency)} / day
-              </span>
-            </span>
+              <InputGroupAddon align="inline-end">
+                <InputGroupText className="text-[13px] whitespace-nowrap">
+                  {currencySymbol(currency)} / day
+                </InputGroupText>
+              </InputGroupAddon>
+            </InputGroup>
             <DateField
               aria-label={`Profile ${i + 1} end date`}
               value={line.end_date}
@@ -311,8 +454,9 @@ function LinesEditor({
                 )
               }
             />
-            <div className="pj-cap-cell">
-              <input
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <Input
+                className={NUMBER_INPUT}
                 aria-label={`Profile ${i + 1} yearly billable cap`}
                 type="number"
                 min="0"
@@ -324,32 +468,42 @@ function LinesEditor({
                 onBlur={() => commit(drafts)}
               />
               {capThisYear !== null && (
-                <span className="pj-cap-prorata">
+                <span className="num text-[11px] whitespace-nowrap text-muted-foreground">
                   ≈ {Number.isInteger(capThisYear) ? capThisYear : capThisYear.toFixed(1)} d
                 </span>
               )}
             </div>
-            <span className="pe-lines-subtotal">{money(value, currency)}</span>
-            <button
-              type="button"
-              className="pe-icon-btn"
-              aria-label={`Remove profile ${i + 1}`}
-              title={
-                drafts.length <= 1
-                  ? "An extension needs at least one profile"
-                  : "Remove profile"
-              }
-              disabled={disabled || drafts.length <= 1}
-              onClick={() => commit(drafts.filter((_, j) => j !== i))}
-            >
-              <Trash2 size={14} />
-            </button>
+            <div className="flex items-center justify-between gap-2 @xl/lines:contents">
+            <span className="num flex h-10 items-center text-[13px] whitespace-nowrap @xl/lines:justify-end">
+              {money(value, currency)}
+            </span>
+            <span className="flex h-10 items-center justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="hover:text-destructive"
+                aria-label={`Remove profile ${i + 1}`}
+                title={
+                  drafts.length <= 1
+                    ? "An extension needs at least one profile"
+                    : "Remove profile"
+                }
+                disabled={disabled || drafts.length <= 1}
+                onClick={() => commit(drafts.filter((_, j) => j !== i))}
+              >
+                <Trash2 />
+              </Button>
+            </span>
+            </div>
           </div>
         );
       })}
-      <button
+      <Button
         type="button"
-        className="pe-lines-add"
+        variant="outline"
+        size="sm"
+        className="self-start border-dashed text-muted-foreground hover:text-foreground"
         disabled={disabled}
         onClick={() =>
           commit([
@@ -358,9 +512,9 @@ function LinesEditor({
           ])
         }
       >
-        <Plus size={13} />
+        <Plus data-icon="inline-start" />
         Add profile
-      </button>
+      </Button>
     </div>
   );
 }
@@ -370,6 +524,7 @@ export function ProjectExtensionsSection({
   pricingModel,
   currency,
   profiles,
+  projectStartDate,
   tjm,
   estimatedDays,
   fixedPrice,
@@ -384,6 +539,8 @@ export function ProjectExtensionsSection({
   currency: string;
   /** The contract's initial pricing lines — prefilled into new extensions. */
   profiles: PricingLine[];
+  /** Initial contract window start — its lines bill from this date. */
+  projectStartDate: string | null;
   /** Project defaults prefilled into the add form. */
   tjm: number | null;
   estimatedDays: number | null;
@@ -408,6 +565,7 @@ export function ProjectExtensionsSection({
   const [message, setMessage] = useState("");
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<ProjectExtension | null>(null);
   // Add-form state. New extensions chain after the latest end date and
   // default to "Proposed" until they are signed, per the reference design.
   const [label, setLabel] = useState("");
@@ -583,7 +741,9 @@ export function ProjectExtensionsSection({
 
   const addLines = cleanLines(lineDrafts);
   const addDaysTotal = linesDays(addLines, fromDate, endDate || null);
-  const addAmount = linesAmount(addLines, fromDate, endDate || null);
+  // Preview value: per-line rate × capped open days — the same rule the
+  // project page and dashboards use once the extension is saved.
+  const addAmount = linesCappedAmount(addLines, fromDate, endDate || null);
 
   // Not a real <form>: this section renders inside the project edit form
   // (nested forms are dropped by the parser, which would submit the project
@@ -652,9 +812,12 @@ export function ProjectExtensionsSection({
     );
   }
 
+  /** Delete asks first (AlertDialog); deleteExtension runs on confirm. */
   function remove(ext: ProjectExtension) {
-    const name = ext.label || "Extension";
-    if (!confirm(`Delete extension “${name}”?`)) return;
+    setDeleting(ext);
+  }
+
+  function deleteExtension(ext: ProjectExtension) {
     void mutate(async () => {
       const result = await db()
         .from("sales_project_extensions")
@@ -692,7 +855,9 @@ export function ProjectExtensionsSection({
     .reduce((sum, e) => sum + Number(e.estimated_days ?? 0), 0);
 
   const baseAmount = isRegie
-    ? Number(tjm ?? 0) * Number(estimatedDays ?? 0)
+    ? // Initial contract value: per-line rate × capped open days between
+      // the project dates — not the flat tjm × estimated_days product.
+      linesCappedAmount(profiles, projectStartDate, projectEndDate)
     : Number(fixedPrice ?? 0);
   const profileNames = profiles.map((p) => p.name).filter(Boolean);
   const lines = active.length
@@ -712,7 +877,7 @@ export function ProjectExtensionsSection({
               .filter(Boolean);
             return {
               label: `Extension ${i + 1}${suffix} · ${Number(ext.estimated_days ?? 0)} days${names.length ? ` · ${names.join(", ")}` : ""}`,
-              value: money(Number(ext.amount), ext.currency),
+              value: money(extensionValue(ext), ext.currency),
             };
           }
           return {
@@ -723,44 +888,49 @@ export function ProjectExtensionsSection({
       ]
     : [];
   const signedTotal =
-    baseAmount + signedExts.reduce((sum, e) => sum + Number(e.amount), 0);
+    baseAmount + signedExts.reduce((sum, e) => sum + extensionValue(e), 0);
   const proposedTotal = active
     .filter((e) => e.status !== "signed")
-    .reduce((sum, e) => sum + Number(e.amount), 0);
+    .reduce((sum, e) => sum + extensionValue(e), 0);
   const totalLabel = proposedTotal
     ? `Signed value · +${money(proposedTotal, currency)} more if proposed extensions are signed`
     : "Estimated value";
 
   return (
-    <div className="pe-section">
-      <Notice error>{error}</Notice>
-      <Notice>{message}</Notice>
+    <div className="flex flex-col gap-3.5">
+      <PageAlerts error={error} message={message} />
 
-      <div className="pe-head">
-        <div className="pe-head-text">
-          <h3 className="pe-title">Extensions</h3>
-          <p className="pe-desc">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-[1_1_16rem] flex-col gap-1">
+          <h3 className="m-0 font-heading text-xl leading-tight font-medium tracking-[-0.02em]">
+            Extensions
+          </h3>
+          <p className="m-0 text-sm text-muted-foreground">
             Each renewal adds days and carries its own annex. Signing one moves
             the project end date automatically.
           </p>
         </div>
         {!adding && (
-          <button
+          <Button
             type="button"
-            className="pe-add"
+            variant="outline"
+            size="sm"
+            className="flex-none"
             disabled={busy || saving}
             onClick={openAddForm}
           >
-            <Plus size={15} />
+            <Plus data-icon="inline-start" />
             Add extension
-          </button>
+          </Button>
         )}
       </div>
 
-      {extensions === null && <p className="pe-muted">Loading…</p>}
+      {extensions === null && (
+        <p className="m-0 text-[13px] text-muted-foreground">Loading…</p>
+      )}
       {extensions !== null && !extensions.length && !adding && (
-        <p className="pe-muted">
-          No extensions yet — add one when the contract is renewed.
+        <p className="m-0 text-[13px] text-muted-foreground">
+          No extensions yet. Add one when the contract is renewed.
         </p>
       )}
 
@@ -768,10 +938,6 @@ export function ProjectExtensionsSection({
         const cancelled = ext.status === "cancelled";
         const signed = ext.status === "signed";
         const extIsRegie = ext.pricing_model === "regie";
-        const statusMeta = EXTENSION_STATUS_META[ext.status] || {
-          label: ext.status,
-          color: "#8E8E8E",
-        };
         const canAdopt =
           signed &&
           !!ext.end_date &&
@@ -779,72 +945,64 @@ export function ProjectExtensionsSection({
         return (
           <div
             key={ext.id}
-            className={`pe-ext${cancelled ? " is-cancelled" : ""}`}
+            className={cn(EXT_CARD, cancelled && "opacity-55")}
           >
-            <div className="pe-ext-head">
-              <div className="pe-ext-id">
-                <span className="pe-ext-index" aria-hidden="true">
-                  {i + 1 + numberOffset}
-                </span>
-                <span className="pe-ext-name">Extension {i + 1}</span>
-                {ext.label && <span className="pe-ext-label">{ext.label}</span>}
-                <span className="pe-ext-from">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <ExtensionId index={i + 1 + numberOffset}>
+                <span className="font-semibold">Extension {i + 1}</span>
+                {ext.label && (
+                  <span className="truncate text-muted-foreground">{ext.label}</span>
+                )}
+                <span className="text-muted-foreground">
                   From {shortDate(ext.start_date)}
                 </span>
-                <span
-                  className="pe-ext-badge"
-                  style={{ "--ext-color": statusMeta.color } as CSSProperties}
-                >
-                  <span
-                    className="pe-ext-badge-dot"
-                    style={{ background: statusMeta.color }}
-                    aria-hidden="true"
-                  />
-                  {statusMeta.label}
-                </span>
-              </div>
-              <div className="pe-ext-actions">
+                <ExtensionBadge status={ext.status} />
+              </ExtensionId>
+              <div className="flex flex-wrap items-center gap-2">
                 {canAdopt && (
-                  <button
+                  <Button
                     type="button"
-                    className="pe-adopt"
+                    variant="outline"
+                    size="xs"
                     disabled={saving || busy}
                     title="Move the project end date to this extension's end date"
                     onClick={() => adoptEndDate(ext)}
                   >
-                    <CalendarPlus size={14} />
+                    <CalendarPlus data-icon="inline-start" />
                     Extend project to {shortDate(ext.end_date)}
-                  </button>
+                  </Button>
                 )}
                 {cancelled ? (
-                  <button
+                  <Button
                     type="button"
-                    className="pe-restore"
+                    variant="outline"
+                    size="xs"
                     disabled={saving || busy}
                     onClick={() => setExtensionStatus(ext, "planned")}
                   >
-                    <RotateCcw size={13} />
+                    <RotateCcw data-icon="inline-start" />
                     Restore
-                  </button>
+                  </Button>
                 ) : (
-                  <button
+                  <Button
                     type="button"
-                    className="pe-icon-btn"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="hover:text-destructive"
                     aria-label={`Delete extension ${i + 1 + numberOffset}`}
                     title="Delete extension"
                     disabled={saving || busy}
                     onClick={() => remove(ext)}
                   >
-                    <Trash2 size={15} />
-                  </button>
+                    <Trash2 />
+                  </Button>
                 )}
               </div>
             </div>
 
             {!cancelled && (
-              <div className="pe-ext-grid">
-                <label className="pe-field">
-                  <span className="pe-label">New end date</span>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3.5">
+                <Field label="New end date">
                   <DateField
                     value={ext.end_date || ""}
                     min={ext.start_date || undefined}
@@ -852,10 +1010,9 @@ export function ProjectExtensionsSection({
                       update(ext, { end_date: value || null })
                     }
                   />
-                </label>
+                </Field>
                 {extIsRegie ? (
-                  <div className="pe-field pe-field-wide">
-                    <span className="pe-label">Pricing lines</span>
+                  <Field label="Pricing lines" as="div" wide>
                     <LinesEditor
                       lines={
                         draftsById[ext.id] ?? toDrafts(extensionLines(ext))
@@ -866,10 +1023,9 @@ export function ProjectExtensionsSection({
                       disabled={saving || busy}
                       onCommit={(next) => commitLines(ext, next)}
                     />
-                  </div>
+                  </Field>
                 ) : (
-                  <label className="pe-field">
-                    <span className="pe-label">Amount</span>
+                  <Field label="Amount">
                     <CommitNumber
                       value={
                         ext.fixed_price != null ? Number(ext.fixed_price) : null
@@ -879,52 +1035,31 @@ export function ProjectExtensionsSection({
                       disabled={saving || busy}
                       onCommit={(next) => update(ext, { fixed_price: next })}
                     />
-                  </label>
+                  </Field>
                 )}
-                <div className="pe-field">
-                  <span className="pe-label">Status</span>
-                  <div
-                    className="pe-seg"
-                    role="radiogroup"
-                    aria-label="Extension status"
-                  >
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={signed}
-                      className={signed ? "on" : ""}
-                      disabled={saving || busy}
-                      onClick={() =>
-                        !signed && setExtensionStatus(ext, "signed")
-                      }
-                    >
-                      Signed
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={!signed}
-                      className={!signed ? "on" : ""}
-                      disabled={saving || busy}
-                      onClick={() =>
-                        signed && setExtensionStatus(ext, "planned")
-                      }
-                    >
-                      Proposed
-                    </button>
-                  </div>
-                </div>
+                <Field label="Status" as="div">
+                  <StatusSwitch
+                    signed={signed}
+                    disabled={saving || busy}
+                    onSigned={() => !signed && setExtensionStatus(ext, "signed")}
+                    onProposed={() => signed && setExtensionStatus(ext, "planned")}
+                  />
+                </Field>
               </div>
             )}
 
-            {ext.notes && <div className="pe-ext-notes">{ext.notes}</div>}
+            {ext.notes && (
+              <div className="text-[13px] whitespace-pre-wrap text-muted-foreground">
+                {ext.notes}
+              </div>
+            )}
           </div>
         );
       })}
 
       {adding && (
         <div
-          className="pe-form"
+          className={EXT_CARD}
           onKeyDown={(e) => {
             if (
               e.key === "Enter" &&
@@ -935,38 +1070,30 @@ export function ProjectExtensionsSection({
             }
           }}
         >
-          <div className="pe-ext-head">
-            <div className="pe-ext-id">
-              <span className="pe-ext-index" aria-hidden="true">
-                {(extensions?.length || 0) + 1 + numberOffset}
-              </span>
-              <span className="pe-ext-name">New extension</span>
-              {fromDate && (
-                <span className="pe-ext-from">From {shortDate(fromDate)}</span>
-              )}
-            </div>
-          </div>
-          <div className="pe-ext-grid">
-            <label className="pe-field">
-              <span className="pe-label">Label (optional)</span>
-              <input
+          <ExtensionId index={(extensions?.length || 0) + 1 + numberOffset}>
+            <span className="font-semibold">New extension</span>
+            {fromDate && (
+              <span className="text-muted-foreground">From {shortDate(fromDate)}</span>
+            )}
+          </ExtensionId>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3.5">
+            <Field label="Label (optional)">
+              <Input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 maxLength={200}
                 placeholder="Renewal 2026, Phase 2…"
               />
-            </label>
-            <label className="pe-field">
-              <span className="pe-label">New end date</span>
+            </Field>
+            <Field label="New end date">
               <DateField
                 value={endDate}
                 min={fromDate || undefined}
                 onChange={setEndDate}
               />
-            </label>
+            </Field>
             {isRegie ? (
-              <div className="pe-field pe-field-wide">
-                <span className="pe-label">Pricing lines</span>
+              <Field label="Pricing lines" as="div" wide>
                 <LinesEditor
                   lines={lineDrafts}
                   windowStart={fromDate || null}
@@ -975,103 +1102,120 @@ export function ProjectExtensionsSection({
                   disabled={saving || busy}
                   onCommit={setLineDrafts}
                 />
-              </div>
+              </Field>
             ) : (
-              <label className="pe-field">
-                <span className="pe-label">Forfait</span>
-                <input
+              <Field label="Forfait">
+                <Input
                   type="number"
+                  className={NUMBER_INPUT}
                   min={0}
                   step={100}
                   value={extFixed}
                   onChange={(e) => setExtFixed(e.target.value)}
                 />
-              </label>
+              </Field>
             )}
-            <div className="pe-field">
-              <span className="pe-label">Status</span>
-              <div
-                className="pe-seg"
-                role="radiogroup"
-                aria-label="Extension status"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={status === "signed"}
-                  className={status === "signed" ? "on" : ""}
-                  onClick={() => setStatus("signed")}
-                >
-                  Signed
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={status !== "signed"}
-                  className={status !== "signed" ? "on" : ""}
-                  onClick={() => setStatus("planned")}
-                >
-                  Proposed
-                </button>
-              </div>
-            </div>
+            <Field label="Status" as="div">
+              <StatusSwitch
+                signed={status === "signed"}
+                onSigned={() => setStatus("signed")}
+                onProposed={() => setStatus("planned")}
+              />
+            </Field>
           </div>
-          <label className="pe-field">
-            <span className="pe-label">Notes</span>
-            <textarea
+          <Field label="Notes">
+            <Textarea
+              className="min-h-16 text-sm md:text-sm"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              rows={2}
               maxLength={5000}
               placeholder="Renewal terms, indexation…"
             />
-          </label>
+          </Field>
           {isRegie && (
-            <div className="pe-value">
+            <div className="flex items-baseline justify-between gap-2 text-[13px] text-muted-foreground tabular-nums">
               <span>
                 Extension value · {addLines.length} profile
                 {addLines.length === 1 ? "" : "s"} · {addDaysTotal} days
               </span>
-              <strong>{money(addAmount, currency)}</strong>
+              <strong className="num font-medium text-foreground">
+                {money(addAmount, currency)}
+              </strong>
             </div>
           )}
-          <div className="pe-form-actions">
-            <button
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
               type="button"
-              className="pe-btn pe-btn-ghost"
+              variant="outline"
+              size="sm"
               disabled={saving || busy}
               onClick={() => setAdding(false)}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="pe-btn pe-btn-primary"
+              size="sm"
               disabled={saving || busy}
               onClick={() => add()}
             >
               Add extension
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {!!lines.length && (
-        <div className="pe-panel">
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 px-4 py-4 md:px-[18px]">
           {lines.map((l, i) => (
-            <div key={i} className="pe-panel-line">
+            <div
+              key={i}
+              className="flex justify-between gap-4 text-[13px] text-muted-foreground"
+            >
               <span>{l.label}</span>
-              <span>{l.value}</span>
+              <span className="num whitespace-nowrap">{l.value}</span>
             </div>
           ))}
-          <div className="pe-panel-total">
-            <span className="pe-panel-total-label">{totalLabel}</span>
-            <span className="pe-panel-total-amount">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-1">
+            <span className="text-sm text-muted-foreground">{totalLabel}</span>
+            <span className="num font-heading text-2xl font-medium tracking-[-0.02em] whitespace-nowrap">
               {money(signedTotal, currency)}
             </span>
           </div>
         </div>
       )}
+
+      <AlertDialog
+        open={!!deleting}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete extension "{deleting?.label || "Extension"}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The renewal and its pricing lines are removed. The project end
+              date and staffing are not rolled back.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                const target = deleting;
+                setDeleting(null);
+                if (target) deleteExtension(target);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

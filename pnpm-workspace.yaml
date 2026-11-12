@@ -3,5 +3,9 @@ packages:
   - packages/*
 
 allowBuilds:
+  '@tailwindcss/oxide': true
   esbuild: true
   supabase: true
+
+minimumReleaseAgeExclude:
+  - '@quicksort-sas/ui@0.1.0'

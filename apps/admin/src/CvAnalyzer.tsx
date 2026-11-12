@@ -1,11 +1,58 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSession } from "@clerk/react";
 import { db, type Job, type Row } from "@quicksort/hr-db";
-import { Notice } from "@quicksort/hr-ui";
-import { ArrowLeft, ArrowUpRight, Check, FileText, Info, Upload, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Download, FileText, Info, Upload, X } from "lucide-react";
+import { cn } from "cn";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+  NativeSelect,
+  NativeSelectOption,
+  Progress,
+  Spinner,
+  Stat,
+  StatGroup,
+  StatLabel,
+  StatUnit,
+  StatValue,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Textarea,
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@quicksort-sas/ui";
+import { PageAlerts, PageHeading, linkButton } from "./ui";
 import { MAX_BATCH_FILES, MAX_CV_BYTES, evaluationSchema, matchMetrics, topProfiles, type AnalysisRequest, type CandidateResult } from "./analysis";
-import "./analyzer.css";
 
+/**
+ * HR → CV analyzer (on @quicksort-sas/ui): the setup card (mode, job, CVs)
+ * beside the ranked shortlist, and the candidate detail with its stats,
+ * scorecards, interview questions and findings. Request logic is unchanged.
+ */
 const MAX_PARALLEL_CVS = 5;
 type Item = { id: string; requestId?: string; name: string; file?: File; cv?: AnalysisRequest["cv"]; status: "queued" | "analyzing" | "done" | "failed"; error?: string };
 export function CvAnalyzer({ jobs, documents, people }: { jobs: Job[]; documents: Row<"candidate_documents">[]; people: Row<"profiles">[] }) {
@@ -123,43 +170,168 @@ export function CvAnalyzer({ jobs, documents, people }: { jobs: Job[]; documents
   const failed = items.filter(i => i.status === "failed");
   const pending = items.filter(i => i.status === "queued").length;
   if (selected) return <CandidateDetail candidate={selected} onBack={() => setSelected(null)} />;
-  return <div className="cv-workspace">
-    <Notice error>{error}</Notice>
-    <div className="cv-workbench">
-      <section className="cv-card cv-setup" aria-label="Analysis setup">
-        <div className="cv-section-heading"><span className="cv-step">01</span><h2>Build your shortlist</h2></div>
-        <fieldset disabled={busy}>
-          <div className="cv-mode" aria-label="Upload mode">{(["bulk", "single"] as const).map(value => <button type="button" key={value} aria-pressed={mode === value} onClick={() => { setMode(value); setFiles([]); if (inputRef.current) inputRef.current.value = ""; }}>{value === "bulk" ? "Bulk upload" : "Single CV test"}</button>)}</div>
-          <label htmlFor="cv-job">Job to evaluate against</label><select id="cv-job" value={jobId} onChange={e => setJobId(e.target.value)}><option value="">Select a job</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.title}{j.published ? "" : " · unpublished"}</option>)}</select>
-          {!jobs.length && <p className="cv-muted">Create a job post to get started.</p>}
-          {mode === "single" && <><label htmlFor="cv-source">Candidate CV</label><select id="cv-source" value={source} onChange={e => setSource(e.target.value)}><option value="upload">Upload PDF</option><option value="text">Paste CV text</option><option value="document">Existing candidate document</option></select></>}
-          {(mode === "bulk" || source === "upload") && <>
-            <div className="cv-dropzone" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!busy) addFiles(Array.from(e.dataTransfer.files)); }}>
-              <Upload size={24} /><strong>{mode === "bulk" ? "Drop your CVs here" : "Drop one CV here"}</strong><span className="cv-muted">PDF · up to 10 MB each{mode === "bulk" ? ` · ${MAX_BATCH_FILES} files per batch` : ""}</span>
-              <label className="cv-file-button" htmlFor="cv-file">{mode === "bulk" ? "Choose PDFs" : "Choose PDF"}</label><input ref={inputRef} id="cv-file" aria-label={mode === "bulk" ? "Upload CV PDFs" : "Upload one CV PDF"} type="file" accept=".pdf,application/pdf" multiple={mode === "bulk"} onChange={e => { addFiles(Array.from(e.target.files || [])); e.target.value = ""; }} />
+  const resetInput = () => { if (inputRef.current) inputRef.current.value = ""; };
+  return <div className="@container flex flex-col gap-6">
+    <PageAlerts error={error} />
+    <div className="grid items-start gap-6 @3xl:grid-cols-[20rem_minmax(0,1fr)]">
+      <Card role="region" aria-label="Analysis setup">
+        <CardHeader>
+          <StepTitle step="01">Build your shortlist</StepTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <fieldset disabled={busy} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
+            <ToggleGroup
+              aria-label="Upload mode"
+              className="w-full"
+              value={[mode]}
+              onValueChange={(v) => { const next = v[0] as "bulk" | "single" | undefined; if (next) { setMode(next); setFiles([]); resetInput(); } }}
+            >
+              {(["bulk", "single"] as const).map(value => <ToggleGroupItem key={value} value={value} className="flex-1">{value === "bulk" ? "Bulk upload" : "Single CV test"}</ToggleGroupItem>)}
+            </ToggleGroup>
+            <Field>
+              <FieldLabel htmlFor="cv-job">Job to evaluate against</FieldLabel>
+              <NativeSelect id="cv-job" className="w-full" value={jobId} onChange={e => setJobId(e.target.value)}>
+                <NativeSelectOption value="">Select a job</NativeSelectOption>
+                {jobs.map(j => <NativeSelectOption key={j.id} value={j.id}>{j.title}{j.published ? "" : " · unpublished"}</NativeSelectOption>)}
+              </NativeSelect>
+              {!jobs.length && <FieldDescription>Create a job post to get started.</FieldDescription>}
+            </Field>
+            {mode === "single" && <Field>
+              <FieldLabel htmlFor="cv-source">Candidate CV</FieldLabel>
+              <NativeSelect id="cv-source" className="w-full" value={source} onChange={e => setSource(e.target.value)}>
+                <NativeSelectOption value="upload">Upload PDF</NativeSelectOption>
+                <NativeSelectOption value="text">Paste CV text</NativeSelectOption>
+                <NativeSelectOption value="document">Existing candidate document</NativeSelectOption>
+              </NativeSelect>
+            </Field>}
+            {(mode === "bulk" || source === "upload") && <>
+              <div
+                className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-muted/40 px-4 py-6 text-center has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background"
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); if (!busy) addFiles(Array.from(e.dataTransfer.files)); }}
+              >
+                <Upload className="size-6 text-muted-foreground" aria-hidden="true" />
+                <div className="flex flex-col gap-1">
+                  <strong className="text-sm font-medium">{mode === "bulk" ? "Drop your CVs here" : "Drop one CV here"}</strong>
+                  <span className="text-xs text-muted-foreground">PDF · up to 10 MB each{mode === "bulk" ? ` · ${MAX_BATCH_FILES} files per batch` : ""}</span>
+                </div>
+                <label htmlFor="cv-file" className={cn(linkButton({ variant: "outline", size: "sm" }), "cursor-pointer", busy && "pointer-events-none opacity-50")}>{mode === "bulk" ? "Choose PDFs" : "Choose PDF"}</label>
+                <input ref={inputRef} id="cv-file" className="sr-only" aria-label={mode === "bulk" ? "Upload CV PDFs" : "Upload one CV PDF"} type="file" accept=".pdf,application/pdf" multiple={mode === "bulk"} onChange={e => { addFiles(Array.from(e.target.files || [])); e.target.value = ""; }} />
+              </div>
+              {files.length > 0 && <div className="flex flex-col gap-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <strong className="font-medium">{files.length} {files.length === 1 ? "CV" : "CVs"} ready</strong>
+                  <Button type="button" variant="ghost" size="xs" onClick={() => setFiles([])}>Clear</Button>
+                </div>
+                <ul className="m-0 flex max-h-48 list-none flex-col divide-y divide-border overflow-auto p-0">
+                  {files.map((file, i) => <li className="flex items-center gap-2 py-1.5 text-muted-foreground" key={`${file.name}-${i}`}>
+                    <FileText className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                    <Button type="button" variant="ghost" size="icon-xs" aria-label={`Remove ${file.name}`} onClick={() => setFiles(current => current.filter((_, n) => n !== i))}><X /></Button>
+                  </li>)}
+                </ul>
+              </div>}
+            </>}
+            {mode === "single" && source === "text" && <Field>
+              <FieldLabel htmlFor="cv-text">CV text</FieldLabel>
+              <Textarea id="cv-text" className="min-h-36" maxLength={60000} value={text} onChange={e => setText(e.target.value)} placeholder="Paste experience, skills and qualifications…" />
+            </Field>}
+            {mode === "single" && source === "document" && <Field>
+              <FieldLabel htmlFor="cv-document">Available PDFs</FieldLabel>
+              <NativeSelect id="cv-document" className="w-full" value={documentId} onChange={e => setDocumentId(e.target.value)}>
+                <NativeSelectOption value="">Select a CV</NativeSelectOption>
+                {documents.filter(d => d.name.toLowerCase().endsWith(".pdf")).map(d => <NativeSelectOption key={d.id} value={d.id}>{people.find(p => p.id === d.candidate_id)?.full_name || "Candidate"} · {d.name}</NativeSelectOption>)}
+              </NativeSelect>
+            </Field>}
+            <Button variant="pivot" size="lg" className="w-full" type="button" disabled={!jobs.length} onClick={() => void run()}>
+              {busy ? "Evaluating…" : mode === "bulk" ? "Analyze batch" : "Analyze candidate"}<ArrowUpRight data-icon="inline-end" aria-hidden="true" />
+            </Button>
+          </fieldset>
+          <p className="m-0 text-xs text-muted-foreground">The top 10 profiles appear here. Every completed evaluation is saved in Analysis history for all admins. Keep this page open until the scan finishes.</p>
+          {busy && <Button variant="outline" onClick={() => controller.current?.abort()}>Stop analysis</Button>}
+        </CardContent>
+      </Card>
+      <section className="flex min-w-0 flex-col gap-4" aria-label="Selected profiles">
+        <div className="flex items-center gap-3">
+          <StepTitle step="02">Selected profiles</StepTitle>
+          <Badge variant="outline" className="ml-auto">Top {Math.min(10, shortlist.length) || 10}</Badge>
+        </div>
+        {items.length > 0 && <Card size="sm" role="status" aria-live="polite">
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <strong className="text-sm font-medium">{busy ? `Evaluating ${completed + failed.length} of ${items.length}` : stopped || failed.length ? "Partial evaluation" : "Evaluation complete"}</strong>
+              <span className="num text-xs text-muted-foreground">{completed} analyzed{failed.length ? ` · ${failed.length} failed` : ""}</span>
             </div>
-            {files.length > 0 && <div className="cv-files"><div className="cv-inline"><strong>{files.length} {files.length === 1 ? "CV" : "CVs"} ready</strong><button type="button" className="cv-text-button" onClick={() => setFiles([])}>Clear</button></div><div className="cv-file-list">{files.map((file, i) => <div className="cv-file-row" key={`${file.name}-${i}`}><FileText size={15} /><span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => setFiles(current => current.filter((_, n) => n !== i))}><X size={14} /></button></div>)}</div></div>}
-          </>}
-          {mode === "single" && source === "text" && <><label htmlFor="cv-text">CV text</label><textarea id="cv-text" rows={6} maxLength={60000} value={text} onChange={e => setText(e.target.value)} placeholder="Paste experience, skills and qualifications…" /></>}
-          {mode === "single" && source === "document" && <><label htmlFor="cv-document">Available PDFs</label><select id="cv-document" value={documentId} onChange={e => setDocumentId(e.target.value)}><option value="">Select a CV</option>{documents.filter(d => d.name.toLowerCase().endsWith(".pdf")).map(d => <option key={d.id} value={d.id}>{people.find(p => p.id === d.candidate_id)?.full_name || "Candidate"} · {d.name}</option>)}</select></>}
-          <button className="cv-primary cv-start" type="button" disabled={!jobs.length} onClick={() => void run()}>{busy ? "Evaluating…" : mode === "bulk" ? "Analyze batch" : "Analyze candidate"}<ArrowUpRight size={17} /></button>
-        </fieldset>
-        <p className="cv-footnote">The top 10 profiles appear here. Every completed evaluation is saved in Analysis history for all admins. Keep this page open until the scan finishes.</p>
-        {busy && <button className="cv-secondary" onClick={() => controller.current?.abort()}>Stop analysis</button>}
-      </section>
-      <section className="cv-results" aria-label="Selected profiles">
-        <div className="cv-section-heading"><span className="cv-step">02</span><h2>Selected profiles</h2><span className="cv-badge">Top {Math.min(10, shortlist.length) || 10}</span></div>
-        {items.length > 0 && <div className="cv-card cv-progress" role="status" aria-live="polite"><div className="cv-inline"><strong>{busy ? `Evaluating ${completed + failed.length} of ${items.length}` : stopped || failed.length ? "Partial evaluation" : "Evaluation complete"}</strong><span className="cv-muted">{completed} analyzed{failed.length ? ` · ${failed.length} failed` : ""}</span></div><progress max={items.length} value={completed + failed.length} /><p className="cv-muted">{runJob?.title}{busy ? " · Preparing the shortlist after all files are evaluated." : unassessable ? ` · ${unassessable} CV(s) had insufficient evidence to rank.` : ""}</p></div>}
-        {busy ? <div className="cv-card cv-empty"><div className="cv-orbit" /><h3>Reading the evidence.</h3><p>Checking skills, experience and job requirements across your CVs.</p></div> : shortlist.length ? <>
-          <div className="cv-shortlist-toolbar"><p className="cv-muted">{shortlist.length} profiles{stopped || failed.length ? " from completed evaluations" : " selected"} · Click a profile to review</p><button className="cv-text-button" disabled={pdfBusy} onClick={() => void downloadShortlist()}>{pdfBusy ? "Creating PDF…" : "Download shortlist"}</button></div>
-          <div className="cv-ranking-help"><Info size={14} /><span>Documented match = points evidenced across six equal categories. Unknowns earn no evidence points; they are not proven weaknesses. Equal scores retain upload order. Human review decides next steps.</span></div>
-          <div className="cv-shortlist">{shortlist.map((candidate, index) => { const metrics = matchMetrics(candidate.report.evaluation); return <button className="cv-profile" key={candidate.id} onClick={() => { setSelected(candidate); window.scrollTo({ top: 0 }); }}><span className="cv-rank">{String(index + 1).padStart(2, "0")}</span><span className="cv-profile-copy"><strong>{candidate.report.evaluation.candidateName === "Unnamed candidate" ? candidate.fileName : candidate.report.evaluation.candidateName}</strong><span>{candidate.report.evaluation.headline}</span><small>{candidate.fileName}</small></span><span className="cv-match"><strong>{metrics.assessable ? `${metrics.score}%` : "—"}</strong><small>documented match</small></span><ArrowUpRight size={18} /></button>; })}</div>
-        </> : <div className="cv-card cv-empty"><FileText size={32} /><h3>{finished ? "No profiles ready to shortlist" : "Your next shortlist starts here"}</h3><p>{finished ? "Retry incomplete files, or provide more readable CVs with relevant experience." : "Choose a job and upload your CVs. We’ll surface up to 10 profiles with the strongest documented match."}</p><div className="cv-empty-tags"><span>Evidence-based scores</span><span>Interview preparation</span></div></div>}
-        {!busy && (failed.length > 0 || pending > 0) && <div className="cv-card"><h3>Files needing attention</h3>{failed.map(item => <p className="cv-file-error" key={item.id}><strong>{item.name}</strong><span>{item.error}</span></p>)}{pending > 0 && <p className="cv-muted">{pending} files were not completed.</p>}<button className="cv-secondary" onClick={() => void run(true)}>Retry incomplete files</button></div>}
+            <Progress value={completed + failed.length} max={items.length} aria-label="Evaluation progress" />
+            <p className="m-0 text-xs text-muted-foreground">{runJob?.title}{busy ? " · Preparing the shortlist after all files are evaluated." : unassessable ? ` · ${unassessable} CV(s) had insufficient evidence to rank.` : ""}</p>
+          </CardContent>
+        </Card>}
+        {busy ? <Empty className="min-h-64 border border-border">
+          <EmptyHeader>
+            <EmptyMedia><Spinner className="size-6" /></EmptyMedia>
+            <EmptyTitle>Reading the evidence.</EmptyTitle>
+            <EmptyDescription>Checking skills, experience and job requirements across your CVs.</EmptyDescription>
+          </EmptyHeader>
+        </Empty> : shortlist.length ? <>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <p className="m-0 text-sm text-muted-foreground">{shortlist.length} profiles{stopped || failed.length ? " from completed evaluations" : " selected"} · Click a profile to review</p>
+            <Button variant="outline" size="sm" disabled={pdfBusy} onClick={() => void downloadShortlist()}><Download data-icon="inline-start" aria-hidden="true" />{pdfBusy ? "Creating PDF…" : "Download shortlist"}</Button>
+          </div>
+          <p className="m-0 flex gap-2 text-xs text-muted-foreground"><Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /><span>Documented match = points evidenced across six equal categories. Unknowns earn no evidence points; they are not proven weaknesses. Equal scores retain upload order. Human review decides next steps.</span></p>
+          <ItemGroup className="gap-2">{shortlist.map((candidate, index) => {
+            const metrics = matchMetrics(candidate.report.evaluation);
+            return <Item key={candidate.id} variant="outline" className="cursor-pointer text-left hover:bg-muted/50" render={<button type="button" onClick={() => { setSelected(candidate); window.scrollTo({ top: 0 }); }} />}>
+              <ItemMedia className="num w-6 text-sm text-muted-foreground">{String(index + 1).padStart(2, "0")}</ItemMedia>
+              <ItemContent className="min-w-0">
+                <ItemTitle className="text-base">{candidate.report.evaluation.candidateName === "Unnamed candidate" ? candidate.fileName : candidate.report.evaluation.candidateName}</ItemTitle>
+                <ItemDescription>{candidate.report.evaluation.headline}</ItemDescription>
+                <span className="truncate text-xs text-muted-foreground">{candidate.fileName}</span>
+              </ItemContent>
+              <ItemActions className="flex-col items-end gap-0.5 text-right">
+                <strong className="num text-2xl font-medium">{metrics.assessable ? `${metrics.score}%` : "N/A"}</strong>
+                <small className="text-[10px] text-muted-foreground">documented match</small>
+              </ItemActions>
+              <ArrowUpRight className="hidden size-4 text-muted-foreground @md:block" aria-hidden="true" />
+            </Item>;
+          })}</ItemGroup>
+        </> : <Empty className="min-h-64 border border-border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><FileText /></EmptyMedia>
+            <EmptyTitle>{finished ? "No profiles ready to shortlist" : "Your next shortlist starts here"}</EmptyTitle>
+            <EmptyDescription>{finished ? "Retry incomplete files, or provide more readable CVs with relevant experience." : "Choose a job and upload your CVs. We'll surface up to 10 profiles with the strongest documented match."}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent className="flex-row flex-wrap justify-center gap-2">
+            <Badge variant="outline">Evidence-based scores</Badge>
+            <Badge variant="outline">Interview preparation</Badge>
+          </EmptyContent>
+        </Empty>}
+        {!busy && (failed.length > 0 || pending > 0) && <Card size="sm" role="region" aria-label="Files needing attention">
+          <CardHeader><CardTitle>Files needing attention</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {failed.length > 0 && <ul className="m-0 flex list-none flex-col divide-y divide-border p-0 text-sm">
+              {failed.map(item => <li className="flex flex-col gap-0.5 py-2" key={item.id}><strong className="font-medium">{item.name}</strong><span className="text-destructive">{item.error}</span></li>)}
+            </ul>}
+            {pending > 0 && <p className="m-0 text-sm text-muted-foreground">{pending} files were not completed.</p>}
+            <div><Button variant="outline" onClick={() => void run(true)}>Retry incomplete files</Button></div>
+          </CardContent>
+        </Card>}
       </section>
     </div>
   </div>;
 }
+
+/** Section title led by its mono step number ("01", "02"). */
+function StepTitle({ step, children }: { step: string; children: ReactNode }) {
+  return <h2 className="m-0 flex items-center gap-2.5 font-heading text-lg font-medium tracking-tight">
+    <span className="num inline-flex size-6 items-center justify-center rounded-sm border border-border text-xs text-muted-foreground" aria-hidden="true">{step}</span>
+    {children}
+  </h2>;
+}
+
+/** Native details/summary styled as a disclosure row. */
+const DISCLOSURE = "group/disclosure [&>summary]:flex [&>summary]:cursor-pointer [&>summary]:list-none [&>summary]:items-center [&>summary]:gap-1.5 [&>summary::-webkit-details-marker]:hidden";
+const QUOTE = "m-0 border-l-2 border-border pl-3 text-xs leading-relaxed text-muted-foreground";
+
 export function CandidateDetail({ candidate, onBack, backLabel = "Selected profiles" }: { candidate: CandidateResult; onBack: () => void; backLabel?: string }) {
   const [tab, setTab] = useState("overview");
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -172,17 +344,107 @@ export function CandidateDetail({ candidate, onBack, backLabel = "Selected profi
   }
   const [score, setScore] = useState<number | null>(null);
   const e = candidate.report.evaluation, metrics = matchMetrics(e);
-  return <div className="cv-workspace cv-detail">
-    <button className="cv-back" onClick={onBack}><ArrowLeft size={16} />{backLabel}</button>
-    <div className="cv-detail-heading"><div><p className="cv-eyebrow">{candidate.report.job.title}</p><h1>{e.candidateName === "Unnamed candidate" ? candidate.fileName : e.candidateName}</h1><p className="cv-muted">{e.headline}</p></div><button className="cv-secondary" disabled={pdfBusy} onClick={() => void downloadReport()}>{pdfBusy ? "Creating PDF…" : "Download report"}</button></div>
-    <Notice error>{pdfError}</Notice>
-    <div className="cv-detail-stats"><div><strong>{metrics.assessable ? `${metrics.score}%` : "Unknown"}</strong><span>Documented match</span></div><div><strong>{metrics.coverage}%</strong><span>Evidence coverage</span></div><div><strong>{e.confidence}</strong><span>Evidence confidence</span></div></div>
-    <div className="cv-tabs" role="tablist" aria-label="Candidate details">{[["overview", "Overview"], ["interview", "Interview questions"], ["assessment", "Strengths & concerns"]].map(([id, label]) => <button key={id} id={`cv-tab-${id}`} role="tab" aria-selected={tab === id} aria-controls={`cv-content-${id}`} onClick={() => setTab(id)}>{label}</button>)}</div>
-    <section role="tabpanel" id={`cv-content-${tab}`} aria-labelledby={`cv-tab-${tab}`}>
-      {tab === "overview" && <div className="cv-detail-grid"><section className="cv-card"><h2>Evaluation summary</h2><p className="cv-summary">{e.summary}</p><p className="cv-footnote">{candidate.fileName} · {new Date(candidate.report.analyzedAt).toLocaleDateString()} · Human review required</p></section><section className="cv-card"><div className="cv-inline"><h2>Scorecards</h2><span className="cv-muted">Click for evidence</span></div><div className="cv-scores">{e.scorecards.map((s, i) => <div className="cv-score" key={s.criterion}><button aria-expanded={score === i} aria-controls={`cv-evidence-${i}`} aria-label={`${s.criterion}: ${s.score === null ? "Unknown" : `${s.score} out of 5`}. Show evidence`} onClick={() => setScore(score === i ? null : i)}><span>{s.criterion}<Info size={13} /></span><strong>{s.score === null ? "Unknown" : `${s.score}/5`}</strong><span className="cv-score-bar"><span style={{ width: `${(s.score || 0) * 20}%` }} /></span></button>{score === i && <div className="cv-score-explanation" id={`cv-evidence-${i}`} role="note"><strong>{s.requirement}</strong><blockquote>{s.evidence}</blockquote><p>{s.rationale}</p></div>}</div>)}</div><p className="cv-footnote">0 mismatch · 3 meets · 5 exceptional. Unknown means not assessable.</p></section></div>}
-      {tab === "interview" && <div className="cv-detail-grid">{[["Validate claimed experience", "Questions about experience the candidate mentions in the CV.", e.experienceQuestions], ["Explore gaps against the job", "Requirements that are missing or unproven in the CV.", e.gapQuestions]].map(([title, subtitle, questions]) => <section className="cv-card" key={String(title)}><h2>{String(title)}</h2><p className="cv-muted">{String(subtitle)}</p>{(questions as typeof e.experienceQuestions).length === 0 && <p>No supported questions identified in this category.</p>}{(questions as typeof e.experienceQuestions).map((q, i) => <div className="cv-question" key={i}><span className="cv-step">{i + 1}</span><div><h3>{q.question}</h3><p className="cv-muted">{q.context}</p><details><summary>What to listen for</summary><p>{q.listenFor}</p></details><label className="cv-reviewed"><input type="checkbox" /><Check size={13} /> Reviewed in interview</label></div></div>)}</section>)}</div>}
-      {tab === "assessment" && <div className="cv-detail-grid">{([["Advantages", e.advantages], ["Gaps & disadvantages", e.disadvantages], ["Risks to verify", e.risks], ["Other observations", e.aspectCritiques]] as const).map(([title, findings]) => <section className="cv-card" key={title}><h2>{title}</h2>{!findings.length && <p className="cv-muted">No supported findings identified.</p>}{findings.map((f, i) => <details className="cv-finding" key={i}><summary>{f.aspect}</summary><p>{f.assessment}</p><blockquote>{f.evidence}</blockquote><p className="cv-muted">Verify: {f.followUp}</p></details>)}</section>)}</div>}
-    </section>
+  return <div className="@container flex max-w-6xl flex-col gap-6">
+    <Button variant="ghost" size="sm" className="-ml-2 self-start" onClick={onBack}><ArrowLeft data-icon="inline-start" aria-hidden="true" />{backLabel}</Button>
+    <PageHeading
+      eyebrow={candidate.report.job.title}
+      title={e.candidateName === "Unnamed candidate" ? candidate.fileName : e.candidateName}
+      action={<Button variant="outline" disabled={pdfBusy} onClick={() => void downloadReport()}><Download data-icon="inline-start" aria-hidden="true" />{pdfBusy ? "Creating PDF…" : "Download report"}</Button>}
+    >
+      {e.headline}
+    </PageHeading>
+    <PageAlerts error={pdfError} />
+    <Card size="sm">
+      <CardContent>
+        <StatGroup>
+          <Stat size="sm" pivot><StatValue>{metrics.assessable ? <>{metrics.score}<StatUnit>%</StatUnit></> : "Unknown"}</StatValue><StatLabel>Documented match</StatLabel></Stat>
+          <Stat size="sm"><StatValue>{metrics.coverage}<StatUnit>%</StatUnit></StatValue><StatLabel>Evidence coverage</StatLabel></Stat>
+          <Stat size="sm"><StatValue className="capitalize">{e.confidence}</StatValue><StatLabel>Evidence confidence</StatLabel></Stat>
+        </StatGroup>
+      </CardContent>
+    </Card>
+    <Tabs value={tab} onValueChange={(next) => setTab(String(next))} className="gap-6">
+      <TabsList variant="line" aria-label="Candidate details" className="h-10 w-full justify-start gap-5 overflow-x-auto border-b border-border">
+        {[["overview", "Overview"], ["interview", "Interview questions"], ["assessment", "Strengths & concerns"]].map(([id, label]) => <TabsTrigger key={id} value={id} className="flex-none group-data-horizontal/tabs:after:bottom-0">{label}</TabsTrigger>)}
+      </TabsList>
+      <TabsContent value="overview" className="grid items-start gap-4 @3xl:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Evaluation summary</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="m-0 leading-relaxed">{e.summary}</p>
+            <p className="m-0 text-xs text-muted-foreground">{candidate.fileName} · {new Date(candidate.report.analyzedAt).toLocaleDateString()} · Human review required</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Scorecards</CardTitle><CardDescription>Click for evidence</CardDescription></CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {e.scorecards.map((s, i) => <div key={s.criterion} className="flex flex-col gap-2">
+              <button
+                type="button"
+                className="grid w-full cursor-pointer grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1.5 rounded-sm text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                aria-expanded={score === i}
+                aria-controls={`cv-evidence-${i}`}
+                aria-label={`${s.criterion}: ${s.score === null ? "Unknown" : `${s.score} out of 5`}. Show evidence`}
+                onClick={() => setScore(score === i ? null : i)}
+              >
+                <span className="flex items-center gap-1.5">{s.criterion}<Info className="size-3.5 text-muted-foreground" aria-hidden="true" /></span>
+                <strong className="num text-xs font-medium">{s.score === null ? "Unknown" : `${s.score}/5`}</strong>
+                <span className="col-span-full h-1 overflow-hidden rounded-[1px] bg-border dark:bg-input/70"><span className="block h-full bg-primary" style={{ width: `${(s.score || 0) * 20}%` }} /></span>
+              </button>
+              {score === i && <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs leading-relaxed" id={`cv-evidence-${i}`} role="note">
+                <strong className="font-medium">{s.requirement}</strong>
+                <blockquote className={QUOTE}>{s.evidence}</blockquote>
+                <p className="m-0">{s.rationale}</p>
+              </div>}
+            </div>)}
+            <p className="m-0 text-xs text-muted-foreground">0 mismatch · 3 meets · 5 exceptional. Unknown means not assessable.</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="interview" className="grid items-start gap-4 @3xl:grid-cols-2">
+        {[["Validate claimed experience", "Questions about experience the candidate mentions in the CV.", e.experienceQuestions], ["Explore gaps against the job", "Requirements that are missing or unproven in the CV.", e.gapQuestions]].map(([title, subtitle, questions]) => <Card key={String(title)}>
+          <CardHeader><CardTitle>{String(title)}</CardTitle><CardDescription>{String(subtitle)}</CardDescription></CardHeader>
+          <CardContent className="flex flex-col divide-y divide-border">
+            {(questions as typeof e.experienceQuestions).length === 0 && <p className="m-0 text-sm">No supported questions identified in this category.</p>}
+            {(questions as typeof e.experienceQuestions).map((q, i) => <div className="flex gap-3 py-4 first:pt-0 last:pb-0" key={i}>
+              <span className="num inline-flex size-6 shrink-0 items-center justify-center rounded-sm border border-border text-xs text-muted-foreground" aria-hidden="true">{i + 1}</span>
+              <div className="flex min-w-0 flex-col gap-2">
+                <h3 className="m-0 text-sm font-medium leading-snug">{q.question}</h3>
+                <p className="m-0 text-sm text-muted-foreground">{q.context}</p>
+                <details className={DISCLOSURE}>
+                  <summary className="text-xs font-medium underline-offset-4 hover:underline"><ChevronRight className="size-3.5 transition-transform group-open/disclosure:rotate-90" aria-hidden="true" />What to listen for</summary>
+                  <p className="m-0 mt-2 text-sm">{q.listenFor}</p>
+                </details>
+                <ReviewedCheckbox id={`cv-reviewed-${String(title).split(" ")[0]}-${i}`} />
+              </div>
+            </div>)}
+          </CardContent>
+        </Card>)}
+      </TabsContent>
+      <TabsContent value="assessment" className="grid items-start gap-4 @3xl:grid-cols-2">
+        {([["Advantages", e.advantages], ["Gaps & disadvantages", e.disadvantages], ["Risks to verify", e.risks], ["Other observations", e.aspectCritiques]] as const).map(([title, findings]) => <Card key={title}>
+          <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+          <CardContent className="flex flex-col divide-y divide-border">
+            {!findings.length && <p className="m-0 text-sm text-muted-foreground">No supported findings identified.</p>}
+            {findings.map((f, i) => <details className={cn(DISCLOSURE, "py-3 first:pt-0 last:pb-0")} key={i}>
+              <summary className="text-sm font-medium"><ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open/disclosure:rotate-90" aria-hidden="true" />{f.aspect}</summary>
+              <div className="mt-2 flex flex-col gap-2 pl-5.5 text-sm">
+                <p className="m-0">{f.assessment}</p>
+                <blockquote className={QUOTE}>{f.evidence}</blockquote>
+                <p className="m-0 text-muted-foreground">Verify: {f.followUp}</p>
+              </div>
+            </details>)}
+          </CardContent>
+        </Card>)}
+      </TabsContent>
+    </Tabs>
   </div>;
 }
 
+/** Interviewer's own tick, kept only on screen. */
+function ReviewedCheckbox({ id }: { id: string }) {
+  return <Field orientation="horizontal" className="mt-1 w-auto gap-2">
+    <Checkbox id={id} />
+    <FieldLabel htmlFor={id} className="text-xs font-normal text-muted-foreground">Reviewed in interview</FieldLabel>
+  </Field>;
+}

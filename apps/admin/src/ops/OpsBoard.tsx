@@ -1,14 +1,46 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bold, Eye, Heading2, Italic, Link2, List, PenLine, Plus, Search, Trash2, X } from "lucide-react";
+import { Bold, Eye, GripVertical, Heading2, Italic, Link2, List, PenLine, Plus, Search, Trash2, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Notice, Empty } from "@quicksort/hr-ui";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Avatar,
+  AvatarFallback,
+  Badge,
+  Button,
+  Card as UiCard,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Field,
+  FieldLabel,
+  Input,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  Kbd,
+  NativeSelect,
+  NativeSelectOption,
+  Textarea,
+} from "@quicksort-sas/ui";
+import { cn } from "cn";
 import {
   db,
   errorMessage,
   isMissingRelationError,
   type Row,
 } from "@quicksort/hr-db";
+import { EmptyState, PageAlerts } from "../ui";
 import "./ops.css";
 
 /**
@@ -225,7 +257,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
       }
       setCreatingBoard(false);
       setBoardId(boardResult.data.id);
-    }, `Board “${name}” created.`);
+    }, `Board "${name}" created.`);
   }
 
   async function saveColumnName(column: Column, name: string) {
@@ -261,7 +293,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
   /** Space on a selected card toggles ownership: yours ⇄ unassigned. */
   async function toggleAssign(card: Card) {
     if (card.owner_email && card.owner_email !== actorEmail) {
-      setMessage(`“${card.title}” is assigned to ${card.owner_email} — open it to reassign.`);
+      setMessage(`"${card.title}" is assigned to ${card.owner_email}. Open it to reassign.`);
       return;
     }
     const next = card.owner_email === actorEmail ? "" : actorEmail;
@@ -273,7 +305,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
         .select("id")
         .single();
       if (result.error) throw result.error;
-    }, next ? `“${card.title}” assigned to you.` : `“${card.title}” unassigned.`);
+    }, next ? `"${card.title}" assigned to you.` : `"${card.title}" unassigned.`);
   }
 
   /** Quick-add: creates a card from a bare title, owned by the actor. The
@@ -335,29 +367,28 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
         .select("id")
         .single();
       if (result.error) throw result.error;
-    }, `“${card.title}” moved to ${columns.find((c) => c.id === columnId)?.name || "column"}.`);
+    }, `"${card.title}" moved to ${columns.find((c) => c.id === columnId)?.name || "column"}.`);
   }
 
   if (notMigrated) {
     return (
-      <Empty title="Operations boards are not set up yet">
+      <EmptyState title="Operations boards are not set up yet">
         Apply the ops boards migration (20261005090000_ops_boards.sql) to this
         Supabase project, then refresh.
-      </Empty>
+      </EmptyState>
     );
   }
 
   return (
-    <div className="ops">
-      <Notice error>{error}</Notice>
-      <Notice>{message}</Notice>
+    <div className="flex flex-col gap-4">
+      <PageAlerts error={error} message={message} />
 
-      <div className="ops-boards" role="tablist" aria-label="Boards">
+      <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Boards">
         {boards.map((b) =>
           renamingBoard === b.id ? (
-            <input
+            <Input
               key={b.id}
-              className="ops-board-rename"
+              className="h-8 w-48 shrink-0 rounded-full px-3 text-sm font-medium md:text-sm"
               defaultValue={b.name}
               maxLength={200}
               aria-label="Board name"
@@ -375,52 +406,74 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
               }}
             />
           ) : (
-            <button
+            <Button
               key={b.id}
               role="tab"
               aria-selected={b.id === boardId}
-              className={b.id === boardId ? "ops-board active" : "ops-board"}
+              variant={b.id === boardId ? "outline" : "ghost"}
+              size="sm"
+              className={cn(
+                "shrink-0 gap-2 rounded-full pr-3 pl-1",
+                b.id === boardId ? "bg-card text-foreground" : "text-muted-foreground",
+              )}
               title="Click to open · double-click to rename"
               onClick={() => setBoardId(b.id)}
               onDoubleClick={() => setRenamingBoard(b.id)}
             >
-              <span className="ops-board-initial" aria-hidden="true">
+              <span
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-semibold",
+                  b.id === boardId ? "bg-foreground text-background" : "bg-muted text-foreground",
+                )}
+                aria-hidden="true"
+              >
                 {firstInitial(b.name)}
               </span>
-              <span className="ops-board-name">{b.name}</span>
-              <span className="ops-board-count">{counts[b.id] || 0}</span>
-            </button>
+              <span className="max-w-44 truncate">{b.name}</span>
+              <span className="num text-xs opacity-60">{counts[b.id] || 0}</span>
+            </Button>
           ),
         )}
-        <button className="ops-board ops-board-new" onClick={() => setCreatingBoard(true)}>
-          <Plus size={14} />
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 rounded-full border-dashed text-muted-foreground"
+          onClick={() => setCreatingBoard(true)}
+        >
+          <Plus data-icon="inline-start" />
           New board
-        </button>
-        {board && (
-          <div className="ops-search">
-            <Search size={14} aria-hidden="true" />
-            <input
+        </Button>
+      </div>
+
+      {!loading && !boards.length && (
+        <EmptyState title="No boards yet">
+          Use "New board" above to create one, set its columns, then add cards.
+        </EmptyState>
+      )}
+
+      {board && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+          <InputGroup className="h-9 w-full sm:w-64">
+            <InputGroupAddon>
+              <Search aria-hidden="true" />
+            </InputGroupAddon>
+            <InputGroupInput
               type="search"
+              className="text-sm md:text-sm"
               aria-label="Search tickets or filter by owner"
               placeholder="Search title or owner…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-          </div>
-        )}
-      </div>
-
-      {board && (
-        <div className="ops-toolbar">
-          <span className="muted small-text">
+          </InputGroup>
+          <span className="num">
             {search.trim()
               ? `${visibleCards.length} of ${cards.length} cards`
               : `${visibleCards.length} card${visibleCards.length === 1 ? "" : "s"}`}
           </span>
-          <span style={{ flex: 1 }} />
           {selectedId && (
-            <span className="muted small-text ops-kbd-hint">
-              Space: assign to me · Enter: edit · Esc: deselect
+            <span className="ml-auto hidden items-center gap-1.5 sm:inline-flex">
+              <Kbd>Space</Kbd> assign to me · <Kbd>Enter</Kbd> edit · <Kbd>Esc</Kbd> deselect
             </span>
           )}
         </div>
@@ -428,15 +481,18 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
 
       {board && (
         <div
-          className="ops-kanban"
+          className="-mx-1 flex items-start gap-3 overflow-x-auto px-1 pb-3"
           onClick={(e) => {
-            if (!(e.target as HTMLElement).closest(".ops-card")) setSelectedId("");
+            if (!(e.target as HTMLElement).closest("[data-board-card]")) setSelectedId("");
           }}
         >
           {columns.map((column) => (
             <section
               key={column.id}
-              className={dragOver === column.id ? "ops-column drop" : "ops-column"}
+              className={cn(
+                "flex min-h-36 w-72 shrink-0 flex-col gap-2 rounded-lg bg-muted/60 p-2 transition-shadow",
+                dragOver === column.id && "ring-2 ring-foreground/25 ring-inset",
+              )}
               aria-label={`${column.name} column`}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -451,10 +507,10 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
                 if (card) void moveCard(card, column.id);
               }}
             >
-              <header className="ops-column-head">
+              <header className="flex min-h-8 items-center justify-between gap-2 border-b border-border px-1.5 pb-2">
                 {renamingColumn === column.id ? (
-                  <input
-                    className="ops-column-rename"
+                  <Input
+                    className="h-7 min-w-0 flex-1 px-2 font-mono text-xs tracking-[0.06em] uppercase md:text-xs"
                     defaultValue={column.name}
                     maxLength={200}
                     aria-label="Column name"
@@ -474,19 +530,27 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
                   />
                 ) : (
                   <h2
+                    className="label-mono m-0 -ml-1 cursor-default truncate rounded-sm px-1 py-0.5 text-foreground select-none hover:bg-accent"
                     title="Double-click to rename"
                     onDoubleClick={() => setRenamingColumn(column.id)}
                   >
                     {column.name}
                   </h2>
                 )}
-                <span className="ops-column-count">{cardsOf(column.id).length}</span>
+                <Badge variant="secondary" className="num shrink-0">
+                  {cardsOf(column.id).length}
+                </Badge>
               </header>
 
               {cardsOf(column.id).map((card) => (
-                <article
+                <UiCard
                   key={card.id}
-                  className={selectedId === card.id ? "ops-card selected" : "ops-card"}
+                  size="sm"
+                  data-board-card=""
+                  className={cn(
+                    "cursor-grab gap-2 py-3 transition-[border-color,box-shadow] outline-none hover:border-faint focus-visible:ring-2 focus-visible:ring-ring/30 active:cursor-grabbing",
+                    selectedId === card.id && "border-foreground ring-1 ring-foreground hover:border-foreground",
+                  )}
                   draggable
                   role="button"
                   tabIndex={0}
@@ -497,73 +561,80 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
                   onClick={() => setSelectedId(card.id)}
                   onDoubleClick={() => setEditing(card)}
                 >
-                  <div className="ops-card-title">
-                    {card.priority && (
-                      <span className={`ops-priority ops-priority--${card.priority.toLowerCase()}`}>
-                        {card.priority}
-                      </span>
+                  <div className="flex flex-col gap-2 px-3">
+                    <div className="flex items-start gap-2">
+                      {card.priority && (
+                        <Badge variant={PRIORITY_BADGE[card.priority] ?? "secondary"} className="mt-0.5 shrink-0">
+                          {card.priority}
+                        </Badge>
+                      )}
+                      <h3 className="m-0 min-w-0 text-sm leading-snug font-medium [overflow-wrap:anywhere]">{card.title}</h3>
+                    </div>
+                    {!!card.content.trim() && (
+                      <p className="m-0 line-clamp-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                        {card.content.trim().split(/\r?\n/)[0]}
+                      </p>
                     )}
-                    <h3>{card.title}</h3>
+                    {card.owner_email && (
+                      <p className="m-0 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                        <Avatar size="sm" aria-hidden="true">
+                          <AvatarFallback>{initials(card.owner_email)}</AvatarFallback>
+                        </Avatar>
+                        <span className="truncate">{card.owner_email}</span>
+                      </p>
+                    )}
                   </div>
-                  {!!card.content.trim() && (
-                    <p className="ops-card-content">{card.content.trim().split(/\r?\n/)[0]}</p>
-                  )}
-                  {card.owner_email && (
-                    <p className="ops-card-owner">
-                      <span className="ops-owner-avatar" aria-hidden="true">
-                        {initials(card.owner_email)}
-                      </span>
-                      <span>{card.owner_email}</span>
-                    </p>
-                  )}
-                </article>
+                </UiCard>
               ))}
 
               {!cardsOf(column.id).length && (
-                <p className="ops-column-empty">No cards yet</p>
+                <p className="m-0 rounded-md border border-dashed border-border px-2 py-5 text-center text-xs text-muted-foreground">
+                  No cards yet
+                </p>
               )}
 
               {addingTo === column.id ? (
-                <div className="ops-quick-add">
-                  <input
-                    value={quickTitle}
-                    maxLength={300}
-                    placeholder="Ticket title, Enter to add"
-                    aria-label="New card title"
-                    autoFocus
-                    onChange={(e) => setQuickTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        void addCard(column, quickTitle);
-                      } else if (e.key === "Escape") {
-                        e.preventDefault();
-                        quickCancel.current = true;
-                        setAddingTo("");
-                        setQuickTitle("");
-                      }
-                    }}
-                    onBlur={() => {
-                      // Enter commits (busy) then blurs — keep the input open
-                      // for the next card; Escape cancels so blur must not commit.
-                      if (busy || quickCancel.current) return;
-                      if (quickTitle.trim()) void addCard(column, quickTitle);
-                      else setAddingTo("");
-                    }}
-                  />
-                </div>
+                <Input
+                  className="h-9 bg-card text-sm md:text-sm"
+                  value={quickTitle}
+                  maxLength={300}
+                  placeholder="Ticket title, Enter to add"
+                  aria-label="New card title"
+                  autoFocus
+                  onChange={(e) => setQuickTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void addCard(column, quickTitle);
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      quickCancel.current = true;
+                      setAddingTo("");
+                      setQuickTitle("");
+                    }
+                  }}
+                  onBlur={() => {
+                    // Enter commits (busy) then blurs — keep the input open
+                    // for the next card; Escape cancels so blur must not commit.
+                    if (busy || quickCancel.current) return;
+                    if (quickTitle.trim()) void addCard(column, quickTitle);
+                    else setAddingTo("");
+                  }}
+                />
               ) : (
-                <button
-                  className="ops-add"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start text-muted-foreground"
                   onClick={() => {
                     quickCancel.current = false;
                     setQuickTitle("");
                     setAddingTo(column.id);
                   }}
                 >
-                  <Plus size={14} />
+                  <Plus data-icon="inline-start" />
                   Add a card
-                </button>
+                </Button>
               )}
             </section>
           ))}
@@ -578,7 +649,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
                   .from("ops_columns")
                   .insert({ board_id: board.id, name, position: columns.length });
                 if (result.error) throw result.error;
-              }, `Column “${name}” added.`)
+              }, `Column "${name}" added.`)
             }
           />
         </div>
@@ -597,14 +668,14 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
       {editing && (
         <CardEditor
           card={editing}
+          columnId={cards.find((c) => c.id === editing.id)?.column_id ?? editing.column_id}
           columns={columns}
           busy={busy}
           onClose={() => setEditing(null)}
           onSave={(draft) => void saveCard(draft)}
-          onMove={(columnId) => void moveCard(editing, columnId)}
+          onMove={(columnId) => void moveCard(cards.find((c) => c.id === editing.id) ?? editing, columnId)}
           onDelete={() => {
             const card = editing;
-            if (!confirm(`Delete “${card.title}”?`)) return;
             void action(async () => {
               const result = await db().from("ops_cards").delete().eq("id", card.id);
               if (result.error) throw result.error;
@@ -617,9 +688,14 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
   );
 }
 
+const PRIORITY_BADGE: Record<string, "destructive" | "warning" | "secondary"> = {
+  P1: "destructive",
+  P2: "warning",
+  P3: "secondary",
+};
+
 /**
- * Create-a-board modal (design: Quicksort brand "Create Board"). Wide
- * dark card over a dimmed board: board name, optional description, a
+ * Create-a-board dialog: board name, optional description, a
  * drag-to-reorder column list (Enter adds a row, paste adds many,
  * Backspace on an empty row removes it, Alt+arrows reorder) and a live
  * preview strip. The footer carries a contextual hint, Cancel and a
@@ -695,39 +771,29 @@ function BoardCreator({
   }
 
   return (
-    <div className="ops-modal" role="dialog" aria-modal="true" aria-label="Create a board">
-      <div className="ops-modal-veil" onClick={onClose} />
-      <form
-        className="ops-creator"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.preventDefault();
-            onClose();
-          }
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
+        <form
+          className="grid min-w-0 gap-6"
+          onSubmit={(e) => {
             e.preventDefault();
             void submit();
-          }
-        }}
-      >
-        <div className="ops-creator-head">
-          <div>
-            <h2 id="ops-cb-title">Create a board</h2>
-            <p>Cards move left to right through the columns you set here.</p>
-          </div>
-          <button type="button" className="ops-creator-close" aria-label="Close" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void submit();
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Create a board</DialogTitle>
+            <DialogDescription>Cards move left to right through the columns you set here.</DialogDescription>
+          </DialogHeader>
 
-        <div className="ops-creator-body">
-          <label className="ops-creator-field">
-            <span>Board name</span>
-            <input
+          <Field>
+            <FieldLabel htmlFor="ops-cb-name">Board name</FieldLabel>
+            <Input
               id="ops-cb-name"
               value={name}
               maxLength={200}
@@ -738,39 +804,37 @@ function BoardCreator({
                 if (e.key === "Enter") e.preventDefault();
               }}
             />
-          </label>
+          </Field>
 
-          <label className="ops-creator-field">
-            <span className="ops-creator-field-label">
-              Description <em>Optional</em>
-            </span>
-            <textarea
+          <Field>
+            <FieldLabel htmlFor="ops-cb-description">
+              Description <span className="font-normal text-muted-foreground">Optional</span>
+            </FieldLabel>
+            <Textarea
+              id="ops-cb-description"
+              className="min-h-16"
               value={description}
-              rows={2}
               maxLength={2000}
               placeholder="What this board tracks and how cards flow through it."
               onChange={(e) => setDescription(e.target.value)}
             />
-          </label>
+          </Field>
 
-          <div className="ops-creator-cols">
-            <div className="ops-creator-cols-head">
-              <span>Columns</span>
-              <span className="ops-creator-cols-hint">Enter adds a column · drag to reorder</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="text-sm font-medium">Columns</span>
+              <span className="text-xs text-muted-foreground">Enter adds a column · drag to reorder</span>
             </div>
-            <div className="ops-col-list">
+            <div className="overflow-hidden rounded-lg border border-input">
               {columns.map((column, i) => (
                 <div
                   key={column.id}
-                  className="ops-col-row"
+                  className={cn(
+                    "flex items-center gap-2 border-b border-border pr-1 pl-2 transition-colors",
+                    dragIndex === i && "opacity-40",
+                    overIndex === i && dragIndex !== null && dragIndex !== i && "bg-muted",
+                  )}
                   draggable
-                  style={{
-                    opacity: dragIndex === i ? 0.4 : 1,
-                    background:
-                      overIndex === i && dragIndex !== null && dragIndex !== i
-                        ? "var(--qs-bg-1)"
-                        : undefined,
-                  }}
                   onDragStart={(e) => {
                     e.dataTransfer.effectAllowed = "move";
                     setDragIndex(i);
@@ -794,12 +858,11 @@ function BoardCreator({
                     setOverIndex(null);
                   }}
                 >
-                  <span className="ops-col-grip" aria-hidden="true">
-                    ⋮⋮
-                  </span>
-                  <span className="ops-col-num">{String(i + 1).padStart(2, "0")}</span>
-                  <input
+                  <GripVertical className="size-4 shrink-0 cursor-grab text-faint" aria-hidden="true" />
+                  <span className="num w-5 shrink-0 text-xs text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
+                  <Input
                     data-col-input={column.id}
+                    className="h-10 min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 shadow-none hover:border-0 focus-visible:border-0 focus-visible:shadow-none focus-visible:ring-0"
                     value={column.name}
                     maxLength={200}
                     placeholder="Column name"
@@ -846,59 +909,62 @@ function BoardCreator({
                       }
                     }}
                   />
-                  <button
+                  <Button
                     type="button"
-                    className="ops-col-remove"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground"
                     aria-label={`Remove column ${i + 1}`}
                     onClick={() => removeAt(i)}
                   >
-                    <X size={14} />
-                  </button>
+                    <X />
+                  </Button>
                 </div>
               ))}
-              <button
+              <Button
                 type="button"
-                className="ops-col-add"
+                variant="ghost"
+                className="h-10 w-full justify-start rounded-none text-muted-foreground"
                 onClick={() => insertAfter(columns.length - 1, [""])}
               >
-                <Plus size={16} />
+                <Plus data-icon="inline-start" />
                 Add column
-              </button>
+              </Button>
             </div>
           </div>
 
-          <div className="ops-creator-preview">
-            <span className="ops-creator-preview-label">Preview</span>
-            <div className="ops-preview-strip">
+          <div className="flex flex-col gap-2">
+            <span className="text-xs text-muted-foreground">Preview</span>
+            <div className="flex gap-2 overflow-x-auto rounded-lg bg-muted p-3">
               {validColumns.map((columnName, i) => (
-                <div key={i} className="ops-preview-col">
-                  <span className="ops-preview-name">{columnName}</span>
-                  <span className="ops-preview-card" />
-                  <span className="ops-preview-card" style={{ opacity: i % 2 ? 0 : 1 }} />
+                <div key={i} className="flex w-28 flex-none flex-col gap-1.5 rounded-md bg-background p-2">
+                  <span className="label-mono truncate text-foreground">{columnName}</span>
+                  <span className="h-4 rounded-sm bg-muted" />
+                  <span className="h-4 rounded-sm bg-muted" style={{ opacity: i % 2 ? 0 : 1 }} />
                 </div>
               ))}
               {!validColumns.length && (
-                <span className="ops-preview-empty">
+                <span className="py-4 text-xs text-muted-foreground">
                   Add a column to see the board take shape.
                 </span>
               )}
             </div>
           </div>
-        </div>
 
-        <div className="ops-creator-foot">
-          <span className="ops-creator-hint">{footerHint}</span>
-          <div className="actions">
-            <button type="button" className="btn secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button className="btn" disabled={busy || !canCreate}>
-              Create board
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
+          <DialogFooter className="sm:justify-between">
+            <span className="text-xs text-muted-foreground">{footerHint}</span>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="pivot" disabled={busy || !canCreate}>
+                Create board
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -916,14 +982,18 @@ function NewColumn({
   const [open, setOpen] = useState(false);
   if (!open)
     return (
-      <button className="ops-column ops-column-new" onClick={() => setOpen(true)}>
-        <Plus size={14} />
+      <Button
+        variant="outline"
+        className="h-36 w-72 shrink-0 border-dashed text-muted-foreground"
+        onClick={() => setOpen(true)}
+      >
+        <Plus data-icon="inline-start" />
         New column
-      </button>
+      </Button>
     );
   return (
     <form
-      className="ops-column ops-add-form"
+      className="flex w-72 shrink-0 flex-col gap-2 rounded-lg bg-muted/60 p-2"
       onSubmit={(e) => {
         e.preventDefault();
         const name = String(new FormData(e.currentTarget).get("name")).trim();
@@ -931,16 +1001,24 @@ function NewColumn({
         void onCreate(name).then(() => setOpen(false));
       }}
     >
-      <input name="name" placeholder={`Column ${columnCount + 1}`} required maxLength={200} autoFocus />
-      <div className="actions">
-        <button className="btn small" disabled={disabled}>
+      <Input
+        name="name"
+        className="h-9 bg-card text-sm md:text-sm"
+        placeholder={`Column ${columnCount + 1}`}
+        aria-label="New column name"
+        required
+        maxLength={200}
+        autoFocus
+      />
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={disabled}>
           Add column
-        </button>
-        <button type="button" className="btn secondary small" onClick={() => setOpen(false)}>
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
           Cancel
-        </button>
+        </Button>
       </div>
-      <span className="muted small-text">Board: {board.name}</span>
+      <span className="px-1 text-xs text-muted-foreground">Board: {board.name}</span>
     </form>
   );
 }
@@ -951,12 +1029,14 @@ function NewColumn({
  * renders the value with react-markdown (GFM).
  */
 function MarkdownField({
+  id,
   label,
   value,
   maxLength,
   placeholder,
   onChange,
 }: {
+  id: string;
   label: ReactNode;
   value: string;
   maxLength: number;
@@ -1010,57 +1090,58 @@ function MarkdownField({
   ];
 
   return (
-    <div className="ops-md form-field">
-      <div className="ops-md-bar">
-        <span className="ops-md-label">{label}</span>
-        <span style={{ flex: 1 }} />
+    <Field>
+      <div className="flex flex-wrap items-center gap-1">
+        <FieldLabel htmlFor={id} className="w-full sm:mr-auto sm:w-auto">
+          {label}
+        </FieldLabel>
         {tools.map(({ icon: Icon, label: toolLabel, run }) => (
-          <button
+          <Button
             key={toolLabel}
             type="button"
-            className="icon-button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
             aria-label={toolLabel}
             title={toolLabel}
             tabIndex={-1}
             onMouseDown={(e) => e.preventDefault()} /* keep textarea focus */
             onClick={run}
           >
-            <Icon size={14} />
-          </button>
+            <Icon />
+          </Button>
         ))}
-        <button
-          type="button"
-          className="btn secondary small"
-          onClick={() => setPreview((p) => !p)}
-        >
-          {preview ? <PenLine size={13} /> : <Eye size={13} />}
+        <Button type="button" variant="outline" size="xs" className="ml-1" onClick={() => setPreview((p) => !p)}>
+          {preview ? <PenLine data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
           {preview ? "Write" : "Preview"}
-        </button>
+        </Button>
       </div>
       {preview ? (
-        <div className="ops-md-preview">
+        <div className="ops-md-preview min-h-32 rounded-lg border border-input bg-muted/40 px-3 py-2.5 text-sm">
           {value.trim() ? (
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
           ) : (
-            <span className="muted">Nothing to preview yet.</span>
+            <span className="text-muted-foreground">Nothing to preview yet.</span>
           )}
         </div>
       ) : (
-        <textarea
+        <Textarea
+          id={id}
           ref={ref}
+          className="max-h-[40dvh] min-h-32 text-sm md:text-sm"
           value={value}
-          rows={5}
           maxLength={maxLength}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
         />
       )}
-    </div>
+    </Field>
   );
 }
 
 function CardEditor({
   card,
+  columnId,
   columns,
   busy,
   onClose,
@@ -1069,6 +1150,7 @@ function CardEditor({
   onDelete,
 }: {
   card: Card;
+  columnId: string;
   columns: Column[];
   busy: boolean;
   onClose: () => void;
@@ -1082,81 +1164,121 @@ function CardEditor({
     priority: card.priority,
     owner_email: card.owner_email,
   });
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
-    <div className="ops-modal" role="dialog" aria-modal="true" aria-label="Edit card">
-      <div className="ops-modal-card form">
-        <div className="ops-modal-head">
-          <h2>Edit card</h2>
-          <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-        <label>
-          Title
-          <input
-            value={draft.title}
-            maxLength={300}
-            autoFocus
-            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-          />
-        </label>
-        <MarkdownField
-          label={<>
-            Content <em className="muted">Optional · Markdown</em>
-          </>}
-          value={draft.content}
-          maxLength={20000}
-          placeholder="Specs, notes, links — the body of the card."
-          onChange={(content) => setDraft({ ...draft, content })}
-        />
-        <div className="form-columns">
-          <label>
-            Priority
-            <select
-              value={draft.priority}
-              onChange={(e) => setDraft({ ...draft, priority: e.target.value })}
-            >
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p || "None"}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Owner
-            <input
-              value={draft.owner_email}
-              maxLength={200}
-              placeholder="name@quicksort.fr"
-              onChange={(e) => setDraft({ ...draft, owner_email: e.target.value })}
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Edit card</DialogTitle>
+          <DialogDescription className="sr-only">Edit the card's title, content, priority, owner and column.</DialogDescription>
+        </DialogHeader>
+        <div className="grid min-w-0 gap-5">
+          <Field>
+            <FieldLabel htmlFor="ops-editor-title">Title</FieldLabel>
+            <Input
+              id="ops-editor-title"
+              value={draft.title}
+              maxLength={300}
+              autoFocus
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
             />
-          </label>
+          </Field>
+          <MarkdownField
+            id="ops-editor-content"
+            label={<>
+              Content <span className="font-normal text-muted-foreground">Optional · Markdown</span>
+            </>}
+            value={draft.content}
+            maxLength={20000}
+            placeholder="Specs, notes, links. The body of the card."
+            onChange={(content) => setDraft({ ...draft, content })}
+          />
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="ops-editor-priority">Priority</FieldLabel>
+              <NativeSelect
+                id="ops-editor-priority"
+                className="w-full"
+                value={draft.priority}
+                onChange={(e) => setDraft({ ...draft, priority: e.target.value })}
+              >
+                {PRIORITIES.map((p) => (
+                  <NativeSelectOption key={p} value={p}>
+                    {p || "None"}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="ops-editor-owner">Owner</FieldLabel>
+              <Input
+                id="ops-editor-owner"
+                value={draft.owner_email}
+                maxLength={200}
+                placeholder="name@quicksort.fr"
+                onChange={(e) => setDraft({ ...draft, owner_email: e.target.value })}
+              />
+            </Field>
+          </div>
+          <Field>
+            <FieldLabel htmlFor="ops-editor-column">Move to</FieldLabel>
+            <NativeSelect
+              id="ops-editor-column"
+              className="w-full"
+              value={columnId}
+              disabled={busy}
+              onChange={(e) => onMove(e.target.value)}
+            >
+              {columns.map((c) => (
+                <NativeSelectOption key={c.id} value={c.id}>
+                  {c.name}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </Field>
         </div>
-        <label>
-          Move to
-          <select value={card.column_id} onChange={(e) => onMove(e.target.value)}>
-            {columns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="actions">
-          <button className="btn" disabled={busy || !draft.title.trim()} onClick={() => onSave(draft)}>
-            Save card
-          </button>
-          <button type="button" className="btn secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <span style={{ flex: 1 }} />
-          <button type="button" className="btn danger" disabled={busy} onClick={onDelete}>
-            <Trash2 size={14} />
+        <DialogFooter className="sm:justify-between">
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            disabled={busy}
+            onClick={() => setConfirmingDelete(true)}
+          >
+            <Trash2 data-icon="inline-start" />
             Delete
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={busy || !draft.title.trim()} onClick={() => onSave(draft)}>
+              Save card
+            </Button>
+          </div>
+        </DialogFooter>
+
+        <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete "{card.title}"?</AlertDialogTitle>
+              <AlertDialogDescription>The card and its content are removed from the board. This cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() => {
+                  setConfirmingDelete(false);
+                  onDelete();
+                }}
+              >
+                Delete card
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </DialogContent>
+    </Dialog>
   );
 }

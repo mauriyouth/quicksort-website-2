@@ -1,16 +1,20 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
   useState,
   type FormEvent,
   type ReactElement,
+  type ReactNode,
 } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
   MoreVertical,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -18,8 +22,63 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { db, errorMessage, type Row } from "@quicksort/hr-db";
-import { Notice } from "@quicksort/hr-ui";
+import { cn } from "cn";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Avatar,
+  AvatarFallback,
+  Badge,
+  Button,
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Input,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+  NativeSelect,
+  NativeSelectOption,
+  Stat,
+  StatLabel,
+  StatSource,
+  StatUnit,
+  StatValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  Textarea,
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@quicksort-sas/ui";
+import { EmptyState, PageAlerts, PageHeading } from "../ui";
 import {
   money,
   useSales,
@@ -34,7 +93,8 @@ import {
   type AdminStatus,
 } from "../referentials";
 import { ClientPicker } from "./ClientPicker";
-import { ProjectContractSection, type ContractFolder } from "./ProjectContract";
+import { DocumentsPanel } from "../documents/DocumentsPanel";
+import { documentFlag, formatDay, loadAlerts } from "../documents/client";
 import {
   ProjectExtensionsSection,
   isActiveExtension,
@@ -49,19 +109,27 @@ import {
   storedPricingLines,
   type PricingLine,
 } from "./pricing-lines";
-import { craMonthYear, proratedBillableDays } from "./billable-cap";
+import {
+  cappedLineDays,
+  craMonthYear,
+  extensionValue,
+  linesCappedAmount,
+  proratedBillableDays,
+} from "./billable-cap";
 import { DateField } from "../DateField";
-import "./sales.css";
-import "./project-form.css";
-import { loadWorkspace, type Assignment } from "../hr/data";
+import "./sales.css"; // ClientPicker still uses it
+import { executeCommand, loadWorkspace, type Assignment } from "../hr/data";
 import {
   isOpenAssignment,
+  isStaffedAssignment,
   lineStaffing,
   LineStaffingPanel,
   ProjectTeamCard,
   type LineStaffing,
   type StaffingPerson,
 } from "./ProjectStaffing";
+import { ProjectInvoices } from "./invoicing/ProjectInvoices";
+import { placeContractFolder } from "./contract-folder";
 
 /**
  * Projects (sales.md §14 Phase 2) — the delivery continuation of won deals.
@@ -70,8 +138,9 @@ import {
  * configurable referentials edited under Administration → Global settings,
  * BoondManager-style. Régie contracts carry named pricing lines
  * ("Lead dev", "Data engineer"…), each with its own rate and end date —
- * the line window runs from the contract start to that date and the project
- * amount is the sum of rate × open days across the lines.
+ * the line window runs from the contract start to that date and the
+ * contract value is the sum of rate × capped open days across the lines
+ * (annual billable cap per line), extensions valued the same way.
  */
 type Project = Row<"sales_projects">;
 
@@ -87,6 +156,9 @@ type TjmProfileDraft = {
   end_date: string;
   /** Full-year billable-days allowance for this line — "" when exempt. */
   cap: string;
+  /** The line's name as saved — assignments are keyed by it, so a rename
+      moves them along on save. Undefined for a line added in this draft. */
+  savedName?: string;
 };
 
 /** Semantic list tabs (source design "Projects — redesign.html"). */
@@ -98,6 +170,8 @@ type ProjectRow = {
   project: Project;
   meta: AdminStatus;
   client?: SalesClient;
+  /** Billing intermediary when set — invoices go to it, not the client. */
+  intermediary?: SalesClient;
   team: string[];
   who: string;
   initials: string;
@@ -138,11 +212,11 @@ function sheetFromUrl(list: Project[]): Project | null | undefined {
 }
 
 /** Legacy query-param deep links (?project=<id>, ?new=1) still arrive from
-    old bookmarks — rewrite the address bar to the path form. */
-function redirectLegacyProjectQuery() {
+    old bookmarks — returns the path form to redirect to, if any. */
+function legacyProjectRedirect(): string | null {
   const params = new URLSearchParams(window.location.search);
   const legacyId = params.get("project");
-  if (params.get("new") !== "1" && !legacyId) return;
+  if (params.get("new") !== "1" && !legacyId) return null;
   const url = new URL(window.location.href);
   url.pathname =
     params.get("new") === "1"
@@ -150,7 +224,7 @@ function redirectLegacyProjectQuery() {
       : `/sales/projects/${encodeURIComponent(legacyId!)}`;
   url.searchParams.delete("project");
   url.searchParams.delete("new");
-  window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  return url.pathname + url.search + url.hash;
 }
 
 /** Open working days between ISO dates lives in pricing-lines.ts. */
@@ -204,6 +278,134 @@ function timelineProgress(p: Project) {
   };
 }
 
+/** CRA consumption feeding the project progress bars and billable caps. */
+type CraConsumption = {
+  /** All-time client_project days per project. */
+  days: Map<string, number>;
+  /** Given-year days per project and pricing line. */
+  lineYearDays: Map<string, Map<string, number>>;
+};
+
+const EMPTY_CONSUMPTION: CraConsumption = {
+  days: new Map(),
+  lineYearDays: new Map(),
+};
+
+/** Totals summed in the database (sales_project_cra_consumption). Null when
+    the function is not deployed yet, so the caller can fall back to
+    summing the raw entries. */
+async function loadCraConsumption(
+  year: number,
+): Promise<CraConsumption | null> {
+  try {
+    // Not in the generated Database types yet; call it untyped.
+    const untyped = db() as unknown as SupabaseClient;
+    const r = await untyped.rpc("sales_project_cra_consumption", {
+      target_year: year,
+    });
+    if (r.error || !r.data) return null;
+    const data = r.data as {
+      projects?: { project_id: string; days: number | string }[];
+      lines?: { project_id: string; pricing_line: string; days: number | string }[];
+    };
+    const days = new Map<string, number>();
+    for (const p of data.projects || []) days.set(p.project_id, Number(p.days));
+    const lineYearDays = new Map<string, Map<string, number>>();
+    for (const l of data.lines || []) {
+      const byLine = lineYearDays.get(l.project_id) || new Map<string, number>();
+      byLine.set(l.pricing_line, Number(l.days));
+      lineYearDays.set(l.project_id, byLine);
+    }
+    return { days, lineYearDays };
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback for databases without sales_project_cra_consumption: pages every
+    client_project CRA entry and sums it here. A full entry = one day, a
+    half-day entry (am/pm) = half a day. Best-effort: a read failure yields
+    empty totals rather than breaking the screen. */
+async function craConsumptionFromEntries(
+  assignments: Assignment[],
+  year: number,
+): Promise<CraConsumption> {
+  // PostgREST caps a response at 1000 rows, so page through until a
+  // short page arrives — summing a single capped response silently
+  // drops consumption days once client_project rows exceed the cap.
+  // Databases without the half-day migration reject the part column —
+  // fall back to counting every entry as a full day instead of losing
+  // consumption entirely.
+  const PAGE = 1000;
+  let craSelect = "project_id, part, month, employee_id, day";
+  let halfDays = true;
+  const craRows: {
+    project_id: string | null;
+    month: string;
+    employee_id: string;
+    day: string;
+    part?: string;
+  }[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const page = await db()
+      .from("cra_entries")
+      .select(craSelect)
+      .eq("status", "client_project")
+      .range(offset, offset + PAGE - 1);
+    if (page.error) {
+      if (offset === 0 && halfDays) {
+        halfDays = false;
+        craSelect = "project_id, month, employee_id, day";
+        offset = -PAGE;
+        continue;
+      }
+      return EMPTY_CONSUMPTION;
+    }
+    craRows.push(...((page.data || []) as unknown as typeof craRows));
+    if ((page.data?.length ?? 0) < PAGE) break;
+  }
+  // The annual billable cap is per pricing line and prorated per
+  // calendar year, so consumption is split the same way: a CRA day
+  // attributes to the pricing line of the employee's assignment
+  // covering that day (same window/status rules as the CRA screen).
+  // Assignments able to carry a CRA day onto a priced line — one
+  // assignment per employee/project pair, like assignedProjects().
+  const pricedByEmployee = new Map<string, Assignment[]>();
+  for (const a of assignments) {
+    if (
+      !["confirmed", "active", "completed"].includes(a.status) ||
+      !a.pricing_line
+    )
+      continue;
+    const list = pricedByEmployee.get(a.employee_id) || [];
+    list.push(a);
+    pricedByEmployee.set(a.employee_id, list);
+  }
+  const days = new Map<string, number>();
+  const lineYearDays = new Map<string, Map<string, number>>();
+  for (const row of craRows) {
+    if (!row.project_id) continue;
+    const d = row.part === "am" || row.part === "pm" ? 0.5 : 1;
+    // All-time consumption on the project; the cap check only tallies the
+    // given calendar year.
+    days.set(row.project_id, (days.get(row.project_id) || 0) + d);
+    if (craMonthYear(row.month) !== year) continue;
+    const line = pricedByEmployee
+      .get(row.employee_id)
+      ?.find(
+        (a) =>
+          a.project_id === row.project_id &&
+          a.start_date <= row.day &&
+          (!a.end_date || a.end_date >= row.day),
+      )?.pricing_line;
+    if (!line) continue;
+    const byLine = lineYearDays.get(row.project_id) || new Map<string, number>();
+    byLine.set(line, (byLine.get(line) || 0) + d);
+    lineYearDays.set(row.project_id, byLine);
+  }
+  return { days, lineYearDays };
+}
+
 export function Projects({ actorEmail }: { actorEmail: string }) {
   const { data, loading, busy, error, message, load, action } =
     useSales(actorEmail);
@@ -252,17 +454,32 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
   >(new Map());
   const [loadError, setLoadError] = useState("");
   const [reloadTick, setReloadTick] = useState(0);
+  /** Contract warnings per project (document_alerts): expired, missing, expiring. */
+  const [documentFlags, setDocumentFlags] = useState<Map<string, string>>(new Map());
+  // Finalized + paid invoices HT per project — feeds the Billed stat card.
+  const [billedByProject, setBilledByProject] = useState<Map<string, number>>(new Map());
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<ProjectsTab>("all");
-  const [menuFor, setMenuFor] = useState<string | null>(null);
+  // Project awaiting the delete confirmation (replaces window.confirm).
+  const [deleting, setDeleting] = useState<Project | null>(null);
   // The create/edit form is a page, addressed by the URL: /sales/projects/<id>
   // edits, /sales/projects/new creates. `undefined` = the projects list itself.
   const [editing, setEditing] = useState<Project | null | undefined>(undefined);
+  // Finalized + paid invoices HT for the edited project, reported by its
+  // invoices card — feeds the Billed stat. Keyed so a stale project's
+  // figure never shows on another.
+  const [invoicedHt, setInvoicedHt] = useState<{
+    projectId: string;
+    amount: number;
+  } | null>(null);
   const projectsRef = useRef<Project[]>([]);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Old ?project=/?new= bookmarks redirect to the path form on arrival.
   useEffect(() => {
-    redirectLegacyProjectQuery();
+    const target = legacyProjectRedirect();
+    if (target) navigate(target, { replace: true });
   }, []);
 
   useEffect(() => {
@@ -274,12 +491,14 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
           : "Projects · Quicksort Admin";
   }, [editing]);
 
-  // Sync the open page from the address bar on back/forward navigation.
+  // The open page follows the URL: back/forward, header tabs and links
+  // from other pages (e.g. an HR assignment) all land here.
+  // Keeps the open object when it is the same project, so local patches
+  // (onProjectPatched) survive a same-page navigation.
   useEffect(() => {
-    const onPop = () => setEditing(sheetFromUrl(projectsRef.current));
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
+    const next = sheetFromUrl(projectsRef.current);
+    setEditing((prev) => (next && prev && prev.id === next.id ? prev : next));
+  }, [location.pathname]);
 
   /** The annual cap and its consumption are always evaluated against the
       current calendar year. */
@@ -289,158 +508,79 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const r = await db()
+        // The reads are independent, so they all start together. The list
+        // renders as soon as projects arrive; staffing and CRA consumption
+        // fill in behind it instead of holding the whole screen back.
+        const projectsReq = db()
           .from("sales_projects")
           .select("*")
           .order("updated_at", { ascending: false });
+        const extReq = db().from("sales_project_extensions").select("*");
+        const staffingReq = loadWorkspace();
+        const consumptionReq = loadCraConsumption(currentYear);
+        // Awaited below; this only keeps an early throw from leaving an
+        // unhandled rejection behind.
+        staffingReq.catch(() => {});
+
+        const [r, ext] = await Promise.all([projectsReq, extReq]);
         if (r.error) throw r.error;
-        const ext = await db().from("sales_project_extensions").select("*");
         if (ext.error) throw ext.error;
-        // Loaded before the CRA pass: line attribution needs every
-        // assignment's pricing line and window.
-        const staffing = await loadWorkspace();
-        // CRA consumption: a full 'client_project' entry = one day billed
-        // to that project, a half-day entry (am/pm) = half a day. HR
-        // operators read every employee's CRA through the cra_access
-        // policy, so a single grouped count feeds the progress bars on
-        // every project row.
-        // PostgREST caps a response at 1000 rows, so page through until a
-        // short page arrives — summing a single capped response silently
-        // drops consumption days once client_project rows exceed the cap.
-        // Databases without the half-day migration reject the part column —
-        // fall back to counting every entry as a full day instead of losing
-        // consumption entirely.
-        const PAGE = 1000;
-        let craSelect = "project_id, part, month, employee_id, day";
-        let halfDays = true;
-        const craRows: {
-          project_id: string | null;
-          month: string;
-          employee_id: string;
-          day: string;
-          part?: string;
-        }[] = [];
-        let craFailed = false;
-        for (let offset = 0; ; offset += PAGE) {
-          const page = await db()
-            .from("cra_entries")
-            .select(craSelect)
-            .eq("status", "client_project")
-            .range(offset, offset + PAGE - 1);
-          if (page.error) {
-            if (offset === 0 && halfDays) {
-              halfDays = false;
-              craSelect = "project_id, month, employee_id, day";
-              offset = -PAGE;
-              continue;
-            }
-            craFailed = true;
-            break;
-          }
-          craRows.push(...((page.data || []) as unknown as typeof craRows));
-          if ((page.data?.length ?? 0) < PAGE) break;
-        }
-        const craDays = new Map<string, number>();
-        // The annual billable cap is per pricing line and prorated per
-        // calendar year, so consumption is split the same way: a CRA day
-        // attributes to the pricing line of the employee's assignment
-        // covering that day (same window/status rules as the CRA screen).
-        const craLineYearDays = new Map<string, Map<string, number>>();
-        if (!craFailed) {
-          // Assignments able to carry a CRA day onto a priced line — one
-          // assignment per employee/project pair, like assignedProjects().
-          const pricedByEmployee = new Map<
-            string,
-            {
-              project_id: string;
-              start_date: string;
-              end_date: string | null;
-              pricing_line: string;
-            }[]
-          >();
-          for (const a of staffing.assignments) {
-            if (
-              !["confirmed", "active", "completed"].includes(a.status) ||
-              !a.pricing_line
-            )
-              continue;
-            const list = pricedByEmployee.get(a.employee_id) || [];
-            list.push({
-              project_id: a.project_id,
-              start_date: a.start_date,
-              end_date: a.end_date,
-              pricing_line: a.pricing_line,
-            });
-            pricedByEmployee.set(a.employee_id, list);
-          }
-          for (const row of craRows) {
-            if (!row.project_id) continue;
-            const days =
-              row.part === "am" || row.part === "pm" ? 0.5 : 1;
-            // All-time consumption on the project; the cap check below only
-            // tallies the current calendar year.
-            craDays.set(row.project_id, (craDays.get(row.project_id) || 0) + days);
-            // Only the current calendar year feeds the cap check.
-            if (craMonthYear(row.month) !== currentYear) continue;
-            const line = pricedByEmployee
-              .get(row.employee_id)
-              ?.find(
-                (a) =>
-                  a.project_id === row.project_id &&
-                  a.start_date <= row.day &&
-                  (!a.end_date || a.end_date >= row.day),
-              )?.pricing_line;
-            if (!line) continue;
-            const byLine = craLineYearDays.get(row.project_id) || new Map<string, number>();
-            byLine.set(line, (byLine.get(line) || 0) + days);
-            craLineYearDays.set(row.project_id, byLine);
-          }
-        }
+        if (cancelled) return;
+        const list = r.data || [];
+        setProjects(list);
+        projectsRef.current = list;
+        setExtensions(ext.data || []);
+        setLoadError("");
+        // The URL is the source of truth: (re)open the create/edit page
+        // after every reload so deep links and redirects land on it.
+        setEditing(sheetFromUrl(list));
+
+        const staffing = await staffingReq;
+        if (cancelled) return;
         const today = new Date().toISOString().slice(0, 10);
-        if (!cancelled) {
-          const list = r.data || [];
-          setProjects(list);
-          projectsRef.current = list;
-          setExtensions(ext.data || []);
-          setAssignments(
-            staffing.assignments.filter(
-              (a) =>
-                ["reserved", "confirmed", "active"].includes(a.status) &&
-                a.start_date <= today &&
-                (!a.end_date || a.end_date >= today),
-            ),
-          );
-          setEmployees(
-            staffing.employees.map((e) => ({
-              id: e.id,
-              full_name:
-                staffing.people.find((p) => p.id === e.person_id)?.full_name ||
-                "Person",
-              start_date: e.start_date,
-              status: e.status,
-            })),
-          );
-          setTalentPool(
-            staffing.people
-              .filter(
-                (p) =>
-                  !staffing.employees.some(
-                    (e) => e.person_id === p.id && e.status !== "ended",
-                  ),
-              )
-              .map((p) => ({ personId: p.id, name: p.full_name })),
-          );
-          setCanEngage(staffing.capabilities.recruit);
-          setStaffingAssignments(
-            staffing.assignments.filter((a) => isOpenAssignment(a)),
-          );
-          setCraDaysByProject(craDays);
-          setCraLineYearDaysByProject(craLineYearDays);
-          setLoadError("");
-          // The URL is the source of truth: (re)open the create/edit page
-          // after every reload so deep links and redirects land on it.
-          setEditing(sheetFromUrl(list));
-        }
+        setAssignments(
+          staffing.assignments.filter(
+            (a) =>
+              ["reserved", "confirmed", "active"].includes(a.status) &&
+              a.start_date <= today &&
+              (!a.end_date || a.end_date >= today),
+          ),
+        );
+        setEmployees(
+          staffing.employees.map((e) => ({
+            id: e.id,
+            full_name:
+              staffing.people.find((p) => p.id === e.person_id)?.full_name ||
+              "Person",
+            start_date: e.start_date,
+            status: e.status,
+          })),
+        );
+        setTalentPool(
+          staffing.people
+            .filter(
+              (p) =>
+                !staffing.employees.some(
+                  (e) => e.person_id === p.id && e.status !== "ended",
+                ),
+            )
+            .map((p) => ({ personId: p.id, name: p.full_name })),
+        );
+        setCanEngage(staffing.capabilities.recruit);
+        setStaffingAssignments(
+          staffing.assignments.filter((a) => isStaffedAssignment(a)),
+        );
+
+        // The annual cap and its consumption are evaluated per pricing line
+        // for the current calendar year; the server sums it when the
+        // consumption function is deployed, otherwise the raw entries are
+        // paged and summed here (needs every assignment's line and window).
+        const consumption =
+          (await consumptionReq) ??
+          (await craConsumptionFromEntries(staffing.assignments, currentYear));
+        if (cancelled) return;
+        setCraDaysByProject(consumption.days);
+        setCraLineYearDaysByProject(consumption.lineYearDays);
       } catch (e) {
         if (!cancelled) setLoadError(errorMessage(e));
       }
@@ -450,6 +590,56 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     };
     // reloadTick lets child sections (extensions) ask for a project refresh.
   }, [data, reloadTick]); // re-fetch after every sales action() reload
+
+  useEffect(() => {
+    let cancelled = false;
+    // Optional: before the documents migration the list simply has no contract flags.
+    loadAlerts({ kind: "project" }).then(
+      (alerts) => {
+        if (cancelled) return;
+        const byProject = new Map<string, typeof alerts>();
+        for (const alert of alerts)
+          if (alert.project_id) byProject.set(alert.project_id, [...(byProject.get(alert.project_id) || []), alert]);
+        setDocumentFlags(new Map([...byProject].map(([id, list]) => [id, documentFlag(list)])));
+      },
+      () => !cancelled && setDocumentFlags(new Map()),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [data, reloadTick]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Optional: before the invoicing migration the Billed stat stays at zero.
+    // Summed in cents, paged past PostgREST's 1000-row cap like the CRA pass.
+    // invoices is not in the generated Database types yet; read it untyped.
+    const untyped = db() as unknown as SupabaseClient;
+    (async () => {
+      const PAGE = 1000;
+      const cents = new Map<string, number>();
+      for (let offset = 0; ; offset += PAGE) {
+        const page = await untyped
+          .from("invoices")
+          .select("project_id, total_ht")
+          .in("status", ["finalized", "paid"])
+          .not("project_id", "is", null)
+          .range(offset, offset + PAGE - 1);
+        if (page.error) throw page.error;
+        for (const i of (page.data || []) as { project_id: string; total_ht: number | string }[])
+          cents.set(
+            i.project_id,
+            (cents.get(i.project_id) || 0) + Math.round(Number(i.total_ht) * 100),
+          );
+        if ((page.data?.length ?? 0) < PAGE) break;
+      }
+      if (!cancelled)
+        setBilledByProject(new Map([...cents].map(([id, c]) => [id, c / 100])));
+    })().catch(() => !cancelled && setBilledByProject(new Map()));
+    return () => {
+      cancelled = true;
+    };
+  }, [data, reloadTick]);
 
   const projectStatuses = statusesFor(ref.statuses, "project", {
     includeHidden: false,
@@ -497,7 +687,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     }
     return map;
   }, [extensions]);
-  /** Open assignments per employee, every project — availability readout
+  /** Staffed assignments per employee, every project — availability readout
       and the capacity pre-check on the contract page's assign panel. */
   const assignmentsByEmployee = useMemo(() => {
     const map = new Map<string, Assignment[]>();
@@ -551,6 +741,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     return projects.map((p) => {
       const meta = statusMeta(ref.statuses, "project", p.status);
       const client = clientsById.get(p.client_id);
+      const intermediary = p.intermediary_client_id
+        ? clientsById.get(p.intermediary_client_id)
+        : undefined;
       const team = teamByProject.get(p.id) || [];
       const isRegie = p.pricing_model === "regie";
       // Signed extensions push the end date out and add value.
@@ -560,11 +753,22 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         if (ext.end_date && (!effEnd || ext.end_date > effEnd))
           effEnd = ext.end_date;
       }
+      // Contract value comes from the pricing lines only: each line bills
+      // its own rate over the open days of its window (window start → line
+      // end date), shrunk by its per-year billable cap. The stored amount
+      // columns (mean rate × days) are not used for régie.
       const extTotal = signedExts.reduce(
-        (sum, ext) => sum + Number(ext.amount),
+        (sum, ext) => sum + extensionValue(ext),
         0,
       );
-      const total = Number(p.amount) + extTotal;
+      const total =
+        (isRegie
+          ? linesCappedAmount(
+              storedTjmProfiles(p.tjm_profiles),
+              p.start_date,
+              p.end_date,
+            )
+          : Number(p.amount)) + extTotal;
       // Consumption comes from the CRA: signed régie extensions grow the
       // day budget alongside the value.
       const consumedDays = craDaysByProject.get(p.id) || 0;
@@ -635,6 +839,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             )
             .join(" · ");
       }
+      if (!flag) flag = documentFlags.get(p.id) ?? null;
       const rateChips = isRegie
         ? distinctRates([
             ...storedTjmProfiles(p.tjm_profiles),
@@ -656,6 +861,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         project: p,
         meta,
         client,
+        intermediary,
         team,
         who: team.length
           ? team.length > 1
@@ -675,6 +881,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         rateChips,
         metaLine: [
           client?.name,
+          intermediary ? `billed to ${intermediary.name}` : "",
           p.type ? typeLabel(ref.types, p.type) : "",
           rateLabel,
         ]
@@ -702,6 +909,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     signedExtensionsByProject,
     craDaysByProject,
     craLineYearDaysByProject,
+    documentFlags,
   ]);
 
   const activeRows = rows.filter((r) => !r.meta.is_terminal);
@@ -713,6 +921,12 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
   const staffedCount = activeRows.filter((r) => r.team.length > 0).length;
   const trackedRows = activeRows.filter((r) => r.budgetDays > 0);
   const consumedTotal = activeRows.reduce((sum, r) => sum + r.billed, 0);
+  // Billed vs contract value (signed extensions included) on active projects.
+  const invoicedTotal = activeRows.reduce(
+    (sum, r) => sum + (billedByProject.get(r.project.id) || 0),
+    0,
+  );
+  const contractTotal = activeRows.reduce((sum, r) => sum + r.total, 0);
   const attentionRows = rows.filter((r) => r.flag);
   const endingSoon = activeRows.filter((r) => {
     if (!r.effEnd) return false;
@@ -747,25 +961,18 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       if (days < 0 || days > 30) return false;
     }
     if (tab === "archived" && !r.meta.is_terminal) return false;
+    if (tab === "all" && r.meta.is_terminal) return false;
     if (!query) return true;
     const p = r.project;
     return (
       p.title.toLowerCase().includes(query) ||
       (r.client?.name.toLowerCase().includes(query) ?? false) ||
+      (r.intermediary?.name.toLowerCase().includes(query) ?? false) ||
       typeLabel(ref.types, p.type).toLowerCase().includes(query) ||
       p.owner_email.toLowerCase().includes(query) ||
       r.team.join(" ").toLowerCase().includes(query)
     );
   });
-
-  // The overflow menu closes on any outside click, like the design
-  // mockup's document-level listener.
-  useEffect(() => {
-    if (menuFor === null) return;
-    const close = () => setMenuFor(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [menuFor]);
 
   // Escape leaves the create/edit page, like every other sheet.
   useEffect(() => {
@@ -784,7 +991,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     url.pathname = project
       ? `/sales/projects/${encodeURIComponent(project.id)}`
       : "/sales/projects/new";
-    window.history.pushState(null, "", url.pathname + url.search + url.hash);
+    navigate(url.pathname + url.search + url.hash);
     setEditing(project);
   }
 
@@ -795,11 +1002,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     const url = new URL(window.location.href);
     if (url.pathname.replace(/\/+$/, "") !== "/sales/projects") {
       url.pathname = "/sales/projects";
-      window.history.replaceState(
-        null,
-        "",
-        url.pathname + url.search + url.hash,
-      );
+      navigate(url.pathname + url.search + url.hash, { replace: true });
     }
   }
 
@@ -817,13 +1020,24 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       pricing_model === "regie"
         ? storedTjmProfiles(JSON.parse(String(f.get("tjm_profiles") || "[]")))
         : [];
+    // Saved lines renamed in this edit — their open assignments follow.
+    const renames: { from: string; to: string }[] =
+      editing && pricing_model === "regie"
+        ? JSON.parse(String(f.get("tjm_renames") || "[]"))
+        : [];
     const daysSum = linesDays(profiles, windowStart, windowEnd);
-    const regieAmount = linesAmount(profiles, windowStart, windowEnd);
+    const regieRate = linesAmount(profiles, windowStart, windowEnd);
+    // Stored amount: per-line rate × capped days — the contract value.
+    const regieAmount = linesCappedAmount(profiles, windowStart, windowEnd);
     const fixedPrice =
       pricing_model === "forfait" ? Number(f.get("fixed_price") ?? 0) : null;
     const values = {
       title: String(f.get("title")).trim(),
       client_id: String(f.get("client_id")),
+      // Optional intermediary: when set, invoices go to the intermediary
+      // instead of the main client. Empty picker → NULL → bill the client.
+      intermediary_client_id:
+        String(f.get("intermediary_client_id") || "") || null,
       // The convert picker only exists on create — never unlink on edit.
       opportunity_id: editing ? editing.opportunity_id : opportunityId || null,
       pricing_model,
@@ -832,7 +1046,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       tjm:
         pricing_model === "regie"
           ? daysSum > 0
-            ? Math.round((regieAmount / daysSum) * 100) / 100
+            ? Math.round((regieRate / daysSum) * 100) / 100
             : 0
           : null,
       estimated_days: pricing_model === "regie" ? daysSum : null,
@@ -859,8 +1073,46 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             .select("id")
             .single();
       if (result.error) throw result.error;
+      if (editing && isTerminalStatus(values.status) !== isTerminalStatus(editing.status))
+        await syncContractFolder(editing.id, isTerminalStatus(values.status));
+      // Assignments reference their line by name: move the open ones onto
+      // the renamed line (after the save, so the new name exists).
+      for (const { from, to } of renames)
+        for (const a of staffingAssignments.filter(
+          (a) =>
+            a.project_id === editing?.id &&
+            a.pricing_line === from &&
+            isOpenAssignment(a),
+        ))
+          await executeCommand({
+            kind: "update_assignment",
+            assignment_id: a.id,
+            expected_version: a.version,
+            position: a.position === from ? to : a.position,
+            pricing_line: to,
+            allocation_pct: a.allocation_pct,
+            start_date: a.start_date,
+            end_date: a.end_date,
+            status: a.status,
+            rationale: `Pricing line renamed to "${to}" on the contract page.`,
+          });
     }, "Project saved.");
     closeProjectDialog();
+  }
+
+  const isTerminalStatus = (key: string | null | undefined) =>
+    !!projectStatuses.find((s) => s.key === key)?.is_terminal;
+
+  /** Archiving files the Drive folder under archived/<year>; restoring brings it back. */
+  async function syncContractFolder(projectId: string, archived: boolean) {
+    try {
+      await placeContractFolder(projectId, archived);
+    } catch (e) {
+      void load();
+      throw new Error(
+        `Project ${archived ? "archived" : "restored"}, but its Drive folder could not be moved: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
 
   function setStatus(p: Project, status: string, success: string) {
@@ -872,39 +1124,69 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
         .select("id")
         .single();
       if (result.error) throw result.error;
+      if (isTerminalStatus(status) !== isTerminalStatus(p.status))
+        await syncContractFolder(p.id, isTerminalStatus(status));
     }, success);
   }
 
   return (
-    <>
-      <Notice error>{error || loadError}</Notice>
-      <Notice>{message}</Notice>
+    <div className="@container flex flex-col gap-6">
+      <PageAlerts error={error || loadError} message={message} />
       {ref.missing && (
-        <Notice error>
-          The admin_settings migration is missing — apply
-          supabase/migrations/20261007090000_sales_projects_admin_settings.sql,
-          until then built-in defaults are used.
-        </Notice>
+        <PageAlerts error="The admin_settings migration is missing. Apply supabase/migrations/20261007090000_sales_projects_admin_settings.sql; until then, built-in defaults are used." />
       )}
+      <AlertDialog open={!!deleting} onOpenChange={(open) => { if (!open) setDeleting(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project "{deleting?.title}"?</AlertDialogTitle>
+            <AlertDialogDescription>The project is removed for good. This can't be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                const p = deleting;
+                setDeleting(null);
+                if (!p) return;
+                void action(async () => {
+                  const r = await db()
+                    .from("sales_projects")
+                    .delete()
+                    .eq("id", p.id)
+                    .select("id")
+                    .single();
+                  if (r.error) throw r.error;
+                }, "Project deleted.");
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {editing !== undefined && (
-        <div className="pj-page">
-          <div className="pj-head">
-            <button className="pj-back" onClick={closeProjectDialog}>
-              <ArrowLeft size={16} />
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col items-start gap-3">
+            <Button variant="ghost" size="sm" className="-ml-2" onClick={closeProjectDialog}>
+              <ArrowLeft data-icon="inline-start" />
               Projects
-            </button>
-            <div className="pj-head-row">
-              <div className="pj-head-main">
-                <div className="pj-title-row">
-                  <h1 className="pj-title" id="pj-title">
+            </Button>
+            <header className="flex w-full flex-wrap items-start justify-between gap-4">
+              <div className="flex min-w-0 flex-col gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                  <h1 className="m-0 text-3xl font-medium tracking-tight" id="pj-title">
                     {editing ? "Edit project" : "Create a project"}
                   </h1>
                   {editing && (
-                    <span className="pj-title-chip">{editing.title}</span>
+                    <Badge variant="outline" className="h-6 max-w-80 truncate px-2 text-xs normal-case tracking-normal">
+                      <span className="truncate">{editing.title}</span>
+                    </Badge>
                   )}
                 </div>
                 {editing && (
-                  <div className="pj-meta">
+                  <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                     {(() => {
                       const meta = statusMeta(
                         ref.statuses,
@@ -912,6 +1194,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                         editing.status,
                       );
                       const client = clientsById.get(editing.client_id);
+                      const intermediary = editing.intermediary_client_id
+                        ? clientsById.get(editing.intermediary_client_id)
+                        : undefined;
                       const signed =
                         signedExtensionsByProject.get(editing.id) || [];
                       let effEnd = editing.end_date;
@@ -920,9 +1205,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                           effEnd = ext.end_date;
                       }
                       const items: ReactElement[] = [
-                        <span className="pj-meta-item" key="status">
+                        <span className="inline-flex items-center gap-1.5 text-foreground" key="status">
                           <span
-                            className="pj-meta-dot"
+                            className="size-2 shrink-0 rounded-full"
                             style={{ background: meta.color }}
                             aria-hidden="true"
                           />
@@ -930,13 +1215,15 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                         </span>,
                       ];
                       if (client)
+                        items.push(<span key="client">{client.name}</span>);
+                      if (intermediary)
                         items.push(
-                          <span className="pj-meta-item" key="client">
-                            {client.name}
+                          <span key="intermediary">
+                            {`Billed to ${intermediary.name} (intermediary)`}
                           </span>,
                         );
                       items.push(
-                        <span className="pj-meta-item" key="pricing">
+                        <span key="pricing">
                           {editing.pricing_model === "regie"
                             ? "Régie"
                             : "Forfait"}
@@ -945,33 +1232,34 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                       );
                       if (editing.start_date && effEnd)
                         items.push(
-                          <span className="pj-meta-item" key="range">
+                          <span className="num text-[13px]" key="range">
                             {`${shortDate(editing.start_date)} → ${longDate(effEnd)}`}
                           </span>,
                         );
-                      return items;
+                      return items.flatMap((item, i) =>
+                        i === 0
+                          ? [item]
+                          : [<span key={`sep-${i}`} aria-hidden="true" className="text-faint">·</span>, item],
+                      );
                     })()}
-                  </div>
+                  </p>
                 )}
               </div>
-              <div className="pj-actions">
-                <button
-                  type="button"
-                  className="pj-btn pj-btn-ghost"
-                  onClick={closeProjectDialog}
-                >
+              <div className="flex shrink-0 items-center gap-2 max-sm:w-full max-sm:*:flex-1">
+                <Button type="button" variant="outline" onClick={closeProjectDialog}>
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
                   form="pj-form"
-                  className="pj-btn pj-btn-primary"
+                  variant="pivot"
+                  data-save-shortcut
                   disabled={busy}
                 >
                   {editing ? "Save changes" : "Create project"}
-                </button>
+                </Button>
               </div>
-            </div>
+            </header>
           </div>
           {editing && (
             <ProjectStatsStrip
@@ -979,6 +1267,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
               signedExts={signedExtensionsByProject.get(editing.id) || []}
               craDays={craDaysByProject.get(editing.id) || 0}
               staffed={editingStaffing}
+              billedHt={
+                invoicedHt?.projectId === editing.id ? invoicedHt.amount : null
+              }
             />
           )}
           <ProjectForm
@@ -999,19 +1290,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             }
             onCancel={closeProjectDialog}
             onSubmit={save}
-            onFolderLinked={(projectId, folder) => {
-              const patch = {
-                drive_folder_id: folder.id,
-                drive_folder_name: folder.name,
-                drive_folder_link: folder.webViewLink || null,
-              };
-              setProjects((list) =>
-                list.map((x) => (x.id === projectId ? { ...x, ...patch } : x)),
-              );
-              setEditing((e) =>
-                e && e.id === projectId ? { ...e, ...patch } : e,
-              );
-            }}
+            onDocumentsChanged={() => setReloadTick((t) => t + 1)}
             onExtensionsChanged={() => setReloadTick((t) => t + 1)}
             onStaffingChanged={() => setReloadTick((t) => t + 1)}
             staffing={editingStaffing}
@@ -1019,6 +1298,9 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             talentPool={talentPool}
             canEngage={canEngage}
             assignmentsByEmployee={assignmentsByEmployee}
+            onInvoicedHt={(projectId, amount) =>
+              setInvoicedHt({ projectId, amount })
+            }
             onProjectPatched={(projectId, patch) => {
               setProjects((list) =>
                 list.map((x) => (x.id === projectId ? { ...x, ...patch } : x)),
@@ -1032,427 +1314,524 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       )}
       {editing === undefined && (
         <>
-          <header className="projects-head">
-            <div className="projects-head-text">
-              <h1>Projects</h1>
-              <p className="projects-lede">
-                Delivery, consumption and billing across your engagements
-              </p>
-            </div>
-            <button
-              type="button"
-              className="projects-cta"
-              onClick={() => openProjectPage(null)}
-            >
-              <Plus size={18} />
-              New project
-            </button>
-          </header>
-          <section className="projects-stats" aria-label="Summary">
-            <div className="projects-stat">
-              <span className="projects-stat-label">Active projects</span>
-              <span className="projects-stat-value">{activeCount}</span>
-              <span className="projects-stat-sub">
-                {staffedCount} staffed · {activeCount - staffedCount} unassigned
-              </span>
-            </div>
-            <div className="projects-stat">
-              <span className="projects-stat-label">Contract value</span>
-              <span className="projects-stat-value">{money(activeTotal)}</span>
-              <span className="projects-stat-sub">
-                Régie + forfait, active contracts
-              </span>
-            </div>
-            <div className="projects-stat">
-              <span className="projects-stat-label">Consumed to date</span>
-              <span className="projects-stat-value">
-                ≈ {money(consumedTotal)}
-              </span>
-              <span className="projects-stat-sub">
-                {trackedRows.length
-                  ? `Tracked on ${trackedRows.filter((r) => r.consumedDays > 0).length} of ${trackedRows.length} régie projects`
-                  : "No régie contracts active"}
-              </span>
-            </div>
-            <div className="projects-stat projects-stat-inv">
-              <span className="projects-stat-label">Needs attention</span>
-              <span className="projects-stat-value">
-                {attentionRows.length}
-              </span>
-              <span className="projects-stat-sub">
-                {attentionSub || "Nothing flagged"}
-              </span>
-            </div>
-          </section>
-          <section className="projects-card" aria-label="Project list">
-            <div className="projects-toolbar">
-              <div
-                className="projects-tabs"
-                role="tablist"
-                aria-label="Filter projects"
-              >
-                {(
-                  [
-                    ["all", "All", rows.length],
-                    ["attention", "Needs attention", attentionRows.length],
-                    ["ending", "Ending in 30 days", endingSoon],
-                    ["archived", "Archived", archivedCount],
-                  ] as [ProjectsTab, string, number][]
-                ).map(([id, label, count]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === id}
-                    className={`projects-tab${tab === id ? " on" : ""}`}
-                    onClick={() => setTab(id)}
+          <PageHeading
+            title="Projects"
+            action={
+              <Button variant="pivot" onClick={() => openProjectPage(null)}>
+                <Plus data-icon="inline-start" />
+                New project
+              </Button>
+            }
+          >
+            Delivery, consumption and billing across your engagements
+          </PageHeading>
+          <Card role="region" aria-label="Summary">
+            <CardContent>
+              <StatGrid className="grid-cols-2 @2xl:grid-cols-3 @6xl:grid-cols-5">
+                <Stat size="sm">
+                  <StatValue className={STAT_VALUE}>{activeCount}</StatValue>
+                  <StatLabel>Active projects</StatLabel>
+                  <StatSource>
+                    {staffedCount} staffed · {activeCount - staffedCount} unassigned
+                  </StatSource>
+                </Stat>
+                <Stat size="sm">
+                  <StatValue className={STAT_VALUE}><Figure value={money(activeTotal)} /></StatValue>
+                  <StatLabel>Contract value</StatLabel>
+                  <StatSource>Régie + forfait, active contracts</StatSource>
+                </Stat>
+                <Stat size="sm">
+                  <StatValue className={STAT_VALUE}>
+                    <span className="text-muted-foreground">≈</span>
+                    <Figure value={money(consumedTotal)} />
+                  </StatValue>
+                  <StatLabel>Consumed to date</StatLabel>
+                  <StatSource>
+                    {trackedRows.length
+                      ? `Tracked on ${trackedRows.filter((r) => r.consumedDays > 0).length} of ${trackedRows.length} régie projects`
+                      : "No régie contracts active"}
+                  </StatSource>
+                </Stat>
+                <Stat size="sm">
+                  <StatValue className={STAT_VALUE}>
+                    {contractTotal > 0 ? (
+                      <>
+                        {Math.round((invoicedTotal / contractTotal) * 100)}
+                        <StatUnit>%</StatUnit>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </StatValue>
+                  <StatLabel>Billed</StatLabel>
+                  <StatSource>
+                    {money(invoicedTotal)} of {money(contractTotal)} contract value
+                  </StatSource>
+                </Stat>
+                <Stat size="sm">
+                  <StatValue
+                    className={cn(
+                      STAT_VALUE,
+                      attentionRows.length > 0 && "text-destructive",
+                    )}
                   >
-                    {label} <span className="count">{count}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="projects-toolbar-right">
-                <label className="projects-search">
-                  <Search size={18} aria-hidden="true" />
-                  <span className="projects-search-label">Search projects</span>
-                  <input
+                    {attentionRows.length}
+                  </StatValue>
+                  <StatLabel>Needs attention</StatLabel>
+                  <StatSource>{attentionSub || "Nothing flagged"}</StatSource>
+                </Stat>
+              </StatGrid>
+            </CardContent>
+          </Card>
+          <Card role="region" aria-label="Project list" className="pb-0">
+            <CardHeader className="flex flex-col gap-3 @5xl:flex-row @5xl:items-center @5xl:justify-between">
+              <Tabs
+                value={tab}
+                onValueChange={(v) => setTab(v as ProjectsTab)}
+                className="max-w-full min-w-0"
+              >
+                <TabsList
+                  variant="line"
+                  aria-label="Filter projects"
+                  className="max-w-full flex-wrap justify-start gap-x-4 gap-y-1 group-data-horizontal/tabs:h-auto"
+                >
+                  {(
+                    [
+                      ["all", "All", activeCount],
+                      ["attention", "Needs attention", attentionRows.length],
+                      ["ending", "Ending in 30 days", endingSoon],
+                      ["archived", "Archived", archivedCount],
+                    ] as [ProjectsTab, string, number][]
+                  ).map(([id, label, count]) => (
+                    <TabsTrigger key={id} value={id} className="gap-1.5 py-2">
+                      {label}
+                      <span className="num text-xs text-muted-foreground">
+                        {count}
+                      </span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <div className="flex min-w-0 items-center gap-2 @5xl:w-80">
+                <InputGroup className="min-w-0 flex-1">
+                  <InputGroupAddon>
+                    <Search />
+                  </InputGroupAddon>
+                  <InputGroupInput
                     type="search"
                     aria-label="Search projects"
                     placeholder="Search code, consultant, client"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
-                </label>
-                <button
-                  className="projects-refresh"
+                </InputGroup>
+                <Button
+                  variant="outline"
+                  size="icon"
                   aria-label="Refresh"
                   title="Refresh"
                   disabled={loading}
                   onClick={() => void load()}
                 >
-                  <RefreshCw size={18} />
-                </button>
+                  <RefreshCw />
+                </Button>
               </div>
-            </div>
-            <div className="projects-table-scroll">
-              <div className="projects-table">
-                <div className="projects-head-row" aria-hidden="true">
-                  <div>Project</div>
-                  <div>Timeline</div>
-                  <div>
-                    Consumption{" "}
-                    <span className="projects-head-hint">
-                      · bar = days used, tick = time elapsed
-                    </span>
-                  </div>
-                  <div>Status</div>
-                  <div />
+            </CardHeader>
+            <CardContent className="px-0">
+              {!visible.length ? (
+                <div className="px-(--card-spacing) pb-(--card-spacing)">
+                  <EmptyState
+                    title={
+                      projects.length
+                        ? "No projects match this view."
+                        : "No projects yet"
+                    }
+                  >
+                    {projects.length
+                      ? undefined
+                      : "Convert a won deal from the pipeline, or create a project manually."}
+                  </EmptyState>
                 </div>
-                {visible.map((r, i) => {
-                  const p = r.project;
-                  const ended = r.daysLeft !== null && r.daysLeft < 0;
-                  const tracked = r.consumedDays > 0 && r.budgetDays > 0;
-                  return (
-                    <div className="projects-row" key={p.id}>
-                      <div className="projects-cell">
-                        <span
-                          className={`projects-avatar${
-                            r.team.length ? "" : " unassigned"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          {r.initials}
+              ) : (
+                <Table aria-label="Projects">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-(--card-spacing)!">Project</TableHead>
+                      <TableHead>Timeline</TableHead>
+                      <TableHead>
+                        Consumption
+                        <span className="hidden normal-case tracking-normal text-faint @5xl:inline">
+                          {" "}· bar = days used, tick = time elapsed
                         </span>
-                        <div className="projects-cell-text">
-                          <span className="projects-who">{r.who}</span>
-                          <button
-                            type="button"
-                            className="projects-title"
-                            title={p.title}
-                            onClick={() => openProjectPage(p)}
-                          >
-                            {p.title}
-                          </button>
-                          <span className="projects-sub">
-                            {r.metaLine || "—"}
-                          </span>
-                          {r.rateChips.length > 1 && (
-                            <span className="projects-rates">
-                              {r.rateChips.map((c, i) => (
-                                <span
-                                  className="projects-rate-chip"
-                                  key={`${c.name}-${c.tjm}-${i}`}
+                      </TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-12 pr-(--card-spacing)!">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visible.map((r) => {
+                      const p = r.project;
+                      const ended = r.daysLeft !== null && r.daysLeft < 0;
+                      const tracked = r.consumedDays > 0 && r.budgetDays > 0;
+                      return (
+                        <Fragment key={p.id}>
+                          <TableRow className={cn(r.flag && "border-b-0")}>
+                            <TableCell
+                              className="cursor-pointer pl-(--card-spacing)! align-top whitespace-normal"
+                              onClick={() => openProjectPage(p)}
+                            >
+                              <div className="flex min-w-0 items-start gap-3">
+                                <Avatar
+                                  aria-hidden="true"
+                                  className="mt-0.5 hidden @3xl:flex"
                                 >
-                                  {c.name && (
-                                    <span className="projects-rate-name">
-                                      {c.name}
+                                  <AvatarFallback
+                                    className={cn(
+                                      !r.team.length && "text-muted-foreground",
+                                    )}
+                                  >
+                                    {r.initials}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex min-w-0 flex-col gap-0.5">
+                                  <span className="text-xs text-muted-foreground">
+                                    {r.who}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="w-fit max-w-full truncate text-left font-medium underline-offset-4 hover:underline"
+                                    title={p.title}
+                                    onClick={(ev) => {
+                                      ev.stopPropagation();
+                                      openProjectPage(p);
+                                    }}
+                                  >
+                                    {p.title}
+                                  </button>
+                                  <span className="text-xs text-muted-foreground">
+                                    {r.metaLine || "—"}
+                                  </span>
+                                  {r.rateChips.length > 1 && (
+                                    <span className="mt-1 flex flex-wrap gap-1">
+                                      {r.rateChips.map((c, i) => (
+                                        <Badge
+                                          variant="secondary"
+                                          className="normal-case tracking-normal"
+                                          key={`${c.name}-${c.tjm}-${i}`}
+                                        >
+                                          {c.name && (
+                                            <span className="font-sans text-muted-foreground">
+                                              {c.name}
+                                            </span>
+                                          )}
+                                          {`${money(c.tjm, p.currency)}/j`}
+                                        </Badge>
+                                      ))}
                                     </span>
                                   )}
-                                  {c.name ? " " : ""}
-                                  {`${money(c.tjm, p.currency)}/j`}
-                                </span>
-                              ))}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="projects-timeline">
-                        {p.start_date && r.effEnd ? (
-                          <>
-                            <div className="projects-range">
-                              <span>{`${shortDate(p.start_date)} → ${shortDate(r.effEnd)}`}</span>
-                              {r.extended && (
-                                <span className="projects-ext-tag">
-                                  extended
-                                </span>
-                              )}
-                              {r.daysLeft !== null && (
-                                <span
-                                  className={`left${ended ? " ended" : ""}`}
-                                >
-                                  {ended
-                                    ? `Ended ${Math.abs(r.daysLeft)}d ago`
-                                    : `${r.daysLeft}d left`}
-                                </span>
-                              )}
-                            </div>
-                            {r.timePct !== null && (
-                              <div
-                                className="projects-bar"
-                                role="progressbar"
-                                aria-valuenow={r.timePct}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                              >
-                                <div
-                                  className="projects-bar-fill"
-                                  style={{ width: `${r.timePct}%` }}
-                                />
+                                </div>
                               </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="projects-range">
-                            <span>
-                              {p.start_date
-                                ? `Starts ${shortDate(p.start_date)}`
-                                : "No dates"}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="projects-consume">
-                        {tracked ? (
-                          <>
-                            <div className="projects-consume-label">
-                              <span>
-                                {fmtDays(r.consumedDays)} / {fmtDays(r.budgetDays)} j ·{" "}
-                                <span className="projects-consume-dim">
-                                  {r.usedPct}%
+                            </TableCell>
+                            <TableCell className="min-w-36 align-top whitespace-normal">
+                              {p.start_date && r.effEnd ? (
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <span className="num text-[13px] whitespace-nowrap">{`${shortDate(p.start_date)} → ${shortDate(r.effEnd)}`}</span>
+                                    {r.extended && (
+                                      <Badge variant="outline">extended</Badge>
+                                    )}
+                                    {r.daysLeft !== null && (
+                                      <span
+                                        className={cn(
+                                          "text-xs",
+                                          ended ? "text-faint" : "text-muted-foreground",
+                                        )}
+                                      >
+                                        {ended
+                                          ? `Ended ${Math.abs(r.daysLeft)}d ago`
+                                          : `${r.daysLeft}d left`}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {r.timePct !== null && (
+                                    <div
+                                      className="h-1 w-full overflow-hidden rounded-full bg-border"
+                                      role="progressbar"
+                                      aria-label="Contract time elapsed"
+                                      aria-valuenow={r.timePct}
+                                      aria-valuemin={0}
+                                      aria-valuemax={100}
+                                    >
+                                      <div
+                                        className="h-full rounded-full bg-muted-foreground/60"
+                                        style={{ width: `${r.timePct}%` }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[13px] text-muted-foreground">
+                                  {p.start_date
+                                    ? `Starts ${shortDate(p.start_date)}`
+                                    : "No dates"}
                                 </span>
-                              </span>
-                              <span>
-                                <strong>{money(r.billed, p.currency)}</strong>{" "}
-                                <span className="projects-consume-dim">
-                                  / {money(r.total, p.currency)}
-                                </span>
-                              </span>
-                            </div>
-                            <div
-                              className="projects-bar tall"
-                              role="progressbar"
-                              aria-label="Contract days consumed"
-                              aria-valuenow={Math.min(r.usedPct, 100)}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            >
-                              <div
-                                className="projects-bar-fill"
-                                style={{
-                                  width: `${Math.min(r.usedPct, 100)}%`,
-                                }}
-                              />
-                              {r.timePct !== null && (
-                                <div
-                                  className="projects-bar-tick"
-                                  style={{ left: `${r.timePct}%` }}
-                                  aria-hidden="true"
-                                />
                               )}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="projects-consume-label">
-                              <span className="projects-consume-dim">
-                                {r.isRegie
-                                  ? r.consumedDays > 0
-                                    ? `${fmtDays(r.consumedDays)} logged · set a day budget`
-                                    : "No days logged yet"
-                                  : "Forfait — no day budget"}
-                              </span>
-                              <span>
-                                <span className="projects-consume-dim">
-                                  — /
-                                </span>{" "}
-                                <strong>{money(r.total, p.currency)}</strong>
-                              </span>
-                            </div>
-                            <div
-                              className="projects-bar tall dashed"
-                              aria-hidden="true"
-                            />
-                          </>
-                        )}
-                        {r.lineCaps.map((c) => (
-                          <div
-                            key={c.name}
-                            className={`projects-consume-cap${
-                              c.consumed > c.cap ? " over" : ""
-                            }`}
-                          >
-                            {currentYear}
-                            {c.name ? ` ${c.name}` : ""} cap:{" "}
-                            {fmtDays(c.consumed)} / {fmtDays(c.cap)} days
-                          </div>
-                        ))}
-                      </div>
-                      <div>
-                        <span
-                          className={`projects-status${r.flag ? " alert" : ""}`}
-                        >
-                          <span
-                            className="projects-status-dot"
-                            style={{
-                              background: r.flag ? undefined : r.meta.color,
-                            }}
-                            aria-hidden="true"
-                          />
-                          {r.meta.label}
-                        </span>
-                      </div>
-                      <div className="projects-col-actions">
-                        <button
-                          className="projects-row-btn icon"
-                          aria-label={`More actions for ${p.title}`}
-                          aria-expanded={menuFor === p.id}
-                          onClick={(ev) => {
-                            ev.stopPropagation();
-                            setMenuFor(menuFor === p.id ? null : p.id);
-                          }}
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                        {menuFor === p.id && (
-                          <div
-                            className={`projects-menu${
-                              i >= visible.length - 2 ? " up" : ""
-                            }`}
-                            role="menu"
-                          >
-                            <button
-                              type="button"
-                              role="menuitem"
-                              disabled={busy}
-                              onClick={() => {
-                                setMenuFor(null);
-                                openProjectPage(p);
-                              }}
-                            >
-                              Edit
-                            </button>
-                            {r.meta.is_terminal
-                              ? defaultStatus &&
-                                p.status !== defaultStatus.key && (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    disabled={busy}
-                                    onClick={() => {
-                                      setMenuFor(null);
-                                      setStatus(
-                                        p,
-                                        defaultStatus.key,
-                                        "Project restored.",
-                                      );
-                                    }}
-                                  >
-                                    <ArchiveRestore size={16} />
-                                    Restore
-                                  </button>
-                                )
-                              : terminalStatus &&
-                                p.status !== terminalStatus.key && (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    disabled={busy}
-                                    onClick={() => {
-                                      setMenuFor(null);
-                                      setStatus(
-                                        p,
-                                        terminalStatus.key,
-                                        "Project archived.",
-                                      );
-                                    }}
-                                  >
-                                    <Archive size={16} />
-                                    Archive
-                                  </button>
+                            </TableCell>
+                            <TableCell className="min-w-44 align-top whitespace-normal">
+                              <div className="flex flex-col gap-2">
+                                {tracked ? (
+                                  <>
+                                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs">
+                                      <span className="num">
+                                        {fmtDays(r.consumedDays)} / {fmtDays(r.budgetDays)} j ·{" "}
+                                        <span className="text-muted-foreground">
+                                          {r.usedPct}%
+                                        </span>
+                                      </span>
+                                      <span className="num">
+                                        <strong className="font-medium">{money(r.billed, p.currency)}</strong>{" "}
+                                        <span className="text-muted-foreground">
+                                          / {money(r.total, p.currency)}
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <div
+                                      className="relative h-1.5 w-full rounded-full bg-border"
+                                      role="progressbar"
+                                      aria-label="Contract days consumed"
+                                      aria-valuenow={Math.min(r.usedPct, 100)}
+                                      aria-valuemin={0}
+                                      aria-valuemax={100}
+                                    >
+                                      <div
+                                        className={cn(
+                                          "h-full rounded-full",
+                                          r.usedPct > 100 ? "bg-destructive" : "bg-foreground",
+                                        )}
+                                        style={{
+                                          width: `${Math.min(r.usedPct, 100)}%`,
+                                        }}
+                                      />
+                                      {r.timePct !== null && (
+                                        <div
+                                          className="absolute -top-1 -bottom-1 w-0.5 -translate-x-px rounded-full bg-muted-foreground"
+                                          style={{ left: `${r.timePct}%` }}
+                                          aria-hidden="true"
+                                        />
+                                      )}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs">
+                                      <span className="text-muted-foreground">
+                                        {r.isRegie
+                                          ? r.consumedDays > 0
+                                            ? `${fmtDays(r.consumedDays)} logged · set a day budget`
+                                            : "No days logged yet"
+                                          : "Forfait, no day budget"}
+                                      </span>
+                                      <span className="num">
+                                        <span className="text-muted-foreground">
+                                          — /
+                                        </span>{" "}
+                                        <strong className="font-medium">{money(r.total, p.currency)}</strong>
+                                      </span>
+                                    </div>
+                                    <div
+                                      className="h-1.5 w-full rounded-full border border-dashed border-border"
+                                      aria-hidden="true"
+                                    />
+                                  </>
                                 )}
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="danger"
-                              disabled={busy}
-                              onClick={() => {
-                                setMenuFor(null);
-                                if (confirm(`Delete project “${p.title}”?`))
-                                  void action(async () => {
-                                    const r = await db()
-                                      .from("sales_projects")
-                                      .delete()
-                                      .eq("id", p.id)
-                                      .select("id")
-                                      .single();
-                                    if (r.error) throw r.error;
-                                  }, "Project deleted.");
-                              }}
-                            >
-                              <Trash2 size={16} />
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {r.flag && (
-                        <div className="projects-flag">
-                          <TriangleAlert size={16} aria-hidden="true" />
-                          <span>{r.flag}</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {!visible.length && (
-                  <div className="projects-empty">
-                    {projects.length
-                      ? "No projects match this view."
-                      : "No projects yet — convert a won deal from the pipeline, or create a project manually."}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="projects-foot">
+                                {r.lineCaps.map((c) => (
+                                  <div
+                                    key={c.name}
+                                    className={cn(
+                                      "num text-[11px]",
+                                      c.consumed > c.cap
+                                        ? "text-destructive"
+                                        : "text-muted-foreground",
+                                    )}
+                                  >
+                                    {currentYear}
+                                    {c.name ? ` ${c.name}` : ""} cap:{" "}
+                                    {fmtDays(c.consumed)} / {fmtDays(c.cap)} days
+                                  </div>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <Badge
+                                variant={r.flag ? "destructive" : "outline"}
+                                className="h-6 gap-1.5 px-2 text-xs normal-case tracking-normal"
+                              >
+                                {!r.flag && (
+                                  <span
+                                    className="size-1.5 shrink-0 rounded-full"
+                                    style={{ background: r.meta.color }}
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                {r.flag && (
+                                  <TriangleAlert className="size-3" aria-hidden="true" />
+                                )}
+                                <span className="font-sans">{r.meta.label}</span>
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="pr-(--card-spacing)! text-right align-top">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      aria-label={`More actions for ${p.title}`}
+                                    />
+                                  }
+                                >
+                                  <MoreVertical />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44">
+                                  <DropdownMenuItem
+                                    disabled={busy}
+                                    onClick={() => openProjectPage(p)}
+                                  >
+                                    <Pencil />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  {r.meta.is_terminal
+                                    ? defaultStatus &&
+                                      p.status !== defaultStatus.key && (
+                                        <DropdownMenuItem
+                                          disabled={busy}
+                                          onClick={() =>
+                                            setStatus(
+                                              p,
+                                              defaultStatus.key,
+                                              "Project restored.",
+                                            )
+                                          }
+                                        >
+                                          <ArchiveRestore />
+                                          Restore
+                                        </DropdownMenuItem>
+                                      )
+                                    : terminalStatus &&
+                                      p.status !== terminalStatus.key && (
+                                        <DropdownMenuItem
+                                          disabled={busy}
+                                          onClick={() =>
+                                            setStatus(
+                                              p,
+                                              terminalStatus.key,
+                                              "Project archived.",
+                                            )
+                                          }
+                                        >
+                                          <Archive />
+                                          Archive
+                                        </DropdownMenuItem>
+                                      )}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    disabled={busy}
+                                    onClick={() => setDeleting(p)}
+                                  >
+                                    <Trash2 />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                          {r.flag && (
+                            <TableRow className="hover:bg-transparent">
+                              <TableCell
+                                colSpan={5}
+                                className="h-auto px-(--card-spacing)! pt-0 pb-3 whitespace-normal"
+                              >
+                                <div className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                                  <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+                                  <span>{r.flag}</span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+            <CardFooter className="flex flex-wrap justify-between gap-2 py-3 text-xs text-muted-foreground">
               <span>
                 Showing {visible.length} of {rows.length} projects
               </span>
-              <span>Account owner · {actorEmail}</span>
-            </div>
-          </section>
+              <span className="truncate">Account owner · {actorEmail}</span>
+            </CardFooter>
+          </Card>
         </>
       )}
-    </>
+    </div>
+  );
+}
+
+/** Stat value size shared by the list and project stat grids. */
+const STAT_VALUE =
+  "group-data-[size=sm]/stat:text-[22px] @5xl:group-data-[size=sm]/stat:text-[26px]";
+
+/** A wrapping grid of stats — StatGroup keeps every stat on one row, which
+    does not fit five or six money figures in ~800px. */
+function StatGrid({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <div className={cn("grid gap-x-6 gap-y-6", className)}>{children}</div>
+  );
+}
+
+/** A money figure with its currency set as the stat unit ("410 000 €"). */
+function Figure({ value }: { value: string }) {
+  const m = value.match(/^(.*\d)\s*([^\d\s][^\d]*)$/);
+  return m ? <>{m[1]}<StatUnit>{m[2]}</StatUnit></> : <>{value}</>;
+}
+
+/** Card heading with the outline semantics of the old <h2>. */
+function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <CardTitle role="heading" aria-level={2}>
+      {children}
+    </CardTitle>
+  );
+}
+
+/** Thin progress track — `tone` colours the fill. */
+function Meter({
+  pct,
+  label,
+  over,
+}: {
+  pct: number;
+  label: string;
+  over?: boolean;
+}) {
+  return (
+    <div
+      className="h-1 w-full overflow-hidden rounded-full bg-border"
+      role="progressbar"
+      aria-label={label}
+      aria-valuenow={Math.min(pct, 100)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div
+        className={cn("h-full rounded-full", over ? "bg-destructive" : "bg-foreground")}
+        style={{ width: `${Math.min(pct, 100)}%` }}
+      />
+    </div>
   );
 }
 
@@ -1467,10 +1846,13 @@ function ProjectStatsStrip({
   signedExts,
   craDays,
   staffed,
+  billedHt,
 }: {
   project: Project;
   signedExts: ProjectExtension[];
   craDays: number;
+  /** Finalized + paid invoices HT; null until the invoices card loads. */
+  billedHt: number | null;
   /** Open assignments vs billable line days (contract + extensions). */
   staffed: {
     days: number;
@@ -1490,15 +1872,22 @@ function ProjectStatsStrip({
   );
   const budget = isRegie ? days + extDays : 0;
   const extAmount = signedExts.reduce(
-    (sum, ext) => sum + Number(ext.amount),
+    (sum, ext) => sum + extensionValue(ext),
     0,
   );
-  const total = Number(project.amount) + extAmount;
+  const total =
+    (isRegie
+      ? linesCappedAmount(
+          storedTjmProfiles(project.tjm_profiles),
+          project.start_date,
+          project.end_date,
+        )
+      : Number(project.amount)) + extAmount;
   // Per-line annual billable caps (sales.md §14): a capped line can bill at
   // most its prorated allowance per calendar year, so line days beyond the
-  // cap never become value. Sum the lifetime excess over every year of
-  // every capped line's window (contract + signed extensions) and shrink
-  // the day budget — and with it value, consumption and remaining.
+  // cap never become value. The value itself is the per-line build-up —
+  // each line's rate × its capped open days, contract and signed
+  // extensions summed; cappedDaysLost below only shrinks the day budget.
   let cappedDaysLost = 0;
   const addCapLoss = (
     line: PricingLine,
@@ -1534,14 +1923,11 @@ function ProjectStatsStrip({
   for (const ext of signedExts)
     for (const line of storedTjmProfiles(ext.tjm_profiles))
       addCapLoss(line, ext.start_date, ext.end_date);
-  const capped = budget > 0 && cappedDaysLost > 0;
+  const capped = cappedDaysLost > 0;
   const budgetCapped = capped ? Math.max(0, budget - cappedDaysLost) : budget;
-  // Blended consumption value — the same approximation as the projects
-  // list, scaled to the capped budget/value so consumption never exceeds
-  // what the caps allow to bill.
-  const cappedTotal = capped
-    ? Math.round((budgetCapped / budget) * total)
-    : total;
+  // The value already reflects the caps line by line (see above), so it
+  // stands as the consumption ceiling — no proportional shrink needed.
+  const cappedTotal = total;
   const effDays = capped ? Math.min(craDays, budgetCapped) : craDays;
   const pct =
     budgetCapped > 0 ? Math.round((effDays / budgetCapped) * 100) : 0;
@@ -1556,72 +1942,107 @@ function ProjectStatsStrip({
   }
   const progress = timelineProgress({ ...project, end_date: effEnd });
   return (
-    <div className="pj-stats">
-      <div className="pj-stat">
-        <span className="pj-stat-label">Contract value</span>
-        <span className="pj-stat-value">
-          {money(cappedTotal, project.currency)}
-        </span>
-        <span className="pj-stat-sub">
-          {isRegie
-            ? `${money(Number(project.tjm ?? 0), project.currency)} × ${fmtDays(budgetCapped)} days`
-            : "Forfait"}
-          {extAmount > 0 ? " · incl. extensions" : ""}
-          {capped ? " · capped by annual caps" : ""}
-        </span>
-      </div>
-      {staffed && (
-        <div className="pj-stat">
-          <span className="pj-stat-label">Staffed</span>
-          <span className="pj-stat-value">{staffed.pct}%</span>
-          <span className="pj-stat-sub">
-            {fmtDays(staffed.staffedDays)} of {fmtDays(staffed.days)} days
-            have someone on them
-          </span>
-        </div>
-      )}
-      <div className="pj-stat">
-        <span className="pj-stat-label">Consumed (CRA)</span>
-        <span className="pj-stat-value">
-          {budgetCapped > 0
-            ? money(consumedValue, project.currency)
-            : `${fmtDays(craDays)} days`}
-        </span>
-        <span className="pj-stat-sub">
-          {budgetCapped > 0
-            ? `${fmtDays(effDays)} of ${fmtDays(budgetCapped)} days · ${pct}%`
-            : "from CRA timesheets"}
-        </span>
-      </div>
-      <div className="pj-stat">
-        <span className="pj-stat-label">Remaining</span>
-        <span className="pj-stat-value">
-          {budgetCapped > 0
-            ? money(cappedTotal - consumedValue, project.currency)
-            : "—"}
-        </span>
-        <span className="pj-stat-sub">
-          {budgetCapped > 0
-            ? `${fmtDays(budgetCapped - effDays)} days left to deliver`
-            : "Fixed price"}
-        </span>
-      </div>
-      <div className="pj-stat">
-        <span className="pj-stat-label">Time left</span>
-        <span className="pj-stat-value">
-          {progress
-            ? progress.left < 0
-              ? "Ended"
-              : `${progress.left} days`
-            : "—"}
-        </span>
-        <span className="pj-stat-sub">
-          {effEnd ? `Ends ${longDate(effEnd)}` : "No end date"}
-        </span>
-      </div>
-    </div>
+    <Card role="region" aria-label="Project figures">
+      <CardContent>
+        <StatGrid className="grid-cols-2 @2xl:grid-cols-3 @6xl:grid-cols-6">
+          <Stat size="sm">
+            <StatValue className={STAT_VALUE}>
+              <Figure value={money(cappedTotal, project.currency)} />
+            </StatValue>
+            <StatLabel>Contract value</StatLabel>
+            <StatSource>
+              {isRegie
+                ? `${fmtDays(budgetCapped)} billable days`
+                : "Forfait"}
+              {extAmount > 0 ? " · incl. extensions" : ""}
+              {capped ? " · capped by annual caps" : ""}
+            </StatSource>
+          </Stat>
+          {staffed && (
+            <Stat size="sm">
+              <StatValue className={STAT_VALUE}>
+                {staffed.pct}
+                <StatUnit>%</StatUnit>
+              </StatValue>
+              <StatLabel>Staffed</StatLabel>
+              <StatSource>
+                {fmtDays(staffed.staffedDays)} of {fmtDays(staffed.days)} days
+                have someone on them
+              </StatSource>
+            </Stat>
+          )}
+          <Stat size="sm">
+            <StatValue className={STAT_VALUE}>
+              {budgetCapped > 0 ? (
+                <Figure value={money(consumedValue, project.currency)} />
+              ) : (
+                <>
+                  {fmtDays(craDays)}
+                  <StatUnit>days</StatUnit>
+                </>
+              )}
+            </StatValue>
+            <StatLabel>Consumed (CRA)</StatLabel>
+            <StatSource>
+              {budgetCapped > 0
+                ? `${fmtDays(effDays)} of ${fmtDays(budgetCapped)} days · ${pct}%`
+                : "from CRA timesheets"}
+            </StatSource>
+          </Stat>
+          {billedHt !== null && (
+            <Stat size="sm">
+              <StatValue className={STAT_VALUE}>
+                <Figure value={money(billedHt, project.currency)} />
+              </StatValue>
+              <StatLabel>Billed</StatLabel>
+              <StatSource>
+                {cappedTotal > 0
+                  ? `${Math.round((billedHt / cappedTotal) * 100)}% of contract value`
+                  : "Finalized and paid invoices, HT"}
+              </StatSource>
+            </Stat>
+          )}
+          <Stat size="sm">
+            <StatValue className={STAT_VALUE}>
+              {budgetCapped > 0 ? (
+                <Figure value={money(cappedTotal - consumedValue, project.currency)} />
+              ) : (
+                "—"
+              )}
+            </StatValue>
+            <StatLabel>Remaining</StatLabel>
+            <StatSource>
+              {budgetCapped > 0
+                ? `${fmtDays(budgetCapped - effDays)} days left to deliver`
+                : "Fixed price"}
+            </StatSource>
+          </Stat>
+          <Stat size="sm">
+            <StatValue className={STAT_VALUE}>
+              {progress ? (
+                progress.left < 0 ? (
+                  "Ended"
+                ) : (
+                  <>
+                    {progress.left}
+                    <StatUnit>days</StatUnit>
+                  </>
+                )
+              ) : (
+                "—"
+              )}
+            </StatValue>
+            <StatLabel>Time left</StatLabel>
+            <StatSource>
+              {effEnd ? `Ends ${longDate(effEnd)}` : "No end date"}
+            </StatSource>
+          </Stat>
+        </StatGrid>
+      </CardContent>
+    </Card>
   );
 }
+
 
 function ProjectForm({
   editing,
@@ -1638,7 +2059,7 @@ function ProjectForm({
   signedExtensions,
   onCancel,
   onSubmit,
-  onFolderLinked,
+  onDocumentsChanged,
   onExtensionsChanged,
   onStaffingChanged,
   staffing,
@@ -1646,6 +2067,7 @@ function ProjectForm({
   talentPool,
   canEngage,
   assignmentsByEmployee,
+  onInvoicedHt,
   onProjectPatched,
 }: {
   editing: Project | null;
@@ -1662,7 +2084,8 @@ function ProjectForm({
   signedExtensions: ProjectExtension[];
   onCancel: () => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
-  onFolderLinked: (projectId: string, folder: ContractFolder) => void;
+  /** Reload list flags after a contract or avenant was filed. */
+  onDocumentsChanged: () => void;
   onExtensionsChanged: () => void;
   /** Reload after an assignment was created or ended from the contract page. */
   onStaffingChanged: () => void;
@@ -1686,6 +2109,8 @@ function ProjectForm({
   canEngage: boolean;
   /** Open assignments per employee, all projects — availability readout. */
   assignmentsByEmployee: Map<string, Assignment[]>;
+  /** The invoices card's HT total, for the stat strip's Billed figure. */
+  onInvoicedHt: (projectId: string, amount: number) => void;
   onProjectPatched: (
     projectId: string,
     patch: { end_date: string | null; updated_at: string },
@@ -1698,6 +2123,12 @@ function ProjectForm({
     editing?.pricing_model || source?.pricing_model || "regie",
   );
   const [clientId, setClientId] = useState(editing?.client_id || "");
+  // Optional billing intermediary — when set, invoices go to it instead of
+  // the main client. Cleared if the main client is switched to the same id
+  // (the database rejects client == intermediary).
+  const [intermediaryId, setIntermediaryId] = useState(
+    editing?.intermediary_client_id || "",
+  );
   const [startDate, setStartDate] = useState(editing?.start_date || "");
   const [endDate, setEndDate] = useState(editing?.end_date || "");
   const [profiles, setProfiles] = useState<TjmProfileDraft[]>(() => {
@@ -1705,6 +2136,7 @@ function ProjectForm({
     if (editing && stored.length)
       return stored.map((p) => ({
         name: p.name,
+        savedName: p.name,
         tjm: String(p.tjm),
         end_date: p.end_date || "",
         cap:
@@ -1769,7 +2201,13 @@ function ProjectForm({
     max_billable_days_per_year: Number(p.cap) > 0 ? Number(p.cap) : null,
   }));
   const totalDays = linesDays(cleanedProfiles, startDate, endDate);
-  const regieTotal = linesAmount(cleanedProfiles, startDate, endDate);
+  // The contract's total days are the Σ of the profile line volumes — a
+  // profile can end before the contract does, so the raw start→end
+  // count overstates the budget. Forfait has no lines; the window count
+  // stands there.
+  const contractDays = pricingModel === "regie" ? totalDays : openDays;
+  // Estimated value: per-line rate × capped open days, no mean rate.
+  const regieTotal = linesCappedAmount(cleanedProfiles, startDate, endDate);
   const daysDiffer = openDays > 0 && totalDays !== openDays;
   const currencySymbol =
     { EUR: "€", USD: "$", SAR: "SAR" }[currency as "EUR" | "USD" | "SAR"] ||
@@ -1837,7 +2275,7 @@ function ProjectForm({
     0,
   );
   const extAmount = signedExtensions.reduce(
-    (sum, ext) => sum + Number(ext.amount),
+    (sum, ext) => sum + extensionValue(ext),
     0,
   );
   const consumptionBudget =
@@ -1865,13 +2303,16 @@ function ProjectForm({
     );
 
   return (
-    <form id="pj-form" className="pj-form" onSubmit={onSubmit}>
-      <div className="pj-body">
-        {!editing && !!convertible.length && (
-          <section className="pj-card">
-            <label className="pj-field">
-              <span className="pj-label">Convert a won deal (optional)</span>
-              <select
+    <form id="pj-form" className="flex flex-col gap-4" onSubmit={onSubmit}>
+      {!editing && !!convertible.length && (
+        <Card size="sm">
+          <CardContent>
+            <Field className="max-w-xl">
+              <FieldLabel htmlFor="pj-opportunity">
+                Convert a won deal (optional)
+              </FieldLabel>
+              <NativeSelect
+                id="pj-opportunity"
                 name="opportunity_id"
                 defaultValue=""
                 onChange={(e) => {
@@ -1887,151 +2328,197 @@ function ProjectForm({
                   }
                 }}
               >
-                <option value="">Create manually</option>
+                <NativeSelectOption value="">Create manually</NativeSelectOption>
                 {convertible.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.title} —{" "}
+                  <NativeSelectOption key={o.id} value={o.id}>
+                    {o.title},{" "}
                     {clients.find((c) => c.id === o.client_id)?.name ||
                       "Client"}
-                  </option>
+                  </NativeSelectOption>
                 ))}
-              </select>
-            </label>
-          </section>
-        )}
+              </NativeSelect>
+            </Field>
+          </CardContent>
+        </Card>
+      )}
 
-        <div className={editing ? "pj-layout" : "pj-layout pj-layout-wide"}>
-          <div className="pj-main">
-            <section className="pj-card">
-              <div className="pj-card-head">
-                <div>
-                  <h2 className="pj-card-title">General</h2>
-                  <p className="pj-card-desc">
-                    Who the project is for and who owns it.
-                  </p>
-                </div>
-              </div>
-              <div className="pj-grid pj-grid-3">
-                <label className="pj-field">
-                  <span className="pj-label">Project title</span>
-                  <input
+      <div
+        className={cn(
+          "grid items-start gap-4",
+          editing && "@5xl:grid-cols-[minmax(0,1fr)_20rem]",
+        )}
+      >
+        <div className="@container flex min-w-0 flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <SectionTitle>General</SectionTitle>
+              <CardDescription>
+                Who the project is for and who owns it.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-5">
+              <div className="grid gap-5 @2xl:grid-cols-2">
+                <Field className="@2xl:col-span-2">
+                  <FieldLabel htmlFor="pj-title-input">Project title</FieldLabel>
+                  <Input
+                    id="pj-title-input"
                     name="title"
                     defaultValue={editing?.title}
                     required
                     maxLength={200}
                   />
-                  <span className="pj-field-help">
-                    Same as the code — give it a readable name, e.g. "Credit
+                  <FieldDescription>
+                    Same as the code: give it a readable name, e.g. "Credit
                     Chain · AI squad"
-                  </span>
-                </label>
-                <div className="pj-field">
-                  <span className="pj-label">Client</span>
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel>Client</FieldLabel>
                   <ClientPicker
                     clients={clients}
                     value={clientId}
-                    onChange={setClientId}
+                    onChange={(id) => {
+                      setClientId(id);
+                      if (intermediaryId && intermediaryId === id)
+                        setIntermediaryId("");
+                    }}
                     required
                   />
-                </div>
-                <label className="pj-field">
-                  <span className="pj-label">Status</span>
-                  <select
+                </Field>
+                <Field>
+                  <FieldLabel>
+                    Intermediary
+                    <span className="font-normal text-muted-foreground">(optional)</span>
+                  </FieldLabel>
+                  <ClientPicker
+                    clients={clients.filter((c) => c.id !== clientId)}
+                    value={intermediaryId}
+                    onChange={setIntermediaryId}
+                    name="intermediary_client_id"
+                  />
+                  <FieldDescription>
+                    {intermediaryId
+                      ? `Billed to ${clients.find((c) => c.id === intermediaryId)?.name || "the intermediary"}: the main client isn't invoiced.`
+                      : "No intermediary: the main client is billed directly."}
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="pj-status">Status</FieldLabel>
+                  <NativeSelect
+                    id="pj-status"
                     name="status"
+                    className="w-full"
                     defaultValue={
                       editing?.status || defaultStatusKey || statuses[0]?.key
                     }
                   >
                     {statuses.map((s) => (
-                      <option key={s.key} value={s.key}>
+                      <NativeSelectOption key={s.key} value={s.key}>
                         {s.label}
                         {s.is_default ? " (default)" : ""}
-                      </option>
+                      </NativeSelectOption>
                     ))}
-                  </select>
-                </label>
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="pj-owner">Owner</FieldLabel>
+                  <InputGroup>
+                    <InputGroupAddon>
+                      <span
+                        className="flex size-6 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-foreground uppercase"
+                        aria-hidden="true"
+                      >
+                        {owner.trim().charAt(0) || "?"}
+                      </span>
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      id="pj-owner"
+                      name="owner_email"
+                      type="email"
+                      value={owner}
+                      onChange={(e) => setOwner(e.target.value)}
+                      maxLength={200}
+                    />
+                  </InputGroup>
+                </Field>
               </div>
-              <label className="pj-field pj-field-owner">
-                <span className="pj-label">Owner</span>
-                <span className="pj-affix pj-owner">
-                  <span className="pj-owner-avatar" aria-hidden="true">
-                    {owner.trim().charAt(0) || "?"}
-                  </span>
-                  <input
-                    name="owner_email"
-                    type="email"
-                    value={owner}
-                    onChange={(e) => setOwner(e.target.value)}
-                    maxLength={200}
-                  />
-                </span>
-              </label>
-            </section>
+            </CardContent>
+          </Card>
 
-            <section className="pj-card">
-              <div className="pj-card-head">
-                <div>
-                  <h2 className="pj-card-title">Contract</h2>
-                  <p className="pj-card-desc">
-                    The initial contract window and its pricing — renewals
-                    continue as extensions below.
-                  </p>
-                </div>
-                {openDays > 0 && (
-                  <span className="pj-chip">{openDays} working days</span>
-                )}
-              </div>
+          <Card>
+            <CardHeader>
+              <SectionTitle>Contract</SectionTitle>
+              <CardDescription>
+                The initial contract window and its pricing. Renewals
+                continue as extensions below.
+              </CardDescription>
+              {contractDays > 0 && (
+                <CardAction>
+                  <Badge variant="secondary" className="h-6 px-2 text-xs normal-case tracking-normal">
+                    {contractDays} working days
+                  </Badge>
+                </CardAction>
+              )}
+            </CardHeader>
 
-              {/* The initial contract is modeled like an extension: an
-                  index badge, a window, and its own pricing lines in one
-                  sunken row. */}
-              <div className="pj-contract">
-                <div className="pj-contract-head">
-                  <span className="pj-contract-index" aria-hidden="true">
+            {/* The initial contract is modeled like an extension: an
+                index badge, a window, and its own pricing lines in one
+                sunken row. */}
+            <CardContent>
+              <div className="flex flex-col gap-4 rounded-lg border border-border bg-muted/40 p-4">
+                <div className="flex flex-wrap items-center gap-2.5 text-[13px]">
+                  <span
+                    className="num flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] text-muted-foreground"
+                    aria-hidden="true"
+                  >
                     1
                   </span>
-                  <span className="pj-contract-name">Initial contract</span>
+                  <span className="font-medium">Initial contract</span>
                   {startDate && (
-                    <span className="pj-contract-from">
+                    <span className="text-muted-foreground">
                       From {shortDate(startDate)}
                     </span>
                   )}
                 </div>
 
-                <div className="pj-grid pj-grid-2">
-                  <label className="pj-field">
-                    <span className="pj-label">Start date</span>
+                <div className="grid gap-4 @lg:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Start date</FieldLabel>
                     <DateField
                       name="start_date"
+                      aria-label="Start date"
                       defaultValue={editing?.start_date || ""}
                       onChange={(value) => setStartDate(value)}
                     />
-                  </label>
-                  <label className="pj-field">
-                    <span className="pj-label">End date</span>
+                  </Field>
+                  <Field>
+                    <FieldLabel>End date</FieldLabel>
                     <DateField
                       name="end_date"
+                      aria-label="End date"
                       value={endDate}
                       onChange={(value) => setEndDate(value)}
                     />
-                  </label>
+                  </Field>
                 </div>
                 {pricingModel === "regie" && openDays > 0 && daysDiffer && (
-                  <p className="pj-hint">
+                  <p className="m-0 flex flex-wrap items-center gap-x-2 text-[13px] text-muted-foreground">
                     The profile windows don't match the contract end date.
-                    <button
+                    <Button
                       type="button"
-                      className="pj-link"
+                      variant="link"
+                      size="sm"
+                      className="h-auto px-0 text-[13px]"
                       onClick={() => setProfile(0, { end_date: endDate })}
                     >
                       Run the first profile to {longDate(endDate)}
-                    </button>
+                    </Button>
                   </p>
                 )}
                 {timeline && (
-                  <div className="pj-track">
+                  <div className="flex flex-col gap-2.5 pt-1">
                     <div
-                      className="pj-track-bar"
+                      className="relative h-1 rounded-full bg-border"
                       role="progressbar"
                       aria-label="Contract window elapsed"
                       aria-valuenow={timeline.pct}
@@ -2039,87 +2526,90 @@ function ProjectForm({
                       aria-valuemax={100}
                     >
                       <div
-                        className="pj-track-fill"
+                        className="absolute inset-y-0 left-0 rounded-full bg-muted-foreground/50"
                         style={{ width: `${timeline.pct}%` }}
                       />
                       <div
-                        className="pj-track-today"
+                        className="absolute -top-1 -bottom-1 w-0.5 -translate-x-px rounded-full bg-foreground"
                         style={{ left: `${timeline.pct}%` }}
                       />
                     </div>
-                    <div className="pj-track-labels">
-                      <span>{shortDate(startDate)}</span>
-                      <span>Today · {timeline.pct}% of the window elapsed</span>
-                      <span>{shortDate(endDate)}</span>
+                    <div className="num flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
+                      <span className="whitespace-nowrap">{shortDate(startDate)}</span>
+                      <span className="text-center text-foreground/80">
+                        Today · {timeline.pct}% of the window elapsed
+                      </span>
+                      <span className="whitespace-nowrap">{shortDate(endDate)}</span>
                     </div>
                   </div>
                 )}
 
-                <div className="pj-grid pj-grid-2 pj-pricing-row">
-                  <div className="pj-field">
-                    <span className="pj-label">Pricing model</span>
-                    <div
-                      className="pj-seg"
-                      role="radiogroup"
+                <div className="grid gap-4 @lg:grid-cols-2">
+                  <Field>
+                    <FieldLabel>Pricing model</FieldLabel>
+                    <ToggleGroup
                       aria-label="Pricing model"
+                      className="w-full *:flex-1"
+                      value={[pricingModel]}
+                      onValueChange={(v) => {
+                        if (v[0]) setPricingModel(v[0] as string);
+                      }}
                     >
-                      <button
-                        type="button"
-                        role="radio"
-                        aria-checked={pricingModel === "regie"}
-                        className={pricingModel === "regie" ? "on" : ""}
-                        onClick={() => setPricingModel("regie")}
-                      >
-                        Régie
-                      </button>
-                      <button
-                        type="button"
-                        role="radio"
-                        aria-checked={pricingModel === "forfait"}
-                        className={pricingModel === "forfait" ? "on" : ""}
-                        onClick={() => setPricingModel("forfait")}
-                      >
-                        Forfait
-                      </button>
-                    </div>
+                      <ToggleGroupItem value="regie">Régie</ToggleGroupItem>
+                      <ToggleGroupItem value="forfait">Forfait</ToggleGroupItem>
+                    </ToggleGroup>
                     <input
                       type="hidden"
                       name="pricing_model"
                       value={pricingModel}
                     />
-                  </div>
-                  <label className="pj-field">
-                    <span className="pj-label">Currency</span>
-                    <select
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pj-currency">Currency</FieldLabel>
+                    <NativeSelect
+                      id="pj-currency"
                       name="currency"
+                      className="w-full"
                       value={currency}
                       onChange={(e) => setCurrency(e.target.value)}
                     >
-                      <option value="EUR">EUR — Euro</option>
-                      <option value="SAR">SAR — Saudi riyal</option>
-                      <option value="USD">USD — US dollar</option>
-                    </select>
-                  </label>
+                      <NativeSelectOption value="EUR">EUR (Euro)</NativeSelectOption>
+                      <NativeSelectOption value="SAR">SAR (Saudi riyal)</NativeSelectOption>
+                      <NativeSelectOption value="USD">USD (US dollar)</NativeSelectOption>
+                    </NativeSelect>
+                  </Field>
                 </div>
                 {pricingModel === "forfait" && (
-                  <label className="pj-field pj-field-fixed">
-                    <span className="pj-label">Forfait</span>
-                    <input
-                      name="fixed_price"
-                      type="number"
-                      min="0"
-                      step="100"
-                      value={fixedPrice}
-                      onChange={(e) => setFixedPrice(e.target.value)}
-                      required
-                    />
-                  </label>
+                  <Field className="max-w-xs">
+                    <FieldLabel htmlFor="pj-fixed-price">Forfait</FieldLabel>
+                    <InputGroup>
+                      <InputGroupInput
+                        id="pj-fixed-price"
+                        name="fixed_price"
+                        type="number"
+                        min="0"
+                        step="100"
+                        className="num"
+                        value={fixedPrice}
+                        onChange={(e) => setFixedPrice(e.target.value)}
+                        required
+                      />
+                      <InputGroupAddon align="inline-end">
+                        <InputGroupText>{currencySymbol}</InputGroupText>
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </Field>
                 )}
                 {pricingModel === "regie" && (
-                  <div className="pj-lines">
+                  <div className="flex flex-col gap-3">
                     {profiles.map((profile, i) => {
                       const cleaned = cleanedProfiles[i];
                       const days = lineDays(cleaned, startDate, endDate);
+                      const billableDays = cappedLineDays(
+                        cleaned,
+                        startDate,
+                        endDate,
+                      );
                       // Live prorata: the cap input is the full-year
                       // allowance; the caption shows what this calendar
                       // year actually allows over the line window.
@@ -2134,18 +2624,24 @@ function ProjectForm({
                             )
                           : null;
                       // Staffing follows the saved lines — assignments
-                      // are keyed by line name, so a renamed or brand-new
-                      // draft line can only be staffed after saving.
+                      // are keyed by the saved line name (possibly ""), so
+                      // a line keeps its staffing while being renamed and
+                      // a brand-new draft line can only be staffed after
+                      // saving.
                       const lineStaff =
-                        editing && cleaned.name
-                          ? staffingByLine.get(cleaned.name)
+                        editing && profile.savedName !== undefined
+                          ? staffingByLine.get(profile.savedName)
                           : undefined;
                       return (
-                        <div className="pj-line" key={i}>
-                          <div className="pj-line-grid">
-                            <label className="pj-field">
-                              <span className="pj-label">Profile</span>
-                              <input
+                        <div
+                          className="@container relative flex flex-col overflow-hidden rounded-lg border border-border bg-card"
+                          key={i}
+                        >
+                          <div className="grid grid-cols-1 items-start gap-3 p-3.5 @xs:grid-cols-2 @2xl:grid-cols-[minmax(0,1.1fr)_minmax(7.5rem,1fr)_minmax(10rem,1.1fr)_minmax(7.25rem,0.7fr)_auto_auto]">
+                            <Field className="gap-2 @xs:col-span-2 @2xl:col-span-1">
+                              <FieldLabel htmlFor={`pj-line-${i}-name`}>Profile</FieldLabel>
+                              <Input
+                                id={`pj-line-${i}-name`}
                                 aria-label={`Profile ${i + 1} name`}
                                 placeholder="Name this profile, e.g. Data Engineer"
                                 value={profile.name}
@@ -2154,28 +2650,32 @@ function ProjectForm({
                                   setProfile(i, { name: e.target.value })
                                 }
                               />
-                            </label>
-                            <label className="pj-field">
-                              <span className="pj-label">Daily rate</span>
-                              <span className="pj-affix">
-                                <input
+                            </Field>
+                            <Field className="gap-2">
+                              <FieldLabel htmlFor={`pj-line-${i}-rate`}>Daily rate</FieldLabel>
+                              <InputGroup>
+                                <InputGroupInput
+                                  id={`pj-line-${i}-rate`}
                                   aria-label={`Profile ${i + 1} daily rate`}
                                   type="number"
                                   min="0"
                                   step="0.01"
                                   required
+                                  className="num"
                                   value={profile.tjm}
                                   onChange={(e) =>
                                     setProfile(i, { tjm: e.target.value })
                                   }
                                 />
-                                <span className="pj-affix-suffix">
-                                  {currencySymbol} / day
-                                </span>
-                              </span>
-                            </label>
-                            <div className="pj-field">
-                              <span className="pj-label">End date</span>
+                                <InputGroupAddon align="inline-end">
+                                  <InputGroupText className="text-xs whitespace-nowrap">
+                                    {currencySymbol} / day
+                                  </InputGroupText>
+                                </InputGroupAddon>
+                              </InputGroup>
+                            </Field>
+                            <Field className="gap-2">
+                              <FieldLabel>End date</FieldLabel>
                               <DateField
                                 aria-label={`Profile ${i + 1} end date`}
                                 value={profile.end_date}
@@ -2185,92 +2685,102 @@ function ProjectForm({
                                   setProfile(i, { end_date: value })
                                 }
                               />
-                            </div>
-                            <div className="pj-field">
-                              <span className="pj-label">Cap / year</span>
-                              <div className="pj-cap-cell">
-                                <input
-                                  aria-label={`Profile ${i + 1} yearly billable cap`}
-                                  type="number"
-                                  min="0"
-                                  step="1"
-                                  value={profile.cap}
-                                  placeholder="e.g. 210"
-                                  onChange={(e) =>
-                                    setProfile(i, { cap: e.target.value })
-                                  }
-                                />
-                                {capThisYear !== null && (
-                                  <span className="pj-cap-prorata">
-                                    ≈ {fmtDays(capThisYear)} d in {currentYear}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="pj-field pj-line-subtotal">
-                              <span className="pj-label">Subtotal</span>
+                            </Field>
+                            <Field className="gap-2">
+                              <FieldLabel htmlFor={`pj-line-${i}-cap`}>Cap / year</FieldLabel>
+                              <Input
+                                id={`pj-line-${i}-cap`}
+                                aria-label={`Profile ${i + 1} yearly billable cap`}
+                                type="number"
+                                min="0"
+                                step="1"
+                                className="num"
+                                value={profile.cap}
+                                placeholder="e.g. 210"
+                                onChange={(e) =>
+                                  setProfile(i, { cap: e.target.value })
+                                }
+                              />
+                              {capThisYear !== null && (
+                                <span className="num -mt-1 text-[11px] whitespace-nowrap text-muted-foreground">
+                                  ≈ {fmtDays(capThisYear)} d in {currentYear}
+                                </span>
+                              )}
+                            </Field>
+                            <Field className="gap-2">
+                              <span className="text-sm leading-none font-medium @2xl:text-right">Subtotal</span>
                               <span
-                                className="pj-subtotal"
-                                title={`${days} working days`}
+                                className="num flex h-10 items-center text-sm font-medium whitespace-nowrap @2xl:justify-end"
+                                title={
+                                  billableDays < days
+                                    ? `${fmtDays(billableDays)} billable of ${days} working days (annual cap)`
+                                    : `${days} working days`
+                                }
                               >
-                                {money(cleaned.tjm * days, currency)}
+                                {money(cleaned.tjm * billableDays, currency)}
                               </span>
+                            </Field>
+                            <div className="absolute top-2 right-2 @2xl:static @2xl:flex @2xl:items-end @2xl:justify-end @2xl:self-stretch @2xl:pb-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-muted-foreground hover:text-destructive"
+                                aria-label={`Remove profile ${i + 1}`}
+                                title={
+                                  profiles.length <= 1
+                                    ? "A régie project needs at least one profile"
+                                    : "Remove profile"
+                                }
+                                disabled={profiles.length <= 1}
+                                onClick={() => removeProfile(i)}
+                              >
+                                <X />
+                              </Button>
                             </div>
-                            <button
-                              type="button"
-                              className="pj-profile-remove"
-                              aria-label={`Remove profile ${i + 1}`}
-                              title={
-                                profiles.length <= 1
-                                  ? "A régie project needs at least one profile"
-                                  : "Remove profile"
-                              }
-                              disabled={profiles.length <= 1}
-                              onClick={() => removeProfile(i)}
-                            >
-                              <X size={14} />
-                            </button>
                           </div>
 
                           {/* The line bills from the contract start to its
                               own end date — a read-out of the window the
                               fields above define. */}
-                          <div className="pj-line-billed">
-                            <span className="pj-line-billed-label">Billed</span>
+                          <div className="num flex flex-wrap items-center gap-x-3.5 gap-y-2 px-3.5 pb-3 text-[13px]">
+                            <span className="text-muted-foreground">Billed</span>
                             <span>
                               {startDate ? shortDate(startDate) : "—"} →{" "}
                               {cleaned.end_date ? shortDate(cleaned.end_date) : "—"}
                             </span>
-                            <span className="pj-line-days">
+                            <span className="text-muted-foreground">
                               {fmtDays(days)} working days ×{" "}
                               {money(cleaned.tjm, currency)}
                             </span>
                             {!!cleaned.end_date &&
                               !!endDate &&
                               cleaned.end_date === endDate && (
-                                <span className="pj-line-same">
+                                <Badge variant="secondary" className="normal-case tracking-normal">
                                   Same as contract
-                                </span>
+                                </Badge>
                               )}
                           </div>
 
                           {editing &&
                             (lineStaff ? (
-                              <LineStaffingPanel
-                                projectId={editing.id}
-                                staffing={lineStaff}
-                                people={people}
-                                talentPool={talentPool}
-                                canEngage={canEngage}
-                                assignmentsByEmployee={
-                                  assignmentsByEmployee
-                                }
-                                personNameByEmployee={personNameByEmployee}
-                                currency={currency}
-                                onChanged={onStaffingChanged}
-                              />
+                              <div className="border-t border-border bg-muted/40 p-3.5">
+                                <LineStaffingPanel
+                                  projectId={editing.id}
+                                  staffing={lineStaff}
+                                  people={people}
+                                  talentPool={talentPool}
+                                  canEngage={canEngage}
+                                  assignmentsByEmployee={
+                                    assignmentsByEmployee
+                                  }
+                                  personNameByEmployee={personNameByEmployee}
+                                  currency={currency}
+                                  onChanged={onStaffingChanged}
+                                />
+                              </div>
                             ) : cleaned.name ? (
-                              <p className="pj-line-save-hint">
+                              <p className="m-0 border-t border-border bg-muted/40 px-3.5 py-3 text-[13px] text-muted-foreground">
                                 Save changes to staff this line.
                               </p>
                             ) : null)}
@@ -2282,45 +2792,53 @@ function ProjectForm({
                       name="tjm_profiles"
                       value={JSON.stringify(cleanedProfiles)}
                     />
-                    <div className="pj-table-foot pj-lines-foot">
-                      <button
+                    <input
+                      type="hidden"
+                      name="tjm_renames"
+                      value={JSON.stringify(
+                        profiles.flatMap((p, i) =>
+                          p.savedName !== undefined &&
+                          cleanedProfiles[i].name &&
+                          cleanedProfiles[i].name !== p.savedName
+                            ? [{ from: p.savedName, to: cleanedProfiles[i].name }]
+                            : [],
+                        ),
+                      )}
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border px-3.5 py-2.5">
+                      <Button
                         type="button"
-                        className="pj-add-profile"
+                        variant="ghost"
+                        size="sm"
+                        className="-ml-2"
                         onClick={addProfile}
                       >
-                        + Add profile
-                      </button>
-                      <span className="pj-value">
-                        <span className="pj-value-label">Estimated value</span>
-                        <span className="pj-value-amount">
-                          {money(regieTotal, currency)}
-                        </span>
-                      </span>
+                        <Plus data-icon="inline-start" />
+                        Add profile
+                      </Button>
+                      <EstimatedValue amount={money(regieTotal, currency)} />
                     </div>
                   </div>
                 )}
                 {pricingModel === "forfait" && fixedNumber > 0 && (
-                  <div className="pj-table-foot pj-foot-plain">
-                    <span />
-                    <span className="pj-value">
-                      <span className="pj-value-label">Estimated value</span>
-                      <span className="pj-value-amount">
-                        {money(fixedNumber, currency)}
-                      </span>
-                    </span>
+                  <div className="flex justify-end rounded-lg border border-border bg-card px-3.5 py-2.5">
+                    <EstimatedValue amount={money(fixedNumber, currency)} />
                   </div>
                 )}
               </div>
-            </section>
+            </CardContent>
+          </Card>
 
-            {editing && (
-              <section className="pj-card">
+          {editing && (
+            <Card>
+              <CardContent>
                 <ProjectExtensionsSection
                   projectId={editing.id}
                   numberOffset={1}
                   pricingModel={pricingModel}
                   currency={currency}
                   profiles={storedTjmProfiles(editing.tjm_profiles)}
+                  projectStartDate={editing.start_date}
                   tjm={editing.tjm != null ? Number(editing.tjm) : null}
                   estimatedDays={
                     editing.estimated_days != null
@@ -2343,92 +2861,107 @@ function ProjectForm({
                     onProjectPatched(editing.id, patch);
                   }}
                 />
-              </section>
-            )}
+              </CardContent>
+            </Card>
+          )}
 
-            <section className="pj-card">
-              <div className="pj-card-head">
-                <div>
-                  <h2 className="pj-card-title">Notes</h2>
-                  <p className="pj-card-desc">
-                    Scope, team, renewal terms — anything the next person needs.
-                  </p>
-                </div>
-              </div>
-              <textarea
-                className="pj-notes-area"
+          {editing && editing.pricing_model === "regie" && (
+            <Card>
+              <CardContent>
+                <ProjectInvoices
+                  projectId={editing.id}
+                  onTotals={(amount) => onInvoicedHt(editing.id, amount)}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <SectionTitle>Notes</SectionTitle>
+              <CardDescription>
+                Scope, team, renewal terms: anything the next person needs.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
                 name="notes"
+                className="min-h-32"
                 defaultValue={editing?.notes}
-                rows={5}
                 maxLength={5000}
                 placeholder="Scope, team, renewal terms…"
                 aria-label="Notes"
               />
-            </section>
-          </div>
+            </CardContent>
+          </Card>
+        </div>
 
-          {editing && (
-            <aside className="pj-side">
-              {staffing && (
-                <ProjectTeamCard
-                  team={staffing.assignments
-                    .map((a) => ({
-                      employeeId: a.employee_id,
-                      name:
-                        personNameByEmployee.get(a.employee_id) || "Person",
-                      line: a.pricing_line,
-                      alloc: a.allocation_pct,
-                      period: `${shortDate(a.start_date)} → ${
-                        a.end_date ? shortDate(a.end_date) : "open"
-                      }`,
-                      status: a.status,
-                    }))
-                    .sort((a, b) => a.name.localeCompare(b.name))}
-                  unstaffedDays={Math.max(
-                    0,
-                    staffing.days - staffing.staffedDays,
-                  )}
-                />
-              )}
-              <section className="pj-card pj-consume-card">
-                <div className="pj-card-head">
-                  <h2 className="pj-card-title">Consumption (CRA)</h2>
-                  <a className="pj-side-link" href="/hr/people">
+        {editing && (
+          <aside className="grid min-w-0 items-start gap-4 @3xl:grid-cols-2 @5xl:grid-cols-1">
+            {staffing && (
+              <ProjectTeamCard
+                team={staffing.assignments
+                  .map((a) => ({
+                    employeeId: a.employee_id,
+                    name:
+                      personNameByEmployee.get(a.employee_id) || "Person",
+                    line: a.pricing_line,
+                    alloc: a.allocation_pct,
+                    period: `${shortDate(a.start_date)} → ${
+                      a.end_date ? shortDate(a.end_date) : "open"
+                    }`,
+                    status: a.status,
+                  }))
+                  .sort((a, b) => a.name.localeCompare(b.name))}
+                unstaffedDays={Math.max(
+                  0,
+                  staffing.days - staffing.staffedDays,
+                )}
+              />
+            )}
+            <Card size="sm">
+              <CardHeader>
+                <SectionTitle>Consumption (CRA)</SectionTitle>
+                <CardAction>
+                  <a
+                    className="text-[13px] whitespace-nowrap text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                    href="/hr/people"
+                  >
                     Timesheets →
                   </a>
+                </CardAction>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[13px] text-muted-foreground">
+                    Value billed / Estimated value
+                  </span>
+                  <p className="num m-0 flex flex-wrap items-baseline gap-1.5">
+                    <strong className="text-[26px] leading-tight font-medium tracking-[-0.03em]">
+                      {consumptionBudget > 0
+                        ? money(consumedValue, currency)
+                        : `${fmtDays(consumedDays)} days`}
+                    </strong>
+                    {consumptionBudget > 0 && (
+                      <span className="text-sm text-muted-foreground">
+                        / {money(consumptionAmount, currency)}
+                      </span>
+                    )}
+                  </p>
                 </div>
-                <p className="pj-side-label">Value billed / Estimated value</p>
-                <p className="pj-side-figures">
-                  <strong>
-                    {consumptionBudget > 0
-                      ? money(consumedValue, currency)
-                      : `${fmtDays(consumedDays)} days`}
-                  </strong>
-                  {consumptionBudget > 0 && (
-                    <span>/ {money(consumptionAmount, currency)}</span>
-                  )}
-                </p>
                 {consumptionBudget > 0 && (
                   <>
-                    <div
-                      className="pj-side-bar"
-                      role="progressbar"
-                      aria-label="Contract days consumed"
-                      aria-valuenow={Math.min(consumePct, 100)}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                    >
-                      <div
-                        className={consumePct > 100 ? "over" : ""}
-                        style={{ width: `${Math.min(consumePct, 100)}%` }}
-                      />
-                    </div>
-                    <div className="pj-side-meta">
-                      <span>
+                    <Meter
+                      pct={consumePct}
+                      label="Contract days consumed"
+                      over={consumePct > 100}
+                    />
+                    <div className="num flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="whitespace-nowrap">
                         {consumePct}% billed · {fmtDays(consumedDays)} of{" "}
                         {fmtDays(consumptionBudget)} days
                       </span>
-                      <span>
+                      <span className="whitespace-nowrap">
                         {money(
                           Math.max(consumptionAmount - consumedValue, 0),
                           currency,
@@ -2439,58 +2972,71 @@ function ProjectForm({
                   </>
                 )}
                 {consumedDays === 0 && (
-                  <p className="pj-hint">
-                    No client-project days recorded on this project yet — the
+                  <p className="m-0 text-[13px] text-muted-foreground">
+                    No client-project days recorded on this project yet. The
                     bar fills as employees save their CRA.
                   </p>
                 )}
                 {savedLineCaps.length > 0 && (
-                  <>
-                    <p className="pj-side-label">
+                  <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+                    <span className="text-[13px] text-muted-foreground">
                       {currentYear} billable caps (per profile)
-                    </p>
+                    </span>
                     {savedLineCaps.map((c) => (
-                      <p className="pj-side-figures" key={c.name}>
+                      <p
+                        className="num m-0 flex flex-wrap items-baseline gap-1.5 text-sm"
+                        key={c.name}
+                      >
                         <strong
-                          className={
-                            c.consumed > c.cap ? "pj-side-over" : ""
-                          }
+                          className={cn(
+                            "font-medium",
+                            c.consumed > c.cap && "text-destructive",
+                          )}
                         >
                           {c.name || "Unnamed profile"}:{" "}
                           {fmtDays(c.consumed)} days
                         </strong>
-                        <span>/ {fmtDays(c.cap)} days</span>
+                        <span className="text-muted-foreground">/ {fmtDays(c.cap)} days</span>
                       </p>
                     ))}
                     {savedLineCaps.some((c) => c.consumed > c.cap) && (
-                      <p className="pj-hint">
-                        A profile's annual cap is exceeded — the project is
+                      <p className="m-0 text-[13px] text-destructive">
+                        A profile's annual cap is exceeded; the project is
                         flagged in the list.
                       </p>
                     )}
-                  </>
+                  </div>
                 )}
-              </section>
-              <section className="pj-card">
-                <ProjectContractSection
-                  projectId={editing.id}
-                  folder={
-                    editing.drive_folder_id
-                      ? {
-                          id: editing.drive_folder_id,
-                          name: editing.drive_folder_name || "",
-                          webViewLink: editing.drive_folder_link || undefined,
-                        }
-                      : null
-                  }
-                  title="Contract files"
-                  onLinked={(folder) => onFolderLinked(editing.id, folder)}
+              </CardContent>
+            </Card>
+            <Card size="sm" className="@3xl:col-span-2 @5xl:col-span-1">
+              <CardContent>
+                <DocumentsPanel
+                  owner={{ kind: "project", id: editing.id }}
+                  title="Contract documents"
+                  extensions={signedExtensions.map((x) => ({
+                    id: x.id,
+                    label: x.label || (x.start_date ? `Extension from ${formatDay(x.start_date)}` : "Extension"),
+                  }))}
+                  onChanged={onDocumentsChanged}
                 />
-              </section>
-            </aside>
-          )}
-        </div>
+              </CardContent>
+            </Card>
+          </aside>
+        )}
       </div>
     </form>
+  );
+}
+
+/** "Estimated value" read-out under the pricing lines. */
+function EstimatedValue({ amount }: { amount: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-2.5">
+      <span className="text-[13px] text-muted-foreground">Estimated value</span>
+      <span className="num text-xl font-medium tracking-[-0.02em] whitespace-nowrap">
+        {amount}
+      </span>
+    </span>
   );
 }

@@ -1,5 +1,38 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { fileURLToPath } from 'node:url';
+
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+const tailwindEntry = fileURLToPath(new URL('./src/index.css', import.meta.url));
+
+// The admin pages are styled by ~11k lines of hand-written CSS (here and in
+// packages/*) with global element rules (`button {}`, `h1 {}`, `select {}`).
+// Unlayered CSS beats every cascade layer, so left as-is those rules would
+// override the Tailwind utilities inside @quicksort-sas/ui components. Wrap
+// every such file in `@layer legacy`, ordered between Tailwind's `base` and
+// `components`: legacy still beats preflight, utilities beat legacy, and the
+// relative order inside the legacy CSS is unchanged. The order is declared by
+// an inline <style> at the top of index.html — the first stylesheet in the
+// document fixes it, and in the bundle a hoisted legacy @import would
+// otherwise declare `legacy` first.
+function legacyCssLayer(): Plugin {
+  return {
+    name: 'quicksort-admin-legacy-css-layer',
+    enforce: 'pre',
+    transform(code, id) {
+      const [file, query = ''] = id.split('?');
+      if (!file.endsWith('.css') || /(^|&)(raw|url)\b/.test(query)) return;
+      if (file === tailwindEntry || !file.startsWith(repoRoot) || file.includes('/node_modules/')) return;
+      const imports: string[] = [];
+      const body = code.replace(/^\s*@import\s+([^;]+);/gm, (_, target: string) => {
+        imports.push(/^url\(\s*['"]?https?:/.test(target.trim()) ? `@import ${target};` : `@import ${target} layer(legacy);`);
+        return '';
+      });
+      return { code: `${imports.join('\n')}\n@layer legacy {\n${body}\n}\n`, map: null };
+    },
+  };
+}
 
 // Serves the Vercel-style api/ routes during `vite dev` so the CV analyzer and
 // candidate intake work locally exactly as they do when deployed. Each handler
@@ -14,8 +47,19 @@ function apiRoutes(): Plugin {
     '/api/ai-models': '/api/ai-models.ts',
     '/api/analysis-history': '/api/analysis-history.ts',
     '/api/sales-pipeline': '/api/sales-pipeline.ts',
-    '/api/boondmanager': '/api/boondmanager.ts',
-    '/api/team-photo': '/api/team-photo.mjs',
+    '/api/invoicing': '/api/invoicing.ts',
+    '/api/bank-transactions': '/api/bank-transactions.ts',
+    '/api/bank-transactions-cron': '/api/bank-transactions-cron.ts',
+    '/api/freelancer-invoices': '/api/freelancer-invoices.ts',
+    '/api/freelancer-invoices-cron': '/api/freelancer-invoices-cron.ts',
+    '/api/google-drive': '/api/google-drive.ts',
+    '/api/recruitment-cv': '/api/recruitment-cv.ts',
+    '/api/documents': '/api/documents.ts',
+    '/api/documents-extract': '/api/documents-extract.ts',
+    '/api/signatures': '/api/signatures.ts',
+    '/api/youtrust-webhook': '/api/youtrust-webhook.ts',
+    '/api/accounts': '/api/accounts.ts',
+    '/api/impersonate': '/api/impersonate.ts',
   };
   return {
     name: 'quicksort-admin-api-routes',
@@ -28,16 +72,28 @@ function apiRoutes(): Plugin {
           const module = await server.ssrLoadModule(route);
           const chunks: Buffer[] = [];
           for await (const chunk of req) chunks.push(Buffer.from(chunk));
-          const raw = Buffer.concat(chunks).toString('utf8');
+          const bytes = Buffer.concat(chunks);
+          const raw = bytes.toString('utf8');
           const query = Object.fromEntries(new URL(req.url || '/', 'http://localhost').searchParams);
           await module.default(
-            { method: req.method, headers: req.headers, query, body: raw ? JSON.parse(raw) : undefined },
+            {
+              method: req.method, headers: req.headers, query,
+              // Lazy like Vercel's req.body, so a handler that only reads the raw stream
+              // (the Youtrust webhook) never trips on a body that is not JSON.
+              get body() { return raw ? JSON.parse(raw) : undefined; },
+              // The stream is already consumed above; replay its bytes for raw-body readers.
+              async *[Symbol.asyncIterator]() { if (bytes.length) yield bytes; },
+            },
             {
               setHeader: (name, value) => void res.setHeader(name, value),
               status(code) { res.statusCode = code; return this as never; },
               json(body) {
                 if (!res.hasHeader('content-type')) res.setHeader('content-type', 'application/json');
                 res.end(JSON.stringify(body));
+              },
+              send(body) {
+                res.end(body);
+                return this as never;
               },
             },
           );
@@ -63,5 +119,9 @@ export default defineConfig(({ mode }) => {
   for (const [key, value] of Object.entries(loadEnv(mode, process.cwd(), ''))) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
-  return { plugins: [react(), apiRoutes()] };
+  return {
+    plugins: [legacyCssLayer(), tailwindcss(), react(), apiRoutes()],
+    // packages/* still resolve React 18 for the other apps; admin bundles one React 19.
+    resolve: { dedupe: ['react', 'react-dom'] },
+  };
 });

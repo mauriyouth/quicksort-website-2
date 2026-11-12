@@ -3,17 +3,26 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/team-photo",
-      "destination": "/api/team-photo"
-    },
-    {
       "source": "/((?!api(?:/|$)).*)",
       "destination": "/index.html"
     }
   ],
+  "crons": [
+    {
+      "path": "/api/bank-transactions-cron",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/freelancer-invoices-cron",
+      "schedule": "0 * * * *"
+    }
+  ],
   "functions": {
-    "api/team-photo.mjs": {
-      "includeFiles": "private/team-photos/**"
+    "api/freelancer-invoices-cron.ts": {
+      "maxDuration": 300
+    },
+    "api/freelancer-invoices.ts": {
+      "maxDuration": 300
     }
   },
   "headers": [

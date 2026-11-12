@@ -56,7 +56,7 @@ export function EventsManager() {
   }
   return <div className="flex flex-col gap-6">
     <PageHeading title="Events" eyebrow="Community" action={<Button variant="pivot" disabled={busy} onClick={() => { setEditing(null); setError(''); setMessage(''); }}><Plus data-icon="inline-start"/>Add event</Button>}>
-      Manage the cards in the website’s circular gallery. Published changes appear without a website deployment.
+      Manage the cards in the website's circular gallery. Published changes appear without a website deployment.
     </PageHeading>
     <PageAlerts error={error} message={message} />
     {editing !== undefined && <EventEditor key={editing?.id || 'new'} event={editing} busy={busy} onCancel={() => setEditing(undefined)} onSave={(values, file) => action(async () => {

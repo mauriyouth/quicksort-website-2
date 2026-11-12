@@ -34,7 +34,7 @@ export function TypeSearchField({
         value={value}
         onPick={onChange}
         placeholder="Search a document type…"
-        emptyText={(query) => `No match for “${query}”.`}
+        emptyText={(query) => `No match for "${query}".`}
         selectOnFocus
         aria-label="Type"
       />

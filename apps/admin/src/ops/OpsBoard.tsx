@@ -257,7 +257,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
       }
       setCreatingBoard(false);
       setBoardId(boardResult.data.id);
-    }, `Board “${name}” created.`);
+    }, `Board "${name}" created.`);
   }
 
   async function saveColumnName(column: Column, name: string) {
@@ -293,7 +293,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
   /** Space on a selected card toggles ownership: yours ⇄ unassigned. */
   async function toggleAssign(card: Card) {
     if (card.owner_email && card.owner_email !== actorEmail) {
-      setMessage(`“${card.title}” is assigned to ${card.owner_email} — open it to reassign.`);
+      setMessage(`"${card.title}" is assigned to ${card.owner_email}. Open it to reassign.`);
       return;
     }
     const next = card.owner_email === actorEmail ? "" : actorEmail;
@@ -305,7 +305,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
         .select("id")
         .single();
       if (result.error) throw result.error;
-    }, next ? `“${card.title}” assigned to you.` : `“${card.title}” unassigned.`);
+    }, next ? `"${card.title}" assigned to you.` : `"${card.title}" unassigned.`);
   }
 
   /** Quick-add: creates a card from a bare title, owned by the actor. The
@@ -367,7 +367,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
         .select("id")
         .single();
       if (result.error) throw result.error;
-    }, `“${card.title}” moved to ${columns.find((c) => c.id === columnId)?.name || "column"}.`);
+    }, `"${card.title}" moved to ${columns.find((c) => c.id === columnId)?.name || "column"}.`);
   }
 
   if (notMigrated) {
@@ -447,7 +447,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
 
       {!loading && !boards.length && (
         <EmptyState title="No boards yet">
-          Use “New board” above to create one, set its columns, then add cards.
+          Use "New board" above to create one, set its columns, then add cards.
         </EmptyState>
       )}
 
@@ -649,7 +649,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
                   .from("ops_columns")
                   .insert({ board_id: board.id, name, position: columns.length });
                 if (result.error) throw result.error;
-              }, `Column “${name}” added.`)
+              }, `Column "${name}" added.`)
             }
           />
         </div>
@@ -1170,7 +1170,7 @@ function CardEditor({
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Edit card</DialogTitle>
-          <DialogDescription className="sr-only">Edit the card’s title, content, priority, owner and column.</DialogDescription>
+          <DialogDescription className="sr-only">Edit the card's title, content, priority, owner and column.</DialogDescription>
         </DialogHeader>
         <div className="grid min-w-0 gap-5">
           <Field>
@@ -1190,7 +1190,7 @@ function CardEditor({
             </>}
             value={draft.content}
             maxLength={20000}
-            placeholder="Specs, notes, links — the body of the card."
+            placeholder="Specs, notes, links. The body of the card."
             onChange={(content) => setDraft({ ...draft, content })}
           />
           <div className="grid gap-5 sm:grid-cols-2">
@@ -1261,7 +1261,7 @@ function CardEditor({
         <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete “{card.title}”?</AlertDialogTitle>
+              <AlertDialogTitle>Delete "{card.title}"?</AlertDialogTitle>
               <AlertDialogDescription>The card and its content are removed from the board. This cannot be undone.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

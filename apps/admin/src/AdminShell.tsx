@@ -2,8 +2,8 @@
  * Admin workspace shell, built on @quicksort-sas/ui: a collapsible sidebar
  * (icons-only when collapsed, a sheet on mobile) and a sticky top bar that
  * carries the section header and the theme switch. Replaces the shared
- * hr-ui <Shell> for the admin app only — the employee portal and the other
- * apps keep theirs.
+ * hr-ui <Shell> for both the admin workspace and the employee portal
+ * (HrPortal); the other apps keep theirs.
  *
  * Page content still renders inside `.content` (max-width, padding) so pages
  * not yet migrated to components keep their layout.
@@ -127,8 +127,8 @@ function AdminSidebar({
     <Sidebar collapsible="icon">
       <SidebarHeader className="gap-3 px-3 pt-4">
         <a
-          href="https://www.quicksort.fr"
-          aria-label="Quicksort home"
+          href="/"
+          aria-label="Quicksort OS home"
           className="flex h-8 items-center px-1 text-sidebar-foreground"
         >
           <QuicksortLogo className="group-data-[collapsible=icon]:hidden" />

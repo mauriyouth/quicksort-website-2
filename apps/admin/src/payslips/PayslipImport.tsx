@@ -1,14 +1,28 @@
-import { useMemo, useRef, useState, type DragEvent } from "react";
+import { useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Upload } from "lucide-react";
-import { Notice } from "@quicksort/hr-ui";
+import { ArrowLeft, Upload } from "lucide-react";
+import { cn } from "cn";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardFooter,
+  Checkbox,
+  NativeSelect,
+  NativeSelectOption,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@quicksort-sas/ui";
 import { errorMessage } from "@quicksort/hr-db";
+import { PageAlerts, PageHeading, linkButton } from "../ui";
 import { readPayslipDrop, payslipTitle } from "./read.browser";
 import { matchPayslips, preferredEmployment, type FiledPayslip, type MatchEmployee, type ReviewRow, type ReviewStatus } from "./match";
 import { filedConflict, fileReviewRow, loadMatchContext, replacedMatricule } from "./client";
-import "../documents/documents.css";
-import "../hr/workspace.css";
-import "./payslips.css";
 
 /**
  * HR → Payslips: drop a Silae zip (or PDFs), review who each payslip matches,
@@ -17,15 +31,17 @@ import "./payslips.css";
  */
 type Item = { row: ReviewRow; personId: string | null; confirmed: boolean; overwrite: boolean; state: "idle" | "filing" | "done" | "error"; error: string };
 
-const CHIP: Record<ReviewStatus, { label: string; tone: string }> = {
-  matched: { label: "Matched", tone: "good" },
-  changed: { label: "Changed", tone: "good" },
-  confirm: { label: "Confirm", tone: "" },
-  unknown: { label: "Unknown", tone: "" },
-  "already-filed": { label: "Already filed", tone: "quiet" },
-  duplicate: { label: "Duplicate", tone: "quiet" },
-  unreadable: { label: "Unreadable", tone: "urgent" },
+type Tone = "success" | "warning" | "secondary" | "destructive";
+const CHIP: Record<ReviewStatus, { label: string; tone: Tone }> = {
+  matched: { label: "Matched", tone: "success" },
+  changed: { label: "Changed", tone: "success" },
+  confirm: { label: "Confirm", tone: "warning" },
+  unknown: { label: "Unknown", tone: "warning" },
+  "already-filed": { label: "Already filed", tone: "secondary" },
+  duplicate: { label: "Duplicate", tone: "secondary" },
+  unreadable: { label: "Unreadable", tone: "destructive" },
 };
+const NOTE = "m-0 text-xs text-muted-foreground";
 const NEEDS_CONFIRMATION = (s: ReviewStatus) => s === "confirm" || s === "unknown";
 const FILEABLE = (s: ReviewStatus) => s === "matched" || s === "changed" || NEEDS_CONFIRMATION(s);
 
@@ -107,93 +123,120 @@ export function PayslipImport() {
   }
 
   return (
-    <div className="docs-page payslips-page">
-      <header className="docs-head">
-        <Link to="/hr/payslips" className="payslips-back">← All payslips</Link>
-        <h1>Import payslips</h1>
-        <p className="projects-lede">Drop the Silae export. Each payslip is matched to its employee, then filed in their Documents.</p>
-      </header>
-      <Notice error>{error}</Notice>
+    <div className="@container flex flex-col gap-6">
+      <Link to="/hr/payslips" className={cn(linkButton({ variant: "ghost", size: "sm" }), "-ml-2 self-start")}>
+        <ArrowLeft data-icon="inline-start" aria-hidden="true" /> All payslips
+      </Link>
+      <PageHeading title="Import payslips">
+        Drop the Silae export. Each payslip is matched to its employee, then filed in their Documents.
+      </PageHeading>
+      <PageAlerts error={error} />
 
       <div
-        className={`payslips-drop${dragging ? " on" : ""}`}
+        className={cn(
+          "flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-muted/40 px-4 py-8 text-center transition-colors",
+          dragging && "border-foreground bg-muted",
+        )}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
       >
-        <Upload size={20} aria-hidden="true" />
-        <p>{reading ? "Reading payslips…" : "Drop a zip or PDF payslips here"}</p>
-        <button type="button" className="btn secondary" disabled={busy} onClick={() => input.current?.click()}>Choose files</button>
+        <Upload className="size-5 text-muted-foreground" aria-hidden="true" />
+        <p className="m-0 text-sm">{reading ? "Reading payslips…" : "Drop a zip or PDF payslips here"}</p>
+        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => input.current?.click()}>Choose files</Button>
         <input ref={input} type="file" multiple accept=".zip,.pdf,application/pdf,application/zip" aria-label="Payslip files" hidden
           onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ""; void read(list); }} />
       </div>
 
       {items.length > 0 && (
-        <section className="payslips-review" aria-label="Review">
-          <div className="hr-table-wrap">
-            <table className="hr-table payslips-table">
-              <thead>
-                <tr><th>File</th><th>Name as printed</th><th>Employee</th><th>Period</th><th>Status</th></tr>
-              </thead>
-              <tbody>
+        <Card role="region" aria-label="Review">
+          <CardContent className="px-0">
+            <Table className="[&_tr>*:first-child]:pl-6 [&_tr>*:last-child]:pr-6">
+              <TableHeader>
+                <TableRow><TableHead>File</TableHead><TableHead>Name as printed</TableHead><TableHead>Employee</TableHead><TableHead>Period</TableHead><TableHead>Status</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {items.map((item, i) => {
                   const { row } = item;
                   const chip = CHIP[row.status];
                   const replaced = replacement(item);
                   const matricule = "error" in row.file ? "" : row.file.matricule;
                   return (
-                    <tr key={i}>
-                      <td className="payslips-file" title={row.file.fileName}>{row.file.fileName}</td>
-                      <td>{row.printedName || "—"}</td>
-                      <td className="payslips-employee">
-                        {NEEDS_CONFIRMATION(row.status) && item.state !== "done" ? (
-                          <>
-                            <select aria-label={`Employee for ${row.file.fileName}`} value={item.personId ?? ""} disabled={busy}
-                              onChange={(e) => patch(i, { personId: e.target.value || null, confirmed: false, overwrite: false })}>
-                              <option value="">Choose an employee…</option>
-                              {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                            </select>
-                            <label className="hr-checkbox">
-                              <input type="checkbox" checked={item.confirmed} disabled={busy || !item.personId} aria-label={`Confirm ${row.file.fileName}`}
-                                onChange={(e) => patch(i, { confirmed: e.target.checked })} />
-                              Confirm
-                            </label>
-                          </>
-                        ) : (
-                          personName(item.personId)
-                        )}
-                        {conflictOf(item)?.identical && item.state !== "done" && <small>Already filed for {personName(item.personId)}</small>}
-                        {supersedesOf(item) && NEEDS_CONFIRMATION(row.status) && item.state !== "done" && <small>Replaces the payslip already filed for {personName(item.personId)}</small>}
-                        {row.warning && <small>{row.warning}</small>}
-                        {replaced && item.state !== "done" && (
-                          <label className="hr-checkbox">
-                            <input type="checkbox" checked={item.overwrite} disabled={busy} onChange={(e) => patch(i, { overwrite: e.target.checked })} />
-                            Replace matricule {replaced} with {matricule}
-                          </label>
-                        )}
-                        {"error" in row.file && <small>{row.file.error}</small>}
-                        {item.error && <small role="alert" className="payslips-error">{item.error}</small>}
-                      </td>
-                      <td>{periodLabel(row)}</td>
-                      <td>
-                        <span className={`hr-tag ${item.state === "done" ? "good" : chip.tone}`}>
+                    <TableRow key={i} className="align-top">
+                      <TableCell className="max-w-28 truncate font-mono text-xs @3xl:max-w-40" title={row.file.fileName}>{row.file.fileName}</TableCell>
+                      <TableCell className="min-w-28 whitespace-normal">{row.printedName || "—"}</TableCell>
+                      <TableCell className="min-w-48 whitespace-normal">
+                        <div className="flex flex-col gap-1.5">
+                          {NEEDS_CONFIRMATION(row.status) && item.state !== "done" ? (
+                            <>
+                              <NativeSelect size="sm" className="w-full" aria-label={`Employee for ${row.file.fileName}`} value={item.personId ?? ""} disabled={busy}
+                                onChange={(e) => patch(i, { personId: e.target.value || null, confirmed: false, overwrite: false })}>
+                                <NativeSelectOption value="">Choose an employee…</NativeSelectOption>
+                                {people.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.name}</NativeSelectOption>)}
+                              </NativeSelect>
+                              <CheckRow id={`payslip-confirm-${i}`} checked={item.confirmed} disabled={busy || !item.personId} ariaLabel={`Confirm ${row.file.fileName}`}
+                                onChange={(checked) => patch(i, { confirmed: checked })}>
+                                Confirm
+                              </CheckRow>
+                            </>
+                          ) : (
+                            personName(item.personId)
+                          )}
+                          {conflictOf(item)?.identical && item.state !== "done" && <p className={NOTE}>Already filed for {personName(item.personId)}</p>}
+                          {supersedesOf(item) && NEEDS_CONFIRMATION(row.status) && item.state !== "done" && <p className={NOTE}>Replaces the payslip already filed for {personName(item.personId)}</p>}
+                          {row.warning && <p className={NOTE}>{row.warning}</p>}
+                          {replaced && item.state !== "done" && (
+                            <CheckRow id={`payslip-replace-${i}`} checked={item.overwrite} disabled={busy} onChange={(checked) => patch(i, { overwrite: checked })}>
+                              Replace matricule {replaced} with {matricule}
+                            </CheckRow>
+                          )}
+                          {"error" in row.file && <p className={NOTE}>{row.file.error}</p>}
+                          {item.error && <p role="alert" className="m-0 text-xs text-destructive">{item.error}</p>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="num whitespace-nowrap text-xs">{periodLabel(row)}</TableCell>
+                      <TableCell>
+                        <Badge variant={item.state === "done" ? "success" : chip.tone}>
                           {item.state === "done" ? "Filed" : item.state === "filing" ? "Filing…" : chip.label}
-                        </span>
-                      </td>
-                    </tr>
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-          <div className="hr-form-actions">
-            {progress && <span role="status" className="payslips-progress">Filing {Math.min(progress.done + 1, progress.total)} of {progress.total}…</span>}
-            <button type="button" className="btn" disabled={busy || queue.length === 0} onClick={() => void fileAll()}>
+              </TableBody>
+            </Table>
+          </CardContent>
+          <CardFooter className="flex flex-wrap items-center justify-end gap-3 border-t border-border py-4">
+            {progress && <span role="status" className="num text-sm text-muted-foreground">Filing {Math.min(progress.done + 1, progress.total)} of {progress.total}…</span>}
+            <Button type="button" disabled={busy || queue.length === 0} onClick={() => void fileAll()}>
               File {queue.length} payslip{queue.length === 1 ? "" : "s"}
-            </button>
-          </div>
-        </section>
+            </Button>
+          </CardFooter>
+        </Card>
       )}
     </div>
+  );
+}
+
+/** Checkbox with its text beside it. The text is tied by aria-labelledby (or
+ *  the explicit ariaLabel), not a <label>: a <label> would also name the
+ *  package Checkbox's hidden native input, giving two controls one name. */
+function CheckRow({ id, checked, disabled, ariaLabel, onChange, children }: {
+  id: string;
+  checked: boolean;
+  disabled?: boolean;
+  ariaLabel?: string;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <span className="flex items-start gap-2">
+      <Checkbox className="mt-0.5" checked={checked} disabled={disabled} aria-label={ariaLabel} aria-labelledby={ariaLabel ? undefined : `${id}-text`}
+        onCheckedChange={(next) => onChange(next === true)} />
+      <span id={`${id}-text`} className={cn("cursor-pointer text-sm select-none", disabled && "cursor-not-allowed opacity-50")}
+        onClick={() => { if (!disabled) onChange(!checked); }}>
+        {children}
+      </span>
+    </span>
   );
 }

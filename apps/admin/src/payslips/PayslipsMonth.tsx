@@ -183,7 +183,7 @@ function PayslipPreview({ doc, name, onClose }: { doc: FiledPayslipDoc; name: st
       <CardContent className="flex flex-col gap-3">
         {loading && <p role="status" className="text-sm text-muted-foreground">Loading the payslip…</p>}
         <PageAlerts error={error} />
-        {file && "url" in file && <iframe title={`${doc.title} — ${name}`} src={file.url} className="h-[75vh] w-full rounded-sm border border-border bg-white @3xl:h-[min(80vh,900px)]" />}
+        {file && "url" in file && <iframe title={`${doc.title}, ${name}`} src={file.url} className="h-[75vh] w-full rounded-sm border border-border bg-white @3xl:h-[min(80vh,900px)]" />}
         {file && "link" in file && (
           <p className="text-sm text-muted-foreground">
             This file is too large to preview inline. <a className="underline" href={file.link} target="_blank" rel="noopener noreferrer">Open it</a>.

@@ -73,6 +73,8 @@ export function DocumentAlerts() {
       const next = alerts.map((alert): Row => {
         if (alert.person_id)
           return { ...alert, ownerName: names.people.get(alert.person_id) || "Person", ownerDetail: "Employee", href: `/hr/people/${alert.person_id}/employments` };
+        if (alert.owner_kind === "company")
+          return { ...alert, ownerName: "Quicksort", ownerDetail: "Company", href: "/operations/admin" };
         if (alert.project_id) {
           const project = names.projects.get(alert.project_id);
           return { ...alert, ownerName: project?.title || "Project", ownerDetail: project?.client ? `Project · ${project.client}` : "Project", href: `/sales/projects/${alert.project_id}` };
@@ -126,7 +128,7 @@ export function DocumentAlerts() {
         Identity papers, contracts and certificates that expired, expire soon or are still missing.
       </PageHeading>
       <PageAlerts error={error} />
-      {notReady && <PageAlerts message="The documents registry is not set up yet — apply the documents migrations (supabase db push)." />}
+      {notReady && <PageAlerts message="The documents registry is not set up yet. Apply the documents migrations (supabase db push)." />}
 
       <Card aria-label="Summary">
         <CardContent>

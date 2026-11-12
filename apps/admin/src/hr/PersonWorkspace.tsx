@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useSession } from '@clerk/react';
-import { Check, CheckCircle2, ChevronRight, Circle, Eye, Lock, Plus, Sparkles, AlertCircle, FileText, Search } from 'lucide-react';
+import { Check, CheckCircle2, ChevronRight, Circle, Eye, Lock, Plus, Sparkles, AlertCircle, Search } from 'lucide-react';
 import { db, errorMessage } from '@quicksort/hr-db';
 import {
   Alert,
@@ -47,8 +47,9 @@ import { CraScreen } from '../cra/CraScreen';
 import { countryName, countryOptions, needsResidencePermit } from './countries';
 import { DocumentsPanel } from '../documents/DocumentsPanel';
 import { MatriculeEdit, PersonPayslips } from '../payslips/PersonPayslips';
+import { PersonSignatures } from '../signatures/PersonSignatures';
+import { CandidateApplication } from './CandidateApplication';
 // PersonPayslips does not import its own stylesheet; it is loaded here.
-import '../payslips/payslips.css';
 import { Action, Empty, Field, Form, SearchField, Section, SkillListField, Tag, checked, date, initials, label, nullable, number, text, today, useRetryCommand, type RunCommand } from './ui';
 export const stages: ApplicationStage[] = ['application', 'screening', 'hr_interview', 'technical_interview', 'client_presentation', 'decision', 'offer', 'contract'];
 export const personName = (workspace: Workspace, id: string) => workspace.people.find(person => person.id === id)?.full_name ?? 'Unknown person';
@@ -173,11 +174,13 @@ export function PersonWorkspace({
   const tabs = [{
     key: 'profile',
     title: 'Profile'
-  }, {
+  },
+  // Employees with no application on file don't need an empty Applications tab.
+  ...(!isEmployee || applications.length > 0 ? [{
     key: 'applications',
     title: 'Applications',
     count: applications.length
-  }, ...(isEmployee ? [{
+  }] : []), ...(isEmployee ? [{
     key: 'employment',
     title: 'Employment',
     count: employees.length
@@ -195,9 +198,9 @@ export function PersonWorkspace({
   }];
   const activeTab = tabs.some(item => item.key === tab) ? tab : 'profile';
   return <div className="@container flex min-w-0 flex-col gap-6">
-    <Tabs value={activeTab} onValueChange={value => onNavigate(value as PersonTab)} className="max-w-full min-w-0">
-      <TabsList variant="line" aria-label="Person record" className="h-10 max-w-full justify-start gap-4 overflow-x-auto">
-        {tabs.map(item => <TabsTrigger key={item.key} value={item.key} className="flex-none gap-1.5">
+    <Tabs value={activeTab} onValueChange={value => onNavigate(value as PersonTab)} className="w-full min-w-0">
+      <TabsList variant="line" aria-label="Person record" className="h-10 w-full justify-start gap-5 overflow-x-auto border-b border-border">
+        {tabs.map(item => <TabsTrigger key={item.key} value={item.key} className="flex-none gap-1.5 group-data-horizontal/tabs:after:bottom-0">
           {item.title}
           {'count' in item && <span className="num text-xs text-muted-foreground">
             {item.count}
@@ -269,6 +272,7 @@ function Profile({
         phone: text(data, 'phone'),
         headline: text(data, 'headline'),
         location: text(data, 'location'),
+        linkedin_url: text(data, 'linkedin_url'),
         skills: text(data, 'skills'),
         languages: text(data, 'languages'),
         degrees: text(data, 'degrees'),
@@ -298,11 +302,11 @@ function Profile({
     n: assignments.length,
     label: 'Projects',
     tab: 'projects'
-  }, {
+  }, ...(!employees.length || applications.length ? [{
     n: applications.length,
     label: 'Applications',
     tab: 'applications'
-  }];
+  }] : [])];
   const skillCount = listed(person.skills).length;
   // Profile completeness: the fields a client CV draws on, plus the portal
   // link. Each unfilled one is a gap the sidebar can jump you to.
@@ -374,6 +378,7 @@ function Profile({
           <Field name="email" label="Work email" type="email" value={person.email} />
           <Field name="phone" label="Phone" type="tel" value={person.phone} />
           <Field name="location" label="Location" value={person.location} />
+          <Field name="linkedin_url" label="LinkedIn profile" type="url" value={person.linkedin_url} />
           <UiField className="min-w-0 gap-1.5">
             <FieldLabel htmlFor={`owner-${person.id}`}>Record owner</FieldLabel>
             <InputGroup>
@@ -396,21 +401,21 @@ function Profile({
             name: 'languages',
             field: 'Add a language',
             value: person.languages,
-            placeholder: 'e.g. French — native'
+            placeholder: 'e.g. French, native'
           }, {
             title: 'Education',
             hint: 'Degree, school and year',
             name: 'degrees',
             field: 'Add a degree',
             value: person.degrees,
-            placeholder: 'e.g. Master MIAGE — Dauphine'
+            placeholder: 'e.g. Master MIAGE, Dauphine'
           }, {
             title: 'Certifications',
             hint: 'Accreditations with year obtained',
             name: 'certifications',
             field: 'Add a certification',
             value: person.certifications,
-            placeholder: 'e.g. PSM I — 2023'
+            placeholder: 'e.g. PSM I, 2023'
           }].map(item => <div key={item.name} className="flex min-w-0 flex-col gap-1.5">
             <h3 className="m-0 text-sm font-medium">{item.title}</h3>
             <p className={cn(QUIET, 'mb-1 text-xs')}>{item.hint}</p>
@@ -647,22 +652,7 @@ function Applications({
   context: RecordContext;
   initialId?: string | null;
 }) {
-  const {
-    workspace
-  } = context;
-  const applications = workspace.applications.filter(application => application.person_id === person.id);
-  const [selected, setSelected] = useState(initialId ?? applications[0]?.id ?? '');
-  const current = applications.find(application => application.id === selected) ?? applications[0];
-  if (!current) return <Empty>No application yet. Add this person to a hiring need from Recruitment to start one.</Empty>;
-  return <>
-    <UiField className="max-w-xl gap-1.5">
-      <FieldLabel htmlFor={`applications-${person.id}`}>Application history</FieldLabel>
-      <NativeSelect id={`applications-${person.id}`} className="w-full" value={current.id} onChange={event => setSelected(event.target.value)}>
-        {applications.map(application => <NativeSelectOption value={application.id} key={application.id}>{workspace.opportunities.find(opportunity => opportunity.id === application.opportunity_id)?.title ?? 'Hiring need'} · {label(application.status)} · {date(application.created_at)}</NativeSelectOption>)}
-      </NativeSelect>
-    </UiField>
-    <ApplicationDetail key={current.id} application={current} person={person} context={context} />
-  </>;
+  return <CandidateApplication person={person} context={context} initialId={initialId} records={application => <ApplicationDetail key={application.id} application={application} person={person} context={context} />} />;
 }
 export function Readiness({
   applicationId,
@@ -714,7 +704,29 @@ export function Readiness({
     </li>)}
   </ul>;
 }
-/** One record (interview, offer, contract) inside an application section. */
+/** Read-only hire prerequisite for users who can't send contracts: is the contract signed in Youtrust? */
+function ContractSigned({ applicationId }: { applicationId: string }) {
+  const [signed, setSigned] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    void loadRequirements(applicationId, 'hire').then(items => {
+      if (!cancelled) setSigned(items.find(item => item.key === 'signatures')?.done ?? false);
+    }).catch(failure => {
+      if (!cancelled) setError(errorMessage(failure));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applicationId]);
+  if (error) return <ErrorText>{error}</ErrorText>;
+  if (signed === null) return <p role="status" className={QUIET}>Checking the signature…</p>;
+  return <p className="m-0 flex items-center gap-2.5 text-sm">
+    {signed ? <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" /> : <Circle className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+    <span>{signed ? 'Signed in Youtrust' : 'Not signed yet. An admin sends the contract from this page.'}</span>
+  </p>;
+}
+/** One record (interview, offer) inside an application section. */
 function RecordCard({ title, meta, badges, children }: { title: ReactNode; meta?: ReactNode; badges?: ReactNode; children?: ReactNode }) {
   return <Card size="sm">
     <CardHeader>
@@ -743,20 +755,7 @@ function ApplicationDetail({
   const opportunity = workspace.opportunities.find(item => item.id === application.opportunity_id);
   const interviews = workspace.interviews.filter(interview => interview.application_id === application.id);
   const offers = workspace.offers.filter(offer => offer.application_id === application.id);
-  const contracts = workspace.contracts.filter(contract => contract.application_id === application.id);
   return <>
-    <RecordCard title={opportunity?.title ?? 'Hiring need'} meta={`Application opened ${date(application.created_at)} · ${label(application.source)}`} badges={<>
-      <Tag tone={application.status === 'active' ? 'good' : 'quiet'}>
-        {label(application.status)}
-      </Tag>
-      <Tag>
-        {label(application.stage)}
-      </Tag>
-    </>}>
-      {application.reason && <p className="m-0">
-        {application.reason}
-      </p>}
-    </RecordCard>
     <Section title="Interviews" detail="Scheduling records the interview. Calendar invitations are sent manually.">
       {!interviews.length && <Empty>No interview has been scheduled for this application.</Empty>}
       {interviews.map(interview => <RecordCard key={interview.id} title={`${label(interview.kind)} interview`} meta={`${new Date(interview.scheduled_at).toLocaleString()} · ${interview.panel}`} badges={<Tag>
@@ -780,7 +779,7 @@ function ApplicationDetail({
               }))
             })}>
               {['Technical skills', 'Communication', 'Motivation'].map((competency, index) => <div className="col-span-full grid gap-4 @md:grid-cols-[10rem_minmax(0,1fr)]" key={competency}>
-                <Field name={`rating_${index}`} label={`${competency} rating (1–5)`} type="number" min={1} max={5} required />
+                <Field name={`rating_${index}`} label={`${competency} rating (1-5)`} type="number" min={1} max={5} required />
                 <Field name={`evidence_${index}`} label={`${competency} evidence`} required />
               </div>)}
               <Field name="notes" label="Interviewer notes" type="textarea" required />
@@ -873,24 +872,10 @@ function ApplicationDetail({
         </Form>
       </Disclosure>}
     </Section>
-    <Section title="Contracts" detail="Hiring requires the accepted offer and signatures linked to this application.">
-      {contracts.map(contract => {
-        const signature = workspace.signatures.find(item => item.contract_id === contract.id);
-        const counter = workspace.countersignatures.find(item => item.contract_id === contract.id);
-        return <RecordCard key={contract.id} title={<><FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><span className="min-w-0 truncate">{contract.title}</span></>} badges={<Tag tone={signature && counter ? 'good' : 'quiet'}>
-            {signature && counter ? 'Both signatures recorded' : 'Awaiting signatures'}
-          </Tag>}>
-          <p className="m-0">Candidate: {signature ? `${signature.signer_name}, ${date(signature.signed_at)}` : 'Pending'} · Employer: {counter ? `${counter.signer_name}, ${date(counter.signed_at)}` : 'Pending'}</p>
-          {!counter && <Form run={run} busy={busy} button="Countersign as employer" success="Employer countersignature recorded." submit={data => ({
-            kind: 'countersign_contract',
-            contract_id: contract.id,
-            signer_name: text(data, 'signer_name')
-          })}>
-            <Field name="signer_name" label="Employer signer's full name" required />
-          </Form>}
-        </RecordCard>;
-      })}
-      {!contracts.length && <Empty>No contract is linked to this application.</Empty>}
+    <Section title="Contract signature" detail="The hiring contract for this application. Once signed in Youtrust, the person can be hired.">
+      {workspace.capabilities.admin
+        ? <PersonSignatures personId={person.id} person={{ name: person.full_name, email: person.email }} applicationId={application.id} />
+        : <ContractSigned key={`signed-${workspace.events.length}`} applicationId={application.id} />}
     </Section>
     {application.status === 'active' && <Section title="Hire and start preboarding" detail="The person keeps all prior applications and employment periods.">
       <div className="grid items-start gap-4 @3xl:grid-cols-[16rem_minmax(0,1fr)]">
@@ -899,7 +884,7 @@ function ApplicationDetail({
             <CardHeading level={3}>Prerequisites</CardHeading>
           </CardHeader>
           <CardContent>
-            <Readiness key={`hire-${workspace.events.length}-${workspace.signatures.length}-${workspace.countersignatures.length}`} applicationId={application.id} stage="hire" />
+            <Readiness key={`hire-${workspace.events.length}`} applicationId={application.id} stage="hire" />
           </CardContent>
         </Card>
         <Card size="sm">
@@ -963,9 +948,9 @@ function EngageDirectly({
     busy
   } = context;
   if (!workspace.capabilities.recruit) return null;
-  return <Disclosure summary="Engage directly — no application">
+  return <Disclosure summary="Engage directly (no application)">
     <div className="flex flex-col gap-4">
-      <p className={QUIET}>For people hired outside the pipeline (freelancers, direct contracts). Skips offers and contracts — an optional rationale is recorded as audit evidence.</p>
+      <p className={QUIET}>For people hired outside the pipeline (freelancers, direct contracts). Skips offers and contracts. An optional rationale is recorded as audit evidence.</p>
       <Form run={run} busy={busy} button="Record engagement" success="Engagement recorded. The person can be staffed on projects right away." submit={data => {
         const contractType = text(data, 'contract_type');
         const dailyRateText = text(data, 'daily_rate');
@@ -982,10 +967,10 @@ function EngageDirectly({
       }}>
         <Field name="role" label="Engagement role" value={person.headline} required />
         <Field name="contract_type" label="Contract type" value="Freelance" options={options(['Freelance', 'CDI', 'CDD', 'Internship', 'Apprenticeship'])} required />
-        <Field name="daily_rate" label="Daily rate — TJM (€/day)" type="number" min={0} step="0.01" hint="Freelance only: recorded as the first daily-rate entry in the compensation history." />
+        <Field name="daily_rate" label="Daily rate (TJM, €/day)" type="number" min={0} step="0.01" hint="Freelance only: recorded as the first daily-rate entry in the compensation history." />
         <Field name="start_date" label="Start date" type="date" value={today()} required />
         <Field name="manager_email" label="Manager email" type="email" />
-        <Field name="rationale" label="Engagement rationale" type="textarea" hint="Optional — why this person is engaged without the application pipeline." />
+        <Field name="rationale" label="Engagement rationale" type="textarea" hint="Optional. Why this person is engaged without the application pipeline." />
       </Form>
     </div>
   </Disclosure>;
@@ -1130,7 +1115,7 @@ export function EmploymentDetail({
     <FieldLabel htmlFor={`period-${employee.id}`} className="text-xs font-normal text-muted-foreground">Period</FieldLabel>
     <NativeSelect id={`period-${employee.id}`} size="sm" value={employee.id} onChange={event => onSelectPeriod(event.target.value)} aria-label="Employment period">
       {periods.map(period => <NativeSelectOption value={period.id} key={period.id}>
-        {date(period.start_date)} – {period.end_date ? date(period.end_date) : 'present'}
+        {date(period.start_date)} to {period.end_date ? date(period.end_date) : 'present'}
       </NativeSelectOption>)}
     </NativeSelect>
   </UiField> : undefined;
@@ -1181,7 +1166,7 @@ export function EmploymentDetail({
           expected_version: employee.version
         }} success="Onboarding completed. Probation remains a separate decision.">Complete onboarding</Action>}
         {employee.status === 'preboarding' && <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => setCancellingHire(open => !open)}>
-          Cancel hire — candidate renounced
+          Cancel hire (candidate renounced)
         </Button>}
       </div>}
       {editingPeople && canEdit && <div className={ROW_FORM}><Form run={run} busy={busy} button="Save manager and buddy" success="Manager and buddy updated." submit={data => ({
@@ -1234,6 +1219,9 @@ export function EmploymentDetail({
         hideFiledTypeCodes={['PAYSLIP']}
       />
     </EmpSection>}
+    {workspace.capabilities.admin && <EmpSection title="Contracts & signatures" detail="Contracts sent for e-signature through Youtrust. Signed copies are filed in Documents.">
+      <PersonSignatures personId={employee.person_id} person={{ name: person.full_name, email: person.email }} />
+    </EmpSection>}
     {workspace.capabilities.recruit && !freelance && <EmpSection title="Payslips" detail="Silae payslips filed for this person, newest first.">
       <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3.5">
         <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden="true" />
@@ -1255,7 +1243,7 @@ export function EmploymentDetail({
                 €{(entry.rate_kind === 'daily' ? entry.daily_rate : entry.salary_monthly)?.toLocaleString()} / {entry.rate_kind === 'daily' ? 'day' : 'month'}
               </span>
               <span className={ROW_META}>
-                {date(entry.start_date)} – {entry.end_date ? date(entry.end_date) : 'ongoing'}
+                {date(entry.start_date)} to {entry.end_date ? date(entry.end_date) : 'ongoing'}
                 {entry.rationale ? ` · ${entry.rationale}` : ''}
               </span>
             </div>
@@ -1279,7 +1267,7 @@ export function EmploymentDetail({
                 end_date: nullable(data, 'end_date'),
                 rationale: text(data, 'rationale')
               })}>
-                <Field name={entry.rate_kind === 'daily' ? 'daily_rate' : 'salary_monthly'} label={entry.rate_kind === 'daily' ? 'Daily rate — TJM (€)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" value={(entry.rate_kind === 'daily' ? entry.daily_rate : entry.salary_monthly) ?? undefined} required />
+                <Field name={entry.rate_kind === 'daily' ? 'daily_rate' : 'salary_monthly'} label={entry.rate_kind === 'daily' ? 'Daily rate (TJM, €)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" value={(entry.rate_kind === 'daily' ? entry.daily_rate : entry.salary_monthly) ?? undefined} required />
                 <Field name="start_date" label="Effective from" type="date" value={entry.start_date} required />
                 <Field name="end_date" label="Effective until (empty = ongoing)" type="date" value={entry.end_date} />
                 <Field name="rationale" label="Change rationale" type="textarea" required />
@@ -1301,9 +1289,9 @@ export function EmploymentDetail({
         start_date: text(data, 'start_date'),
         rationale: text(data, 'rationale')
       })}>
-        <Field name={freelance ? 'daily_rate' : 'salary_monthly'} label={freelance ? 'Daily rate — TJM (€)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" required />
+        <Field name={freelance ? 'daily_rate' : 'salary_monthly'} label={freelance ? 'Daily rate (TJM, €)' : 'Monthly salary (€)'} type="number" min={0} step="0.01" required />
         <Field name="start_date" label="Effective from" type="date" value={today()} required />
-        <Field name="rationale" label="Rationale" type="textarea" hint="Raise, correction, indexation — recorded as audit evidence." />
+        <Field name="rationale" label="Rationale" type="textarea" hint="Raise, correction, indexation. Recorded as audit evidence." />
       </Form></div>}
     </EmpSection>
     <EmpSection title="Journey checklist" detail={tasks.length ? `${completeCount} of ${tasks.length} complete. Required tasks are enforced when the journey closes.` : 'Required tasks are enforced when the journey closes.'}>
@@ -1314,7 +1302,7 @@ export function EmploymentDetail({
           const completing = completingTaskId === task.id;
           const editing = editingTaskId === task.id;
           return <li key={task.id} className={ROW}>
-            <TaskCheck done={!!task.completed_at} aria-label={task.completed_at ? `${task.title} — completed` : `Complete ${task.title}`} aria-expanded={completing} disabled={ended || !!task.completed_at} onClick={() => {
+            <TaskCheck done={!!task.completed_at} aria-label={task.completed_at ? `${task.title}, completed` : `Complete ${task.title}`} aria-expanded={completing} disabled={ended || !!task.completed_at} onClick={() => {
               setCompletingTaskId(completing ? '' : task.id);
               setEditingTaskId('');
             }} />
@@ -1386,7 +1374,7 @@ export function EmploymentDetail({
       {canEdit && <TaskComposer employee={employee} context={context} />}
       {canEdit && <AiPanel person={person} employee={employee} workspace={workspace} run={run} reload={reload} kind="onboarding_plan" bare cta="Draft plan with AI" />}
     </EmpSection>
-    <EmpSection title="Reviews" detail="A held review records the outcome. Onboarding alone doesn’t confirm probation.">
+    <EmpSection title="Reviews" detail="A held review records the outcome. Onboarding alone doesn't confirm probation.">
       {!reviews.length && <EmpEmpty action={!ended && <Button type="button" variant="outline" size="sm" onClick={() => setSchedulingReview(open => !open)}>
           Schedule review
         </Button>}>No reviews scheduled</EmpEmpty>}
@@ -1506,7 +1494,7 @@ export function EmploymentDetail({
           <ul className="m-0 flex list-none flex-col divide-y divide-border border-t border-border p-0">
             {workspace.exitItems.filter(item => item.offboarding_id === exit.id).map(item => <li className={ROW} key={item.id}>
               {/* Status mark only: completing goes through the form below. */}
-              <span className={cn('grid size-[22px] shrink-0 place-items-center rounded-full border', item.completed_at ? 'border-foreground bg-foreground text-background' : 'border-input text-transparent')} role="img" aria-label={item.completed_at ? `${item.title} — completed` : `${item.title} — open`}>
+              <span className={cn('grid size-[22px] shrink-0 place-items-center rounded-full border', item.completed_at ? 'border-foreground bg-foreground text-background' : 'border-input text-transparent')} role="img" aria-label={item.completed_at ? `${item.title}, completed` : `${item.title}, open`}>
                 <Check className="size-3" aria-hidden="true" />
               </span>
               <div className={ROW_MAIN}>
@@ -1809,7 +1797,7 @@ export function AssignForm({
               </span>}
             </button>;
           })}
-          {!matches.length && <p className={QUIET}>{projects.length ? `No open project matches “${query.trim()}”.` : 'No open project to staff on yet.'}</p>}
+          {!matches.length && <p className={QUIET}>{projects.length ? `No open project matches "${query.trim()}".` : 'No open project to staff on yet.'}</p>}
         </div>
       </BuilderStep>
       {profiles.length > 0 && <BuilderStep index={2} title="Pricing line" note="The TJM profile this person is billed on">
@@ -1845,7 +1833,7 @@ export function AssignForm({
           </label>
         </div>
         <p className={QUIET}>
-          {allocation === 100 ? 'Full time on this project — no capacity left for another.' : `${allocation}% of the week here, ${100 - allocation}% free for other projects.`}
+          {allocation === 100 ? 'Full time on this project. No capacity left for another.' : `${allocation}% of the week here, ${100 - allocation}% free for other projects.`}
         </p>
       </BuilderStep>
       <BuilderStep index={profiles.length > 0 ? 4 : 3} title="Period" note={windowHint ? `Project window: ${windowHint}` : 'This project has no delivery dates yet.'}>
@@ -1877,7 +1865,7 @@ export function AssignForm({
           <AlertDescription>These dates fall outside this employment period ({date(employee.start_date)} → {employee.planned_exit_date ? date(employee.planned_exit_date) : 'open-ended'}).</AlertDescription>
         </Alert>}
         {!outsideWindow && !outsideEmployment && <p className={QUIET}>
-          {openEnded ? 'Open-ended — capacity counts it until someone ends it.' : `${workDays} working days in this period.`}
+          {openEnded ? 'Open-ended. Capacity counts it until someone ends it.' : `${workDays} working days in this period.`}
         </p>}
       </BuilderStep>
       <BuilderStep index={profiles.length > 0 ? 5 : 4} title="Commitment">
@@ -1925,7 +1913,7 @@ export function AssignForm({
           })}
         </div>
         <span className={quiet}>
-          {clash ? 'Some days are already booked — the save will be refused above 100%.' : counts ? 'Shaded is already booked, bright is this draft.' : 'Proposed work is not counted against capacity.'}
+          {clash ? 'Some days are already booked. The save will be refused above 100%.' : counts ? 'Shaded is already booked, bright is this draft.' : 'Proposed work is not counted against capacity.'}
         </span>
       </div>}
       {error && <ErrorText errorRef={errorRef}>{error}</ErrorText>}
@@ -2032,7 +2020,7 @@ function Assignments({
             <StatLabel>Available this year</StatLabel>
             <StatValue>{availability.ready ? fmtDays(availability.availableDays) : '…'}</StatValue>
             <StatSource>
-              {availability.error ? `CRA unavailable — ${availability.error}` : availability.ready ? `${fmtDays(availability.openDays)} open days − ${fmtDays(availability.projectDays)} project − ${fmtDays(availability.paidLeaveDays)} CP − ${fmtDays(availability.rttDays)} RTT · usable for internal` : 'Reading the CRA…'}
+              {availability.error ? `CRA unavailable: ${availability.error}` : availability.ready ? `${fmtDays(availability.openDays)} open days − ${fmtDays(availability.projectDays)} project − ${fmtDays(availability.paidLeaveDays)} CP − ${fmtDays(availability.rttDays)} RTT · usable for internal` : 'Reading the CRA…'}
             </StatSource>
           </Stat>
         </div>
@@ -2058,7 +2046,7 @@ function Assignments({
         </CardContent>
       </Card>)}
       {open.map(assignment => <AssignmentCard key={assignment.id} assignment={assignment} workspace={workspace} run={run} busy={busy} openProject={openProject} />)}
-      {!open.length && <Empty>No active assignment. Use “Assign to project” above to commit this person to a project.</Empty>}
+      {!open.length && <Empty>No active assignment. Use "Assign to project" above to commit this person to a project.</Empty>}
     </section>
     <Section title="Past assignments" detail="Ended and cancelled periods, including repeats.">
       {!!history.length && <ToggleGroup aria-label="Filter history" className="self-start" value={[filter]} onValueChange={values => {
@@ -2405,7 +2393,7 @@ function AssignmentClose({
         assignment_id: assignment.id,
         expected_version: assignment.version,
         end_date: isEnd ? endDate : assignment.end_date ?? assignment.start_date,
-        rationale: note.trim() ? `${reason} — ${note.trim()}` : reason,
+        rationale: note.trim() ? `${reason}: ${note.trim()}` : reason,
         cancel: !isEnd
       }, isEnd ? 'Assignment ended with history preserved.' : 'Assignment cancelled with history preserved.');
       onClose();

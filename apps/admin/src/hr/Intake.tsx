@@ -114,9 +114,9 @@ export function Intake({
     const warnings: string[] = [];
     if (position) {
       try {
-        await run({ kind: 'create_application', person_id: personId, opportunity_id: position.id }, `Person added and linked to “${position.title}”.`);
+        await run({ kind: 'create_application', person_id: personId, opportunity_id: position.id }, `Person added and linked to "${position.title}".`);
       } catch (failure) {
-        warnings.push(`The person was saved, but the application to “${position.title}” failed: ${errorMessage(failure)}`);
+        warnings.push(`The person was saved, but the application to "${position.title}" failed: ${errorMessage(failure)}`);
       }
     }
     const path = storagePath.current;
@@ -168,6 +168,9 @@ export function Intake({
         headline: text(data, 'headline'),
         location: text(data, 'location'),
         skills: text(data, 'skills'),
+        linkedin_url: text(data, 'linkedin_url'),
+        // Positions are not editable here; they come from the parsed CV and are edited on the record.
+        experience: profile?.experience ?? [],
         notes: text(data, 'notes'),
         source: text(data, 'source'),
         owner_email: text(data, 'owner_email'),
@@ -177,12 +180,13 @@ export function Intake({
         <Field name="position_id" label="Position" options={openPositions.map(position => ({
           value: position.id,
           label: position.title
-        }))} hint={profile ? 'The CV is filed on Google Drive under <year>/<position>, or “Candidatures spontanées” when no position is set.' : 'Creates the application to this position.'} />
+        }))} hint={profile ? 'The CV is filed on Google Drive under <year>/<position>, or "Candidatures spontanées" when no position is set.' : 'Creates the application to this position.'} />
         <Field name="full_name" label="Full name" value={profile?.fullName} required />
         <Field name="headline" label="Professional headline" value={profile?.headline} />
         <Field name="email" label="Email" type="email" value={profile?.email} />
         <Field name="phone" label="Phone" type="tel" value={profile?.phone} />
         <Field name="location" label="Location" value={profile?.location} />
+        <Field name="linkedin_url" label="LinkedIn profile" type="url" value={profile?.linkedinUrl} />
         <Field name="owner_email" label="Record owner" type="email" value={actorEmail} />
         <Field name="source" label="Source" value={profile ? 'resume' : 'other'} options={['career_site', 'linkedin', 'referral', 'job_board', 'spontaneous', 'rediscovery', 'resume', 'other'].map(value => ({
           value,

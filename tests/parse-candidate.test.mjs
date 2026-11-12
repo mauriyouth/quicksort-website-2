@@ -41,6 +41,7 @@ const profile = {
   company: "Analytical Engines Ltd",
   location: "Paris, France",
   linkedinUrl: "https://www.linkedin.com/in/ada-lovelace",
+  experience: [],
   yearsExperience: 9,
   skills: ["Kubernetes", "Go", "Terraform"],
   summary: "Platform engineer with nine years of experience running Kubernetes estates.",
@@ -265,4 +266,52 @@ test("reports extraction timeouts", async () => {
   );
   assert.equal(r.code, 502);
   assert.match(r.body.error, /timed out/i);
+});
+
+test("drive: parses the person's newest CV filed on Google Drive", async (t) => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { encryptApiKey } = await import("../apps/admin/server/ai-settings.ts");
+  process.env.AI_SETTINGS_ENCRYPTION_KEY = "1".repeat(64);
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const encrypted = encryptApiKey(JSON.stringify({
+    client_email: "cv@example.iam.gserviceaccount.com",
+    private_key: privateKey.export({ type: "pkcs8", format: "pem" }),
+    root_folder_id: "contracts",
+    root_folder_name: "Contrats_Clients",
+  }));
+  const personId = "44444444-4444-4444-8444-444444444444";
+  const pdf = Buffer.from("%PDF-1.7 drive cv");
+  const asked = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const target = new URL(String(url));
+    if (target.host === "oauth2.googleapis.com") return { ok: true, status: 200, json: async () => ({ access_token: "t", expires_in: 3600 }) };
+    asked.push(target);
+    if (target.searchParams.get("alt") === "media") return { ok: true, status: 200, arrayBuffer: async () => pdf };
+    return { ok: true, status: 200, json: async () => ({ files: [{ id: "cv-7", name: "Ada Lovelace.pdf" }] }) };
+  });
+  const calls = [];
+  const parser = createParser({
+    createClient: async () => ({
+      rpc: async () => ({ data: "user-1", error: null }),
+      from: (table) => ({
+        select: () => ({ eq: () => ({
+          single: async () => ({ data: { role: "hr" }, error: null }),
+          maybeSingle: async () => ({ data: table === "google_drive_settings" ? { encrypted_credentials: encrypted } : null, error: null }),
+        }) }),
+      }),
+    }),
+    loadAiSettings: async () => ({ apiKey: "sk-test-key", model: "gpt-4.1-mini" }),
+    generateText: async (args) => {
+      calls.push(args);
+      return { output: profile };
+    },
+  });
+  const r = res();
+  await parser({ method: "POST", headers: { authorization: "Bearer token" }, body: { profile: { kind: "drive", personId } } }, r);
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.ok(asked.some((u) => u.searchParams.get("q")?.includes(personId)), "looks the CV up by person id");
+  assert.ok(asked.some((u) => u.pathname.endsWith("/files/cv-7") && u.searchParams.get("alt") === "media"), "downloads the newest CV");
+  const file = calls[0].messages[0].content.find((part) => part.type === "file");
+  assert.deepEqual(Buffer.from(file.data), pdf);
+  assert.match(calls[0].messages[0].content[0].text, /Ada Lovelace\.pdf/);
 });

@@ -1,9 +1,10 @@
 // Invoice lifecycle and sync: the server flow behind api/invoicing.ts.
 // Every function takes the request context and returns { status, body }.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { addDays, buildDraftLines, draftTotals, monthLabelFr, monthPeriod } from "./draft.ts";
+import { addDays, buildDraftLines, draftTotals, monthLabelFr, monthPeriod, resolvePricingLine } from "./draft.ts";
 import type { BuiltLine, CraEntry, ProductRef } from "./draft.ts";
 import { toInvoiceRows } from "./month.ts";
+import { storedPricingLines } from "../../src/sales/pricing-lines.ts";
 import type { ToInvoiceRow } from "./month.ts";
 import { ProviderError } from "./provider.ts";
 import type { DraftLine, InvoiceDraft, InvoicingProvider, ProviderInvoice } from "./provider.ts";
@@ -24,7 +25,6 @@ export class HttpError extends Error {
 }
 
 type Row = Record<string, any>;
-const SYNC_TTL_MS = 5 * 60 * 1000;
 const NO_EMAIL = "This client has no invoice email in Qonto.";
 const BLOCKER_MESSAGES: Record<string, string> = {
   no_days: "This consultant has no CRA days on this project for that month.",
@@ -329,8 +329,8 @@ async function storeImportedLines(ctx: LifecycleCtx, remote: ProviderInvoice[]) 
 export async function listInvoices(ctx: LifecycleCtx, refresh: boolean) {
   let lastSyncedAt = ctx.settings.lastSyncedAt;
   let syncError: string | null = null;
-  const stale = !lastSyncedAt || ctx.now().getTime() - Date.parse(lastSyncedAt) > SYNC_TTL_MS;
-  if (ctx.settings.hasSecret && (refresh || stale)) {
+  // Qonto sync is manual (Refresh button): it pages through every remote invoice, too slow for each page load.
+  if (ctx.settings.hasSecret && refresh) {
     try { lastSyncedAt = await syncInvoices(ctx); } catch (error) {
       console.error("[invoicing] sync failed", error);
       syncError = error instanceof ProviderError || error instanceof HttpError ? error.message : "Could not refresh invoices from Qonto.";
@@ -369,12 +369,29 @@ async function projectConsultants(ctx: LifecycleCtx, projectId: string): Promise
 }
 
 export async function projectSummary(ctx: LifecycleCtx, projectId: string) {
-  const project = await maybeOne(ctx.client.from("sales_projects").select("id,start_date").eq("id", projectId).maybeSingle(), "Could not read the project.");
+  const project = await maybeOne(ctx.client.from("sales_projects").select("id,start_date,tjm_profiles,currency").eq("id", projectId).maybeSingle(), "Could not read the project.");
   if (!project) throw new HttpError("Project not found.", 404);
-  const invoices = await many(
-    ctx.client.from("invoices").select("*").eq("project_id", projectId).order("issue_date", { ascending: false }),
-    "Could not read invoices.",
-  );
+  const [invoices, assignments] = await Promise.all([
+    many(ctx.client.from("invoices").select("*").eq("project_id", projectId).order("issue_date", { ascending: false }), "Could not read invoices."),
+    many(ctx.client.from("employee_project_assignments").select("employee_id,project_id,pricing_line,start_date,end_date,status").eq("project_id", projectId), "Could not read staffing."),
+  ]);
+  const invoiceLines = invoices.length
+    ? await many(ctx.client.from("invoice_lines").select("invoice_id,pricing_line,position").in("invoice_id", invoices.map((i) => i.id)).order("position"), "Could not read the invoice lines.")
+    : [];
+  // The profile (TJM pricing line) an invoice bills: its own lines first,
+  // else the consultant's staffing for that month (imported invoices).
+  const lineProfile = new Map<string, string>();
+  for (const l of invoiceLines) if (l.pricing_line && !lineProfile.has(l.invoice_id)) lineProfile.set(l.invoice_id, l.pricing_line);
+  const staffedProfile = (employeeId: string | null, month: string): string | null => {
+    if (!employeeId || !month) return null;
+    const first = `${month}-01`, last = `${shiftMonth(month, 1)}-01`;
+    const overlapping = assignments.filter((a) => a.employee_id === employeeId && a.start_date < last && (!a.end_date || a.end_date >= first));
+    for (const a of overlapping) {
+      const line = resolvePricingLine(a as any, project as any);
+      if (line) return line;
+    }
+    return null;
+  };
   let invoiced = 0, paid = 0, outstanding = 0;
   for (const i of invoices) {
     if (i.status !== "finalized" && i.status !== "paid") continue;
@@ -383,7 +400,7 @@ export async function projectSummary(ctx: LifecycleCtx, projectId: string) {
     else outstanding += cents(i.total_ttc);
   }
   // Each row carries its month so the project view can create the draft.
-  const rows: (ToInvoiceRow & { month: string })[] = [];
+  const rows: (ToInvoiceRow & { month: string; profile: string | null })[] = [];
   const { startMonth } = ctx.settings;
   if (startMonth) {
     const projectStart = ym(project.start_date);
@@ -392,13 +409,18 @@ export async function projectSummary(ctx: LifecycleCtx, projectId: string) {
     if (from <= to) {
       const src = await loadSources(ctx, { from, to, projectId });
       for (let m = from; m <= to; m = shiftMonth(m, 1)) {
-        rows.push(...rowsForMonth(ctx, src, m).filter((r) => r.projectId === projectId && r.status === "not_invoiced").map((r) => ({ ...r, month: m })));
+        rows.push(...rowsForMonth(ctx, src, m).filter((r) => r.projectId === projectId && r.status === "not_invoiced").map((r) => ({ ...r, month: m, profile: staffedProfile(r.employeeId, m) })));
       }
     }
   }
   return {
-    invoices: await decorate(ctx, invoices),
+    invoices: (await decorate(ctx, invoices)).map((i) => ({
+      ...i,
+      // Work is billed the month after it is done: no period → month before issue.
+      profile: lineProfile.get(i.id) ?? staffedProfile(i.employee_id, ym(i.period_month) || (ym(i.issue_date) ? shiftMonth(ym(i.issue_date), -1) : "")),
+    })),
     consultants: await projectConsultants(ctx, projectId),
+    profiles: storedPricingLines(project.tjm_profiles).map((l) => l.name),
     totals: { invoicedHt: money(invoiced), paidTtc: money(paid), outstandingTtc: money(outstanding) },
     rows,
   };

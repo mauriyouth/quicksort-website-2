@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { FOLDER_LABELS, datedSubfolder, documentFileName, folderPath, type FolderOwner } from "./folders.ts";
+import { COMPANY_NAME, COMPANY_OWNER_ID, FOLDER_LABELS, datedSubfolder, documentFileName, folderPath, type FolderOwner } from "./folders.ts";
 import { createDriveStorage, driveStorageFromEncrypted, loadDriveSettings } from "./storage/google-drive.ts";
 import { MAX_UPLOAD_BYTES, type DocumentStorage, type StorageFolder, type StoredFile } from "./storage/types.ts";
 import { browserOrigin } from "./storage/origin.ts";
@@ -36,6 +36,8 @@ import { archivedProjectPrefix } from "./archive.ts";
  *   { action: "download-own-document", documentId }
  *     Any signed-in role. own_document_download_source only answers for a
  *     document of the caller's own HR folder (payslips excepted) and logs it.
+ *   Owners are a person, client or project by id, or the company itself
+ *   ({ kind: "company", id: COMPANY_OWNER_ID }, admins only).
  *   { action: "move-payslip", documentId, toPersonId, requestId? }
  *     HR. Moves a wrongly filed payslip to another person's folder; move_payslip
  *     archives the old row and registers the new one atomically.
@@ -57,7 +59,7 @@ const INLINE_DOWNLOAD_BYTES = 4 * 1024 * 1024;
 
 const uuid = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const ownerSchema = z.object({ kind: z.enum(["person", "client", "project"]), id: uuid });
+const ownerSchema = z.object({ kind: z.enum(["person", "client", "project", "company"]), id: uuid });
 const typeCode = z.string().regex(/^[A-Z][A-Z0-9_]{1,39}$/);
 const title = z.string().trim().min(1).max(200);
 
@@ -115,12 +117,12 @@ class DocumentError extends Error {
   }
 }
 
-async function defaultStorage(client: SupabaseClient): Promise<DocumentStorage | null> {
+export async function defaultStorage(client: SupabaseClient): Promise<DocumentStorage | null> {
   const settings = await loadDriveSettings(client);
   return settings ? createDriveStorage(settings) : null;
 }
 
-async function loadType(client: SupabaseClient, code: string, owner: Owner, expiresOn: string | null | undefined) {
+export async function loadType(client: SupabaseClient, code: string, owner: Owner, expiresOn: string | null | undefined) {
   const { data, error } = await client.from("document_types").select("code,label,owner_kinds,folder,requires_expiry").eq("code", code).maybeSingle();
   if (error) throw error;
   const type = data as DocumentType | null;
@@ -136,6 +138,10 @@ async function folderOwner(client: SupabaseClient, owner: Owner): Promise<Folder
     const { data } = await client.from("hr_people").select("full_name").eq("id", owner.id).maybeSingle();
     if (!data) throw new DocumentError(404, "Person not found.");
     return { kind: "person", fullName: data.full_name, personId: owner.id };
+  }
+  if (owner.kind === "company") {
+    if (owner.id !== COMPANY_OWNER_ID) throw new DocumentError(404, "Company not found.");
+    return { kind: "company", companyName: COMPANY_NAME };
   }
   if (owner.kind === "client") {
     const { data } = await client.from("sales_clients").select("name").eq("id", owner.id).maybeSingle();
@@ -184,7 +190,7 @@ async function existingBaseFolder(client: SupabaseClient, storage: DocumentStora
 }
 
 /** `sub` nests below the type's folder (e.g. ["Navigo", "2025"]); each level is cached as "<leaf>/<sub…>". */
-async function resolveFolder(client: SupabaseClient, storage: DocumentStorage, owner: Owner, typeFolder: string, sub: string[] = []) {
+export async function resolveFolder(client: SupabaseClient, storage: DocumentStorage, owner: Owner, typeFolder: string, sub: string[] = []) {
   const leafCode = owner.kind === "client" ? "societe" : typeFolder in FOLDER_LABELS ? typeFolder : "divers";
   const target = await cachedFolder(client, storage, owner, [leafCode, ...sub].join("/"));
   if (target) return target;
@@ -226,6 +232,29 @@ const ownerColumns = (owner: Owner) => ({
   project_id: owner.kind === "project" ? owner.id : null,
 });
 
+/** The `document` payload shared by register_document and register_signed_document. */
+export function documentRecord(meta: Omit<Metadata, "fileId" | "supersedes" | "requestId">, provider: string, file: StoredFile, folderId: string) {
+  return {
+    owner_kind: meta.owner.kind,
+    ...ownerColumns(meta.owner),
+    type_code: meta.typeCode,
+    title: meta.title,
+    issued_on: meta.issuedOn ?? null,
+    valid_from: meta.validFrom ?? null,
+    expires_on: meta.expiresOn ?? null,
+    notes: meta.notes ?? "",
+    parent_document_id: meta.parentDocumentId ?? null,
+    extension_id: meta.extensionId ?? null,
+    storage_provider: provider,
+    provider_file_id: file.id,
+    provider_folder_id: folderId,
+    file_name: file.name,
+    mime_type: file.mimeType,
+    size_bytes: file.size,
+    sha256: file.sha256,
+  };
+}
+
 /**
  * Registers a stored file. On refusal the file is undone (`undo`: trash a
  * fresh upload, move a legacy file back) so storage never holds an untracked
@@ -233,25 +262,7 @@ const ownerColumns = (owner: Owner) => ({
  */
 async function registerFile(client: SupabaseClient, storage: DocumentStorage, meta: Metadata, file: StoredFile, folderId: string, undo: () => Promise<unknown>) {
   const registered = await client.rpc("register_document", {
-    document: {
-      owner_kind: meta.owner.kind,
-      ...ownerColumns(meta.owner),
-      type_code: meta.typeCode,
-      title: meta.title,
-      issued_on: meta.issuedOn ?? null,
-      valid_from: meta.validFrom ?? null,
-      expires_on: meta.expiresOn ?? null,
-      notes: meta.notes ?? "",
-      parent_document_id: meta.parentDocumentId ?? null,
-      extension_id: meta.extensionId ?? null,
-      storage_provider: storage.provider,
-      provider_file_id: file.id,
-      provider_folder_id: folderId,
-      file_name: file.name,
-      mime_type: file.mimeType,
-      size_bytes: file.size,
-      sha256: file.sha256,
-    },
+    document: documentRecord(meta, storage.provider, file, folderId),
     supersedes: meta.supersedes ?? null,
     request_id: meta.requestId ?? randomUUID(),
   });
@@ -406,8 +417,13 @@ export function createDocumentsHandler(deps: {
         const type = await loadType(client, action.typeCode, action.owner, action.expiresOn);
         const folder = await resolveFolder(client, storage, action.owner, type.folder, datedSubfolder(type.code, action));
         const names = await folderOwner(client, action.owner);
-        const ownerName = names.kind === "person" ? names.fullName : names.kind === "client" ? names.clientName : names.projectTitle;
-        const fileName = documentFileName(type.code, ownerName, action.fileName, action.title, action.validFrom);
+        const ownerName =
+          names.kind === "person" ? names.fullName
+          : names.kind === "client" ? names.clientName
+          : names.kind === "company" ? names.companyName
+          : names.projectTitle;
+        const datedOn = names.kind === "company" ? action.issuedOn || action.validFrom : null;
+        const fileName = documentFileName(type.code, ownerName, action.fileName, action.title, action.validFrom, datedOn);
         const upload = await storage.prepareUpload(folder, { name: fileName, mimeType: action.mimeType, size: action.size }, browserOrigin(req));
         return res.status(200).json({ upload, folder, fileName });
       }
@@ -417,7 +433,9 @@ export function createDocumentsHandler(deps: {
         if (!base) return res.status(200).json({ files: [] });
         const [files, filed] = await Promise.all([
           storage.listFiles(base.id),
-          client.from("documents").select("provider_file_id").eq("storage_provider", storage.provider).eq(`${action.owner.kind}_id`, action.owner.id),
+          action.owner.kind === "company"
+            ? client.from("documents").select("provider_file_id").eq("storage_provider", storage.provider).eq("owner_kind", "company")
+            : client.from("documents").select("provider_file_id").eq("storage_provider", storage.provider).eq(`${action.owner.kind}_id`, action.owner.id),
         ]);
         if (filed.error) throw filed.error;
         const known = new Set((filed.data || []).map(row => row.provider_file_id as string));

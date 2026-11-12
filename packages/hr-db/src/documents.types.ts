@@ -1,5 +1,5 @@
 // Document registry (supabase/migrations/20261122090000_documents.sql).
-export type DocumentOwnerKind = "person" | "client" | "project";
+export type DocumentOwnerKind = "person" | "client" | "project" | "company";
 export type DocumentStatus = "active" | "superseded" | "archived";
 export type DocumentStorageProvider = "gdrive" | "s3" | "supabase";
 export type DocumentAlertSeverity = "expired" | "expiring" | "missing";

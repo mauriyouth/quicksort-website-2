@@ -1,1 +1,0 @@
-export { FreelancerCtaSection } from "./FreelancerCtaSection";

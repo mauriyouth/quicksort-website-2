@@ -30,6 +30,8 @@ type Status = {
   peopleRootFolderName?: string | null;
   recruitmentRootFolderId?: string | null;
   recruitmentRootFolderName?: string | null;
+  companyRootFolderId?: string | null;
+  companyRootFolderName?: string | null;
 };
 
 /**
@@ -50,6 +52,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
   const [rootFolderId, setRootFolderId] = useState("");
   const [peopleRootFolderId, setPeopleRootFolderId] = useState("");
   const [recruitmentRootFolderId, setRecruitmentRootFolderId] = useState("");
+  const [companyRootFolderId, setCompanyRootFolderId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -76,6 +79,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
     setRootFolderId(next.rootFolderId || "");
     setPeopleRootFolderId(next.peopleRootFolderId || "");
     setRecruitmentRootFolderId(next.recruitmentRootFolderId || "");
+    setCompanyRootFolderId(next.companyRootFolderId || "");
   }
 
   useEffect(() => {
@@ -98,16 +102,19 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
               rootFolderId: rootFolderId.trim(),
               peopleRootFolderId: peopleRootFolderId.trim(),
               recruitmentRootFolderId: recruitmentRootFolderId.trim(),
+              companyRootFolderId: companyRootFolderId.trim(),
             },
-      )) as { rootFolderName?: string; peopleRootFolderName?: string | null; recruitmentRootFolderName?: string | null };
+      )) as { rootFolderName?: string; peopleRootFolderName?: string | null; recruitmentRootFolderName?: string | null; companyRootFolderName?: string | null };
       setServiceAccountJson("");
       applyStatus(await request());
       setMessage(
         remove
           ? "Google Drive connection removed."
-          : `Google Drive connected — contracts go to “${result.rootFolderName || "Contrats_Clients"}”${
-              result.peopleRootFolderName ? `, HR documents to “${result.peopleRootFolderName}”` : ""
-            }${result.recruitmentRootFolderName ? `, candidate CVs to “${result.recruitmentRootFolderName}”` : ""}.`,
+          : `Google Drive connected. Contracts go to "${result.rootFolderName || "Contrats_Clients"}"${
+              result.peopleRootFolderName ? `, HR documents to "${result.peopleRootFolderName}"` : ""
+            }${result.recruitmentRootFolderName ? `, candidate CVs to "${result.recruitmentRootFolderName}"` : ""}${
+              result.companyRootFolderName ? `, company documents to "${result.companyRootFolderName}"` : ""
+            }.`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the Google Drive connection.");
@@ -124,13 +131,13 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
     ? "Checking connection…"
     : configured
       ? `Service account ${status.serviceAccountEmail || "(saved)"} connected${
-          status.rootFolderName ? `, root folder “${status.rootFolderName}”` : ""
-        }${status.peopleRootFolderName ? `, HR folder “${status.peopleRootFolderName}”` : ", no HR folder yet"}${
-          status.recruitmentRootFolderName ? `, CV folder “${status.recruitmentRootFolderName}”` : ""
-        }${status.updatedAt ? ` — saved ${new Date(status.updatedAt).toLocaleString()}` : ""}.`
+          status.rootFolderName ? `, root folder "${status.rootFolderName}"` : ""
+        }${status.peopleRootFolderName ? `, HR folder "${status.peopleRootFolderName}"` : ", no HR folder yet"}${
+          status.recruitmentRootFolderName ? `, CV folder "${status.recruitmentRootFolderName}"` : ""
+        }${status.companyRootFolderName ? `, company folder "${status.companyRootFolderName}"` : ""}${status.updatedAt ? `, saved ${new Date(status.updatedAt).toLocaleString()}` : ""}.`
       : "No Google Drive service account connected yet.";
 
-  const canSave = !(busy || !(serviceAccountJson.trim() || (configured && (rootFolderId.trim() || peopleRootFolderId.trim() || recruitmentRootFolderId.trim()))));
+  const canSave = !(busy || !(serviceAccountJson.trim() || (configured && (rootFolderId.trim() || peopleRootFolderId.trim() || recruitmentRootFolderId.trim() || companyRootFolderId.trim()))));
   return (
     <div className="flex flex-col gap-4">
       <PageAlerts error={error} message={message} />
@@ -138,7 +145,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove the Google Drive connection?</AlertDialogTitle>
-            <AlertDialogDescription>Contracts, HR documents and CVs can no longer be uploaded until a service account is connected again.</AlertDialogDescription>
+            <AlertDialogDescription>Contracts, HR documents, CVs and company documents can no longer be uploaded until a service account is connected again.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -183,7 +190,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
         {!isOwner ? (
           <Hint role="status">
             {configured
-              ? "Google Drive is connected — contracts are stored there. Only portal owners can manage the connection."
+              ? "Google Drive is connected, and contracts are stored there. Only portal owners can manage the connection."
               : "Google Drive is not connected yet. Ask a portal owner to connect the service account."}
           </Hint>
         ) : (
@@ -209,18 +216,18 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
               </Hint>
             </SettingsRow>
 
-            <SettingsRow label="Root folder ID or URL" hint={status?.rootFolderName ? `Current: “${status.rootFolderName}”` : "Optional"}>
+            <SettingsRow label="Root folder ID or URL" hint={status?.rootFolderName ? `Current: "${status.rootFolderName}"` : "Optional"}>
               <Input
                 value={rootFolderId}
                 onChange={e => setRootFolderId(e.target.value)}
-                placeholder="Leave empty to use the single “Contrats_Clients” folder"
+                placeholder="Leave empty to use the single &quot;Contrats_Clients&quot; folder"
                 aria-label="Root folder ID"
               />
             </SettingsRow>
 
             <SettingsRow
               label="HR documents folder ID or URL"
-              hint={status?.peopleRootFolderName ? `Current: “${status.peopleRootFolderName}”` : "Needed for employee documents"}
+              hint={status?.peopleRootFolderName ? `Current: "${status.peopleRootFolderName}"` : "Needed for employee documents"}
             >
               <Input
                 value={peopleRootFolderId}
@@ -230,13 +237,13 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
               />
               <Hint>
                 Identity cards, cartes Vitale and employment contracts are filed here, one folder per person. Share it with the
-                service account and <strong>HR only</strong> — never with the whole domain. The ID is the last part of the folder URL.
+                service account and <strong>HR only</strong>, never with the whole domain. The ID is the last part of the folder URL.
               </Hint>
             </SettingsRow>
 
             <SettingsRow
               label="Candidate CVs folder ID or URL"
-              hint={status?.recruitmentRootFolderName ? `Current: “${status.recruitmentRootFolderName}”` : "Needed to file CVs from the hiring pipeline"}
+              hint={status?.recruitmentRootFolderName ? `Current: "${status.recruitmentRootFolderName}"` : "Needed to file CVs from the hiring pipeline"}
             >
               <Input
                 value={recruitmentRootFolderId}
@@ -248,6 +255,23 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
                 CVs added in <strong>HR → Add person</strong> are filed as <strong>year / position / Candidate.pdf</strong> (or{" "}
                 <strong>Candidatures spontanées</strong> without a position), and copied when a person is linked to a position. The
                 folder must sit in a Shared Drive and be shared with the service account.
+              </Hint>
+            </SettingsRow>
+
+            <SettingsRow
+              label="Company documents folder ID or URL"
+              hint={status?.companyRootFolderName ? `Current: "${status.companyRootFolderName}"` : "Needed for Operations → Admin"}
+            >
+              <Input
+                value={companyRootFolderId}
+                onChange={e => setCompanyRootFolderId(e.target.value)}
+                placeholder="ID or URL of the company admin folder"
+                aria-label="Company documents folder ID"
+              />
+              <Hint>
+                Quicksort's own papers, filed from <strong>Operations → Admin</strong>: attestation de régularité fiscale, attestation
+                de vigilance URSSAF, extrait Kbis, assurances, and bilans (annual and intermediate, by year). Use a Shared Drive folder
+                shared with the service account and the admins.
               </Hint>
             </SettingsRow>
           </>

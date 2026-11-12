@@ -12,7 +12,6 @@ const personId = '22222222-2222-4222-8222-222222222222';
 const firstApplication = '33333333-3333-4333-8333-333333333333';
 const secondApplication = '44444444-4444-4444-8444-444444444444';
 const employmentId = '55555555-5555-4555-8555-555555555555';
-const contractId = '66666666-6666-4666-8666-666666666666';
 const ownTaskId = '77777777-7777-4777-8777-777777777777';
 const hrTaskId = '88888888-8888-4888-8888-888888888888';
 const firstOffer = '99999999-9999-4999-8999-999999999999';
@@ -27,8 +26,6 @@ type PortalCommand = z.infer<typeof commandSchema>;
 type PortalFixture = {
   profiles: Table<'profiles'>[];
   candidate_documents: Table<'candidate_documents'>[];
-  contracts: Table<'contracts'>[];
-  contract_signatures: Table<'contract_signatures'>[];
   tool_requests: Table<'tool_requests'>[];
   my_applications: View<'my_applications'>[];
   my_application_events: View<'my_application_events'>[];
@@ -42,8 +39,7 @@ type PortalFixture = {
 function portalFixture(): PortalFixture {
   return {
     profiles: [{ id: userId, email, full_name: 'Alex Morgan', created_at: now }],
-    candidate_documents: [], contract_signatures: [], tool_requests: [],
-    contracts: [{ id: contractId, candidate_id: userId, person_id: personId, application_id: firstApplication, employee_id: null, offer_id: firstOffer, title: 'Employment agreement', storage_path: `${userId}/contract.pdf`, document_sha256: 'a'.repeat(64), created_at: now }],
+    candidate_documents: [], tool_requests: [],
     my_applications: [
       { id: firstApplication, person_id: personId, opportunity_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', full_name: 'Alex Morgan', title: 'Platform engineer', stage: 'screening', status: 'active', created_at: now, updated_at: now },
       { id: secondApplication, person_id: personId, opportunity_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', full_name: 'Alex Morgan', title: 'Data engineer', stage: 'technical_interview', status: 'active', created_at: now, updated_at: now },
@@ -77,7 +73,7 @@ function addEmployment(state: PortalFixture) {
     { id: hrTaskId, employee_id: employmentId, phase: 'preboarding', title: 'Provision equipment', assignee: 'hr@example.test', due_date: '2026-10-05', required: true, dependency_id: null, evidence: '', completed_at: null, version: 1 },
   );
 }
-const tables = z.enum(['profiles', 'candidate_documents', 'contracts', 'contract_signatures', 'tool_requests', 'my_applications', 'my_application_events', 'my_employment', 'my_onboarding_items', 'my_offers', 'my_payslips', 'my_documents', 'my_document_types']);
+const tables = z.enum(['profiles', 'candidate_documents', 'tool_requests', 'my_applications', 'my_application_events', 'my_employment', 'my_onboarding_items', 'my_offers', 'my_payslips', 'my_documents', 'my_document_types']);
 async function portalApi(page: Page, state: PortalFixture, failFirstCommand = false) {
   const commands: PortalCommand[] = [];
   let shouldFail = failFirstCommand;
@@ -142,20 +138,31 @@ test('portal selects each application and its own timeline without collapsing re
   await expect(page.getByRole('heading', { name: 'Platform employment offer', exact: true })).toHaveCount(0);
 });
 
-test('pre-hire portal exposes contracts for review and download before onboarding begins', async ({ page }) => {
+test('pre-hire portal has no in-app contracts page', async ({ page }) => {
   await portalApi(page, portalFixture());
   await page.goto(new URL('/application', harness.url).href);
-  await expect(page.getByRole('link', { name: 'My contracts', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My contracts', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'My onboarding', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Tool access', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'My CRA', exact: true })).toHaveCount(0);
-  await page.getByRole('link', { name: 'My contracts', exact: true }).click();
-  await page.getByRole('button', { name: 'Review & sign', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Review: Employment agreement', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Your full legal name')).toBeVisible();
-  const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download PDF', exact: true }).first().click();
-  expect((await download).suggestedFilename()).toBe('Employment agreement.pdf');
+  await page.goto(new URL('/contracts', harness.url).href);
+  await expect(page.getByText('Page not found').first()).toBeVisible();
+});
+
+test('employees no longer see in-app contract signing or My application', async ({ page }) => {
+  const state = portalFixture(); addEmployment(state);
+  await portalApi(page, state);
+  await page.goto(new URL('/onboarding', harness.url).href);
+  await expect(page.getByRole('link', { name: 'My onboarding', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'My contracts', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'My application', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Waiting for your signature')).toHaveCount(0);
+  await expect(page.getByText('To sign', { exact: true })).toHaveCount(0);
+  await page.goto(new URL('/contracts', harness.url).href);
+  await expect(page.getByText('Page not found').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Review & sign', exact: true })).toHaveCount(0);
+  await page.goto(new URL('/application', harness.url).href);
+  await expect(page.getByText('Page not found').first()).toBeVisible();
 });
 
 test('employees can open My CRA through portal navigation and a direct link', async ({ page }) => {

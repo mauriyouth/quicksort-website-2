@@ -182,7 +182,7 @@ export function PipelineBoard() {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "The stage could not be updated.");
-      setMessage(`“${item.title}” moved to ${board?.stages.find((s) => s.key === stage)?.label || stage}.`);
+      setMessage(`"${item.title}" moved to ${board?.stages.find((s) => s.key === stage)?.label || stage}.`);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "The stage could not be updated.");
@@ -210,7 +210,7 @@ export function PipelineBoard() {
           >
             <DialogHeader>
               <DialogTitle>Mark as lost</DialogTitle>
-              <DialogDescription>Why was “{losing?.title}” lost? A reason is required and goes on the activity timeline.</DialogDescription>
+              <DialogDescription>Why was "{losing?.title}" lost? A reason is required and goes on the activity timeline.</DialogDescription>
             </DialogHeader>
             <Field>
               <FieldLabel htmlFor="lost-reason">Reason</FieldLabel>
@@ -276,7 +276,7 @@ export function PipelineBoard() {
       )}
       {board?.stages && !board.stages.some((s) => s.count) && !loading && (
         <EmptyState title="No opportunities on the board">
-          Won and lost aside, every deal starts as a lead. Add opportunities to see the funnel fill up.
+          Add opportunities to see the funnel fill up.
         </EmptyState>
       )}
 
@@ -312,7 +312,7 @@ export function PipelineBoard() {
                     {!!item.sponsors.length && (
                       <div className="flex flex-wrap gap-1">
                         {item.sponsors.map((s) => (
-                          <Badge key={s.personId} variant={INFLUENCE_BADGE[s.influence]} title={`${s.name} — ${s.influence}`} className="normal-case">
+                          <Badge key={s.personId} variant={INFLUENCE_BADGE[s.influence]} title={`${s.name} · ${s.influence}`} className="normal-case">
                             {s.isPrimary ? "★ " : ""}
                             {s.name}
                           </Badge>
@@ -322,7 +322,7 @@ export function PipelineBoard() {
                     {item.lostReason && <p className="m-0 text-xs text-muted-foreground">Lost: {item.lostReason}</p>}
                     <NativeSelect
                       size="sm"
-                      aria-label={`Move “${item.title}” to stage`}
+                      aria-label={`Move "${item.title}" to stage`}
                       value={item.stage}
                       disabled={busyId === item.id}
                       onChange={(e) => move(item, e.target.value)}

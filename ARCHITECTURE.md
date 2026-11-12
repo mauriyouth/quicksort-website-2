@@ -1,25 +1,31 @@
-# Architecture
+# Quicksort OS — Architecture
 
-Quicksort is a single pnpm workspace containing four independently deployed
-web applications, a set of shared packages, and one versioned Supabase schema.
-Each app is built with Vite and React and deployed to Vercel. Sign-in uses
-Clerk. Data and authorization live in Supabase (Postgres, RLS and Storage).
+Quicksort OS (Quicksort Operating System, https://os.quicksort.fr) is the
+company's internal back-office. It is a single pnpm workspace containing the
+admin app, the stand-alone candidate portal, a set of shared packages, and one
+versioned Supabase schema. Both apps are built with Vite and React and
+deployed to Vercel. Sign-in uses Clerk. Data and authorization live in
+Supabase (Postgres, RLS and Storage).
+
+The public marketing site (www.quicksort.fr) lives in its own repository. It
+reads the jobs, blog posts and events that Quicksort OS publishes to Supabase.
 
 ```text
-                         ┌───────────────────────── Clerk (blessed-midge-8591) ─────────────────────────┐
-                         │                 session JWT  →  Supabase "accessToken"                        │
-                         └──────────────────────────────────────────────────────────────────────────────┘
-                                   │                     │                       │
-  ┌──────────────┐      ┌──────────▼─────────┐  ┌────────▼────────┐   ┌──────────▼──────────┐
-  │  apps/web    │      │    apps/admin       │  │ apps/candidate  │   │ apps/intelligence   │
-  │ marketing +  │      │ staff back-office + │  │ candidate /     │   │ business-dev        │
-  │ careers, SSG │      │ candidate portal    │  │ employee portal │   │ workspace           │
-  └──────┬───────┘      │  + api/ (Vercel fn) │  └────────┬────────┘   │  + api/ (proxy)     │
-         │ anon reads   └──┬───────────┬──────┘           │            └──┬──────────┬───────┘
-         │                 │ RLS       │ server-side      │ RLS           │ RLS      │ HTTP proxy
-         ▼                 ▼           ▼                  ▼               ▼          ▼
-  ┌──────────────────────────────┐   OpenAI · Qonto · Google Drive    admin.quicksort.fr/api/business-*
-  │ Supabase: Postgres + RLS +   │   BoondManager · Treg
+            ┌──────────── Clerk (blessed-midge-8591) ────────────┐
+            │      session JWT  →  Supabase "accessToken"         │
+            └─────────────────────────────────────────────────────┘
+                        │                          │
+             ┌──────────▼──────────┐      ┌────────▼────────┐
+             │     apps/admin      │      │ apps/candidate  │
+             │ Quicksort OS:       │      │ candidate /     │
+             │ back-office +       │      │ employee portal │
+             │ candidate portal    │      └────────┬────────┘
+             │  + api/ (Vercel fn) │               │ RLS
+             └──┬───────────┬──────┘               │
+                │ RLS       │ server-side          │
+                ▼           ▼                      ▼
+  ┌──────────────────────────────┐   OpenAI · Qonto · Google Drive
+  │ Supabase: Postgres + RLS +   │
   │ Storage (supabase/migrations)│
   └──────────────────────────────┘
 ```
@@ -28,15 +34,11 @@ Clerk. Data and authorization live in Supabase (Postgres, RLS and Storage).
 
 ```text
 apps/
-  web/            Public marketing site, blog, careers (prerendered + SPA job/blog shells)
-  admin/          Staff back-office (Sales, HR, Ops, content, settings) and the
+  admin/          Quicksort OS: staff back-office (Sales, HR, Ops, content, settings) and the
                   candidate self-service portal, plus Vercel serverless API (api/, server/)
   candidate/      Stand-alone candidate/employee portal
-  intelligence/   Business-development workspace (accounts, leads, partners, case studies)
 packages/
   design-system/  Brand tokens, .qs-* component CSS, React primitives, theme toggle
-  ui/             Marketing components + brand CSS (web)
-  db/             Supabase client + types for the marketing site (anonymous)
   hr-db/          Supabase client, generated types, Clerk→Supabase auth hook (admin)
   hr-ui/          Portal shell, AuthGate, nav routing, shared portal components (admin)
   candidate-db/   Supabase client, types, auth hook (candidate app; capability tables in admin)
@@ -54,23 +56,7 @@ Domain specs that sit next to code: `apps/prd-hr.md` (HR pipeline PRD),
 
 ## Applications
 
-### `apps/web` — marketing site (`@quicksort/web`, port 5173)
-
-- React + React Router, Tailwind, Radix, Framer Motion and GSAP. Screens are in
-  `src/screens/*`, shared pieces in `src/components/*`, and i18n (EN/FR) in
-  `src/lib/i18n.tsx` and `translations.json`.
-- **Build pipeline:** a client build, an SSR build of `src/entry-server.tsx`,
-  then `scripts/prerender.mjs`, which writes static HTML for every marketing
-  route. SEO, i18n and theme regressions are covered by `scripts/*.test.mjs`
-  (`pnpm test:seo`).
-- **Dynamic content:** careers, blog posts and events are read from Supabase
-  at runtime using an anonymous, non-persisted client
-  (`@quicksort/db`.`publicDb`). `vercel.json` rewrites `/career/:slug` and
-  `/blog/:slug` (plus the `/fr/` variants) to `app-shell.html`, so new jobs
-  and posts appear without a rebuild. They are not server-rendered.
-- Docs: `apps/web/README.md`, `apps/web/docs/technical-seo-implementation.md`.
-
-### `apps/admin` — back-office and portal (`@quicksort/admin`, port 5174)
+### `apps/admin` — Quicksort OS back-office and portal (`@quicksort/admin`, port 5174)
 
 The main application. One deployment serves several shells. `src/App.tsx`
 picks the shell from the role the database returns after sign-in:
@@ -79,7 +65,7 @@ picks the shell from the role the database returns after sign-in:
 | --- | --- | --- |
 | `admin`, `hr` | `Admin` | Full back-office. Portal owners (`portal_owners`) also get `/admin-access` |
 | `sales` | `StaffingWorkspace` | HR → People only (staffing view) plus account settings |
-| anything else | `HrPortal` (lazy) | Candidate/employee self-service: application, documents, contracts, CRA, tool access, team photos |
+| anything else | `HrPortal` (lazy) | Candidate/employee self-service: application, documents, CRA, tool access, team photos. Contracts are sent from the admin side and signed in Youtrust |
 
 **Back-office sections** (nav in `App.tsx`; tab strips in `SectionHeader.tsx`):
 
@@ -110,24 +96,15 @@ locally. `api/` files stay thin, and the logic lives in `server/`.
 | `documents`, `documents-extract` | Document registry: upload, register, file, download; AI metadata extraction | Google Drive, OpenAI |
 | `google-drive` | Service-account connection for contract folders | Google Drive API |
 | `invoicing` | Draft → validate → send → cancel → sync client invoices | Qonto (behind `InvoicingProvider`) |
-| `sales-pipeline`, `boondmanager` | Pipeline board reads/moves; BoondManager import | BoondManager |
-| `business-competitor-intelligence`, `business-event-intelligence` | Research for the intelligence app | OpenAI, Treg |
+| `sales-pipeline` | Pipeline board reads/moves | — |
 
 ### `apps/candidate` — candidate portal (`@quicksort/candidate`, port 5175)
 
 A smaller stand-alone portal with onboarding, profile (capability profile),
-documents, contracts, tool access and account pages. It uses
+documents, tool access and account pages. It uses
 `@quicksort/candidate-db`/`candidate-ui`. Its CSP targets the
 `kupbvrnjppcwqxmzxasi` Supabase project. The admin app's `HrPortal` covers the
 same ground for users who sign in to admin without a staff role.
-
-### `apps/intelligence` — business workspace (`@quicksort/intelligence`, port 5176)
-
-Accounts, leads, partners, case studies, a relationship canvas, an audit
-history and public opportunities, all in Supabase `business_*` tables. Its
-`api/` functions are **proxies**: they forward the caller's bearer token to
-`ADMIN_INTERNAL_ORIGIN` (default `https://admin.quicksort.fr`)
-`/api/business-*`, so AI keys and Treg credentials live in one place.
 
 ## Shared packages
 
@@ -137,7 +114,7 @@ consuming app's Vite build compiles them, and no package has a build step.
 - **`design-system`**: the brand foundation. `tokens.css` holds primitive and
   semantic light/dark tokens on `data-theme`. `components.css` holds the
   `.qs-*` primitives. React exports include `Button`, `Card`, `Pill`, `Stat`
-  and `ThemeToggle`. Used by `ui` and `hr-ui`. See its README.
+  and `ThemeToggle`. Used by `hr-ui`. See its README.
 - **`*-db` packages** share one shape. Each has a lazily configured
   `supabase` client (`null` when env vars are missing, which the UI shows as
   "coming online"), `db()`, `errorMessage`, `isMissingRelationError`, and
@@ -174,7 +151,7 @@ consuming app's Vite build compiles them, and no package has a build step.
    service-account JSON, Kimi key in `ai_settings` id `bank-classifier`) are
    stored encrypted in settings tables.
    `AI_SETTINGS_ENCRYPTION_KEY` (server env only) encrypts and decrypts them.
-   `OPENAI_API_KEY` and `TREG_TOKEN` env vars act as fallbacks. Never prefix
+   The `OPENAI_API_KEY` env var acts as a fallback. Never prefix
    a secret with `VITE_`.
 7. **Bank sync env vars** (admin app, server only): `CRON_SECRET` is the
    bearer Vercel cron sends to `/api/bank-transactions-cron`.
@@ -211,14 +188,15 @@ consuming app's Vite build compiles them, and no package has a build step.
   - **Documents:** `document_types`, `documents`, `document_folders`.
   - **Ops:** boards, columns, cards.
   - **Business:** `business_*` tables plus audit logs.
-  - **Content:** `jobs`, blog, events.
+  - **Content:** `jobs`, blog, events (read by the public website).
   - **Access:** `user_roles`, `portal_owners`, `profiles`.
-- **Storage:** private buckets `candidate-documents` and `contracts` (10 MB,
-  self-folder policies keyed by user id or Clerk `sub`). The newer document
-  registry stores files in **Google Drive**. Supabase holds only the metadata
+- **Storage:** private bucket `candidate-documents` (10 MB, self-folder
+  policies keyed by user id or Clerk `sub`). The newer document
+  registry stores files in **Google Drive**, including contracts signed in
+  Youtrust, which are filed in Documents. Supabase holds only the metadata
   and the folder cache.
-- **Projects:** admin targets `ctgtowqjswbxwiapcvfj`. The candidate and
-  intelligence CSPs target `kupbvrnjppcwqxmzxasi`. The web CSP allows both.
+- **Projects:** admin targets `ctgtowqjswbxwiapcvfj`. The candidate CSP
+  targets `kupbvrnjppcwqxmzxasi`.
   Check an app's `VITE_SUPABASE_URL` before running migrations against it.
 
 ## Key cross-cutting flows
@@ -243,7 +221,7 @@ consuming app's Vite build compiles them, and no package has a build step.
 
 ## Deployment
 
-One Vercel project per app, each with its Root Directory set to `apps/<app>`,
+One Vercel project per app (admin is served at `https://os.quicksort.fr`), each with its Root Directory set to `apps/<app>`,
 build command `pnpm build`, output `dist`, and source outside the root
 enabled so workspace packages bundle. Each `vercel.json` sets SPA rewrites
 (everything except `/api/*` goes to `index.html`), a strict CSP, `noindex`
@@ -255,13 +233,10 @@ inlines `VITE_*`. Details: `docs/setup.md`.
 ```sh
 pnpm install
 pnpm dev:admin        # 5174   (pnpm dev is an alias)
-pnpm dev:web          # 5173
 pnpm dev:candidate    # 5175
-pnpm dev:business     # 5176   (intelligence)
 pnpm build            # all apps; admin/candidate builds also typecheck and check photo assets
 pnpm typecheck
 pnpm test             # node --test tests/*.test.mjs (pure domain/handler logic)
-pnpm test:seo         # web prerender, SEO and i18n checks
 pnpm test:browser     # Playwright, mocked network (tests/*.spec.ts)
 pnpm test:hr-db       # scripts/verify-hr-database.mjs (replays migrations into a Docker Postgres via psql)
 ```

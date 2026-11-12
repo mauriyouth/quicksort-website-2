@@ -31,6 +31,7 @@ export const HR_TABS: SectionTab[] = [
 export const OPS_TABS: SectionTab[] = [
   { id: "operations", href: "/operations", label: "Board" },
   { id: "ops-business-plan", href: "/operations/business-plan", label: "Business plan" },
+  { id: "ops-admin", href: "/operations/admin", label: "Admin" },
 ];
 
 export function SectionHeader({

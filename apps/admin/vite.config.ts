@@ -47,7 +47,6 @@ function apiRoutes(): Plugin {
     '/api/ai-models': '/api/ai-models.ts',
     '/api/analysis-history': '/api/analysis-history.ts',
     '/api/sales-pipeline': '/api/sales-pipeline.ts',
-    '/api/boondmanager': '/api/boondmanager.ts',
     '/api/invoicing': '/api/invoicing.ts',
     '/api/bank-transactions': '/api/bank-transactions.ts',
     '/api/bank-transactions-cron': '/api/bank-transactions-cron.ts',
@@ -55,6 +54,8 @@ function apiRoutes(): Plugin {
     '/api/recruitment-cv': '/api/recruitment-cv.ts',
     '/api/documents': '/api/documents.ts',
     '/api/documents-extract': '/api/documents-extract.ts',
+    '/api/signatures': '/api/signatures.ts',
+    '/api/youtrust-webhook': '/api/youtrust-webhook.ts',
     '/api/accounts': '/api/accounts.ts',
     '/api/impersonate': '/api/impersonate.ts',
   };
@@ -69,10 +70,18 @@ function apiRoutes(): Plugin {
           const module = await server.ssrLoadModule(route);
           const chunks: Buffer[] = [];
           for await (const chunk of req) chunks.push(Buffer.from(chunk));
-          const raw = Buffer.concat(chunks).toString('utf8');
+          const bytes = Buffer.concat(chunks);
+          const raw = bytes.toString('utf8');
           const query = Object.fromEntries(new URL(req.url || '/', 'http://localhost').searchParams);
           await module.default(
-            { method: req.method, headers: req.headers, query, body: raw ? JSON.parse(raw) : undefined },
+            {
+              method: req.method, headers: req.headers, query,
+              // Lazy like Vercel's req.body, so a handler that only reads the raw stream
+              // (the Youtrust webhook) never trips on a body that is not JSON.
+              get body() { return raw ? JSON.parse(raw) : undefined; },
+              // The stream is already consumed above; replay its bytes for raw-body readers.
+              async *[Symbol.asyncIterator]() { if (bytes.length) yield bytes; },
+            },
             {
               setHeader: (name, value) => void res.setHeader(name, value),
               status(code) { res.statusCode = code; return this as never; },

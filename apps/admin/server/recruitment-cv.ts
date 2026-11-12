@@ -30,6 +30,10 @@ import {
  *   { action: "copy", personId, personName, position }
  *     Copies the person's latest filed CV into the position folder. No CV on
  *     Drive yet → { copied: false, reason: "no-cv" }.
+ *   { action: "find", personId }
+ *     The person's newest filed CV ({ file } or { file: null }), to preview it
+ *     on the record. The page embeds Drive's own viewer, so the HR user needs
+ *     access to the CV folder in Drive.
  * position = { title, openedAt } — names come from the caller's workspace;
  * opportunities are admin-only under RLS, so HR cannot be checked here.
  */
@@ -54,6 +58,10 @@ const actionSchema = z.discriminatedUnion("action", [
     personId: z.string().uuid(),
     personName: name,
     position,
+  }),
+  z.object({
+    action: z.literal("find"),
+    personId: z.string().uuid(),
   }),
 ]);
 
@@ -81,6 +89,22 @@ async function folderNames(sa: DriveSettings, folderId: string) {
     query: { q: `'${folderId}' in parents and trashed=false`, fields: "files(name)", pageSize: "1000", supportsAllDrives: "true", includeItemsFromAllDrives: "true" },
   });
   return new Set((body.files || []).map(file => file.name));
+}
+
+/** The person's filed CVs on Drive, newest first. */
+export async function personCvs(sa: DriveSettings, personId: string) {
+  const found = await driveApi<{ files?: (DriveFile & { createdTime?: string })[] }>(sa, "/files", {
+    query: {
+      q: `appProperties has { key='${PERSON_KEY}' and value='${personId}' } and trashed=false`,
+      fields: `files(${FILE_FIELDS},createdTime)`,
+      orderBy: "createdTime desc",
+      pageSize: "20",
+      corpora: "allDrives",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+    },
+  });
+  return found.files || [];
 }
 
 async function targetFolder(sa: DriveSettings, rootId: string, pos: { title: string; openedAt: string } | null | undefined) {
@@ -130,19 +154,9 @@ export function createRecruitmentCvHandler(deps = { createClient }) {
         return res.status(200).json({ filed: true, file, folder });
       }
 
-      // copy — the person's newest CV anywhere in the Shared Drive(s).
-      const found = await driveApi<{ files?: DriveFile[] }>(sa, "/files", {
-        query: {
-          q: `appProperties has { key='${PERSON_KEY}' and value='${action.personId}' } and trashed=false`,
-          fields: `files(${FILE_FIELDS})`,
-          orderBy: "createdTime desc",
-          pageSize: "20",
-          corpora: "allDrives",
-          supportsAllDrives: "true",
-          includeItemsFromAllDrives: "true",
-        },
-      });
-      const files = found.files || [];
+      // copy / find — the person's newest CV anywhere in the Shared Drive(s).
+      const files = await personCvs(sa, action.personId);
+      if (action.action === "find") return res.status(200).json({ file: files[0] ?? null });
       if (!files.length) return res.status(200).json({ copied: false, reason: "no-cv" });
       const folder = await targetFolder(sa, rootId, action.position);
       const existing = files.find(file => file.parents?.includes(folder.id));

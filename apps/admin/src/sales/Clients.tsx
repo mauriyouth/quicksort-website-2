@@ -58,7 +58,7 @@ const DETAIL_RE = /^\/sales\/clients\/([\w-]+)$/;
 
 const HEALTH_SCORE: Record<string, number> = { good: 100, warning: 55, risk: 15 };
 const SORTS = [
-  { value: "name", label: "Name A–Z" },
+  { value: "name", label: "Name A-Z" },
   { value: "pipeline", label: "Pipeline value" },
   { value: "activity", label: "Last activity" },
   { value: "health", label: "Health" },

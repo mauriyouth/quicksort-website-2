@@ -15,6 +15,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
 } from "@quicksort-sas/ui";
 import { PageAlerts } from "../../ui";
 import { errorText, useInvoicingApi, type InvoicingApi } from "./api";
@@ -24,15 +27,27 @@ import { LinkInvoiceStrip } from "./LinkInvoiceStrip";
 import { billingMonthOptions, blockerLabel, days, invoiceRowLabel, money, monthLabel, rowOpener, shiftMonth, shortDate } from "./format";
 import type { DraftResponse, Invoice, ToInvoiceRow } from "./types";
 
-type ProjectRow = ToInvoiceRow & { month: string };
+type ProjectRow = ToInvoiceRow & { month: string; profile: string | null };
+type ProjectInvoice = Invoice & { profile: string | null };
 type Consultant = { id: string; name: string };
 type ProjectResponse = {
-  invoices: Invoice[];
+  invoices: ProjectInvoice[];
   consultants: Consultant[];
+  /** The project's TJM profile names, in contract order. */
+  profiles: string[];
   totals: { invoicedHt: number | string; paidTtc: number | string; outstandingTtc: number | string };
   rows: ProjectRow[];
 };
 type Panel = { invoiceId: string; craChanged: boolean; warning: string };
+const NO_PROFILE = "__no_profile__";
+const profileKey = (name: string | null) => name ?? NO_PROFILE;
+
+/** One tab per TJM profile in use: the contract's order first, then any
+ *  other (renamed / extension-only) profile, then "No profile". */
+function profileTabs(names: (string | null)[], order: string[]): (string | null)[] {
+  const rank = (name: string | null) => (name === null ? Infinity : order.includes(name) ? order.indexOf(name) : order.length);
+  return [...new Set(names)].sort((a, b) => rank(a) - rank(b) || (a ?? "").localeCompare(b ?? ""));
+}
 
 /**
  * Invoices card on a régie project sheet: totals, the project's invoices,
@@ -53,6 +68,7 @@ export function ProjectInvoices({ projectId, onTotals }: {
   const [panel, setPanel] = useState<Panel | null>(null);
   const [linking, setLinking] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
+  const [tab, setTab] = useState<string | null>(null);
   // Kept in a ref so an inline callback doesn't re-trigger the load.
   const onTotalsRef = useRef(onTotals);
   onTotalsRef.current = onTotals;
@@ -68,7 +84,15 @@ export function ProjectInvoices({ projectId, onTotals }: {
 
   useEffect(() => { void load(); }, [load]);
 
-    const pending = (data?.rows ?? []).filter((r) => r.status === "not_invoiced");
+  const pending = (data?.rows ?? []).filter((r) => r.status === "not_invoiced");
+  const allInvoices = data?.invoices ?? [];
+  const tabs = profileTabs([...allInvoices, ...pending].map((x) => x.profile), data?.profiles ?? []);
+  // No named profile → nothing to split by: one plain list, no tab bar.
+  const tabbed = tabs.some((t) => t !== null);
+  const activeTab = tab !== null && tabs.some((t) => profileKey(t) === tab) ? tab : profileKey(tabs[0] ?? null);
+  const inTab = (x: { profile: string | null }) => !tabbed || profileKey(x.profile) === activeTab;
+  const invoices = allInvoices.filter(inTab);
+  const pendingInTab = pending.filter(inTab);
 
   async function create(r: ProjectRow) {
     if (busy) return;
@@ -111,15 +135,33 @@ export function ProjectInvoices({ projectId, onTotals }: {
             ))}
           </dl>
 
-          {data.invoices.length === 0 ? (
-            <p className="m-0 text-sm text-muted-foreground">No invoices yet.</p>
+          {tabbed && (
+            <Tabs value={activeTab} onValueChange={(next) => { setTab(String(next)); setAssigning(null); setLinking(null); }}>
+              <TabsList variant="line" aria-label="Profiles" className="h-10 w-full justify-start gap-5 overflow-x-auto border-b border-border">
+                {tabs.map((t) => {
+                  const count = allInvoices.filter((i) => i.profile === t).length;
+                  const todo = pending.filter((r) => r.profile === t).length;
+                  return (
+                    <TabsTrigger key={profileKey(t)} value={profileKey(t)} className={cn("flex-none gap-1.5 group-data-horizontal/tabs:after:bottom-0", t === null && "text-muted-foreground")}>
+                      {t ?? "No profile"}
+                      <span className="num text-xs text-muted-foreground">{count}</span>
+                      {todo > 0 && <Badge variant="secondary" className="num" aria-label={`${todo} not invoiced yet`}>{todo} to invoice</Badge>}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+            </Tabs>
+          )}
+
+          {invoices.length === 0 ? (
+            <p className="m-0 text-sm text-muted-foreground">{tabbed ? "No invoices for this profile yet." : "No invoices yet."}</p>
           ) : (
             <Table aria-label="Project invoices">
               <TableHeader>
                 <TableRow><TableHead>Invoice</TableHead><TableHead>Consultant</TableHead><TableHead>Period</TableHead><TableHead>Due</TableHead><TableHead numeric>Total TTC</TableHead></TableRow>
               </TableHeader>
               <TableBody>
-                {data.invoices.map((i) => {
+                {invoices.map((i) => {
                   const label = invoiceRowLabel(i);
                   const assignable = i.source === "imported" && !i.employee_id && i.status !== "canceled";
                   return (
@@ -161,7 +203,7 @@ export function ProjectInvoices({ projectId, onTotals }: {
             </Table>
           )}
 
-          {pending.length > 0 && (
+          {pendingInTab.length > 0 && (
             <>
               <h3 className="m-0 mt-2 text-[15px] font-medium">Not invoiced yet</h3>
               <Table aria-label="Not invoiced yet">
@@ -169,7 +211,7 @@ export function ProjectInvoices({ projectId, onTotals }: {
                   <TableRow><TableHead>Consultant</TableHead><TableHead>Period</TableHead><TableHead numeric>Days</TableHead><TableHead numeric>Amount HT</TableHead><TableHead>Status</TableHead><TableHead><span className="sr-only">Action</span></TableHead></TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pending.map((r) => {
+                  {pendingInTab.map((r) => {
                     const month = r.month;
                     const ready = r.blockers.length === 0;
                     const k = `${r.employeeId}:${month}`;

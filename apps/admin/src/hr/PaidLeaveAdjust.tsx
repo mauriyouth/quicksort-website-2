@@ -82,7 +82,7 @@ export function PaidLeaveAdjust({ employeeId, personName, close, saved }: {
     }));
   }
 
-  return <Dialog title={`Adjust paid leave — ${personName}`} className="sm:max-w-xl" close={close}>
+  return <Dialog title={`Adjust paid leave · ${personName}`} className="sm:max-w-xl" close={close}>
     <form className="flex flex-col gap-5" onSubmit={submit}>
       <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
         Copy the paid leave box (Congés N-1 / Congés N) from the latest payslip. The CP balance starts from it, then adds accrual for the months after it and subtracts paid leave booked in the CRA after that month.

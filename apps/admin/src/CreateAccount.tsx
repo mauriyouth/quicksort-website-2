@@ -1,6 +1,20 @@
 import { useState, type FormEvent } from "react";
 import { useSession } from "@clerk/react";
-import { Notice } from "@quicksort/hr-ui";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Field,
+  FieldGroup,
+  FieldLabel,
+  Input,
+  NativeSelect,
+  NativeSelectOption,
+} from "@quicksort-sas/ui";
+import { PageAlerts } from "./ui";
 
 const ROLE_LABELS = { candidate: "Candidate", employee: "Employee", hr: "HR", sales: "Sales" } as const;
 
@@ -45,24 +59,36 @@ export function CreateAccountPanel({ onCreated }: { onCreated: () => void | Prom
   }
 
   return (
-    <section className="panel" aria-label="Create an account">
-      <h2>Create an account</h2>
-      <p className="muted small-text">
-        No password is set: the person signs in with this email. Their name comes from their
-        HR record once the account is linked (or create it from the person page, which links it
-        straight away). Admin rights are granted separately, in Admin access.
-      </p>
-      <Notice error>{error}</Notice>
-      <Notice>{message}</Notice>
-      <form className="form" onSubmit={submit}>
-        <label>Email address<input name="email" type="email" required autoComplete="off" placeholder="colleague@quicksort.fr" /></label>
-        <label>Role
-          <select name="role" defaultValue="employee">
-            {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </label>
-        <div><button className="btn" disabled={busy}>{busy ? "Creating…" : "Create account"}</button></div>
-      </form>
-    </section>
+    // mb-6 matches the legacy .panel spacing of the Accounts page it sits on.
+    <Card role="region" aria-label="Create an account" className="mb-6">
+      <CardHeader>
+        <CardTitle>Create an account</CardTitle>
+        <CardDescription className="max-w-prose">
+          No password is set: the person signs in with this email. Their name comes from their
+          HR record once the account is linked (or create it from the person page, which links it
+          straight away). Admin rights are granted separately, in Admin access.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <PageAlerts error={error} message={message} />
+        <form onSubmit={submit}>
+          <FieldGroup>
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
+              <Field>
+                <FieldLabel htmlFor="create-account-email">Email address</FieldLabel>
+                <Input id="create-account-email" name="email" type="email" required autoComplete="off" placeholder="colleague@quicksort.fr" />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="create-account-role">Role</FieldLabel>
+                <NativeSelect id="create-account-role" name="role" defaultValue="employee" className="w-full">
+                  {Object.entries(ROLE_LABELS).map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
+                </NativeSelect>
+              </Field>
+            </div>
+            <div><Button type="submit" disabled={busy}>{busy ? "Creating…" : "Create account"}</Button></div>
+          </FieldGroup>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

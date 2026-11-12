@@ -157,7 +157,7 @@ export function PersonPhoto({ personId, name, fallback, className, editable = fa
     setProgress(0);
     try {
       const file = await preparePhoto(picked);
-      await uploadDocument(owner, file, { typeCode: "PHOTO", title: `Photo — ${name}`, supersedes: photoId }, setProgress);
+      await uploadDocument(owner, file, { typeCode: "PHOTO", title: `Photo of ${name}`, supersedes: photoId }, setProgress);
       notifyDocumentsChanged(owner);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The photo could not be saved.");

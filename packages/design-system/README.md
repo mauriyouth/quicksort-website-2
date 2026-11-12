@@ -1,9 +1,8 @@
 # @quicksort/design-system
 
-React component library for the Quicksort brand, extracted from the identity
-system in `apps/web/quicksort-design-system` (the standalone
-`quicksort-design-system-standalone.html` is a bundled *export* of that
-source — this package is built from the source, not the bundle).
+React component library for the Quicksort brand, extracted from the Quicksort identity
+system (the standalone `quicksort-design-system-standalone.html` at the repo
+root is a bundled *export* of that system).
 
 ## What's inside
 

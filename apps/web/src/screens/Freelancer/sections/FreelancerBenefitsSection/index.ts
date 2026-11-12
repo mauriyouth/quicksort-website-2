@@ -1,1 +1,0 @@
-export { FreelancerBenefitsSection } from "./FreelancerBenefitsSection";

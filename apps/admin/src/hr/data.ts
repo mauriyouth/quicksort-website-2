@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { db } from "@quicksort/hr-db";
+import { experienceItemSchema } from "../candidate-intake";
 import type { CommandResult, Requirement, Workspace } from "./domain";
 export type * from "./domain";
 const personSchema = z.object({
@@ -17,6 +18,12 @@ const personSchema = z.object({
   source: z.string(),
   owner_email: z.string(),
   contact_allowed: z.boolean(),
+  linkedin_url: z.string().catch(''),
+  // Malformed positions are dropped rather than failing the whole workspace.
+  experience: z.array(z.unknown()).catch([]).transform(items => items.flatMap(item => {
+    const parsed = experienceItemSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  })),
   version: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -32,6 +39,7 @@ const applicationSchema = z.object({
   screening_recommendation: z.string(),
   source: z.string(),
   referrer: z.string(),
+  owner_email: z.string().catch(''),
   stage_entered_at: z.string(),
   version: z.number(),
   created_at: z.string(),
@@ -207,33 +215,6 @@ const eventSchema = z.object({
   request_id: z.string(),
   created_at: z.string(),
 });
-const contractSchema = z.object({
-  offer_id: z.string().nullable(),
-  id: z.string(),
-  candidate_id: z.string(),
-  person_id: z.string().nullable(),
-  application_id: z.string().nullable(),
-  employee_id: z.string().nullable(),
-  title: z.string(),
-  storage_path: z.string(),
-  document_sha256: z.string(),
-  created_at: z.string(),
-});
-const signatureSchema = z.object({
-  contract_id: z.string(),
-  candidate_id: z.string(),
-  signer_name: z.string(),
-  consent_text: z.string(),
-  document_sha256: z.string(),
-  signed_at: z.string(),
-});
-const countersignatureSchema = z.object({
-  contract_id: z.string(),
-  actor_id: z.string(),
-  signer_name: z.string(),
-  document_sha256: z.string(),
-  signed_at: z.string(),
-});
 const suggestionSchema = z.object({
   id: z.string(),
   person_id: z.string().nullable(),
@@ -294,9 +275,6 @@ const workspaceSchema = z.object({
  exitItems: z.array(exitItemSchema),
  assignments: z.array(assignmentSchema),
  events: z.array(eventSchema),
- contracts: z.array(contractSchema),
- signatures: z.array(signatureSchema),
- countersignatures: z.array(countersignatureSchema),
  suggestions: z.array(suggestionSchema),
  projects: z.array(staffingProjectSchema),
  clients: z.array(staffingClientSchema),
@@ -348,7 +326,6 @@ const commandSchemas = {
  create_requisition:z.object({kind:z.literal('create_requisition'),...requisitionFields}),
  update_requisition:z.object({kind:z.literal('update_requisition'),opportunity_id:uuid,...version,...requisitionFields}),
  publish_requisition:z.object({kind:z.literal('publish_requisition'),opportunity_id:uuid,...version,job_id:uuid}),
- countersign_contract:z.object({kind:z.literal('countersign_contract'),contract_id:uuid,signer_name:text.trim().min(2)}),
  save_suggestion:z.object({kind:z.literal('save_suggestion'),person_id:uuid.nullable().optional(),application_id:uuid.nullable().optional(),employee_id:uuid.nullable().optional(),opportunity_id:uuid.nullable().optional(),suggestion_kind:suggestionSchema.shape.kind,payload:z.json(),sources:z.array(z.object({type:z.enum(['person','application','employee','task','assignment','opportunity','project']),id:uuid,version:z.number().int().positive()})).min(1),input_version:z.number().int().positive(),model:text.trim().min(1)}),
  review_suggestion:z.object({kind:z.literal('review_suggestion'),suggestion_id:uuid,status:z.enum(['accepted','dismissed'])}),
  import_person:z.object({kind:z.literal('import_person'),...personFields,external_source:text.trim().min(1),external_id:text.trim().min(1),rationale:text.trim().min(1),employment:z.object({role:text,start_date:date,end_date:nullableDate}).optional()}),

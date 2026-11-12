@@ -37,3 +37,12 @@ export async function copyCv(getToken: GetToken, input: { personId: string; pers
   const result = await post(getToken, { action: "copy", ...input });
   return result.ok ? "" : `The application was created, but the CV was not copied on Google Drive: ${result.error}`;
 }
+
+export type FiledCv = { id: string; name: string; webViewLink?: string; modifiedTime?: string; createdTime?: string };
+
+/** The person's newest CV on Drive, or null when none is filed. Throws a readable message on failure. */
+export async function findCv(getToken: GetToken, personId: string): Promise<FiledCv | null> {
+  const result = await post(getToken, { action: "find", personId });
+  if (!result.ok) throw new Error(result.error);
+  return (result.data.file as FiledCv | null) ?? null;
+}

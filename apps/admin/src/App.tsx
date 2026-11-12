@@ -11,6 +11,7 @@ import { Projects } from "./sales/Projects";
 import { Invoicing } from "./sales/invoicing/Invoicing";
 import { DocumentAlerts } from "./documents/DocumentAlerts";
 import { OpsBoard } from "./ops/OpsBoard";
+import { CompanyAdmin } from "./ops/CompanyAdmin";
 import { PipelineBoard } from "./sales/PipelineBoard";
 import { SalesDashboard } from "./sales/SalesDashboard";
 import { AdminShell } from "./AdminShell";
@@ -110,6 +111,7 @@ const nav = [
     children: [
       { id: "operations", href: "/operations", label: "Board" },
       { id: "ops-business-plan", href: "/operations/business-plan", label: "Business plan" },
+      { id: "ops-admin", href: "/operations/admin", label: "Admin" },
     ],
   },
   {
@@ -141,6 +143,7 @@ const SETTINGS_TABS: SectionTab[] = [
   { id: "account", href: "/settings", label: "Account" },
   { id: "ai", href: "/settings/ai", label: "AI configuration" },
   { id: "drive", href: "/settings/drive", label: "Google Drive contracts" },
+  { id: "signatures", href: "/settings/signatures", label: "Signatures" },
 ];
 // Pre-merge HR screens, kept as redirects so old links and bookmarks work.
 const LEGACY_RECRUITING_PATHS = [
@@ -421,7 +424,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     ? "ai"
     : location.pathname.startsWith("/settings/drive")
       ? "drive"
-      : "account";
+      : location.pathname.startsWith("/settings/signatures")
+        ? "signatures"
+        : "account";
   // Spotlight deep-links: open a page pointed at an exact record
   // (?candidate=, ?account=, or a person record under /hr/people/<id>/<tab>).
   // Pages follow the router location, so navigating suffices whether or not
@@ -507,7 +512,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     "hr-documents", "hr-payslips", "jobs",
   ];
   const isHr = hrTabIds.includes(tab);
-  const isOps = tab === "operations" || tab === "ops-business-plan";
+  const isOps = tab === "operations" || tab === "ops-business-plan" || tab === "ops-admin";
   // One shared top menu on every page: the section name plus its screens
   // as tabs. Section landing routes resolve to their first screen
   // ("/sales" → Dashboard, "/hr" → Pipeline); single-screen pages show the
@@ -529,7 +534,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
       : isOps
         ? OPS_TABS
         : tab === "account"
-          ? SETTINGS_TABS
+          ? role === "admin" ? SETTINGS_TABS : SETTINGS_TABS.filter((t) => t.id !== "signatures")
           : [];
   return (
     <AdminShell
@@ -599,6 +604,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
           path="/operations/business-plan"
           element={<Suspense fallback={null}><BusinessPlan actorEmail={email} /></Suspense>}
         />
+        {role === "admin" && <Route path="/operations/admin" element={<CompanyAdmin />} />}
         <Route path="/blog-posts" element={<BlogManager />} />
         <Route path="/administration" element={<AdminSettings />} />
         <Route path="/overview" element={(
@@ -647,11 +653,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
             />
           </div>
           <div className="hero">
-            <div className="eyebrow">The full talent cycle</div>
-            <h2>From first hello to a fond farewell.</h2>
             <p>
               Opportunities, AI-assisted screening, interviews, offers, onboarding,
-              probation and offboarding — one record per person, every decision
+              probation and offboarding. One record per person, every decision
               logged.
             </p>
             <button className="btn lime" onClick={() => navigate("recruiting")}>
@@ -778,7 +782,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
                     rows={8}
                     maxLength={20000}
                     required
-                    placeholder="The role, responsibilities and what you’re looking for…"
+                    placeholder="The role, responsibilities and what you're looking for…"
                   />
                 </label>
                 <label>
@@ -901,7 +905,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
                       onClick={() => {
                         if (
                           confirm(
-                            `Delete “${j.title}”? This removes it from the website.`,
+                            `Delete "${j.title}"? This removes it from the website.`,
                           )
                         )
                           void action(async () => {
@@ -957,7 +961,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
               </label>
             </div>
             <p className="muted small-text">
-              Rights are assigned in the Access manager — this list is
+              Rights are assigned in the Access manager. This list is
               read-only.
             </p>
             {visibleAccounts.map((p) => (
@@ -1141,6 +1145,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/settings" element={<SettingsPage section="account" isOwner={isOwner} email={email} />} />
         <Route path="/settings/ai" element={<SettingsPage section="ai" isOwner={isOwner} email={email} />} />
         <Route path="/settings/drive" element={<SettingsPage section="drive" isOwner={isOwner} email={email} />} />
+        {role === "admin" && <Route path="/settings/signatures" element={<SettingsPage section="signatures" isOwner={isOwner} isAdmin email={email} />} />}
       </Routes>
       )}
       {loading && (

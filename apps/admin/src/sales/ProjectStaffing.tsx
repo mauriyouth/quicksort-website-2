@@ -334,7 +334,7 @@ export function LineStaffingPanel({
   const draftSummary = dOutside
     ? `Dates must sit inside this line's billing period (${shortDate(staffing.start)} → ${shortDate(staffing.end)}).`
     : pickedPool
-      ? `${pickedPool.name.split(" ")[0]} engages as ${engageContract} · ${alloc}% from ${shortDate(dStart)} to ${shortDate(dEnd)} — the employment is created with this assignment.`
+      ? `${pickedPool.name.split(" ")[0]} engages as ${engageContract} · ${alloc}% from ${shortDate(dStart)} to ${shortDate(dEnd)}. The employment is created with this assignment.`
       : overCapacity
       ? `${picked?.name.split(" ")[0] ?? "They"} would exceed 100% capacity on these dates.`
       : beforeEmployment
@@ -372,7 +372,7 @@ export function LineStaffingPanel({
         status: commit,
       });
       setNotice(
-        `${pickedPool ? pickedPool.name : picked?.name} is staffed on “${line.name}”.`,
+        `${pickedPool ? pickedPool.name : picked?.name} is staffed on "${line.name}".`,
       );
       setOpen(false);
       setEmployeeId("");
@@ -551,7 +551,7 @@ export function LineStaffingPanel({
       )}
       {!open && staffing.staff.length === 0 && (
         <p className="m-0 text-[13px] text-muted-foreground">
-          Nobody is staffed on this line yet — its days won't appear on
+          Nobody is staffed on this line yet. Its days won't appear on
           anyone's CRA.
         </p>
       )}
@@ -603,7 +603,7 @@ export function LineStaffingPanel({
               {canEngage && talentMatches.length > 0 && (
                 <>
                   <p className="col-span-full m-0 mt-1.5 text-xs font-semibold tracking-[0.04em] text-muted-foreground uppercase">
-                    Talent pool — engage without an application
+                    Talent pool: engage without an application
                   </p>
                   {talentMatches.map((tp) => {
                     const selected = tp.personId === engageId;
@@ -612,7 +612,7 @@ export function LineStaffingPanel({
                         key={tp.personId}
                         name={tp.name}
                         selected={selected}
-                        sub="Not employed yet — engagement is created with this assignment"
+                        sub="Not employed yet. Engagement is created with this assignment"
                         onClick={() => {
                           setEngageId(tp.personId);
                           setEmployeeId("");
@@ -803,8 +803,8 @@ export function LineStaffingPanel({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmStarted
-                ? `${confirmName}'s assignment on “${line.name}” ends as of today.`
-                : `${confirmName} is released from “${line.name}” before the assignment starts.`}
+                ? `${confirmName}'s assignment on "${line.name}" ends as of today.`
+                : `${confirmName} is released from "${line.name}" before the assignment starts.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1204,7 +1204,7 @@ export function ProjectTeamCard({
       <CardContent>
         {team.length === 0 ? (
           <p className="m-0 text-[13px] text-muted-foreground">
-            No one staffed yet. Use “Assign people” on a pricing line — they'll
+            No one staffed yet. Use "Assign people" on a pricing line. They'll
             get the project on their CRA from their start date.
           </p>
         ) : (

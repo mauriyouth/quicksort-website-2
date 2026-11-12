@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { Archive, Check, ChevronLeft, ChevronRight, Clock, Download, ExternalLink, Eye, FileText, Loader2, RefreshCw, Upload, X } from "lucide-react";
+import { Archive, Check, ChevronLeft, ChevronRight, Clock, Download, ExternalLink, Eye, FileText, Loader2, Plus, RefreshCw, Upload, X } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,7 +72,7 @@ type Draft =
   /** A registered file awaiting its real type (candidate uploads). */
   | { mode: "classify"; file: { name: string }; typeCode: string; doc: DocumentRecord; supersedes?: undefined; extensionId?: string };
 
-const FOLDER_ORDER = ["contrat", "annexes", "commandes", "societe", "identite", "securite_sociale", "contrat_travail", "administratif", "sante", "diplomes", "justificatifs", "sortie", "divers"];
+const FOLDER_ORDER = ["contrat", "annexes", "commandes", "societe", "identite", "securite_sociale", "contrat_travail", "administratif", "sante", "diplomes", "justificatifs", "fiscal", "urssaf", "kbis", "assurances", "bilans", "sortie", "divers"];
 const LINKED_TYPES = new Set(["ANNEX", "AVENANT", "PURCHASE_ORDER", "EMPLOYMENT_AVENANT"]);
 const baseName = (name: string) => name.replace(/\.[A-Za-z0-9]{1,8}$/, "");
 
@@ -100,6 +100,7 @@ export function DocumentsPanel({
   requirements,
   excludeTypeCodes,
   hideFiledTypeCodes,
+  sectionFolders = [],
   onChanged,
 }: {
   owner: DocumentOwner;
@@ -117,6 +118,11 @@ export function DocumentsPanel({
   excludeTypeCodes?: string[];
   /** Types whose filed documents are listed elsewhere (e.g. payslips have their own section). */
   hideFiledTypeCodes?: string[];
+  /**
+   * Folders listed as their own section under the checklist, always shown
+   * with an Add button even when empty (e.g. the company's bilans).
+   */
+  sectionFolders?: string[];
   /** Called after any upload, renewal or archive (e.g. to refresh list flags). */
   onChanged?: () => void;
 }) {
@@ -220,12 +226,18 @@ export function DocumentsPanel({
   const alsoFiled = checklist.length
     ? active.filter(d => !checklistCodes.has(d.type_code)).map(d => rowFor(d))
     : [];
-  // Proofs (Navigo, mutuelle…) get their own section next to the checklist.
-  const isJustificatif = (row: DocRow) => typeOf.get(row.typeCode)?.folder === "justificatifs";
+  // Proofs (Navigo, mutuelle…) get their own section next to the checklist,
+  // and so do the host's sectionFolders (shown even when empty, to add one).
+  const folderOf = (row: DocRow) => typeOf.get(row.typeCode)?.folder ?? "divers";
+  const ownSections = ["justificatifs", ...sectionFolders.filter(f => f !== "justificatifs")];
   const extraSections = [
-    { title: "Also filed", rows: alsoFiled.filter(row => !isJustificatif(row)) },
-    { title: FOLDER_TITLES.justificatifs, rows: alsoFiled.filter(isJustificatif) },
-  ].filter(section => section.rows.length);
+    { title: "Also filed", rows: alsoFiled.filter(row => !ownSections.includes(folderOf(row))), addType: undefined as string | undefined },
+    ...ownSections.map(folder => ({
+      title: FOLDER_TITLES[folder] ?? folder,
+      rows: alsoFiled.filter(row => folderOf(row) === folder),
+      addType: sectionFolders.includes(folder) ? ownerTypes.find(t => t.folder === folder)?.code : undefined,
+    })),
+  ].filter(section => section.rows.length || section.addType);
   const groups = FOLDER_ORDER.map(folder => ({
     folder,
     docs: (checklist.length ? [] : active).filter(d => (typeOf.get(d.type_code)?.folder ?? "divers") === folder),
@@ -295,7 +307,7 @@ export function DocumentsPanel({
   async function submit(meta: DocumentMetadata) {
     if (!draft) return;
     const current = draft;
-    await run(current.supersedes ? "Document renewed — the previous version is kept in history." : current.mode === "classify" ? "Document classified." : "Document filed.", async () => {
+    await run(current.supersedes ? "Document renewed. The previous version is kept in history." : current.mode === "classify" ? "Document classified." : "Document filed.", async () => {
       if (current.mode === "upload") {
         const key = crypto.randomUUID();
         const controller = new AbortController();
@@ -451,12 +463,24 @@ export function DocumentsPanel({
 
       {extraSections.map(section => (
         <section key={section.title} className="flex flex-col gap-1.5">
-          <h3 className={GROUP_TITLE}>{section.title}</h3>
-          <div className={ROWS}>
-            {section.rows.map(row => (
-              <DocumentRow key={row.key} row={row} busy={busy} onPick={pick} {...rowHandlers(row.doc)} />
-            ))}
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className={GROUP_TITLE}>{section.title}</h3>
+            {section.addType && (
+              <Button variant="link" size="sm" className="h-auto px-0" disabled={busy} onClick={() => pick({ typeCode: section.addType! })}>
+                <Plus data-icon="inline-start" aria-hidden="true" />
+                Add
+              </Button>
+            )}
           </div>
+          {section.rows.length ? (
+            <div className={ROWS}>
+              {section.rows.map(row => (
+                <DocumentRow key={row.key} row={row} busy={busy} onPick={pick} {...rowHandlers(row.doc)} />
+              ))}
+            </div>
+          ) : (
+            <p className={MUTED}>Nothing filed yet.</p>
+          )}
         </section>
       ))}
 
@@ -560,7 +584,7 @@ export function DocumentsPanel({
       <AlertDialog open={!!archiveTarget} onOpenChange={open => { if (!open) setArchiveTarget(null); }}>
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Archive “{archiveTarget?.title}”?</AlertDialogTitle>
+            <AlertDialogTitle>Archive "{archiveTarget?.title}"?</AlertDialogTitle>
             <AlertDialogDescription>It leaves the active list; the file stays in storage.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -875,7 +899,7 @@ function DocumentPreview({
 
           {state.tone === "expiring" && (
             <p className="m-0 rounded-xl border border-input px-3.5 py-3 text-[13px] leading-normal text-muted-foreground">
-              Ask the employee for a renewed {type?.label || "document"} before it lapses — an employment cannot run without a valid one.
+              Ask the employee for a renewed {type?.label || "document"} before it lapses. An employment cannot run without a valid one.
             </p>
           )}
 
@@ -939,7 +963,10 @@ function requiredChecklist(types: DocumentTypeRecord[], requirements: string[], 
     }
   return [...groups].map(([key, members]) => {
     const codes = new Set(members.map(t => t.code));
-    const docs = active.filter(d => codes.has(d.type_code));
+    // Most up-to-date first: a titre and its récépissé share a group, and the
+    // one valid the longest is the one that counts.
+    const docs = active.filter(d => codes.has(d.type_code))
+      .sort((a, b) => (b.expires_on || "9999-12-31").localeCompare(a.expires_on || "9999-12-31"));
     const valid = docs.find(d => expiryState(d, members.find(t => t.code === d.type_code)).tone !== "expired");
     const expired = valid ? undefined : docs[0];
     return {
@@ -969,6 +996,11 @@ const FOLDER_TITLES: Record<string, string> = {
   justificatifs: "Justificatifs",
   sortie: "Exit",
   divers: "Other",
+  fiscal: "Tax",
+  urssaf: "URSSAF",
+  kbis: "Kbis",
+  assurances: "Insurance",
+  bilans: "Bilans",
 };
 
 function DocumentForm({
@@ -1073,7 +1105,7 @@ function DocumentForm({
       <p className="m-0 flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-foreground [overflow-wrap:anywhere]">
         <FileText className="size-3.5" aria-hidden="true" />
         <span title={draft.file.name}>{draft.file.name}</span>
-        {draft.supersedes && <span className="font-normal text-muted-foreground">replaces “{draft.supersedes.title}”</span>}
+        {draft.supersedes && <span className="font-normal text-muted-foreground">replaces "{draft.supersedes.title}"</span>}
       </p>
       <Field className="gap-1.5">
         <FieldTitle>Type</FieldTitle>
@@ -1104,7 +1136,7 @@ function DocumentForm({
         </Field>
       )}
       {readingDates && <p role="status" className={MUTED}>Reading the dates off the document…</p>}
-      {datesRead && <p className={MUTED}>Dates read from the document — check them against the paper copy.</p>}
+      {datesRead && <p className={MUTED}>Dates read from the document. Check them against the paper copy.</p>}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5">
         <Field className="gap-1.5">
           <FieldTitle>Issued on</FieldTitle>
@@ -1117,7 +1149,7 @@ function DocumentForm({
         </Field>
       </div>
       {type?.default_validity_months && !expiryTouched && (
-        <p className={MUTED}>Expiry suggested from a {type.default_validity_months >= 12 && type.default_validity_months % 12 === 0 ? `${type.default_validity_months / 12}-year` : `${type.default_validity_months}-month`} validity — adjust it to the date on the document.</p>
+        <p className={MUTED}>Expiry suggested from a {type.default_validity_months >= 12 && type.default_validity_months % 12 === 0 ? `${type.default_validity_months / 12}-year` : `${type.default_validity_months}-month`} validity. Adjust it to the date on the document.</p>
       )}
       <Field className="gap-1.5">
         <FieldLabel htmlFor={`${id}-notes`}>Notes</FieldLabel>

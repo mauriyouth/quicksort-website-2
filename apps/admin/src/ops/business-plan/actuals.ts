@@ -18,14 +18,18 @@
  * - Revenue = finalized + paid invoices (not ignored) by period month
  *   (issue date for imported invoices without one). Collections = paid
  *   invoices by paid_at month.
- * - Freelance cost = CRA client days × daily rate; a staffed freelancer
- *   with no CRA that month falls back to open days × allocation.
+ * - Freelance cost = the freelancer's invoices for the month (HT, period
+ *   month, not rejected, credit notes negative) when there are any, for
+ *   every freelancer, staffed or not. Otherwise, for a staffed freelancer,
+ *   CRA client days × daily rate, falling back to open days × allocation
+ *   when no CRA was filed that month.
  * - Salaried cost = monthly salary × CJM multiplier (employer-cost proxy).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Assignment, Employee, Salary, StaffingProject } from "../../hr/domain.ts";
 import { storedPricingLines, openDaysBetween } from "../../sales/pricing-lines.ts";
-import type { ActualMonth, FixedActuals, FixedChargeLine, Hypotheses, VatActual } from "./model.ts";
+import { workingDaysBetween } from "./calendar.ts";
+import type { ActualMonth, FixedActuals, FixedChargeLine, Hypotheses, SocialCharges, VatActual } from "./model.ts";
 
 export type InvoiceRow = {
   status: string;
@@ -44,7 +48,8 @@ export type InvoiceRow = {
   employee_id?: string | null;
   invoice_url?: string | null;
 };
-export type CraRow = { employee_id: string; day: string; part?: string | null };
+/** A CRA entry; rows without `status` (older loaders) count as client days. */
+export type CraRow = { employee_id: string; day: string; part?: string | null; status?: string | null };
 export type ExtensionRow = {
   project_id: string;
   status: string;
@@ -62,6 +67,8 @@ export type PlanSources = {
   invoices: InvoiceRow[];
   cra: CraRow[];
   cjmMultiplier: number;
+  /** Cost ratio applied to interns' gratification (default 1.4). */
+  internMultiplier?: number;
   /** Month an invoice's revenue counts in: its period (default) or its issue date. */
   revenueBasis?: RevenueBasis;
   /** Optional, for names in the drill-down panels. */
@@ -69,7 +76,15 @@ export type PlanSources = {
   clients?: { id: string; name: string }[];
   /** Employments counted as structure staff, not consultants, over a period. */
   structureStaff: StructureEntry[];
+  /** Freelancer invoices (amounts in cents): the real freelance cost when on file. */
+  freelancerInvoices?: FreelancerInvoiceRow[];
 };
+
+/** A freelancer invoice as the business plan reads it; credit notes carry negative amounts. */
+export type FreelancerInvoiceRow = { employee_id: string; period_month: string | null; amount_ht_cents: number | null; review: string; is_credit_note?: boolean };
+
+/** HT in cents, a credit note always negative whatever sign it was stored with. */
+const signedHtCents = (inv: FreelancerInvoiceRow) => (inv.is_credit_note ? -Math.abs(Number(inv.amount_ht_cents)) : Number(inv.amount_ht_cents));
 
 /** "period" = month of service (period_month, else issue date); "issue" = issue date (else period). */
 export type RevenueBasis = "period" | "issue";
@@ -121,11 +136,29 @@ export type FreelanceLine = {
   days: number;
   /** True when no CRA was filed: days estimated from open days × allocation. */
   estimated: boolean;
+  /** Where the cost comes from: the freelancer's invoices, CRA days × rate, or the open-days estimate. */
+  source: "invoice" | "cra" | "estimate";
+  /** Invoiced HT for the month, in cents, when the cost comes from invoices. */
+  invoicedCents?: number;
   /** Daily buy rate on file (null = none on file). */
   rate: number | null;
   cost: number;
   staffed: boolean;
   exitDate: string | null;
+};
+
+/** One mission start ("vente") or one exit ("départ") behind the month's count. */
+export type MoveLine = {
+  employeeId: string;
+  name: string;
+  /** Mission start date (ventes) or exit date (départs). */
+  date: string;
+  freelance: boolean;
+  /** Ventes: the mission's project and client. */
+  project?: string;
+  client?: string | null;
+  /** Départs: exit already effective (end date) vs only planned. */
+  planned?: boolean;
 };
 
 export type Seeds = Partial<Hypotheses>;
@@ -157,6 +190,10 @@ export type Aggregate = {
   structure: number[];
   /** Structure staff behind each month's figure. */
   structureLines: SalaryLine[][];
+  /** Mission starts behind each month's "Nb de ventes" (closed months), or already on file (open months). */
+  venteLines: MoveLine[][];
+  /** Exits behind each month's "Nb de départs" (closed months), or already planned (open months). */
+  departLines: MoveLine[][];
 };
 
 const STAFFED = ["confirmed", "active", "completed"];
@@ -184,7 +221,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   // Interns cost far less than salaried staff (gratification + very low employer
   // charges), so they get their own employer-cost ratio instead of the CJM multiplier.
   const multFor = (e: { contract_type: string | null }) =>
-    e.contract_type === "Internship" ? 1.4 : src.cjmMultiplier;
+    e.contract_type === "Internship" ? src.internMultiplier ?? 1.4 : src.cjmMultiplier;
   const staffedRows = src.assignments.filter((a) => STAFFED.includes(a.status));
   const staffedIn = (id: string, from: string, to: string) =>
     staffedRows.some((a) => a.employee_id === id && overlaps(a.start_date, a.end_date, from, to));
@@ -258,13 +295,35 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     }
   }
 
-  // CRA client days per employee per month (half-days count 0.5).
+  // CRA days per employee per month (half-days count 0.5): client days, leave, everything filled.
+  type CraTally = { client: number; leave: number; filled: number };
+  const LEAVE = new Set(["paid_leave", "rtt", "unpaid_leave"]);
+  const craTally = new Map<string, Map<string, CraTally>>();
   const craDays = new Map<string, Map<string, number>>();
   for (const e of src.cra) {
     const key = e.day.slice(0, 7);
-    const byEmp = craDays.get(key) || new Map<string, number>();
-    byEmp.set(e.employee_id, (byEmp.get(e.employee_id) || 0) + (e.part === "am" || e.part === "pm" ? 0.5 : 1));
-    craDays.set(key, byEmp);
+    const d = e.part === "am" || e.part === "pm" ? 0.5 : 1;
+    const status = e.status ?? "client_project";
+    const byEmp = craTally.get(key) || new Map<string, CraTally>();
+    const t = byEmp.get(e.employee_id) || { client: 0, leave: 0, filled: 0 };
+    t.filled += d;
+    if (status === "client_project") t.client += d;
+    else if (LEAVE.has(status)) t.leave += d;
+    byEmp.set(e.employee_id, t);
+    craTally.set(key, byEmp);
+    if (status !== "client_project") continue;
+    const client = craDays.get(key) || new Map<string, number>();
+    client.set(e.employee_id, (client.get(e.employee_id) || 0) + d);
+    craDays.set(key, client);
+  }
+  // Invoiced HT per month and freelancer, in cents: not rejected, with a period and an amount.
+  const invoicedByMonth = new Map<string, Map<string, number>>();
+  for (const inv of src.freelancerInvoices ?? []) {
+    if (inv.review === "rejected" || !inv.period_month || inv.amount_ht_cents == null) continue;
+    const key = inv.period_month.slice(0, 7);
+    const byEmp = invoicedByMonth.get(key) || new Map<string, number>();
+    byEmp.set(inv.employee_id, (byEmp.get(inv.employee_id) || 0) + signedHtCents(inv));
+    invoicedByMonth.set(key, byEmp);
   }
 
   const nameOf = new Map((src.people ?? []).map((p) => [p.id, p.full_name]));
@@ -296,6 +355,48 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   const invoiceLines: (InvoiceLine[] | null)[] = [];
   const encLines: (InvoiceLine[] | null)[] = [];
   const salaryLines: (SalaryLine[] | null)[] = [];
+  // Ventes and départs behind each month's count. Closed months count these lines;
+  // open months show them as what is already on file (the forecast is entered by hand).
+  const venteLines: MoveLine[][] = [];
+  const departLines: MoveLine[][] = [];
+  for (let m = 0; m < 12; m++) {
+    const from = monthStart(year, m), to = monthEnd(year, m);
+    venteLines.push(
+      staffedRows
+        .filter((a) => a.start_date >= from && a.start_date <= to)
+        .map((a): MoveLine => {
+          const e = employeeById.get(a.employee_id);
+          const project = projectTitle.get(a.project_id);
+          return {
+            employeeId: a.employee_id,
+            name: e ? displayName(e) : "Consultant",
+            date: a.start_date,
+            freelance: !!isFree.get(a.employee_id),
+            project: project?.title ?? "Projet",
+            client: project?.client_id ? clientName.get(project.client_id) ?? null : null,
+          };
+        })
+        .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name)),
+    );
+    const closed = m < openFrom;
+    departLines.push(
+      src.employees
+        .filter((e) => {
+          // Closed months: the effective exit, else the planned one. Open months: planned exits of people still here.
+          const exit = closed ? e.end_date ?? e.planned_exit_date : e.planned_exit_date ?? e.end_date;
+          if (!closed && e.status === "ended") return false;
+          return !!exit && exit >= from && exit <= to && (isFree.get(e.id) || !inStructureOn(e, exit) || staffedIn(e.id, from, to));
+        })
+        .map((e): MoveLine => ({
+          employeeId: e.id,
+          name: displayName(e),
+          date: (closed ? e.end_date ?? e.planned_exit_date : e.planned_exit_date ?? e.end_date)!,
+          freelance: !!isFree.get(e.id),
+          planned: !e.end_date,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name)),
+    );
+  }
   const freelanceLines: (FreelanceLine[] | null)[] = [];
   for (let m = 0; m < 12; m++) {
     if (m >= openFrom) {
@@ -319,8 +420,10 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     let free = 0;
     const days = craDays.get(key);
     const fLines: FreelanceLine[] = [];
-    for (const empId of staffed) {
-      if (!isFree.get(empId)) continue;
+    const invoiced = invoicedByMonth.get(key);
+    // Every freelancer with an invoice for the month, then the staffed ones.
+    const freelancers = new Set([...(invoiced?.keys() ?? []), ...[...staffed].filter((id) => isFree.get(id))]);
+    for (const empId of freelancers) {
       const rate = salaryOn(src.salaries, empId, to)?.daily_rate
         ?? salaryOn(src.salaries, empId, from)?.daily_rate ?? null;
       let d = days?.get(empId) ?? 0;
@@ -333,16 +436,20 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
             const end = a.end_date && a.end_date < to ? a.end_date : to;
             return s + (openDaysBetween(start, end) * a.allocation_pct) / 100;
           }, 0);
-      free += d * (rate ?? 0);
+      const cents = invoiced?.get(empId);
+      const cost = cents != null ? cents / 100 : d * (rate ?? 0);
+      free += cost;
       const e = employeeById.get(empId);
       fLines.push({
         employeeId: empId,
         name: e ? displayName(e) : "Freelance",
         days: d,
         estimated,
+        source: cents != null ? "invoice" : estimated ? "estimate" : "cra",
+        ...(cents != null ? { invoicedCents: cents } : {}),
         rate,
-        cost: d * (rate ?? 0),
-        staffed: true,
+        cost,
+        staffed: staffed.has(empId),
         exitDate: e ? e.end_date ?? e.planned_exit_date : null,
       });
     }
@@ -350,6 +457,9 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     freelanceLines.push(fLines);
 
     let sal = 0, inter = 0;
+    // Salaried consultants' working days (holidays excluded), billed and leave days, on their consultant share.
+    let jo = 0, jfs = 0, abs = 0, craComplete = true;
+    const tally = craTally.get(key);
     const lines: SalaryLine[] = [];
     for (const e of src.employees) {
       if (isFree.get(e.id)) continue;
@@ -368,6 +478,17 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
       const cost = (salary ?? 0) * multFor(e) * (days ? days[0] / days[1] : 1);
       sal += cost;
       if (!staffed.has(e.id)) inter += cost;
+      const share = days ? days[0] / days[1] : 1;
+      const exit = exitOf(e);
+      const workDays = workingDaysBetween(e.start_date > from ? e.start_date : from, exit && exit < to ? exit : to) * share;
+      const t = tally?.get(e.id);
+      // Client days only fall on mission days (already the consultant share); leave and
+      // other entries are spread over the month, so only their consultant share counts.
+      const client = Math.min(t?.client ?? 0, workDays);
+      jo += workDays;
+      jfs += client;
+      abs += (t?.leave ?? 0) * share;
+      if (Math.min(workDays, client + ((t?.filled ?? 0) - (t?.client ?? 0)) * share) < workDays) craComplete = false;
       lines.push({
         employeeId: e.id,
         name: displayName(e),
@@ -383,11 +504,8 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     lines.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name));
     salaryLines.push(lines);
 
-    const ventes = staffedRows.filter((a) => a.start_date >= from && a.start_date <= to).length;
-    const departs = src.employees.filter((e) => {
-      const exit = e.end_date ?? e.planned_exit_date;
-      return !!exit && exit >= from && exit <= to && (isFree.get(e.id) || !inStructureOn(e, exit) || staffedIn(e.id, from, to));
-    }).length;
+    const ventes = venteLines[m].length;
+    const departs = departLines[m].length;
 
     months.push({
       cons: staffed.size,
@@ -398,6 +516,11 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
       ventes,
       departs,
       enc: (encByMonth.get(key) || 0) / 100,
+      jo,
+      jfs,
+      jf: jfs + fLines.reduce((t, l) => t + l.days, 0),
+      abs,
+      craComplete,
     });
   }
 
@@ -438,14 +561,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   const structure = structureLines.map((lines) => lines.reduce((t, l) => t + l.cost, 0));
 
   // Planned exits in open months (forecast departures seed).
-  const plannedDeparts = Array.from({ length: 12 }, (_, m) => {
-    if (m < openFrom) return 0;
-    const from = monthStart(year, m), to = monthEnd(year, m);
-    return src.employees.filter((e) => {
-      const exit = e.planned_exit_date ?? e.end_date;
-      return e.status !== "ended" && !!exit && exit >= from && exit <= to && (isFree.get(e.id) || !inStructureOn(e, exit) || staffedIn(e.id, from, to));
-    }).length;
-  });
+  const plannedDeparts = departLines.map((lines, m) => (m < openFrom ? 0 : lines.length));
 
   // Seeds, measured as of today.
   const now = isoDay(today);
@@ -454,7 +570,6 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   const staffedNow = [...new Set(current.map((a) => a.employee_id))];
   const seeds: Seeds = {};
   if (staffedNow.length) {
-    seeds.consDebut = staffedNow.length;
     const nFree = staffedNow.filter((id) => isFree.get(id)).length;
     seeds.pctFree = Math.round((nFree / staffedNow.length) * 100);
   }
@@ -516,6 +631,8 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
       name: displayName(e),
       days: 0,
       estimated: false,
+      // Today's roster (rates for the forecast), not a measured month.
+      source: "estimate" as const,
       rate: salaryOn(src.salaries, e.id, now)?.daily_rate ?? null,
       cost: 0,
       staffed: staffedToday.has(e.id),
@@ -525,7 +642,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
 
   const recentStarts = staffedRows.filter((a) => a.start_date > yearAgo && a.start_date <= now).length;
 
-  return { revenueBasis, months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers, invoiceLines, encLines, structure, structureLines };
+  return { revenueBasis, months, seeds, plannedDeparts, avgVentes: Math.round(recentStarts / 12), salaryLines, currentSalaried, freelanceLines, currentFreelancers, invoiceLines, encLines, structure, structureLines, venteLines, departLines };
 }
 
 /* ── Loaders ────────────────────────────────────────────────────────── */
@@ -533,7 +650,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
 const PAGE = 1000;
 
 /** Page past PostgREST's 1000-row cap. */
-async function paged<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
+export async function paged<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
   const rows: T[] = [];
   for (let offset = 0; ; offset += PAGE) {
     const page = await query(offset, offset + PAGE - 1);
@@ -563,17 +680,31 @@ export async function loadCra(client: SupabaseClient, year: number): Promise<Cra
       client
         .from("cra_entries")
         .select(cols)
-        .eq("status", "client_project")
         .gte("day", `${year}-01-01`)
         .lte("day", `${year}-12-31`)
         .range(from, to),
     );
   try {
-    return await run("employee_id, day, part");
+    return await run("employee_id, day, part, status");
   } catch {
     // Databases without the half-day migration: every entry is a full day.
-    return run("employee_id, day");
+    return run("employee_id, day, status");
   }
+}
+
+/** Freelancer invoices for one year's service months (admin only, under RLS). */
+export async function loadFreelancerInvoices(client: SupabaseClient, year: number): Promise<FreelancerInvoiceRow[]> {
+  const rows = await paged<FreelancerInvoiceRow>((from, to) =>
+    client
+      .from("freelancer_invoices")
+      .select("employee_id, period_month, amount_ht_cents, review, is_credit_note")
+      .gte("period_month", `${year}-01-01`)
+      .lte("period_month", `${year}-12-01`)
+      .neq("review", "rejected")
+      .order("id")
+      .range(from, to),
+  );
+  return rows.map((r) => (r.is_credit_note && r.amount_ht_cents != null ? { ...r, amount_ht_cents: signedHtCents(r) } : r));
 }
 
 export function loadExtensions(client: SupabaseClient): Promise<ExtensionRow[]> {
@@ -752,4 +883,49 @@ export function aggregateVat(
     remittances.push(paid);
   }
   return { vat, remittances };
+}
+
+/** A social-charge item of the P&L, matched to the Qonto debits that pay it. */
+export type ChargeItem = "urssaf" | "mutuelle" | "tickets" | "medecine";
+
+/** Payees by item, matched on counterparty, label and reference (case and accents ignored). */
+const CHARGE_PAYEES: [ChargeItem, RegExp][] = [
+  ["medecine", /medecine|sante au travail|\bsist\b|\bsstrn\b|\bcmie\b|\bames\b|ametra|efficience|thalie|prevantis|\bacms\b|\bastbtp\b/],
+  ["tickets", /swile|lunchr|edenred|ticket resto|ticket restaurant|pluxee|sodexo|up dejeuner|cheque dejeuner|bimpli|apetiz|\bconecs\b/],
+  ["mutuelle", /mutuelle|\balan\b|harmonie|\bmgen\b|swisslife|swiss life|generali|axa sante|april sante|henner|groupama|\bmacif\b|\bmaaf\b|prevoyance/],
+  ["urssaf", /urssaf|retraite|agirc|arrco|malakoff|humanis|ag2r|klesia|apicil|\bb2v\b|\bpro ?btp\b|audiens|\birp\b|\bcipav\b|france travail|pole emploi/],
+];
+
+const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** The social-charge item a debit pays, if any (VAT remittances never). */
+export function chargeItemOf(r: Pick<BankRow, "counterparty" | "label" | "reference">): ChargeItem | null {
+  if (isVatRemittance(r)) return null;
+  const text = fold(`${r.counterparty} ${r.label} ${r.reference ?? ""}`);
+  for (const [item, re] of CHARGE_PAYEES) if (re.test(text)) return item;
+  return null;
+}
+
+/**
+ * Employer social charges on salary lines whose cost is the gross salary
+ * (cjmMultiplier 1): URSSAF + pension as a % of gross, and per-head costs
+ * (mutuelle, meal vouchers, occupational health) prorated by the share of
+ * the month counted (cost ÷ salary). Interns carry no charges.
+ */
+type ChargeRates = Pick<Hypotheses, "tauxCharges" | "mutuelle" | "ticketsResto" | "medecine">;
+
+/** One person's employer charges for the month (none for interns or without a salary on file). */
+export function socialChargesOf(l: SalaryLine, h: ChargeRates): SocialCharges {
+  if (l.contractType === "Internship" || !l.salary) return { urssaf: 0, mutuelle: 0, tickets: 0, medecine: 0 };
+  const head = l.cost / l.salary;
+  return { urssaf: (l.cost * h.tauxCharges) / 100, mutuelle: head * h.mutuelle, tickets: head * h.ticketsResto, medecine: (head * h.medecine) / 12 };
+}
+
+export function socialCharges(lines: SalaryLine[], h: ChargeRates): SocialCharges {
+  const t = { urssaf: 0, mutuelle: 0, tickets: 0, medecine: 0 };
+  for (const l of lines) {
+    const c = socialChargesOf(l, h);
+    t.urssaf += c.urssaf; t.mutuelle += c.mutuelle; t.tickets += c.tickets; t.medecine += c.medecine;
+  }
+  return t;
 }

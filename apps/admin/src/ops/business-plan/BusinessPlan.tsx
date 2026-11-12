@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, RefreshCw, RotateCcw } from "lucide-react";
 import { DetailPanel, type DetailKind } from "./DetailPanel";
+import { businessPlanXlsx, type ExportYear } from "./export-xlsx";
 import { db, errorMessage, isMissingRelationError } from "@quicksort/hr-db";
 import { cn } from "cn";
 import {
@@ -22,6 +23,10 @@ import {
   ButtonGroupText,
   Card,
   CardContent,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   CardHeader,
   CardTitle,
   Input,
@@ -50,20 +55,24 @@ import {
 } from "@quicksort-sas/ui";
 import { PageAlerts } from "../../ui";
 import { loadWorkspace } from "../../hr/data";
-import { loadPlanMultipliers, type PlanMultipliers, type PlanScenario } from "../../hr/economics";
 import { BankError, useBankApi, type BankStatus } from "./bank";
 import {
   aggregateActuals,
   aggregateFixedCharges,
   aggregateVat,
+  socialCharges,
   loadCra,
   loadExtensions,
+  loadFreelancerInvoices,
   loadInvoices,
   loadSavedPlan,
   loadStructureStaff,
   saveSavedPlan,
   setStructure,
+  type Aggregate,
   type BankRow,
+  type CraRow,
+  type FreelancerInvoiceRow,
   type PlanSources,
   type RevenueBasis,
   type SavedPlan,
@@ -75,6 +84,8 @@ import {
   firstOpenMonth,
   fmt,
   HYPOTHESIS_KEYS,
+  migrateHypotheses,
+  craIncompleteNote,
   kEur,
   MONTH_NAMES,
   num,
@@ -84,6 +95,8 @@ import {
   type FixedLineKey,
   type HypothesisKey,
   type Hypotheses,
+  type MonthInput,
+  type PlanResult,
 } from "./model";
 
 /**
@@ -97,15 +110,15 @@ import {
 type Field = { key: HypothesisKey; label: string; unit: string; step?: number };
 const GROUPS: { title: string; fields: Field[] }[] = [
   { title: "Activité et prix", fields: [
-    { key: "consDebut", label: "Consultants staffés au 1er janvier", unit: "nb" },
     { key: "tjm", label: "TJM moyen facturé", unit: "€" },
-    { key: "jours", label: "Jours ouvrés facturables / mois", unit: "j" },
-    { key: "occ", label: "Taux d’occupation des salariés", unit: "%" },
+    { key: "taci", label: "TACI cible des salariés (congés inclus)", unit: "%", step: 0.5 },
+    { key: "congesAn", label: "Congés payés par salarié / an", unit: "j" },
+    { key: "rttAn", label: "RTT par salarié / an", unit: "j" },
     { key: "pctFree", label: "Part de freelances", unit: "%" },
   ] },
   { title: "Coûts de production", fields: [
     { key: "coutFree", label: "Coût journalier freelance", unit: "€" },
-    { key: "salaire", label: "Salaire chargé consultant / mois", unit: "€", step: 100 },
+    { key: "salaire", label: "Salaire brut consultant / mois", unit: "€", step: 100 },
     { key: "commFactor", label: "Commission factor sur CA", unit: "%", step: 0.1 },
     { key: "primeIC", label: "Prime IC par vente", unit: "€", step: 50 },
     { key: "primeChasseur", label: "Prime chasseur par vente", unit: "€", step: 50 },
@@ -119,24 +132,25 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     { key: "fDivers", label: "Divers", unit: "€", step: 100 },
     { key: "fAmort", label: "Dotations aux amortissements et provisions", unit: "€", step: 100 },
   ] },
+  { title: "Cotisations sociales", fields: [
+    { key: "tauxCharges", label: "URSSAF et retraite patronales", unit: "% du brut", step: 0.5 },
+    { key: "mutuelle", label: "Mutuelle par salarié / mois", unit: "€", step: 10 },
+    { key: "ticketsResto", label: "Tickets restaurant par salarié / mois", unit: "€", step: 10 },
+    { key: "medecine", label: "Médecine du travail par salarié / an", unit: "€", step: 10 },
+  ] },
   { title: "Trésorerie et impôt", fields: [
     { key: "tresoDebut", label: "Trésorerie au 1er janvier", unit: "€", step: 1000 },
     { key: "dso", label: "Délai de paiement clients", unit: "jours", step: 30 },
-    { key: "tauxIS", label: "Taux d’IS appliqué", unit: "%", step: 0.5 },
+    { key: "tauxIS", label: "Taux d'IS appliqué", unit: "%", step: 0.5 },
   ] },
 ];
 
-type Loaded = Omit<PlanSources, "cra" | "cjmMultiplier"> & { salariesVisible: boolean; multipliers: PlanMultipliers };
+type Loaded = Omit<PlanSources, "cra" | "cjmMultiplier"> & { salariesVisible: boolean };
 
-const SCENARIOS: { id: PlanScenario; param: string; label: string }[] = [
-  { id: "pessimistic", param: "pessimiste", label: "Pessimiste" },
-  { id: "optimistic", param: "optimiste", label: "Optimiste" },
-];
 const BASES: { id: RevenueBasis; param: string; label: string; text: string }[] = [
   { id: "period", param: "prestation", label: "Mois de prestation", text: "par mois de prestation" },
-  { id: "issue", param: "emission", label: "Date d’émission", text: "par date d’émission" },
+  { id: "issue", param: "emission", label: "Date d'émission", text: "par date d'émission" },
 ];
-const multLabel = (v: number) => `×${String(v).replace(".", ",")}`;
 type Draft = { hyp: Record<HypothesisKey, string>; ventes: string[]; departs: string[] };
 
 const untyped = () => db() as unknown as SupabaseClient;
@@ -150,12 +164,90 @@ const MAX_SYNC_RELAUNCHES = 10;
 /** "à l’instant", "12 min", "3 h", "2 j". */
 function ago(iso: string, now: number): string {
   const min = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
-  if (min < 1) return "à l’instant";
+  if (min < 1) return "à l'instant";
   if (min < 60) return `il y a ${min} min`;
   const h = Math.round(min / 60);
   return h < 24 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
 }
 const str = (v: number) => String(v);
+
+/** One year's monthly inputs: actuals where closed, the entered sales / departures elsewhere. */
+function monthInputs(
+  agg: Aggregate,
+  h: Hypotheses,
+  ventes: (m: number) => number,
+  departs: (m: number) => number,
+  fixed: ReturnType<typeof aggregateFixedCharges>["fixed"],
+  vat: ReturnType<typeof aggregateVat>["vat"],
+): MonthInput[] {
+  return agg.months.map((actual, m) => ({
+    actual,
+    ventes: ventes(m),
+    departs: departs(m),
+    structure: agg.structure[m],
+    fixed: fixed[m] ?? undefined,
+    vat: vat[m] ?? undefined,
+    cotConsultants: agg.salaryLines[m] ? socialCharges(agg.salaryLines[m]!, h) : undefined,
+    cotStructure: socialCharges(agg.structureLines[m], h),
+  }));
+}
+
+/** A year between today's and the selected one: what its saved plan needs. */
+type PrevYear = { year: number; saved: SavedPlan | null; cra: CraRow[]; freelancerInvoices: FreelancerInvoiceRow[]; bankRows: BankRow[] | null };
+/** Where a year starts: consultants and cash at the end of the year before (null = cash is a hypothesis). */
+type YearStart = { cons: number; treso: number | null };
+
+/** Saved plan, CRA days and Qonto rows of a year other than the one on screen. */
+async function loadYear(client: SupabaseClient, bankApi: ReturnType<typeof useBankApi>, y: number): Promise<PrevYear> {
+  const [s, c, rows, fi] = await Promise.all([
+    loadSavedPlan(client, y).catch(() => null),
+    loadCra(client, y).catch(() => []),
+    // No Qonto: that year's fixed charges and VAT stay on hypotheses.
+    bankApi.transactions(y).catch(() => null),
+    // No freelancer invoices table (or no access): the CRA × rate estimate stands.
+    loadFreelancerInvoices(client, y).catch(() => []),
+  ]);
+  return { year: y, saved: s, cra: c, freelancerInvoices: fi, bankRows: rows };
+}
+
+/**
+ * A year other than the one on screen, from its saved plan (real months,
+ * then the saved hypotheses, sales and departures, else the data defaults),
+ * starting from `cons` consultants and, when known, `treso` cash.
+ */
+function projectYear(
+  base: Loaded,
+  basis: RevenueBasis,
+  today: Date,
+  coverage: string | null,
+  p: PrevYear,
+  cons: number,
+  treso: number | null,
+): { plan: PlanResult; h: Hypotheses } {
+  const open = firstOpenMonth(p.year, today);
+  const a = aggregateActuals({ ...base, cjmMultiplier: 1, internMultiplier: 1, cra: p.cra, freelancerInvoices: p.freelancerInvoices, revenueBasis: basis }, p.year, open, today);
+  const h = { ...DEFAULT_HYPOTHESES };
+  const savedHyp = migrateHypotheses(p.saved?.hypotheses);
+  for (const k of HYPOTHESIS_KEYS) h[k] = savedHyp[k] ?? a.seeds[k] ?? DEFAULT_HYPOTHESES[k];
+  if (treso != null) h.tresoDebut = treso;
+  const rowsCov = p.bankRows ? coverage : null;
+  const plan = computePlan(
+    h,
+    monthInputs(
+      a, h,
+      (m) => p.saved?.monthly?.ventes?.[m] ?? a.avgVentes,
+      (m) => p.saved?.monthly?.departs?.[m] ?? a.plannedDeparts[m],
+      aggregateFixedCharges(p.bankRows ?? [], p.year, open, rowsCov).fixed,
+      aggregateVat(base.invoices, p.bankRows ?? [], p.year, open, rowsCov).vat,
+    ),
+    cons,
+    p.year,
+  );
+  return { plan, h };
+}
+
+/** Years in the multi-year Excel export: the one on screen and the ones after it. */
+const EXPORT_YEARS = 3;
 
 export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
   const today = useMemo(() => new Date(), []);
@@ -174,18 +266,6 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
       },
       { replace: true },
     );
-  // Employer-cost scenario (salary multiplier), also kept in the URL.
-  const scenario: PlanScenario = SCENARIOS.find((s) => s.param === params.get("charges"))?.id ?? "pessimistic";
-  const setScenario = (id: PlanScenario) =>
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (id === "pessimistic") next.delete("charges");
-        else next.set("charges", SCENARIOS.find((s) => s.id === id)!.param);
-        return next;
-      },
-      { replace: true },
-    );
   // Revenue month: period of service (default) or issue date, also kept in the URL.
   const basis = BASES.find((b) => b.param === params.get("ca")) ?? BASES[0];
   const setBasis = (id: RevenueBasis) =>
@@ -200,7 +280,11 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     );
   const [base, setBase] = useState<Loaded | null>(null);
   const [cra, setCra] = useState<PlanSources["cra"] | null>(null);
+  const [freelancerInvoices, setFreelancerInvoices] = useState<FreelancerInvoiceRow[]>([]);
   const [saved, setSaved] = useState<SavedPlan | null>(null);
+  /** Years from today's to the one before the selected year: their saved plans carry headcount and cash forward. */
+  const [prev, setPrev] = useState<{ year: number; years: PrevYear[] } | null>(null);
+  const prevYears = prev?.year === year ? prev.years : null;
   const [tableMissing, setTableMissing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -312,11 +396,10 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     let cancelled = false;
     (async () => {
       const client = untyped();
-      const [ws, invoices, extensions, mult, structureStaff] = await Promise.all([
+      const [ws, invoices, extensions, structureStaff] = await Promise.all([
         loadWorkspace(),
         loadInvoices(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
         loadExtensions(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
-        loadPlanMultipliers(),
         loadStructureStaff(client).catch((e) => (isMissingRelationError(e) ? [] : Promise.reject(e))),
       ]);
       if (cancelled) return;
@@ -327,7 +410,6 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         projects: ws.projects,
         extensions,
         invoices,
-        multipliers: mult.multipliers,
         people: ws.people.map((p) => ({ id: p.id, full_name: p.full_name })),
         clients: ws.clients,
         structureStaff,
@@ -349,7 +431,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     setDirty(false);
     (async () => {
       const client = untyped();
-      const [craRows, plan] = await Promise.all([
+      const [craRows, plan, invoicesOfYear] = await Promise.all([
         loadCra(client, year).catch(() => []),
         loadSavedPlan(client, year).catch((e) => {
           if (isMissingRelationError(e)) {
@@ -358,8 +440,11 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
           }
           throw e;
         }),
+        // No freelancer invoices table (or no access): the CRA × rate estimate stands.
+        loadFreelancerInvoices(client, year).catch(() => []),
       ]);
       if (cancelled) return;
+      setFreelancerInvoices(invoicesOfYear);
       setCra(craRows);
       setSaved(plan);
     })().catch((e) => !cancelled && setError(errorMessage(e)));
@@ -367,6 +452,19 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
       cancelled = true;
     };
   }, [year]);
+
+  // Per-year: the years before it (from today's), reloaded after a Qonto sync without touching the draft.
+  useEffect(() => {
+    let cancelled = false;
+    const client = untyped();
+    const years = Array.from({ length: Math.max(0, year - today.getFullYear()) }, (_, i) => today.getFullYear() + i);
+    Promise.all(years.map((y) => loadYear(client, bankApi, y)))
+      .then((list) => !cancelled && setPrev({ year, years: list }))
+      .catch((e) => !cancelled && setError(errorMessage(e)));
+    return () => {
+      cancelled = true;
+    };
+  }, [year, today, bankApi, bankVersion]);
 
   const openFrom = firstOpenMonth(year, today);
   // Real fixed charges only once the first full sync is done.
@@ -381,27 +479,44 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     [base, bankRows, year, openFrom, coverageStart],
   );
   const unclassifiedTotal = bank.unclassifiedCount.reduce((a, b) => a + b, 0);
-  const multiplier = base ? base.multipliers[scenario] : 0;
+  // Salaries are gross: employer charges come from the "Cotisations sociales" hypotheses.
+  const multiplier = 1;
   const agg = useMemo(
-    () => (base && cra ? aggregateActuals({ ...base, cjmMultiplier: multiplier, cra, revenueBasis: basis.id }, year, openFrom, today) : null),
-    [base, cra, year, openFrom, today, multiplier, basis.id],
+    () => (base && cra ? aggregateActuals({ ...base, cjmMultiplier: 1, internMultiplier: 1, cra, freelancerInvoices, revenueBasis: basis.id }, year, openFrom, today) : null),
+    [base, cra, freelancerInvoices, year, openFrom, today, basis.id],
   );
-  // Switching scenario re-seeds the forecast loaded salary, unless it was edited.
-  const seededSalaire = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    const next = agg?.seeds.salaire;
-    const prev = seededSalaire.current;
-    seededSalaire.current = next;
-    if (next === undefined || prev === undefined || prev === next || saved?.hypotheses?.salaire !== undefined) return;
-    setDraft((d) => (d && num(d.hyp.salaire) === prev ? { ...d, hyp: { ...d.hyp, salaire: str(next) } } : d));
-  }, [agg, saved]);
+
+  /**
+   * Where the selected year starts. A year after today's starts from the
+   * previous year's December: its saved plan (real months, then the saved
+   * hypotheses, sales and departures, else the data defaults) is recomputed
+   * year after year from today's, whose January cash stays a hypothesis.
+   * Today's year starting in January takes last December's measured headcount.
+   */
+  const start: YearStart | null = useMemo(() => {
+    if (!base || !prevYears) return null;
+    const src = (c: CraRow[]): PlanSources => ({ ...base, cjmMultiplier: 1, internMultiplier: 1, cra: c, revenueBasis: basis.id });
+    const y0 = today.getFullYear();
+    let cons = year <= y0 && firstOpenMonth(year, today) > 0
+      ? 0
+      : aggregateActuals(src([]), Math.min(year, y0) - 1, 12, today).months[11]?.cons ?? 0;
+    let treso: number | null = null;
+    const cov = bankStatus?.state.backfillDone ? bankStatus.state.coverageStart : null;
+    for (const p of prevYears) {
+      const { plan: r } = projectYear(base, basis.id, today, cov, p, cons, treso);
+      cons = r.totals.consFin;
+      treso = r.totals.treso;
+    }
+    return { cons, treso };
+  }, [base, prevYears, year, today, basis.id, bankStatus]);
 
   /** Draft as it would be with no edits: saved values, else data seeds, else mockup defaults. */
   const initialDraft = useCallback((): Draft | null => {
     if (!agg || !cra) return null;
     const hyp = {} as Record<HypothesisKey, string>;
+    const savedHyp = migrateHypotheses(saved?.hypotheses);
     for (const k of HYPOTHESIS_KEYS)
-      hyp[k] = str(saved?.hypotheses?.[k] ?? agg.seeds[k] ?? DEFAULT_HYPOTHESES[k]);
+      hyp[k] = str(savedHyp[k] ?? agg.seeds[k] ?? DEFAULT_HYPOTHESES[k]);
     const pick = (stored: (number | null)[] | undefined, seed: (m: number) => number) =>
       Array.from({ length: 12 }, (_, m) => str(stored?.[m] ?? seed(m)));
     return {
@@ -422,23 +537,19 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     if (!draft) return null;
     const h = { ...DEFAULT_HYPOTHESES };
     for (const k of HYPOTHESIS_KEYS) h[k] = num(draft.hyp[k]);
+    if (start?.treso != null) h.tresoDebut = start.treso;
     return h;
-  }, [draft]);
+  }, [draft, start]);
 
   const plan = useMemo(() => {
-    if (!agg || !draft || !H) return null;
+    if (!agg || !draft || !H || !start) return null;
     return computePlan(
       H,
-      agg.months.map((actual, m) => ({
-        actual,
-        ventes: num(draft.ventes[m]),
-        departs: num(draft.departs[m]),
-        structure: agg.structure[m],
-        fixed: bank.fixed[m] ?? undefined,
-        vat: vat.vat[m] ?? undefined,
-      })),
+      monthInputs(agg, H, (m) => num(draft.ventes[m]), (m) => num(draft.departs[m]), bank.fixed, vat.vat),
+      start.cons,
+      year,
     );
-  }, [agg, draft, H, bank, vat]);
+  }, [agg, draft, H, bank, vat, start, year]);
 
   const edit = (fn: (d: Draft) => Draft) => {
     setDraft((d) => (d ? fn(d) : d));
@@ -458,7 +569,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         return { ...b, structureStaff: entry ? [...rest, { ...entry, employee_id: employeeId }] : rest };
       });
     } catch (e) {
-      setError(isMissingRelationError(e) ? "La table business_plan_structure n’existe pas encore — appliquez la migration." : errorMessage(e));
+      setError(isMissingRelationError(e) ? "La table business_plan_structure n'existe pas encore. Appliquez la migration." : errorMessage(e));
     }
   }
 
@@ -487,9 +598,37 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
       setDirty(false);
       setMessage(`Business plan ${year} enregistré.`);
     } catch (e) {
-      setError(isMissingRelationError(e) ? "La table business_plans n’existe pas encore — appliquez la migration." : errorMessage(e));
+      setError(isMissingRelationError(e) ? "La table business_plans n'existe pas encore. Appliquez la migration." : errorMessage(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  const [exporting, setExporting] = useState(false);
+  /** Downloads the plan on screen (unsaved edits included), alone or followed by the next years' saved plans. */
+  async function exportExcel(count: number) {
+    if (!plan || !H || !base) return;
+    setExporting(true);
+    setError("");
+    try {
+      const years: ExportYear[] = [{ year, plan, h: H }];
+      const cov = bankStatus?.state.backfillDone ? bankStatus.state.coverageStart : null;
+      const next = await Promise.all(Array.from({ length: count - 1 }, (_, i) => loadYear(untyped(), bankApi, year + 1 + i)));
+      for (const p of next) {
+        const prevEnd = years[years.length - 1].plan.totals;
+        years.push({ year: p.year, ...projectYear(base, basis.id, today, cov, p, prevEnd.consFin, prevEnd.treso) });
+      }
+      const bytes = businessPlanXlsx(years, GROUPS);
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `business-plan-${year}${count > 1 ? `-${year + count - 1}` : ""}${dirty ? "-non-enregistre" : ""}.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -505,11 +644,11 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
     }
   }
 
-  const loading = !plan || !draft || !agg || !base;
+  const loading = !plan || !draft || !agg || !base || !start;
   /** Hypotheses that differ from a measured value. */
   const overrides =
     agg && draft
-      ? HYPOTHESIS_KEYS.filter((k) => agg.seeds[k] !== undefined && num(draft.hyp[k]) !== agg.seeds[k] && !(k === "consDebut" && openFrom > 0)).length
+      ? HYPOTHESIS_KEYS.filter((k) => agg.seeds[k] !== undefined && num(draft.hyp[k]) !== agg.seeds[k]).length
       : 0;
   const rows = plan ? planRows(plan) : [];
   const actualCount = Math.min(openFrom, 12);
@@ -550,7 +689,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
           <PageAlerts error={error} message={message} />
           {tableMissing && (
             <Alert variant="destructive" role="status">
-              <AlertDescription>La table business_plans n’existe pas encore : les hypothèses ne peuvent pas être enregistrées.</AlertDescription>
+              <AlertDescription>La table business_plans n'existe pas encore : les hypothèses ne peuvent pas être enregistrées.</AlertDescription>
             </Alert>
           )}
         </div>
@@ -574,6 +713,17 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                   ? `Enregistré le ${new Date(saved.updated_at).toLocaleDateString("fr-FR")}`
                   : "Valeurs issues des données"}
             </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" disabled={loading || exporting} />}>
+                <Download data-icon="inline-start" /> {exporting ? "Export…" : "Exporter Excel"}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => exportExcel(1)}>Année {year}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportExcel(EXPORT_YEARS)}>
+                  {EXPORT_YEARS} ans ({year}–{year + EXPORT_YEARS - 1})
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" onClick={resetToData} disabled={loading}>
               <RotateCcw data-icon="inline-start" /> Réinitialiser
             </Button>
@@ -597,24 +747,6 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               ))}
             </NativeSelect>
           </div>
-          <div className="flex items-center gap-2">
-            <label htmlFor="bp-charges" className="text-sm text-muted-foreground">Charges salariales</label>
-            <NativeSelect
-              id="bp-charges"
-              size="sm"
-              value={scenario}
-              onChange={(e) => setScenario(e.target.value as PlanScenario)}
-              disabled={!base}
-              title="Coût employeur = salaire brut × multiplicateur (réglages globaux → Unit economics)"
-            >
-              {SCENARIOS.map((s) => (
-                <NativeSelectOption key={s.id} value={s.id}>
-                  {s.label}
-                  {base ? ` (${multLabel(base.multipliers[s.id])})` : ""}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </div>
         </div>
       </div>
 
@@ -633,13 +765,13 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               <CardContent className="flex flex-col gap-6">
                 <StatGroup>
                   <Kpi
-                    label="Chiffre d’affaires"
+                    label="Chiffre d'affaires"
                     value={kEur(plan.totals.ca)}
                     hint={`${kEur(plan.totals.ca / 12)} / mois en moyenne`}
                     formula={[
                       "Somme des 12 mois.",
                       `Réel : factures finalisées ou payées, ${basis.text}.`,
-                      "Prévisionnel : consultants × jours facturables × TJM (salariés × taux d’occupation).",
+                      "Prévisionnel : consultants × jours ouvrés × TJM (salariés × TACI du mois).",
                     ]}
                   />
                   <Kpi
@@ -659,17 +791,17 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                     formula={[
                       "= Marge brute − charges fixes",
                       `= ${kEur(plan.totals.mb)} − ${kEur(sumOf(plan.series.fix))}`,
-                      "Excédent brut d’exploitation : avant amortissements, intérêts et IS.",
+                      "Excédent brut d'exploitation : avant amortissements, intérêts et IS.",
                     ]}
                   />
                   <Kpi
-                    label="EBIT (résultat d’exploitation)"
+                    label="EBIT (résultat d'exploitation)"
                     value={kEur(plan.totals.ex)}
                     hint={`${pct(plan.totals.exPct)} du CA`}
                     formula={[
                       "= EBITDA − dotations aux amortissements et provisions",
                       `= ${kEur(plan.totals.eb)} − ${kEur(sumOf(plan.series.da))}`,
-                      "Résultat de l’activité courante, avant intérêts et IS.",
+                      "Résultat de l'activité courante, avant intérêts et IS.",
                     ]}
                   />
                 </StatGroup>
@@ -678,16 +810,35 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                   <Kpi
                     label="Résultat net estimé"
                     value={kEur(plan.totals.rn)}
-                    hint={`résultat d’exploitation ${kEur(plan.totals.ex)} − IS ${kEur(plan.totals.is)}`}
+                    hint={`résultat d'exploitation ${kEur(plan.totals.ex)} − IS ${kEur(plan.totals.is)}`}
                     accent
                     formula={[
-                      "= Résultat d’exploitation − IS",
-                      `Résultat d’exploitation = EBE − dotations = ${kEur(plan.totals.eb)} − ${kEur(sumOf(plan.series.da))} = ${kEur(plan.totals.ex)}`,
-                      `IS = ${fmt(H!.tauxIS)} % du résultat d’exploitation s’il est positif = ${kEur(plan.totals.is)}`,
+                      "= Résultat d'exploitation − IS",
+                      `Résultat d'exploitation = EBE − dotations = ${kEur(plan.totals.eb)} − ${kEur(sumOf(plan.series.da))} = ${kEur(plan.totals.ex)}`,
+                      `IS = ${fmt(H!.tauxIS)} % du résultat d'exploitation s'il est positif = ${kEur(plan.totals.is)}`,
                     ]}
                   />
                   <Kpi
-                    label="Consultants fin d’année"
+                    label="TACI"
+                    value={pct(plan.totals.taci)}
+                    hint={[`TACE ${pct(plan.totals.tace)} · intercontrat ${pct(plan.totals.itc)}`, craIncompleteNote(plan)].filter(Boolean).join(" · ")}
+                    formula={[
+                      "TACI = jours facturés / jours ouvrés des salariés (congés inclus).",
+                      "TACE = jours facturés / (jours ouvrés − congés). Intercontrat = jours ni facturés ni en congés (dont « Internal ») / jours ouvrés.",
+                      "Réel : CRA. Prévisionnel : TACI cible, modulé chaque mois par les congés.",
+                    ]}
+                  />
+                  <Kpi
+                    label="CJM moyen"
+                    value={`${fmt(plan.totals.cjm)} €`}
+                    hint={[`marge ${fmt(plan.totals.mj)} € / jour facturé`, craIncompleteNote(plan)].filter(Boolean).join(" · ")}
+                    formula={[
+                      "CJM = (salaires bruts + cotisations des consultants salariés) / jours ouvrés.",
+                      `Marge par jour facturé = (CA − coûts de production) / jours facturés · TJM réalisé ${fmt(plan.totals.tjmR)} €.`,
+                    ]}
+                  />
+                  <Kpi
+                    label="Consultants fin d'année"
                     value={fmt(plan.totals.consFin)}
                     hint={`${fmt(plan.totals.ventes)} ventes · ${fmt(plan.totals.departs)} départs`}
                     formula={[
@@ -696,7 +847,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                     ]}
                   />
                   <Kpi
-                    label="Trésorerie fin d’année"
+                    label="Trésorerie fin d'année"
                     value={kEur(plan.totals.treso)}
                     hint={`point bas : ${kEur(plan.totals.tresoMin)}`}
                     formula={[
@@ -737,17 +888,44 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                         <CardTitle id={`bp-group-${gi}`}>{g.title}</CardTitle>
                       </CardHeader>
                       <CardContent className="flex flex-col divide-y divide-border">
+                        {gi === 0 && (
+                          <div className="grid grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                            <div className="flex min-w-0 flex-col items-start gap-1">
+                              <label htmlFor="bp-consStart" className="text-sm leading-snug">
+                                Consultants au 1er janvier <span className="text-muted-foreground">(nb)</span>
+                              </label>
+                              <Badge variant={openFrom > 0 ? "secondary" : "outline"}>
+                                {openFrom > 0 ? "remplacé par le réel" : `fin ${year - 1}${year - 1 < today.getFullYear() ? "" : " projetée"}`}
+                              </Badge>
+                            </div>
+                            <Input
+                              className="num h-9 text-right"
+                              id="bp-consStart"
+                              type="number"
+                              value={openFrom > 0 ? str(plan.series.cons[0] ?? 0) : str(start.cons)}
+                              disabled
+                              readOnly
+                              title={`Consultants en décembre ${year - 1} : réel, ou projeté par le plan ${year - 1} (ventes − départs)`}
+                            />
+                          </div>
+                        )}
                         {g.fields.map((f) => {
                           const seed = agg.seeds[f.key];
-                          const replaced = f.key === "consDebut" && openFrom > 0;
+                          /** Carried over from the previous year's plan, not entered. */
+                          const carried = f.key === "tresoDebut" && start.treso != null;
                           return (
                             <div key={f.key} className="grid grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                               <div className="flex min-w-0 flex-col items-start gap-1">
                                 <label htmlFor={`bp-${f.key}`} className="text-sm leading-snug">
                                   {f.label} <span className="text-muted-foreground">({f.unit})</span>
                                 </label>
-                                {replaced ? (
-                                  <Badge variant="secondary">remplacé par le réel</Badge>
+                                {f.key === "taci" && (
+                                  <span className="num text-xs text-muted-foreground">
+                                    TACE équivalent {pct(plan.calendar.tace[0] ?? 0)} · TACI max {pct(plan.calendar.taciMax)}
+                                  </span>
+                                )}
+                                {carried ? (
+                                  <Badge variant="outline">fin {year - 1} projetée</Badge>
                                 ) : seed !== undefined && num(draft.hyp[f.key]) !== seed ? (
                                   <Button variant="outline" size="xs" className="num" onClick={() => setHyp(f.key, str(seed))} title="Revenir à la valeur mesurée">
                                     réel : {fmt(seed)}
@@ -762,8 +940,10 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                                 type="number"
                                 inputMode="decimal"
                                 step={f.step ?? 1}
-                                value={draft.hyp[f.key]}
-                                disabled={replaced}
+                                value={carried ? str(Math.round(start.treso!)) : draft.hyp[f.key]}
+                                disabled={carried}
+                                readOnly={carried}
+                                title={carried ? `Trésorerie fin décembre ${year - 1}, projetée par le plan ${year - 1}` : undefined}
                                 onChange={(e) => setHyp(f.key, e.target.value)}
                               />
                             </div>
@@ -779,9 +959,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
             <TabsContent value="plan" className="flex min-w-0 flex-col gap-12">
               <section aria-labelledby="bp-pl" className="flex min-w-0 flex-col gap-4">
                 <div className="flex flex-wrap items-end justify-between gap-4">
-                  <SectionTitle id="bp-pl" title="Compte de résultat mensuel">
-                    Les mois « Réel » sont calculés depuis la facturation, le staffing, les CRA, les salaires et les transactions Qonto. Saisissez les ventes et départs des mois prévisionnels.
-                  </SectionTitle>
+                  <SectionTitle id="bp-pl" title="Compte de résultat mensuel" />
                   <div className="ml-auto flex flex-col items-end gap-1.5">
                     <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
                       <span
@@ -823,18 +1001,36 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                     <TableBody>
                       <SectionRow label="Activité" />
                       <TableRow className={ROW.line}>
-                        <th scope="row" className={cn(LAB, LAB_BG.line)}>Jours ouvrés facturables</th>
+                        <th scope="row" className={cn(LAB, LAB_BG.line)} title="Lundi–vendredi, hors jours fériés">Jours ouvrés</th>
                         {MONTH_NAMES.map((name, m) => (
-                          <TableCell key={name} numeric className={cn(CELL, plan.actual[m] && ACTUAL)}>{fmt(H!.jours)}</TableCell>
+                          <TableCell key={name} numeric className={cn(CELL, plan.actual[m] && ACTUAL)}>{fmt(plan.calendar.jo[m])}</TableCell>
                         ))}
-                        <TableCell numeric className={TOT}>{fmt(H!.jours * 12)}</TableCell>
+                        <TableCell numeric className={TOT}>{fmt(sumOf(plan.calendar.jo))}</TableCell>
                       </TableRow>
                       {(["ventes", "departs"] as const).map((which) => (
                         <TableRow key={which} className={ROW.line}>
-                          <th scope="row" className={cn(LAB, LAB_BG.line, "font-medium")}>{which === "ventes" ? "Nb de ventes" : "Nb de départs"}</th>
+                          <th scope="row" className={cn(LAB, LAB_BG.line, "p-0 font-medium")}>
+                            <button
+                              type="button"
+                              className={cn(DRILL, "px-3 text-left underline decoration-muted-foreground decoration-dotted underline-offset-[3px]")}
+                              onClick={() => setDetail({ kind: which, month: Math.max(0, Math.min(11, actualCount > 0 ? actualCount - 1 : 0)) })}
+                              title={which === "ventes" ? "Voir les missions qui démarrent" : "Voir les départs"}
+                            >
+                              {which === "ventes" ? "Nb de ventes" : "Nb de départs"} <span className="text-muted-foreground no-underline" aria-hidden="true">›</span>
+                            </button>
+                          </th>
                           {MONTH_NAMES.map((name, m) =>
                             plan.actual[m] ? (
-                              <TableCell key={name} numeric className={cn(CELL, ACTUAL)}>{fmt(plan.series[which][m])}</TableCell>
+                              <TableCell key={name} numeric className={cn("h-auto p-0 first:pl-0 last:pr-0", ACTUAL)}>
+                                <button
+                                  type="button"
+                                  className={cn(DRILL, "num px-2 text-right")}
+                                  onClick={() => setDetail({ kind: which, month: m })}
+                                  aria-label={`${which === "ventes" ? "Nb de ventes" : "Nb de départs"}, détail ${name}`}
+                                >
+                                  {fmt(plan.series[which][m])}
+                                </button>
+                              </TableCell>
                             ) : (
                               <TableCell key={name} className="h-auto px-1.5 py-1.5">
                                 <Input
@@ -866,6 +1062,8 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                                   title={
                                     r.key === "ca" || r.key === "enc" ? "Voir le détail des factures"
                                       : r.key === "tva" ? "Voir le détail de la TVA"
+                                      : r.key === "cotc" || r.key === "cots" ? "Voir le détail des cotisations"
+                                      : r.key === "cu" || r.key === "cmu" || r.key === "ctr" || r.key === "cme" ? "Voir les paiements Qonto"
                                       : isFixedKey(r.key) ? "Voir le détail des transactions"
                                         : "Voir le détail par personne"
                                   }
@@ -891,7 +1089,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                                     type="button"
                                     className={cn(DRILL, "num px-2 text-right")}
                                     onClick={() => setDetail({ kind: r.key!, month: m })}
-                                    aria-label={`${r.label} — détail ${MONTH_NAMES[m]}${hint ? ` · ${hint}` : ""}`}
+                                    aria-label={`${r.label}, détail ${MONTH_NAMES[m]}${hint ? ` · ${hint}` : ""}`}
                                     title={hint || undefined}
                                   >
                                     {toReview > 0 && <span className="mr-1.5 inline-block size-1.5 rounded-full bg-destructive align-middle" aria-hidden="true" />}
@@ -900,10 +1098,21 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                                   </button>
                                 </TableCell>
                               ) : (
-                                <TableCell key={m} numeric className={cn(CELL, plan.actual[m] && ACTUAL)}>{r.kind === "pct" ? pct(v) : fmt(v)}</TableCell>
+                                <TableCell
+                                  key={m}
+                                  numeric
+                                  className={cn(CELL, plan.actual[m] && ACTUAL)}
+                                  title={r.indicator && plan.craIncomplete[m] ? "CRA incomplet : indicateur partiel" : undefined}
+                                >
+                                  {r.indicator && plan.craIncomplete[m] && <span className="mr-1 text-muted-foreground" aria-label="CRA incomplet">*</span>}
+                                  {r.kind === "pct" ? pct(v) : fmt(v)}
+                                </TableCell>
                               );
                             })}
-                            <TableCell numeric className={TOT}>{r.total === null ? "" : r.kind === "pct" ? pct(r.total) : fmt(r.total)}</TableCell>
+                            <TableCell numeric className={TOT} title={r.indicator && craIncompleteNote(plan) ? `${craIncompleteNote(plan)} : total partiel` : undefined}>
+                              {r.indicator && craIncompleteNote(plan) && <span className="mr-1 text-muted-foreground" aria-label="CRA incomplet">*</span>}
+                              {r.total === null ? "" : r.kind === "pct" ? pct(r.total) : fmt(r.total)}
+                            </TableCell>
                           </TableRow>
                         ),
                       )}
@@ -916,7 +1125,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <SectionTitle id="bp-chart" title="CA et EBITDA (EBE) par mois" />
                   <div className="flex flex-wrap gap-5 text-sm text-muted-foreground">
-                    <span className="inline-flex items-center gap-2"><i className="inline-block size-3 rounded-[3px] bg-(--chart-1)" aria-hidden="true" />Chiffre d’affaires</span>
+                    <span className="inline-flex items-center gap-2"><i className="inline-block size-3 rounded-[3px] bg-(--chart-1)" aria-hidden="true" />Chiffre d'affaires</span>
                     <span className="inline-flex items-center gap-2"><i className="inline-block size-3 rounded-[3px] bg-(--chart-2)" aria-hidden="true" />EBITDA (EBE)</span>
                     {actualCount > 0 && actualCount < 12 && (
                       <span className="inline-flex items-center gap-2"><i className={cn("inline-block size-3 rounded-[3px] border border-(--chart-1)", STRIPES_SM)} aria-hidden="true" />Prévisionnel</span>
@@ -925,7 +1134,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                 </div>
                 <Card>
                   <CardContent className="overflow-x-auto">
-                    <div role="img" aria-label="Histogramme mensuel du chiffre d’affaires et de l’EBITDA" className="grid min-w-[640px] grid-cols-12 items-end gap-3">
+                    <div role="img" aria-label="Histogramme mensuel du chiffre d'affaires et de l'EBITDA" className="grid min-w-[640px] grid-cols-12 items-end gap-3">
                       {MONTH_NAMES.map((name, m) => {
                         const forecast = actualCount > 0 && !plan.actual[m];
                         return (
@@ -970,11 +1179,11 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
               <footer className="border-t border-border pt-5 text-xs leading-relaxed text-muted-foreground">
                 Mois réels : CA = factures finalisées ou payées {basis.text} · encaissements = factures payées par date de paiement ·
                 consultants = personnes avec une mission confirmée, active ou terminée sur le mois · ventes = missions démarrant dans le mois ·
-                freelances = jours CRA × taux journalier · salaires = salaire mensuel brut × multiplicateur de charges (scénario {SCENARIOS.find((s) => s.id === scenario)!.label.toLowerCase()} : {multLabel(multiplier)}, × 1,4 pour les stagiaires) · inter-contrat =
-                salariés sans mission sur le mois · départs = sorties d’employés. Salaires structure : personnes listées en structure, sur leur période
-                (par défaut de l’embauche à la sortie ; prévisionnel : dernier salaire connu), hors jours ouvrés en mission —
-                comptés en salaires consultants, au prorata de l’allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses. TVA (trésorerie seulement) : mois clôturés couverts par Qonto = TVA des factures payées − TVA des dépenses − paiements DGFIP ; sinon 20 % des encaissements − 20 % des freelances et charges fixes hors salaires, solde reversé le mois suivant.
-                Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur le résultat d’exploitation annuel positif (EBE − dotations) ·
+                freelances = jours CRA × taux journalier · salaires = salaire mensuel brut (stagiaires : gratification) · cotisations sociales = URSSAF et retraite en % du brut + mutuelle, tickets restaurant et médecine du travail par salarié, au prorata du mois (hypothèses calées sur l'arrêté comptable ; stagiaires exclus) · inter-contrat =
+                salariés sans mission sur le mois · départs = sorties d'employés. Salaires structure : personnes listées en structure, sur leur période
+                (par défaut de l'embauche à la sortie ; prévisionnel : dernier salaire connu), hors jours ouvrés en mission,
+                comptés en salaires consultants, au prorata de l'allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses. TVA (trésorerie seulement) : mois clôturés couverts par Qonto = TVA des factures payées − TVA des dépenses − paiements DGFIP ; sinon 20 % des encaissements − 20 % des freelances et charges fixes hors salaires, solde reversé le mois suivant.
+                Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur le résultat d'exploitation annuel positif (EBE − dotations) ·
                 encaissements décalés du délai client, les coûts sont payés le mois même.
               </footer>
             </TabsContent>
@@ -986,7 +1195,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Modifications non enregistrées</AlertDialogTitle>
-            <AlertDialogDescription>Changer d’année quand même ? Les modifications du business plan {year} seront perdues.</AlertDialogDescription>
+            <AlertDialogDescription>Changer d'année quand même ? Les modifications du business plan {year} seront perdues.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Rester sur {year}</AlertDialogCancel>
@@ -997,7 +1206,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                 setPendingYear(null);
               }}
             >
-              Changer d’année
+              Changer d'année
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

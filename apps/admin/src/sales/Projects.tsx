@@ -278,6 +278,134 @@ function timelineProgress(p: Project) {
   };
 }
 
+/** CRA consumption feeding the project progress bars and billable caps. */
+type CraConsumption = {
+  /** All-time client_project days per project. */
+  days: Map<string, number>;
+  /** Given-year days per project and pricing line. */
+  lineYearDays: Map<string, Map<string, number>>;
+};
+
+const EMPTY_CONSUMPTION: CraConsumption = {
+  days: new Map(),
+  lineYearDays: new Map(),
+};
+
+/** Totals summed in the database (sales_project_cra_consumption). Null when
+    the function is not deployed yet, so the caller can fall back to
+    summing the raw entries. */
+async function loadCraConsumption(
+  year: number,
+): Promise<CraConsumption | null> {
+  try {
+    // Not in the generated Database types yet; call it untyped.
+    const untyped = db() as unknown as SupabaseClient;
+    const r = await untyped.rpc("sales_project_cra_consumption", {
+      target_year: year,
+    });
+    if (r.error || !r.data) return null;
+    const data = r.data as {
+      projects?: { project_id: string; days: number | string }[];
+      lines?: { project_id: string; pricing_line: string; days: number | string }[];
+    };
+    const days = new Map<string, number>();
+    for (const p of data.projects || []) days.set(p.project_id, Number(p.days));
+    const lineYearDays = new Map<string, Map<string, number>>();
+    for (const l of data.lines || []) {
+      const byLine = lineYearDays.get(l.project_id) || new Map<string, number>();
+      byLine.set(l.pricing_line, Number(l.days));
+      lineYearDays.set(l.project_id, byLine);
+    }
+    return { days, lineYearDays };
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback for databases without sales_project_cra_consumption: pages every
+    client_project CRA entry and sums it here. A full entry = one day, a
+    half-day entry (am/pm) = half a day. Best-effort: a read failure yields
+    empty totals rather than breaking the screen. */
+async function craConsumptionFromEntries(
+  assignments: Assignment[],
+  year: number,
+): Promise<CraConsumption> {
+  // PostgREST caps a response at 1000 rows, so page through until a
+  // short page arrives — summing a single capped response silently
+  // drops consumption days once client_project rows exceed the cap.
+  // Databases without the half-day migration reject the part column —
+  // fall back to counting every entry as a full day instead of losing
+  // consumption entirely.
+  const PAGE = 1000;
+  let craSelect = "project_id, part, month, employee_id, day";
+  let halfDays = true;
+  const craRows: {
+    project_id: string | null;
+    month: string;
+    employee_id: string;
+    day: string;
+    part?: string;
+  }[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const page = await db()
+      .from("cra_entries")
+      .select(craSelect)
+      .eq("status", "client_project")
+      .range(offset, offset + PAGE - 1);
+    if (page.error) {
+      if (offset === 0 && halfDays) {
+        halfDays = false;
+        craSelect = "project_id, month, employee_id, day";
+        offset = -PAGE;
+        continue;
+      }
+      return EMPTY_CONSUMPTION;
+    }
+    craRows.push(...((page.data || []) as unknown as typeof craRows));
+    if ((page.data?.length ?? 0) < PAGE) break;
+  }
+  // The annual billable cap is per pricing line and prorated per
+  // calendar year, so consumption is split the same way: a CRA day
+  // attributes to the pricing line of the employee's assignment
+  // covering that day (same window/status rules as the CRA screen).
+  // Assignments able to carry a CRA day onto a priced line — one
+  // assignment per employee/project pair, like assignedProjects().
+  const pricedByEmployee = new Map<string, Assignment[]>();
+  for (const a of assignments) {
+    if (
+      !["confirmed", "active", "completed"].includes(a.status) ||
+      !a.pricing_line
+    )
+      continue;
+    const list = pricedByEmployee.get(a.employee_id) || [];
+    list.push(a);
+    pricedByEmployee.set(a.employee_id, list);
+  }
+  const days = new Map<string, number>();
+  const lineYearDays = new Map<string, Map<string, number>>();
+  for (const row of craRows) {
+    if (!row.project_id) continue;
+    const d = row.part === "am" || row.part === "pm" ? 0.5 : 1;
+    // All-time consumption on the project; the cap check only tallies the
+    // given calendar year.
+    days.set(row.project_id, (days.get(row.project_id) || 0) + d);
+    if (craMonthYear(row.month) !== year) continue;
+    const line = pricedByEmployee
+      .get(row.employee_id)
+      ?.find(
+        (a) =>
+          a.project_id === row.project_id &&
+          a.start_date <= row.day &&
+          (!a.end_date || a.end_date >= row.day),
+      )?.pricing_line;
+    if (!line) continue;
+    const byLine = lineYearDays.get(row.project_id) || new Map<string, number>();
+    byLine.set(line, (byLine.get(line) || 0) + d);
+    lineYearDays.set(row.project_id, byLine);
+  }
+  return { days, lineYearDays };
+}
+
 export function Projects({ actorEmail }: { actorEmail: string }) {
   const { data, loading, busy, error, message, load, action } =
     useSales(actorEmail);
@@ -380,158 +508,79 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const r = await db()
+        // The reads are independent, so they all start together. The list
+        // renders as soon as projects arrive; staffing and CRA consumption
+        // fill in behind it instead of holding the whole screen back.
+        const projectsReq = db()
           .from("sales_projects")
           .select("*")
           .order("updated_at", { ascending: false });
+        const extReq = db().from("sales_project_extensions").select("*");
+        const staffingReq = loadWorkspace();
+        const consumptionReq = loadCraConsumption(currentYear);
+        // Awaited below; this only keeps an early throw from leaving an
+        // unhandled rejection behind.
+        staffingReq.catch(() => {});
+
+        const [r, ext] = await Promise.all([projectsReq, extReq]);
         if (r.error) throw r.error;
-        const ext = await db().from("sales_project_extensions").select("*");
         if (ext.error) throw ext.error;
-        // Loaded before the CRA pass: line attribution needs every
-        // assignment's pricing line and window.
-        const staffing = await loadWorkspace();
-        // CRA consumption: a full 'client_project' entry = one day billed
-        // to that project, a half-day entry (am/pm) = half a day. HR
-        // operators read every employee's CRA through the cra_access
-        // policy, so a single grouped count feeds the progress bars on
-        // every project row.
-        // PostgREST caps a response at 1000 rows, so page through until a
-        // short page arrives — summing a single capped response silently
-        // drops consumption days once client_project rows exceed the cap.
-        // Databases without the half-day migration reject the part column —
-        // fall back to counting every entry as a full day instead of losing
-        // consumption entirely.
-        const PAGE = 1000;
-        let craSelect = "project_id, part, month, employee_id, day";
-        let halfDays = true;
-        const craRows: {
-          project_id: string | null;
-          month: string;
-          employee_id: string;
-          day: string;
-          part?: string;
-        }[] = [];
-        let craFailed = false;
-        for (let offset = 0; ; offset += PAGE) {
-          const page = await db()
-            .from("cra_entries")
-            .select(craSelect)
-            .eq("status", "client_project")
-            .range(offset, offset + PAGE - 1);
-          if (page.error) {
-            if (offset === 0 && halfDays) {
-              halfDays = false;
-              craSelect = "project_id, month, employee_id, day";
-              offset = -PAGE;
-              continue;
-            }
-            craFailed = true;
-            break;
-          }
-          craRows.push(...((page.data || []) as unknown as typeof craRows));
-          if ((page.data?.length ?? 0) < PAGE) break;
-        }
-        const craDays = new Map<string, number>();
-        // The annual billable cap is per pricing line and prorated per
-        // calendar year, so consumption is split the same way: a CRA day
-        // attributes to the pricing line of the employee's assignment
-        // covering that day (same window/status rules as the CRA screen).
-        const craLineYearDays = new Map<string, Map<string, number>>();
-        if (!craFailed) {
-          // Assignments able to carry a CRA day onto a priced line — one
-          // assignment per employee/project pair, like assignedProjects().
-          const pricedByEmployee = new Map<
-            string,
-            {
-              project_id: string;
-              start_date: string;
-              end_date: string | null;
-              pricing_line: string;
-            }[]
-          >();
-          for (const a of staffing.assignments) {
-            if (
-              !["confirmed", "active", "completed"].includes(a.status) ||
-              !a.pricing_line
-            )
-              continue;
-            const list = pricedByEmployee.get(a.employee_id) || [];
-            list.push({
-              project_id: a.project_id,
-              start_date: a.start_date,
-              end_date: a.end_date,
-              pricing_line: a.pricing_line,
-            });
-            pricedByEmployee.set(a.employee_id, list);
-          }
-          for (const row of craRows) {
-            if (!row.project_id) continue;
-            const days =
-              row.part === "am" || row.part === "pm" ? 0.5 : 1;
-            // All-time consumption on the project; the cap check below only
-            // tallies the current calendar year.
-            craDays.set(row.project_id, (craDays.get(row.project_id) || 0) + days);
-            // Only the current calendar year feeds the cap check.
-            if (craMonthYear(row.month) !== currentYear) continue;
-            const line = pricedByEmployee
-              .get(row.employee_id)
-              ?.find(
-                (a) =>
-                  a.project_id === row.project_id &&
-                  a.start_date <= row.day &&
-                  (!a.end_date || a.end_date >= row.day),
-              )?.pricing_line;
-            if (!line) continue;
-            const byLine = craLineYearDays.get(row.project_id) || new Map<string, number>();
-            byLine.set(line, (byLine.get(line) || 0) + days);
-            craLineYearDays.set(row.project_id, byLine);
-          }
-        }
+        if (cancelled) return;
+        const list = r.data || [];
+        setProjects(list);
+        projectsRef.current = list;
+        setExtensions(ext.data || []);
+        setLoadError("");
+        // The URL is the source of truth: (re)open the create/edit page
+        // after every reload so deep links and redirects land on it.
+        setEditing(sheetFromUrl(list));
+
+        const staffing = await staffingReq;
+        if (cancelled) return;
         const today = new Date().toISOString().slice(0, 10);
-        if (!cancelled) {
-          const list = r.data || [];
-          setProjects(list);
-          projectsRef.current = list;
-          setExtensions(ext.data || []);
-          setAssignments(
-            staffing.assignments.filter(
-              (a) =>
-                ["reserved", "confirmed", "active"].includes(a.status) &&
-                a.start_date <= today &&
-                (!a.end_date || a.end_date >= today),
-            ),
-          );
-          setEmployees(
-            staffing.employees.map((e) => ({
-              id: e.id,
-              full_name:
-                staffing.people.find((p) => p.id === e.person_id)?.full_name ||
-                "Person",
-              start_date: e.start_date,
-              status: e.status,
-            })),
-          );
-          setTalentPool(
-            staffing.people
-              .filter(
-                (p) =>
-                  !staffing.employees.some(
-                    (e) => e.person_id === p.id && e.status !== "ended",
-                  ),
-              )
-              .map((p) => ({ personId: p.id, name: p.full_name })),
-          );
-          setCanEngage(staffing.capabilities.recruit);
-          setStaffingAssignments(
-            staffing.assignments.filter((a) => isStaffedAssignment(a)),
-          );
-          setCraDaysByProject(craDays);
-          setCraLineYearDaysByProject(craLineYearDays);
-          setLoadError("");
-          // The URL is the source of truth: (re)open the create/edit page
-          // after every reload so deep links and redirects land on it.
-          setEditing(sheetFromUrl(list));
-        }
+        setAssignments(
+          staffing.assignments.filter(
+            (a) =>
+              ["reserved", "confirmed", "active"].includes(a.status) &&
+              a.start_date <= today &&
+              (!a.end_date || a.end_date >= today),
+          ),
+        );
+        setEmployees(
+          staffing.employees.map((e) => ({
+            id: e.id,
+            full_name:
+              staffing.people.find((p) => p.id === e.person_id)?.full_name ||
+              "Person",
+            start_date: e.start_date,
+            status: e.status,
+          })),
+        );
+        setTalentPool(
+          staffing.people
+            .filter(
+              (p) =>
+                !staffing.employees.some(
+                  (e) => e.person_id === p.id && e.status !== "ended",
+                ),
+            )
+            .map((p) => ({ personId: p.id, name: p.full_name })),
+        );
+        setCanEngage(staffing.capabilities.recruit);
+        setStaffingAssignments(
+          staffing.assignments.filter((a) => isStaffedAssignment(a)),
+        );
+
+        // The annual cap and its consumption are evaluated per pricing line
+        // for the current calendar year; the server sums it when the
+        // consumption function is deployed, otherwise the raw entries are
+        // paged and summed here (needs every assignment's line and window).
+        const consumption =
+          (await consumptionReq) ??
+          (await craConsumptionFromEntries(staffing.assignments, currentYear));
+        if (cancelled) return;
+        setCraDaysByProject(consumption.days);
+        setCraLineYearDaysByProject(consumption.lineYearDays);
       } catch (e) {
         if (!cancelled) setLoadError(errorMessage(e));
       }
@@ -912,6 +961,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
       if (days < 0 || days > 30) return false;
     }
     if (tab === "archived" && !r.meta.is_terminal) return false;
+    if (tab === "all" && r.meta.is_terminal) return false;
     if (!query) return true;
     const p = r.project;
     return (
@@ -1044,7 +1094,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             start_date: a.start_date,
             end_date: a.end_date,
             status: a.status,
-            rationale: `Pricing line renamed to “${to}” on the contract page.`,
+            rationale: `Pricing line renamed to "${to}" on the contract page.`,
           });
     }, "Project saved.");
     closeProjectDialog();
@@ -1083,12 +1133,12 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
     <div className="@container flex flex-col gap-6">
       <PageAlerts error={error || loadError} message={message} />
       {ref.missing && (
-        <PageAlerts error="The admin_settings migration is missing — apply supabase/migrations/20261007090000_sales_projects_admin_settings.sql, until then built-in defaults are used." />
+        <PageAlerts error="The admin_settings migration is missing. Apply supabase/migrations/20261007090000_sales_projects_admin_settings.sql; until then, built-in defaults are used." />
       )}
       <AlertDialog open={!!deleting} onOpenChange={(open) => { if (!open) setDeleting(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete project “{deleting?.title}”?</AlertDialogTitle>
+            <AlertDialogTitle>Delete project "{deleting?.title}"?</AlertDialogTitle>
             <AlertDialogDescription>The project is removed for good. This can't be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1334,7 +1384,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
             </CardContent>
           </Card>
           <Card role="region" aria-label="Project list" className="pb-0">
-            <CardHeader className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center @3xl:justify-between">
+            <CardHeader className="flex flex-col gap-3 @5xl:flex-row @5xl:items-center @5xl:justify-between">
               <Tabs
                 value={tab}
                 onValueChange={(v) => setTab(v as ProjectsTab)}
@@ -1343,17 +1393,17 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                 <TabsList
                   variant="line"
                   aria-label="Filter projects"
-                  className="h-10 max-w-full justify-start gap-4 overflow-x-auto"
+                  className="max-w-full flex-wrap justify-start gap-x-4 gap-y-1 group-data-horizontal/tabs:h-auto"
                 >
                   {(
                     [
-                      ["all", "All", rows.length],
+                      ["all", "All", activeCount],
                       ["attention", "Needs attention", attentionRows.length],
                       ["ending", "Ending in 30 days", endingSoon],
                       ["archived", "Archived", archivedCount],
                     ] as [ProjectsTab, string, number][]
                   ).map(([id, label, count]) => (
-                    <TabsTrigger key={id} value={id} className="gap-1.5">
+                    <TabsTrigger key={id} value={id} className="gap-1.5 py-2">
                       {label}
                       <span className="num text-xs text-muted-foreground">
                         {count}
@@ -1362,7 +1412,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                   ))}
                 </TabsList>
               </Tabs>
-              <div className="flex min-w-0 items-center gap-2 @3xl:w-80">
+              <div className="flex min-w-0 items-center gap-2 @5xl:w-80">
                 <InputGroup className="min-w-0 flex-1">
                   <InputGroupAddon>
                     <Search />
@@ -1581,7 +1631,7 @@ export function Projects({ actorEmail }: { actorEmail: string }) {
                                           ? r.consumedDays > 0
                                             ? `${fmtDays(r.consumedDays)} logged · set a day budget`
                                             : "No days logged yet"
-                                          : "Forfait — no day budget"}
+                                          : "Forfait, no day budget"}
                                       </span>
                                       <span className="num">
                                         <span className="text-muted-foreground">
@@ -2281,7 +2331,7 @@ function ProjectForm({
                 <NativeSelectOption value="">Create manually</NativeSelectOption>
                 {convertible.map((o) => (
                   <NativeSelectOption key={o.id} value={o.id}>
-                    {o.title} —{" "}
+                    {o.title},{" "}
                     {clients.find((c) => c.id === o.client_id)?.name ||
                       "Client"}
                   </NativeSelectOption>
@@ -2318,7 +2368,7 @@ function ProjectForm({
                     maxLength={200}
                   />
                   <FieldDescription>
-                    Same as the code — give it a readable name, e.g. "Credit
+                    Same as the code: give it a readable name, e.g. "Credit
                     Chain · AI squad"
                   </FieldDescription>
                 </Field>
@@ -2348,8 +2398,8 @@ function ProjectForm({
                   />
                   <FieldDescription>
                     {intermediaryId
-                      ? `Billed to ${clients.find((c) => c.id === intermediaryId)?.name || "the intermediary"} — the main client isn't invoiced.`
-                      : "No intermediary — the main client is billed directly."}
+                      ? `Billed to ${clients.find((c) => c.id === intermediaryId)?.name || "the intermediary"}: the main client isn't invoiced.`
+                      : "No intermediary: the main client is billed directly."}
                   </FieldDescription>
                 </Field>
                 <Field>
@@ -2399,7 +2449,7 @@ function ProjectForm({
             <CardHeader>
               <SectionTitle>Contract</SectionTitle>
               <CardDescription>
-                The initial contract window and its pricing — renewals
+                The initial contract window and its pricing. Renewals
                 continue as extensions below.
               </CardDescription>
               {contractDays > 0 && (
@@ -2523,9 +2573,9 @@ function ProjectForm({
                       value={currency}
                       onChange={(e) => setCurrency(e.target.value)}
                     >
-                      <NativeSelectOption value="EUR">EUR — Euro</NativeSelectOption>
-                      <NativeSelectOption value="SAR">SAR — Saudi riyal</NativeSelectOption>
-                      <NativeSelectOption value="USD">USD — US dollar</NativeSelectOption>
+                      <NativeSelectOption value="EUR">EUR (Euro)</NativeSelectOption>
+                      <NativeSelectOption value="SAR">SAR (Saudi riyal)</NativeSelectOption>
+                      <NativeSelectOption value="USD">USD (US dollar)</NativeSelectOption>
                     </NativeSelect>
                   </Field>
                 </div>
@@ -2830,7 +2880,7 @@ function ProjectForm({
             <CardHeader>
               <SectionTitle>Notes</SectionTitle>
               <CardDescription>
-                Scope, team, renewal terms — anything the next person needs.
+                Scope, team, renewal terms: anything the next person needs.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -2923,7 +2973,7 @@ function ProjectForm({
                 )}
                 {consumedDays === 0 && (
                   <p className="m-0 text-[13px] text-muted-foreground">
-                    No client-project days recorded on this project yet — the
+                    No client-project days recorded on this project yet. The
                     bar fills as employees save their CRA.
                   </p>
                 )}
@@ -2951,7 +3001,7 @@ function ProjectForm({
                     ))}
                     {savedLineCaps.some((c) => c.consumed > c.cap) && (
                       <p className="m-0 text-[13px] text-destructive">
-                        A profile's annual cap is exceeded — the project is
+                        A profile's annual cap is exceeded; the project is
                         flagged in the list.
                       </p>
                     )}

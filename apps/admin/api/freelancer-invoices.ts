@@ -164,6 +164,22 @@ async function updateInvoice(client: SupabaseClient, row: { id: string; version:
   if (!data?.length) throw new HttpError("This invoice changed in the meantime. Reload and try again.", 409);
 }
 
+/** What the panel shows of a Qonto debit. Freelancer transfers often carry no payee name: the IBAN and label say who it went to. */
+type DebitInfo = { transactionId: string; amountCents: number; settledAt: string; counterparty: string; label: string; reference: string; iban: string | null };
+type Payment = DebitInfo & { matchedBy: "automatic" | "confirmed" | "manual"; decidedBy: string; alsoPays: string[] };
+type DebitDetailRow = { id: string; settled_at: string; amount_cents: number | string; counterparty: string | null; label: string | null; reference: string | null; raw: unknown };
+const DEBIT_DETAIL_COLUMNS = "id,settled_at,amount_cents,counterparty,label,reference,raw";
+const debitInfo = (d: DebitDetailRow): DebitInfo => ({
+  transactionId: d.id,
+  // Synced debits keep Qonto's positive amount.
+  amountCents: Math.abs(Number(d.amount_cents)),
+  settledAt: d.settled_at,
+  counterparty: d.counterparty ?? "",
+  label: d.label ?? "",
+  reference: d.reference ?? "",
+  iban: debitIban(d.raw),
+});
+
 type DebitRow = { id: string; settled_at: string; amount_cents: number | string; status: string | null; counterparty: string | null; raw: unknown };
 
 async function loadDebit(client: SupabaseClient, id: string): Promise<DebitRow> {
@@ -262,7 +278,7 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
     // Suggestions of unpaid invoices, with their debit, unless that debit already pays something.
     const all = [...invoices, ...unassigned];
     const open = all.filter((r) => !r.paid_at && r.review !== "rejected").map((r) => r.id);
-    const suggestionsOf = new Map<string, { transactionId: string; amountCents: number; settledAt: string; counterparty: string; why: string }[]>();
+    const suggestionsOf = new Map<string, (DebitInfo & { why: string })[]>();
     if (open.length) {
       const matches = await paged<{ invoice_id: string; transaction_id: string; kind: string }>(
         (from, to) => client.from("freelancer_invoice_matches").select("invoice_id,transaction_id,kind").in("invoice_id", open).eq("state", "suggested").order("invoice_id").order("transaction_id").range(from, to),
@@ -271,8 +287,8 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
       const txIds = [...new Set(matches.map((m) => m.transaction_id))];
       if (txIds.length) {
         const [debits, used, whyEvents] = await Promise.all([
-          paged<{ id: string; settled_at: string; amount_cents: number | string; counterparty: string | null }>(
-            (from, to) => client.from("bank_transactions").select("id,settled_at,amount_cents,counterparty").in("id", txIds).order("id").range(from, to),
+          paged<DebitDetailRow>(
+            (from, to) => client.from("bank_transactions").select(DEBIT_DETAIL_COLUMNS).in("id", txIds).order("id").range(from, to),
             "read suggested debits",
           ),
           paged<{ transaction_id: string }>(
@@ -291,15 +307,38 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
           const d = debitOf.get(m.transaction_id);
           if (!d || usedIds.has(d.id)) continue;
           const list = suggestionsOf.get(m.invoice_id) ?? [];
-          list.push({
-            transactionId: d.id,
-            amountCents: Number(d.amount_cents),
-            settledAt: d.settled_at,
-            counterparty: d.counterparty ?? "",
-            why: why.get(`${m.invoice_id}|${d.id}`) || m.kind,
-          });
+          list.push({ ...debitInfo(d), why: why.get(`${m.invoice_id}|${d.id}`) || m.kind });
           suggestionsOf.set(m.invoice_id, list);
         }
+      }
+    }
+
+    // The debit that paid each paid invoice: how it was matched, and what else it paid.
+    const paymentOf = new Map<string, Payment>();
+    const paidTx = [...new Set(all.map((r) => r.paid_by_transaction_id).filter((id): id is string => !!id))];
+    if (paidTx.length) {
+      const [debits, confirmed, siblings] = await Promise.all([
+        paged<DebitDetailRow>((from, to) => client.from("bank_transactions").select(DEBIT_DETAIL_COLUMNS).in("id", paidTx).order("id").range(from, to), "read paying debits"),
+        paged<{ invoice_id: string; transaction_id: string; kind: string; decided_by: string | null }>(
+          (from, to) => client.from("freelancer_invoice_matches").select("invoice_id,transaction_id,kind,decided_by").in("transaction_id", paidTx).eq("state", "confirmed").order("invoice_id").order("transaction_id").range(from, to),
+          "read confirmed matches",
+        ),
+        paged<{ id: string; number: string; paid_by_transaction_id: string }>(
+          (from, to) => client.from("freelancer_invoices").select("id,number,paid_by_transaction_id").in("paid_by_transaction_id", paidTx).order("id").range(from, to),
+          "read invoices paid by the same debits",
+        ),
+      ]);
+      const debitOf = new Map(debits.map((d) => [d.id, d]));
+      for (const r of all) {
+        const d = r.paid_by_transaction_id ? debitOf.get(r.paid_by_transaction_id) : undefined;
+        if (!d) continue;
+        const match = confirmed.find((m) => m.invoice_id === r.id && m.transaction_id === d.id);
+        paymentOf.set(r.id, {
+          ...debitInfo(d),
+          matchedBy: match?.kind === "confident" ? "automatic" : match?.kind === "probable" ? "confirmed" : "manual",
+          decidedBy: match?.decided_by ?? "",
+          alsoPays: siblings.filter((x) => x.paid_by_transaction_id === d.id && x.id !== r.id).map((x) => x.number || "No number"),
+        });
       }
     }
 
@@ -314,6 +353,7 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
         documentId: r.document_id,
         display: displayStatus(inv, monthOk, today),
         suggestions: suggestionsOf.get(r.id) ?? [],
+        payment: paymentOf.get(r.id) ?? null,
       };
     };
 

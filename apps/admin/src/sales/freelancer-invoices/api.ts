@@ -59,7 +59,10 @@ export function useFreelancerInvoicesApi() {
 export type FreelancerInvoicesApi = ReturnType<typeof useFreelancerInvoicesApi>;
 
 // Response shapes of /api/freelancer-invoices (see apps/admin/api/freelancer-invoices.ts).
-export type Suggestion = { transactionId: string; amountCents: number; settledAt: string; counterparty: string; why: string };
+/** A Qonto debit as the panel shows it; amountCents is positive (money out). */
+export type DebitInfo = { transactionId: string; amountCents: number; settledAt: string; counterparty: string; label: string; reference: string; iban: string | null };
+export type Suggestion = DebitInfo & { why: string };
+export type Payment = DebitInfo & { matchedBy: "automatic" | "confirmed" | "manual"; decidedBy: string; alsoPays: string[] };
 export type DisplayStatus = { status: "to_check" | "to_pay" | "paid" | "rejected"; warning: boolean; overdue: boolean };
 export type InvoiceView = {
   id: string;
@@ -83,6 +86,7 @@ export type InvoiceView = {
   documentId: string | null;
   display: DisplayStatus;
   suggestions: Suggestion[];
+  payment: Payment | null;
 };
 export type Billing = { companyName: string; siret: string; iban: string; extraEmails: string[] };
 export type MonthCheck = {

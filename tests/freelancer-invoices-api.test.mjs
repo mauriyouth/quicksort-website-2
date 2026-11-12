@@ -229,8 +229,28 @@ test("GET month lists suggestions for an unpaid invoice", async () => {
   const res = await f.get({ resource: "month", month: MONTH });
   const ana = res.body.rows.find((r) => r.employeeId === "emp-ana");
   assert.deepEqual(ana.invoices[0].suggestions, [
-    { transactionId: "tx-1", amountCents: 1008000, settledAt: "2026-11-08T10:00:00Z", counterparty: "ANA LOPEZ CONSEIL", why: "probable" },
+    { transactionId: "tx-1", amountCents: 1008000, settledAt: "2026-11-08T10:00:00Z", counterparty: "ANA LOPEZ CONSEIL", label: "", reference: "", iban: "FR7630004000031234567890143", why: "probable" },
   ]);
+});
+
+test("GET month shows the debit that paid an invoice, how it was matched and what else it paid", async () => {
+  const f = fixture({ extra: { freelancer_invoice_matches: [{ invoice_id: "00000000-0000-4000-8000-000000000001", transaction_id: "tx-1", kind: "confident", state: "confirmed", decided_by: "freelancer invoices cycle" }] } });
+  Object.assign(f.tables.freelancer_invoices[0], { paid_at: "2026-11-08T10:00:00Z", paid_by_transaction_id: "tx-1" });
+  f.tables.freelancer_invoices.push({ ...f.tables.freelancer_invoices[0], id: "00000000-0000-4000-8000-000000000002", number: "F-2", period_month: "2026-09-01" });
+  Object.assign(f.tables.bank_transactions[0], { label: "Virement Ana", reference: "Facture F-1" });
+  const res = await f.get({ resource: "month", month: MONTH });
+  const ana = res.body.rows.find((r) => r.employeeId === "emp-ana");
+  assert.deepEqual(ana.invoices[0].payment, {
+    transactionId: "tx-1", amountCents: 1008000, settledAt: "2026-11-08T10:00:00Z", counterparty: "ANA LOPEZ CONSEIL",
+    label: "Virement Ana", reference: "Facture F-1", iban: "FR7630004000031234567890143",
+    matchedBy: "automatic", decidedBy: "freelancer invoices cycle", alsoPays: ["F-2"],
+  });
+  assert.equal(ana.invoices[0].suggestions.length, 0);
+});
+
+test("GET month: an unpaid invoice has no payment", async () => {
+  const res = await fixture().get({ resource: "month", month: MONTH });
+  assert.equal(res.body.rows.find((r) => r.employeeId === "emp-ana").invoices[0].payment, null);
 });
 
 test("accept_difference needs a note of at least 3 characters", async () => {

@@ -46,6 +46,8 @@ export type WorkingCalendar = {
   jo: number[];
   /** Planned leave days per salaried employee, each month. */
   abs: number[];
+  /** Planned paid-leave days (CP, RTT excluded) per salaried employee, each month. */
+  cp: number[];
   /** Billed days / working days of a salaried employee, each month (0–1). */
   taci: number[];
   /** Billed days / (working days − leave), each month (0–1, capped at 1). */
@@ -62,6 +64,7 @@ export function workingCalendar(year: number, h: Pick<Hypotheses, "taci" | "cong
   const otherDays = jo.reduce((s, d, m) => (m === 7 ? s : s + d), 0);
   const spread = (1 - AUGUST_LEAVE) * h.congesAn + h.rttAn;
   const abs = jo.map((d, m) => (m === 7 ? AUGUST_LEAVE * h.congesAn : otherDays ? (spread * d) / otherDays : 0));
+  const cp = jo.map((d, m) => (m === 7 ? AUGUST_LEAVE * h.congesAn : otherDays ? ((1 - AUGUST_LEAVE) * h.congesAn * d) / otherDays : 0));
   const total = jo.reduce((a, b) => a + b, 0);
   const present = jo.reduce((s, d, m) => s + Math.max(0, d - abs[m]), 0);
   const taciMax = total ? present / total : 0;
@@ -69,5 +72,5 @@ export function workingCalendar(year: number, h: Pick<Hypotheses, "taci" | "cong
   const t = taciMax ? Math.min(1, Math.max(0, h.taci / 100) / taciMax) : 0;
   const tace = jo.map(() => t);
   const taci = jo.map((d, m) => (d ? (t * Math.max(0, d - abs[m])) / d : 0));
-  return { jo, abs, taci, tace, taciMax };
+  return { jo, abs, cp, taci, tace, taciMax };
 }

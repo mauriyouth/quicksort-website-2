@@ -33,6 +33,8 @@ export type Hypotheses = {
   commFactor: number;
   primeIC: number;
   primeChasseur: number;
+  /** President's loaded salary (mandataire social, outside payroll staff), € per month, every month. */
+  fPresident: number;
   fLoyer: number;
   fOutils: number;
   fMarketing: number;
@@ -64,7 +66,7 @@ export const DEFAULT_HYPOTHESES: Hypotheses = {
   tjm: 650, taci: 75, congesAn: 25, rttAn: 10, pctFree: 40,
   coutFree: 480, salaire: 5000,
   commFactor: 0, primeIC: 500, primeChasseur: 800,
-  fLoyer: 4000, fOutils: 3000, fMarketing: 2500, fHonoraires: 1500, fDeplacements: 2000, fDivers: 1000, fAmort: 0,
+  fPresident: 15000, fLoyer: 4000, fOutils: 3000, fMarketing: 2500, fHonoraires: 1500, fDeplacements: 2000, fDivers: 1000, fAmort: 0,
   tresoDebut: 250000, dso: 60, tauxIS: 25,
   // Calibrated on the accountant's Jan–Jul 2026 statement (79 employee-months).
   tauxCharges: 30, mutuelle: 150, ticketsResto: 160, medecine: 120,
@@ -106,6 +108,10 @@ export type ActualMonth = {
   jf?: number;
   /** Leave days of salaried consultants (paid leave, RTT, unpaid leave). */
   abs?: number;
+  /** Paid-leave provision: gross € per acquired day (Σ yearly daily rate × presence share of the month), interns excluded. */
+  cpAcqBase?: number;
+  /** Paid-leave provision: gross cost of the paid-leave days taken (CRA), interns excluded. */
+  cpTakenCost?: number;
   /** Every salaried consultant filled the CRA for all their working days. */
   craComplete?: boolean;
 };
@@ -117,6 +123,8 @@ export type MonthInput = {
   departs: number;
   /** Loaded structure salaries for the month (measured or projected from the named staff). */
   structure?: number;
+  /** Part of `structure` that earns paid leave (interns excluded); defaults to `structure`. */
+  structureCp?: number;
   /** Closed months only: real fixed charges per line (€ HT, from Qonto). */
   fixed?: FixedActuals;
   /** Closed months covered by Qonto: real VAT cash flows (€). Otherwise estimated. */
@@ -132,7 +140,9 @@ export type Series = {
   fac: number[]; pic: number[]; ch: number[]; varr: number[]; mb: number[]; mbp: number[];
   /** Employer social charges: on consultants (production), on structure (fixed), and by item. */
   cotc: number[]; cots: number[]; cu: number[]; cmu: number[]; ctr: number[]; cme: number[]; cot: number[];
-  fs: number[]; fl: number[]; fo: number[]; fm: number[]; fh: number[]; fdp: number[]; fd: number[]; fix: number[];
+  /** Paid-leave provision (variation, loaded, non-cash): on consultants (production) and on structure (fixed). */
+  cpc: number[]; cps: number[];
+  fs: number[]; fpr: number[]; fl: number[]; fo: number[]; fm: number[]; fh: number[]; fdp: number[]; fd: number[]; fix: number[];
   eb: number[]; ebp: number[]; da: number[]; ex: number[]; exp: number[]; enc: number[]; treso: number[];
   /** VAT cash effect: collected on collections, paid to suppliers, remitted to the state, net. */
   tvaCol: number[]; tvaDed: number[]; tvaRem: number[]; tva: number[];
@@ -173,21 +183,29 @@ export function computePlan(h: Hypotheses, months: MonthInput[], consStart: numb
   const S: Series = {
     jo: [], jfs: [], jf: [], abs: [], taci: [], tace: [], itc: [], tjmR: [], cjm: [], mj: [], ts: [], cac: [],
     cons: [], ca: [], free: [], sal: [], inter: [], prod: [], fac: [], pic: [], ch: [], varr: [], mb: [], mbp: [],
-    cotc: [], cots: [], cu: [], cmu: [], ctr: [], cme: [], cot: [],
-    fs: [], fl: [], fo: [], fm: [], fh: [], fdp: [], fd: [], fix: [], eb: [], ebp: [], da: [], ex: [], exp: [], enc: [], treso: [],
+    cotc: [], cots: [], cu: [], cmu: [], ctr: [], cme: [], cot: [], cpc: [], cps: [],
+    fs: [], fpr: [], fl: [], fo: [], fm: [], fh: [], fdp: [], fd: [], fix: [], eb: [], ebp: [], da: [], ex: [], exp: [], enc: [], treso: [],
     tvaCol: [], tvaDed: [], tvaRem: [], tva: [],
     ventes: [], departs: [],
   };
   let c = consStart;
+  const cpMonth = h.congesAn / 12;
+  const loaded = 1 + h.tauxCharges / 100;
+  // Yearly daily rate: a monthly gross × 12 / working days of the year.
+  const yearJo = cal.jo.reduce((a, b) => a + b, 0);
+  const perDay = (monthly: number) => (yearJo ? (monthly * 12) / yearJo : 0);
   months.forEach((m, i) => {
     let ca: number, free: number, sal: number, inter: number, ventes: number, departs: number;
     let jo: number, jfs: number, jf: number, abs: number;
     let cc: SocialCharges;
+    // Paid-leave provision: (days acquired − paid-leave days taken) × daily gross, loaded.
+    let cpc: number;
     if (m.actual) {
       ({ ca, free, sal, inter, ventes, departs } = m.actual);
       ({ jo = 0, jfs = 0, jf = 0, abs = 0 } = m.actual);
       c = m.actual.cons;
       cc = m.cotConsultants ?? NO_CHARGES;
+      cpc = (cpMonth * (m.actual.cpAcqBase ?? 0) - (m.actual.cpTakenCost ?? 0)) * loaded;
     } else {
       ventes = m.ventes;
       departs = m.departs;
@@ -200,13 +218,17 @@ export function computePlan(h: Hypotheses, months: MonthInput[], consStart: numb
       jo = ns * d; jfs = jo * t; jf = jfs + nf * d; abs = ns * (cal.abs[i] ?? 0);
       inter = sal * (d ? Math.max(0, 1 - t - (cal.abs[i] ?? 0) / d) : 0);
       cc = { urssaf: (sal * h.tauxCharges) / 100, mutuelle: ns * h.mutuelle, tickets: ns * h.ticketsResto, medecine: (ns * h.medecine) / 12 };
+      cpc = perDay(sal) * (cpMonth - (cal.cp[i] ?? 0)) * loaded;
     }
+    // Structure staff: no CRA, leave taken as planned by the calendar.
+    const cps = perDay(m.structureCp ?? m.structure ?? 0) * (cpMonth - (cal.cp[i] ?? 0)) * loaded;
+    S.cpc.push(cpc); S.cps.push(cps);
     const cs = m.cotStructure ?? NO_CHARGES;
     const cotc = chargesTotal(cc), cots = chargesTotal(cs);
     S.cotc.push(cotc); S.cots.push(cots);
     S.cu.push(cc.urssaf + cs.urssaf); S.cmu.push(cc.mutuelle + cs.mutuelle); S.ctr.push(cc.tickets + cs.tickets); S.cme.push(cc.medecine + cs.medecine);
     S.cot.push(cotc + cots);
-    const prod = free + sal + cotc;
+    const prod = free + sal + cotc + cpc;
     const fac = (ca * h.commFactor) / 100, pic = ventes * h.primeIC, ch = ventes * h.primeChasseur;
     const varr = fac + pic + ch;
     const mb = ca - prod - varr;
@@ -214,11 +236,11 @@ export function computePlan(h: Hypotheses, months: MonthInput[], consStart: numb
     const fx = m.actual && m.fixed
       ? m.fixed
       : { loyer: h.fLoyer, outils: h.fOutils, marketing: h.fMarketing, honoraires: h.fHonoraires, deplacements: h.fDeplacements, divers: h.fDivers };
-    const fixMonth = fStructure + cots + fx.loyer + fx.outils + fx.marketing + fx.honoraires + fx.deplacements + fx.divers;
+    const fixMonth = fStructure + cots + cps + h.fPresident + fx.loyer + fx.outils + fx.marketing + fx.honoraires + fx.deplacements + fx.divers;
     const eb = mb - fixMonth;
     S.cons.push(c); S.ca.push(ca); S.free.push(free); S.sal.push(sal); S.inter.push(inter); S.prod.push(prod);
     S.fac.push(fac); S.pic.push(pic); S.ch.push(ch); S.varr.push(varr); S.mb.push(mb); S.mbp.push(ca ? mb / ca : 0);
-    S.fs.push(fStructure); S.fl.push(fx.loyer); S.fo.push(fx.outils); S.fm.push(fx.marketing); S.fh.push(fx.honoraires); S.fdp.push(fx.deplacements); S.fd.push(fx.divers);
+    S.fs.push(fStructure); S.fpr.push(h.fPresident); S.fl.push(fx.loyer); S.fo.push(fx.outils); S.fm.push(fx.marketing); S.fh.push(fx.honoraires); S.fdp.push(fx.deplacements); S.fd.push(fx.divers);
     S.fix.push(fixMonth); S.eb.push(eb); S.ebp.push(ca ? eb / ca : 0);
     // Operating result: EBITDA less depreciation (non-cash, so cash is unchanged).
     const ex = eb - h.fAmort;
@@ -248,7 +270,8 @@ export function computePlan(h: Hypotheses, months: MonthInput[], consStart: numb
     }
     const tva = col - ded - rem;
     S.tvaCol.push(col); S.tvaDed.push(ded); S.tvaRem.push(rem); S.tva.push(tva);
-    cash = cash + enc - S.prod[i] - S.varr[i] - S.fix[i] + tva;
+    // The paid-leave provision is non-cash: leave is paid within the monthly salary.
+    cash = cash + enc - (S.prod[i] - S.cpc[i]) - S.varr[i] - (S.fix[i] - S.cps[i]) + tva;
     S.enc.push(enc);
     S.treso.push(cash);
   });
@@ -295,7 +318,7 @@ export const VAT_RATE = 0.2;
 /** Real VAT cash flows of a closed month, € (all positive amounts). */
 export type VatActual = { collected: number; deductible: number; remitted: number };
 
-/** P&L rows of the "Cotisations sociales" section, one per item. */
+/** P&L rows of the memo "Détail des cotisations sociales" section, one per item. */
 export type ChargeRowKey = "cu" | "cmu" | "ctr" | "cme";
 
 export type RowKind = "line" | "sub" | "total" | "key" | "pct" | "section";
@@ -323,9 +346,11 @@ export function planRows(r: PlanResult): PlanRow[] {
     { ...line("key", "Chiffre d’affaires", S.ca), key: "ca" },
     sec("Coûts de production"),
     { ...line("line", "Freelances", S.free), key: "free" },
-    { ...line("line", "Salaires consultants (brut)", S.sal), key: "sal" },
+    line("line", "Salaires chargés consultants", S.sal.map((v, i) => v + S.cotc[i])),
+    { ...line("sub", "— dont salaires bruts consultants", S.sal), key: "sal" },
     { ...line("sub", "— dont inter-contrats", S.inter), key: "inter" },
-    { ...line("line", "Cotisations sociales consultants", S.cotc), key: "cotc" },
+    { ...line("sub", "— dont cotisations sociales consultants", S.cotc), key: "cotc" },
+    line("line", "Provision congés payés consultants", S.cpc),
     line("total", "Total coûts de production", S.prod),
     sec("Charges variables"),
     line("line", "Commission factor", S.fac),
@@ -335,11 +360,14 @@ export function planRows(r: PlanResult): PlanRow[] {
     line("key", "Gross margin (marge brute)", S.mb),
     line("pct", "Taux de marge brute", S.mbp, T.mbPct),
     sec("Charges fixes"),
-    { ...line("line", "Salaires structure (brut)", S.fs), key: "fs" },
-    { ...line("line", "Cotisations sociales structure", S.cots), key: "cots" },
+    line("line", "Salaires chargés structure", S.fs.map((v, i) => v + S.cots[i])),
+    { ...line("sub", "— dont salaires bruts structure", S.fs), key: "fs" },
+    { ...line("sub", "— dont cotisations sociales structure", S.cots), key: "cots" },
+    line("line", "Provision congés payés structure", S.cps),
+    line("line", "Salaire chargé président", S.fpr),
     { ...line("line", "Loyer et locaux", S.fl), key: "loyer" },
     { ...line("line", "Outils, cloud et licences IA", S.fo), key: "outils" },
-    { ...line("line", "Marketing et événements", S.fm), key: "marketing" },
+    { ...line("line", "Marketing, événements et réceptions", S.fm), key: "marketing" },
     { ...line("line", "Honoraires (comptable, juridique)", S.fh), key: "honoraires" },
     { ...line("line", "Frais de déplacement", S.fdp), key: "deplacements" },
     { ...line("line", "Divers", S.fd), key: "divers" },
@@ -358,12 +386,13 @@ export function planRows(r: PlanResult): PlanRow[] {
     { ...line("line", "Marge par jour facturé", S.mj, T.mj), indicator: true },
     { ...line("pct", "Taux de structure", S.ts, T.ts), indicator: true },
     { ...line("line", "CA par consultant", S.cac, T.cac), indicator: true },
-    sec("Cotisations sociales"),
+    // Memo: the same charges as the two "dont cotisations" rows above, by item. Not added again.
+    sec("Détail des cotisations sociales (déjà incluses ci-dessus)"),
     { ...line("line", "URSSAF et retraite", S.cu), key: "cu" },
     { ...line("line", "Mutuelle", S.cmu), key: "cmu" },
     { ...line("line", "Tickets restaurant", S.ctr), key: "ctr" },
     { ...line("line", "Médecine du travail", S.cme), key: "cme" },
-    line("total", "Total cotisations sociales", S.cot),
+    line("total", "Total cotisations sociales (pour info)", S.cot),
     sec("Trésorerie"),
     { ...line("line", "Encaissements clients", S.enc), key: "enc" },
     { ...line("line", "TVA (effet trésorerie)", S.tva), key: "tva" },

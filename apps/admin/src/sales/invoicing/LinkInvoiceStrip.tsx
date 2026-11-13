@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button, NativeSelect, NativeSelectOption } from "@quicksort-sas/ui";
 import { errorText, type InvoicingApi } from "./api";
 import { money, monthLabel, shortDate } from "./format";
-import type { Invoice, InvoicesList } from "./types";
+import type { Invoice } from "./types";
 
 type Target = { projectId: string; employeeId: string; billedClientId: string; consultantName: string };
 
@@ -34,20 +34,14 @@ export function LinkInvoiceStrip({
 
   useEffect(() => {
     let live = true;
-    api.get<InvoicesList>({ resource: "invoices" })
+    api.get<{ invoices: Invoice[] }>({ resource: "link-candidates", projectId: target.projectId, billedClientId: target.billedClientId ?? "", month })
       .then((r) => { if (live) setInvoices(r.invoices); })
       .catch((e) => { if (live) setError(errorText(e, "Could not load the Qonto invoices.")); });
     return () => { live = false; };
-  }, [api]);
+  }, [api, target.projectId, target.billedClientId, month]);
 
-  // Same project first, then the client's unassigned imports; invoices of this month on top.
-  const candidates = useMemo(() => (invoices ?? [])
-    .filter((i) => i.source === "imported" && i.status !== "canceled" && !i.employee_id &&
-      (i.project_id ? i.project_id === target.projectId : i.billed_client_id === target.billedClientId))
-    .sort((a, b) =>
-      Number(b.project_id === target.projectId) - Number(a.project_id === target.projectId) ||
-      Number((b.period_month ?? "").startsWith(month)) - Number((a.period_month ?? "").startsWith(month)) ||
-      (b.issue_date ?? "").localeCompare(a.issue_date ?? "")), [invoices, target.projectId, target.billedClientId, month]);
+  // Already filtered and ordered by the server: same project first, then the client's unassigned imports.
+  const candidates = invoices ?? [];
 
   async function link() {
     if (!choice || busy) return;

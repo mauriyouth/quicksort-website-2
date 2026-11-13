@@ -861,7 +861,7 @@ function TypeRow({
 
 /** Accrual rates for paid vacation (CP) and reduced working time (RTT).
  *  Employees accrue these days per calendar month from their start date (CP
- *  once the month is over, RTT from its start); a
+ *  and RTT once each month is over); a
  *  rate edit reprices every past and future month, so the copy next to the
  *  inputs says exactly that. */
 const LEAVE_KIND_LABELS: Record<LeaveKind, { label: string; sub: string }> = {
@@ -875,7 +875,7 @@ function LeaveAccrualPanel() {
     <ReferentialCard
       title="Leave accrual"
       count={rates.length}
-      hint="Days accrued per calendar month from each employee's start date, net of the leave already consumed on their CRA. CP is acquired at the end of each month; RTT at its start. Editing a rate reprices all past and future months. Every balance updates immediately."
+      hint="Days accrued per calendar month from each employee's start date, net of the leave already consumed on their CRA. CP and RTT are acquired at the end of each month. Editing a rate reprices all past and future months. Every balance updates immediately."
     >
       {missing && (
         <Alert variant="destructive">
@@ -996,9 +996,9 @@ function ClassifierPanel() {
   const source = classifier?.source === "settings" ? "saved here" : classifier?.source === "environment" ? "server environment" : "none";
   return (
     <ReferentialCard
-      title="Transaction classification (Kimi)"
+      title="Kimi (Moonshot)"
       count={classifier?.configured ? 1 : 0}
-      hint="Expense labels, counterparties and amounts are sent to Moonshot (Kimi) for classification."
+      hint="Used for bank transaction classification and resume import. Expense labels, counterparties and amounts, and the text of imported resumes, are sent to Moonshot (Kimi)."
     >
       <p role="status" className="m-0 text-sm text-muted-foreground">
         {classifier

@@ -441,6 +441,31 @@ select pg_temp.assert_true((select count(*) from public.my_offers)=0,'Other acco
 select pg_temp.assert_true((select count(*) from public.hr_people)=0,'Other account cannot see confidential people');
 reset role;
 select set_config('request.jwt.claims','{"sub":"11000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+-- Hiring needs are archived (read-only, no new applications) or deleted
+-- only when no application would lose its hiring need.
+select set_config('request.jwt.claims','{"sub":"11000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+do $$
+declare busy_need public.opportunities; req uuid; person uuid; v integer;
+begin
+ select * into busy_need from public.opportunities where title='Platform Engineer';
+ perform pg_temp.must_fail(jsonb_build_object('kind','archive_requisition','opportunity_id',busy_need.id,'expected_version',busy_need.version),'active application');
+ perform pg_temp.must_fail(jsonb_build_object('kind','delete_requisition','opportunity_id',busy_need.id,'expected_version',busy_need.version),'Archive it instead');
+ req:=(pg_temp.command('{"kind":"create_requisition","title":"Short-lived need","hiring_mode":"sur_mission"}')->>'opportunity_id')::uuid;
+ perform pg_temp.must_fail(jsonb_build_object('kind','restore_requisition','opportunity_id',req,'expected_version',1),'not archived');
+ perform pg_temp.command(jsonb_build_object('kind','archive_requisition','opportunity_id',req,'expected_version',1));
+ perform pg_temp.assert_true((select archived_at is not null and version=2 from public.opportunities where id=req),'Archiving stamps the hiring need and bumps its version');
+ perform pg_temp.must_fail(jsonb_build_object('kind','update_requisition','opportunity_id',req,'expected_version',2,'title','Renamed','hiring_mode','sur_mission'),'Restore it first');
+ select id into person from public.hr_people where full_name='Jordan Lee';
+ perform pg_temp.must_fail(jsonb_build_object('kind','create_application','person_id',person,'opportunity_id',req),'archived');
+ perform pg_temp.command(jsonb_build_object('kind','restore_requisition','opportunity_id',req,'expected_version',2));
+ select version into v from public.opportunities where id=req and archived_at is null;
+ perform pg_temp.assert_true(v=3,'Restoring clears the archive stamp');
+ perform pg_temp.must_fail(jsonb_build_object('kind','delete_requisition','opportunity_id',req,'expected_version',2),'record changed');
+ perform pg_temp.command(jsonb_build_object('kind','delete_requisition','opportunity_id',req,'expected_version',v));
+ perform pg_temp.assert_true(not exists(select 1 from public.opportunities where id=req),'Deleting removes a hiring need without applications');
+end;
+$$;
+
 select 'HR_FIXTURE:'||public.hr_workspace_snapshot()::text;
 select 'Verified: transactional gates, optimistic versions, retry idempotency, scoped portal, signatures, onboarding, probation, capacity, exits, imports and rehires.';
 rollback;

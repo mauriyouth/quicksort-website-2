@@ -242,7 +242,8 @@ export function SpotlightSearch({
         meta: o.status,
         haystack: `${o.title} ${o.client_need} ${o.status}`,
         icon: Target,
-        target: "opportunities",
+        target: "recruiting",
+        params: { need: o.id },
       }),
     );
     projects.forEach((p) =>

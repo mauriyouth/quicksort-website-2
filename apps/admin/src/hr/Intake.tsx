@@ -3,7 +3,7 @@ import { useSession } from '@clerk/react';
 import { Upload, Sparkles } from 'lucide-react';
 import { z } from 'zod';
 import { db, errorMessage } from '@quicksort/hr-db';
-import { MAX_INTAKE_PDF_BYTES, parsedProfileSchema, type ParsedProfile } from '../candidate-intake';
+import { MAX_INTAKE_PDF_BYTES, certificationLines, educationLines, languageLines, parsedProfileSchema, type ParsedProfile } from '../candidate-intake';
 import { Button, Card, CardContent, Checkbox, Field as UiField, FieldLabel } from '@quicksort-sas/ui';
 import { Field, Form, Tag, checked, text, type RunCommand } from './ui';
 import type { Opportunity } from './domain';
@@ -166,8 +166,12 @@ export function Intake({
         email: text(data, 'email'),
         phone: text(data, 'phone'),
         headline: text(data, 'headline'),
+        summary: text(data, 'summary'),
         location: text(data, 'location'),
         skills: text(data, 'skills'),
+        degrees: text(data, 'degrees'),
+        certifications: text(data, 'certifications'),
+        languages: text(data, 'languages'),
         linkedin_url: text(data, 'linkedin_url'),
         // Positions are not editable here; they come from the parsed CV and are edited on the record.
         experience: profile?.experience ?? [],
@@ -183,6 +187,7 @@ export function Intake({
         }))} hint={profile ? 'The CV is filed on Google Drive under <year>/<position>, or "Candidatures spontanées" when no position is set.' : 'Creates the application to this position.'} />
         <Field name="full_name" label="Full name" value={profile?.fullName} required />
         <Field name="headline" label="Professional headline" value={profile?.headline} />
+        <Field name="summary" label="Profile description" type="textarea" value={profile?.summary} hint="The profile or “About me” paragraph of the resume." />
         <Field name="email" label="Email" type="email" value={profile?.email} />
         <Field name="phone" label="Phone" type="tel" value={profile?.phone} />
         <Field name="location" label="Location" value={profile?.location} />
@@ -192,8 +197,11 @@ export function Intake({
           value,
           label: value.replace(/_/g, ' ')
         }))} required />
-        <Field name="skills" label="Skills and certifications" type="textarea" value={profile?.skills.join(', ')} />
-        <Field name="notes" label="Profile notes" type="textarea" value={profile ? `${profile.summary}\n\nResume source: ${fileName}` : ''} />
+        <Field name="skills" label="Skills" type="textarea" value={profile?.skills.join(', ')} />
+        <Field name="degrees" label="Education" type="textarea" value={profile ? educationLines(profile.education) : ''} hint="One per line: Degree — School — 2016–2018" />
+        <Field name="certifications" label="Certifications" type="textarea" value={profile ? certificationLines(profile.certifications) : ''} hint="One per line: Certification — Issuer — Year" />
+        <Field name="languages" label="Languages" type="textarea" value={profile ? languageLines(profile.languages) : ''} hint="One per line: Language — Level" />
+        <Field name="notes" label="Profile notes" type="textarea" value={profile ? `Resume source: ${fileName}` : ''} />
         <UiField orientation="horizontal" className="col-span-full gap-2">
           <Checkbox id="hr-intake-contact" name="contact_allowed" value="on" defaultChecked />
           <FieldLabel htmlFor="hr-intake-contact" className="font-normal">Contact permitted for future opportunities</FieldLabel>

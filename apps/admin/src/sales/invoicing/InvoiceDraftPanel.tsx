@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ExternalLink, RefreshCw, Send, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronLeft, ChevronRight, ExternalLink, Link2, RefreshCw, Send, Trash2 } from "lucide-react";
 import { cn } from "cn";
 import {
   Alert,
@@ -57,6 +58,12 @@ const toEdit = (l: InvoiceLine): LineEdit => ({
   unitPrice: Number(l.unit_price).toFixed(2),
   description: l.description ?? "",
 });
+/** Optional prev/next through a list of invoices (← / → when focus is not in a field). */
+export type InvoiceNav = { index: number; total: number; onPrev?: () => void; onNext?: () => void };
+
+// Arrow keys belong to these elements (text editing, selects, toggle groups, tabs).
+const OWNS_ARROWS = "input,textarea,select,[contenteditable=true],[role=group],[role=radiogroup],[role=toolbar],[role=tablist],[role=menu],[role=listbox]";
+
 const differs = (a: number | string | null | undefined, b: number | string) => a !== null && a !== undefined && Number(a) !== Number(b);
 
 /**
@@ -72,6 +79,7 @@ export function InvoiceDraftPanel({
   initialWarning = "",
   onClose,
   onChanged,
+  nav,
 }: {
   api: InvoicingApi;
   invoiceId: string;
@@ -79,6 +87,7 @@ export function InvoiceDraftPanel({
   initialWarning?: string;
   onClose: () => void;
   onChanged: () => void;
+  nav?: InvoiceNav;
 }) {
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
   const [lines, setLines] = useState<LineEdit[]>([]);
@@ -103,15 +112,28 @@ export function InvoiceDraftPanel({
     setConsultantId(next.invoice.employee_id ?? "");
   }, []);
 
+  // Browsing with ← / → swaps invoiceId in place (the sheet stays open), so a late response for
+  // the previous invoice must not land on the new one.
+  const current = useRef(invoiceId);
+  current.current = invoiceId;
   const load = useCallback(async () => {
     try {
-      apply(await api.get<InvoiceDetail>({ resource: "invoice", id: invoiceId }));
+      const next = await api.get<InvoiceDetail>({ resource: "invoice", id: invoiceId });
+      if (current.current === invoiceId) apply(next);
     } catch (e) {
-      setError(errorText(e, "Could not load the invoice."));
+      if (current.current === invoiceId) setError(errorText(e, "Could not load the invoice."));
     }
   }, [api, invoiceId, apply]);
 
-  useEffect(() => { void load(); }, [load]);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) first.current = false;
+    else {
+      setDetail(null); setError(""); setWarning(""); setMessage("");
+      setConfirm(null); setRegenerated(false); setDeleted(false);
+    }
+    void load();
+  }, [load]);
 
   const invoice = detail?.invoice;
   const currency = invoice?.currency || "EUR";
@@ -197,17 +219,55 @@ export function InvoiceDraftPanel({
     setMessage("Invoice canceled in Qonto.");
   });
 
-  const savePeriod = () => run("period", () => api.post<InvoiceResponse>("set_period", { invoiceId, month: periodMonth || null }), async () => {
+  // Imported invoices: which consultant-month of the CRA this invoice covers. Both fields save together.
+  const savedPeriod = (invoice?.period_month ?? "").slice(0, 7);
+  const savedConsultant = invoice?.employee_id ?? "";
+  const canAssign = invoice?.source === "imported" && !!invoice.project_id;
+  const periodChanged = periodMonth !== savedPeriod;
+  const consultantChanged = canAssign && consultantId !== savedConsultant;
+  const linkDirty = periodChanged || consultantChanged;
+
+  const saveLink = () => run("link", async () => {
+    const warnings: string[] = [];
+    if (periodChanged) {
+      const r = await api.post<InvoiceResponse>("set_period", { invoiceId, month: periodMonth || null });
+      if (r.warning) warnings.push(r.warning);
+      // Keep the month saved even if the consultant step below fails.
+      setDetail((d) => (d ? { ...d, invoice: { ...d.invoice, period_month: periodMonth ? `${periodMonth}-01` : null } } : d));
+    }
+    if (consultantChanged) {
+      const r = await api.post<InvoiceResponse>("assign_consultant", { invoiceId, employeeId: consultantId || null });
+      if (r.warning) warnings.push(r.warning);
+    }
+    return { warning: warnings.join(" ") };
+  }, async (r) => {
     await load();
-    setMessage(periodMonth ? `Listed under ${monthLabel(periodMonth)}.` : "Listed under its issue month.");
+    if (!r.warning) setMessage("CRA link saved.");
   });
 
-  const saveConsultant = () => run("consultant", () => api.post<InvoiceResponse>("assign_consultant", { invoiceId, employeeId: consultantId || null }), async () => {
-    await load();
-    setMessage(consultantId ? "Consultant assigned." : "Consultant removed.");
-  });
+  const resetLink = () => { setPeriodMonth(savedPeriod); setConsultantId(savedConsultant); };
 
   const periodOptions = useMemo(() => billingMonthOptions(invoice?.issue_date, invoice?.period_month), [invoice?.issue_date, invoice?.period_month]);
+
+  // Moving to another invoice would drop unsaved edits, so it waits until they are saved or reset.
+  const navBlocked = busy !== null || confirm !== null || dirty || linkDirty;
+  const navHint = dirty || linkDirty ? "Save or reset your changes first" : undefined;
+  const goPrev = !navBlocked ? nav?.onPrev : undefined;
+  const goNext = !navBlocked ? nav?.onNext : undefined;
+  useEffect(() => {
+    if (!nav) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.target instanceof Element && e.target.closest(OWNS_ARROWS)) return;
+      const go = e.key === "ArrowLeft" ? goPrev : goNext;
+      if (!go) return;
+      e.preventDefault();
+      go();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [nav, goPrev, goNext]);
 
   const setLine = (id: string, patch: Partial<LineEdit>) => setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const locked = busy !== null;
@@ -216,16 +276,31 @@ export function InvoiceDraftPanel({
     <Sheet open onOpenChange={(open) => { if (!open && !locked) onClose(); }}>
       <SheetContent className="gap-0 data-[side=right]:sm:max-w-[760px]">
         <SheetHeader className="gap-2">
-          <span className="label-mono">
-            {invoice ? `${sourceLabel(invoice.source)} · ${monthLabel(invoice.period_month ?? invoice.issue_date)}` : "Invoice"}
-          </span>
+          <div className="flex items-center gap-3 pr-10">
+            <span className="label-mono">
+              {invoice ? `${sourceLabel(invoice.source)} · ${monthLabel(invoice.period_month ?? invoice.issue_date)}` : "Invoice"}
+            </span>
+            {nav && nav.total > 1 && (
+              <div className="ml-auto flex items-center gap-1" aria-label="Browse invoices">
+                <Button variant="ghost" size="icon-sm" aria-label="Previous invoice" aria-keyshortcuts="ArrowLeft"
+                  title={navHint ?? "Previous (←)"} disabled={!goPrev} onClick={goPrev}><ChevronLeft /></Button>
+                <span className="num min-w-12 text-center text-xs text-muted-foreground">
+                  {nav.index >= 0 ? `${nav.index + 1} / ${nav.total}` : `– / ${nav.total}`}
+                </span>
+                <Button variant="ghost" size="icon-sm" aria-label="Next invoice" aria-keyshortcuts="ArrowRight"
+                  title={navHint ?? "Next (→)"} disabled={!goNext} onClick={goNext}><ChevronRight /></Button>
+              </div>
+            )}
+          </div>
           <SheetTitle className="text-2xl">
             {invoice ? invoice.number || (invoice.status === "draft" ? "Draft invoice" : "Invoice") : "Loading…"}
           </SheetTitle>
           {invoice && (
             <SheetDescription render={<div />} className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <InvoiceStatusBadge label={invoiceRowLabel(invoice)} />
-              {invoice.consultant_name && <span className="text-foreground">{invoice.consultant_name}</span>}
+              {invoice.consultant_name && (craHref(invoice)
+                ? <Link className="text-foreground underline-offset-4 hover:underline" to={craHref(invoice)!} title="Open the CRA this invoice covers">{invoice.consultant_name}</Link>
+                : <span className="text-foreground">{invoice.consultant_name}</span>)}
               {invoice.project_title && <span>{invoice.project_title}</span>}
               {invoice.client_name && <span>Billed to {invoice.client_name}</span>}
             </SheetDescription>
@@ -262,6 +337,51 @@ export function InvoiceDraftPanel({
                 <Alert variant="warning" role="status">
                   <AlertDescription>Imported from Qonto, not created from a CRA. Check that it is not a duplicate of a CRA draft before validating it; edit its lines in Qonto.</AlertDescription>
                 </Alert>
+              )}
+
+              {invoice.source === "imported" && (
+                <Card size="sm">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Link2 className="size-4 text-muted-foreground" aria-hidden /> CRA link</CardTitle>
+                    <CardDescription>
+                      <CraLinkSummary invoice={invoice} consultants={detail.consultants} />
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field className="gap-1.5">
+                        <FieldLabel htmlFor="inv-consultant">Consultant</FieldLabel>
+                        <NativeSelect id="inv-consultant" className="w-full" value={consultantId}
+                          disabled={locked || !canAssign || !detail.consultants?.length} onChange={(e) => setConsultantId(e.target.value)}>
+                          <NativeSelectOption value="">Not assigned</NativeSelectOption>
+                          {(detail.consultants ?? []).map((c) => <NativeSelectOption key={c.id} value={c.id}>{c.name}</NativeSelectOption>)}
+                        </NativeSelect>
+                        <FieldDescription className="text-xs">
+                          {!canAssign
+                            ? "Attach the invoice to a project first: link it from a CRA row in the list."
+                            : detail.consultants?.length ? "Staffed on this project." : "Nobody is staffed on this project yet."}
+                        </FieldDescription>
+                      </Field>
+                      <Field className="gap-1.5">
+                        <FieldLabel htmlFor="inv-period">Billing month</FieldLabel>
+                        <NativeSelect id="inv-period" className="w-full" value={periodMonth} disabled={locked} onChange={(e) => setPeriodMonth(e.target.value)}>
+                          <NativeSelectOption value="">Issue month{invoice.issue_date ? ` (${monthLabel(invoice.issue_date)})` : ""}</NativeSelectOption>
+                          {periodOptions.map((m) => <NativeSelectOption key={m} value={m}>{monthLabel(m)}</NativeSelectOption>)}
+                        </NativeSelect>
+                        <FieldDescription className="text-xs">The month the work was done.</FieldDescription>
+                      </Field>
+                    </div>
+                    {linkDirty && (
+                      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+                        <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span>
+                        <Button variant="ghost" size="sm" disabled={locked} onClick={resetLink}>Reset</Button>
+                        <Button size="sm" disabled={locked} onClick={() => void saveLink()}>
+                          {busy === "link" ? "Saving…" : "Save link"}
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               <Card size="sm">
@@ -356,38 +476,6 @@ export function InvoiceDraftPanel({
                     ) : (
                       <>
                         <ReadField label="Issue date">{shortDate(invoice.issue_date)}</ReadField>
-                        {invoice.source === "imported" && (
-                          <Field className="gap-1.5">
-                            <FieldLabel htmlFor="inv-period">Billing month</FieldLabel>
-                            <div className="flex gap-2">
-                              <NativeSelect id="inv-period" className="min-w-0 flex-1" value={periodMonth} disabled={locked} onChange={(e) => setPeriodMonth(e.target.value)}>
-                                <NativeSelectOption value="">Issue month{invoice.issue_date ? ` (${monthLabel(invoice.issue_date)})` : ""}</NativeSelectOption>
-                                {periodOptions.map((m) => <NativeSelectOption key={m} value={m}>{monthLabel(m)}</NativeSelectOption>)}
-                              </NativeSelect>
-                              <Button variant="outline" className="h-10" disabled={locked || periodMonth === (invoice.period_month ?? "").slice(0, 7)} onClick={savePeriod}>
-                                {busy === "period" ? "Saving…" : "Save"}
-                              </Button>
-                            </div>
-                            <FieldDescription className="text-xs">The month the work was done.</FieldDescription>
-                          </Field>
-                        )}
-                        {invoice.source === "imported" && invoice.project_id && (
-                          <Field className="gap-1.5">
-                            <FieldLabel htmlFor="inv-consultant">Consultant</FieldLabel>
-                            <div className="flex gap-2">
-                              <NativeSelect id="inv-consultant" className="min-w-0 flex-1" value={consultantId} disabled={locked} onChange={(e) => setConsultantId(e.target.value)}>
-                                <NativeSelectOption value="">Not assigned</NativeSelectOption>
-                                {(detail.consultants ?? []).map((c) => <NativeSelectOption key={c.id} value={c.id}>{c.name}</NativeSelectOption>)}
-                              </NativeSelect>
-                              <Button variant="outline" className="h-10" disabled={locked || consultantId === (invoice.employee_id ?? "")} onClick={saveConsultant}>
-                                {busy === "consultant" ? "Saving…" : "Save"}
-                              </Button>
-                            </div>
-                            <FieldDescription className="text-xs">
-                              {detail.consultants?.length ? "Staffed on this project." : "Nobody is staffed on this project yet."}
-                            </FieldDescription>
-                          </Field>
-                        )}
                         <ReadField label="Due date">{shortDate(invoice.due_date)}</ReadField>
                         {invoice.purchase_order && <ReadField label="Purchase order">{invoice.purchase_order}</ReadField>}
                         {invoice.sent_at && <ReadField label="Sent">{dateTime(invoice.sent_at)}</ReadField>}
@@ -554,6 +642,24 @@ export function InvoiceDraftPanel({
 
 // Edited values that differ from the CRA computation.
 const changedInput = "border-warning ring-2 ring-warning/20 hover:border-warning";
+
+// The person-record CRA page for the consultant-month an invoice bills.
+function craHref(invoice: InvoiceDetail["invoice"]): string | null {
+  const month = (invoice.period_month ?? invoice.issue_date)?.slice(0, 7);
+  if (!invoice.consultant_person_id || !month) return null;
+  return `/hr/people/${encodeURIComponent(invoice.consultant_person_id)}/cra/${month.replace("-", "/")}`;
+}
+
+// What an imported invoice currently covers in the CRA, as a link to it.
+function CraLinkSummary({ invoice, consultants }: { invoice: InvoiceDetail["invoice"]; consultants: InvoiceDetail["consultants"] }) {
+  const name = invoice.consultant_name ?? consultants?.find((c) => c.id === invoice.employee_id)?.name;
+  if (!invoice.employee_id || !name) return <>Not linked to a consultant.</>;
+  const label = `${name} · ${monthLabel(invoice.period_month ?? invoice.issue_date)} CRA`;
+  const href = craHref(invoice);
+  return href
+    ? <Link className="text-foreground underline underline-offset-4" to={href}>{label}</Link>
+    : <>{label}</>;
+}
 
 function ReadField({ label, children }: { label: string; children: ReactNode }) {
   return (

@@ -13,14 +13,15 @@ export const SALES_TABS: SectionTab[] = [
   { id: "sales-pipeline", href: "/sales/pipeline", label: "Pipeline" },
   { id: "sales-clients", href: "/sales/clients", label: "Clients" },
   { id: "sales-people", href: "/sales/people", label: "Contacts" },
-  { id: "opportunities", href: "/sales/opportunities", label: "Opportunities" },
   { id: "sales-projects", href: "/sales/projects", label: "Projects" },
   { id: "sales-invoicing", href: "/sales/invoicing", label: "Invoicing" },
+  { id: "sales-freelancer-invoices", href: "/sales/freelancer-invoices", label: "Freelancer invoices" },
 ];
 
 export const HR_TABS: SectionTab[] = [
   { id: "hr-overview", href: "/hr", label: "Overview" },
   { id: "recruiting", href: "/hr/recruiting", label: "Recruiting" },
+  { id: "hr-opportunities", href: "/hr/recruiting/needs", label: "Opportunities" },
   { id: "hr-people", href: "/hr/people", label: "People" },
   { id: "journeys", href: "/hr/journeys", label: "Journeys" },
   { id: "hr-documents", href: "/hr/documents", label: "Documents" },
@@ -31,6 +32,7 @@ export const HR_TABS: SectionTab[] = [
 export const OPS_TABS: SectionTab[] = [
   { id: "operations", href: "/operations", label: "Board" },
   { id: "ops-business-plan", href: "/operations/business-plan", label: "Business plan" },
+  { id: "ops-checks", href: "/operations/checks", label: "Checks" },
   { id: "ops-admin", href: "/operations/admin", label: "Admin" },
 ];
 

@@ -9,7 +9,7 @@ import { browserOrigin } from "../server/documents/storage/origin.ts";
 import type { DocumentStorage } from "../server/documents/storage/types.ts";
 import { completeRequest } from "../server/signatures/complete.ts";
 import { extractFields, knownValues, loadPersonFacts, missingFields } from "../server/signatures/fields.ts";
-import { DocAccessError, fillTemplate, readDocText } from "../server/signatures/google-docs.ts";
+import { DocAccessError, fillTemplate, listFolderDocs, readDocText } from "../server/signatures/google-docs.ts";
 import { encryptSignatureCredentials, loadSignatureSettings, youtrustFromSettings } from "../server/signatures/settings.ts";
 import { canMoveTo, statusFromYoutrust } from "../server/signatures/webhook.ts";
 import type { RequestStatus } from "../server/signatures/webhook.ts";
@@ -20,6 +20,7 @@ import type { YoutrustClient } from "../server/signatures/youtrust.ts";
  * Youtrust contract signing, admins only. POST { action }:
  *   get-settings | save-settings            Youtrust options and write-only credentials.
  *   list-templates | save-template          Google Doc templates (checked readable by the service account).
+ *   list-template-docs                      The Docs in the Drive templates folder, when one is set.
  *   list-requests { personId }              The person's requests, newest first.
  *   prepare { personId, templateId, applicationId? }
  *                                           The template's fields, prefilled from data (the
@@ -36,11 +37,11 @@ export const config = { maxDuration: 60 };
 
 type Request = { method?: string; headers: Record<string, string | string[] | undefined>; body: unknown };
 type Response = { setHeader(name: string, value: string): void; status(code: number): Response; json(body: unknown): void };
-type ServiceAccount = { client_email: string; private_key: string };
+type ServiceAccount = { client_email: string; private_key: string; templates_root_folder_id?: string; templates_root_folder_name?: string };
 type Deps = {
   createClient: typeof createClient;
   createYoutrust: typeof youtrustFromSettings;
-  docs: { readDocText: typeof readDocText; fillTemplate: typeof fillTemplate };
+  docs: { readDocText: typeof readDocText; fillTemplate: typeof fillTemplate; listFolderDocs: typeof listFolderDocs };
   storage: (client: SupabaseClient) => Promise<DocumentStorage | null>;
   loadServiceAccount?: (client: SupabaseClient) => Promise<ServiceAccount | null>;
   now?: () => Date;
@@ -90,6 +91,7 @@ const actionSchema = z.discriminatedUnion("action", [
     webhookSecret: z.string().trim().min(1).max(1000).optional(),
   }),
   z.object({ action: z.literal("list-templates") }),
+  z.object({ action: z.literal("list-template-docs") }),
   z.object({
     action: z.literal("save-template"),
     id: uuid.optional(),
@@ -147,7 +149,7 @@ function check(error: { message?: string; code?: string } | null, fallback: stri
 }
 
 export function createSignaturesHandler(deps: Deps = {
-  createClient, createYoutrust: youtrustFromSettings, docs: { readDocText, fillTemplate }, storage: defaultStorage,
+  createClient, createYoutrust: youtrustFromSettings, docs: { readDocText, fillTemplate, listFolderDocs }, storage: defaultStorage,
 }) {
   return async function handler(req: Request, res: Response) {
     res.setHeader("Cache-Control", "no-store");
@@ -258,6 +260,18 @@ export function createSignaturesHandler(deps: Deps = {
           const { data, error } = await client.from("signature_templates").select("*").order("name");
           check(error, "Could not read the templates.");
           return { status: 200, body: { templates: data ?? [] } };
+        },
+
+        async "list-template-docs"() {
+          const sa = await serviceAccount();
+          const folderId = sa.templates_root_folder_id;
+          if (!folderId) return { status: 200, body: { folder: null, docs: [] } };
+          const docs = await deps.docs.listFolderDocs(sa, folderId).catch((error: { status?: number }) => {
+            if (error?.status === 403 || error?.status === 404)
+              throw new HttpError(`Share the templates folder with ${sa.client_email}.`, 409);
+            throw error;
+          });
+          return { status: 200, body: { folder: { id: folderId, name: sa.templates_root_folder_name || "" }, docs } };
         },
 
         async "save-template"(input) {

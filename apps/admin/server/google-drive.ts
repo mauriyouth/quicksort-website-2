@@ -43,6 +43,7 @@ export { contractFolderName };
  *        it must be shared with HR alone); a saved one is kept when omitted.
  *        recruitmentRootFolderId is the candidate CVs folder (same rules).
  *        companyRootFolderId holds the company's own papers (Operations → Admin).
+ *        templatesRootFolderId holds the Google Doc contract templates.
  * DELETE /api/google-drive — remove the saved connection (portal owners only).
  * POST   /api/google-drive — Drive actions (admins):
  *        { action: "prepare-upload", projectId, fileName, mimeType, size }
@@ -78,6 +79,7 @@ const saveSchema = z.object({
   peopleRootFolderId: folderIdInput.optional(),
   recruitmentRootFolderId: folderIdInput.optional(),
   companyRootFolderId: folderIdInput.optional(),
+  templatesRootFolderId: folderIdInput.optional(),
 });
 
 const actionSchema = z.discriminatedUnion("action", [
@@ -230,6 +232,8 @@ export function createGoogleDriveHandler(deps = { createClient }) {
           recruitmentRootFolderName: settings.recruitment_root_folder_name || null,
           companyRootFolderId: settings.company_root_folder_id || null,
           companyRootFolderName: settings.company_root_folder_name || null,
+          templatesRootFolderId: settings.templates_root_folder_id || null,
+          templatesRootFolderName: settings.templates_root_folder_name || null,
         });
       }
 
@@ -322,6 +326,12 @@ export function createGoogleDriveHandler(deps = { createClient }) {
         const company = companyId
           ? await driveApi<DriveFile>(probe, `/files/${companyId}`, { query: { fields: "id,name", supportsAllDrives: "true" } })
           : null;
+        const templatesId = parsed.data.templatesRootFolderId || saved?.templates_root_folder_id || "";
+        if (templatesId && (templatesId === people?.id || templatesId === recruitment?.id))
+          return res.status(400).json({ error: "The templates folder must be separate from the HR documents and CV folders." });
+        const templates = templatesId
+          ? await driveApi<DriveFile>(probe, `/files/${templatesId}`, { query: { fields: "id,name", supportsAllDrives: "true" } })
+          : null;
         const settings: DriveSettings = {
           ...account,
           root_folder_id: root.id,
@@ -329,13 +339,14 @@ export function createGoogleDriveHandler(deps = { createClient }) {
           ...(people ? { people_root_folder_id: people.id, people_root_folder_name: people.name } : {}),
           ...(recruitment ? { recruitment_root_folder_id: recruitment.id, recruitment_root_folder_name: recruitment.name } : {}),
           ...(company ? { company_root_folder_id: company.id, company_root_folder_name: company.name } : {}),
+          ...(templates ? { templates_root_folder_id: templates.id, templates_root_folder_name: templates.name } : {}),
         };
         const result = await client.from("google_drive_settings").upsert(
           { id: SETTING_ID, encrypted_credentials: encryptApiKey(JSON.stringify(settings)), updated_at: new Date().toISOString() },
           { onConflict: "id" },
         );
         if (result.error) throw result.error;
-        return res.status(200).json({ saved: true, rootFolderName: settings.root_folder_name, peopleRootFolderName: settings.people_root_folder_name || null, recruitmentRootFolderName: settings.recruitment_root_folder_name || null, companyRootFolderName: settings.company_root_folder_name || null, serviceAccountEmail: settings.client_email });
+        return res.status(200).json({ saved: true, rootFolderName: settings.root_folder_name, peopleRootFolderName: settings.people_root_folder_name || null, recruitmentRootFolderName: settings.recruitment_root_folder_name || null, companyRootFolderName: settings.company_root_folder_name || null, templatesRootFolderName: settings.templates_root_folder_name || null, serviceAccountEmail: settings.client_email });
       }
 
       // POST — Drive actions (admins).

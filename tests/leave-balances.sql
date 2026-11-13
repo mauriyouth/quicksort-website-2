@@ -51,16 +51,18 @@ select set_config('request.jwt.claims','{"sub":"26000000-0000-4000-8000-00000000
 select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=2.08,'CP accrues at month end: only the completed previous month counts');
 select pg_temp.assert_true((select consumed from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=1.5,'A morning and a full day consume exactly 1.5 CP days');
 select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=0.58,'CP available nets consumption at 0.5 granularity');
-select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000021','rtt'))=1.6,'Two months accrue 1.6 RTT days at the seeded rate');
+select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000021','rtt'))=0.8,'RTT accrues at month end: only the completed previous month counts');
 select pg_temp.assert_true((select consumed from pg_temp.balance('26000000-0000-4000-8000-000000000021','rtt'))=1.5,'A full day and an afternoon consume exactly 1.5 RTT days');
-select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000-4000-8000-000000000021','rtt'))=0.1,'RTT available nets consumption at 0.5 granularity');
+select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000-4000-8000-000000000021','rtt'))=-0.7,'RTT available nets consumption at 0.5 granularity');
 -- (b) Month window: a mid-month start accrues its whole start month once it
 -- is over; an ended employee accrues through the end month and no further. The preboarding
 -- status on the mid-month employee must not block accrual.
 select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000022','cp'))=2.08,'A mid-month start accrues the whole start month at its end');
 select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000023','cp'))=6.24,'An ended employee accrues through the end month only');
--- (b2) The current month accrues RTT but no CP until it ends.
-select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000021','rtt'))=1.6,'RTT still accrues the current month');
+-- (b2) The current month accrues neither CP nor RTT until it ends; ended
+-- employments acquire RTT through their end month too.
+select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000022','rtt'))=0.8,'A mid-month start accrues its whole start month of RTT at its end');
+select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000023','rtt'))=2.4,'An ended employee accrues RTT through the end month only');
 -- (c) A future start date yields no balance rows at all.
 select pg_temp.assert_true(not exists(select 1 from public.employee_leave_balances() where employee_id='26000000-0000-4000-8000-000000000024'),'Future start date yields no balance rows');
 -- (d) Overdraw: consumed above accrued shows a negative available.
@@ -68,7 +70,7 @@ select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000
 -- (e) Editing the CP rate reprices every employee retroactively.
 update public.leave_accrual_settings set rate=2.5 where kind='cp';
 select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000022','cp'))=2.50,'A rate edit reprices all past months');
-select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000022','rtt'))=1.6,'The untouched RTT rate keeps accruing at 0.8');
+select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000022','rtt'))=0.8,'The untouched RTT rate keeps accruing at 0.8');
 -- Row visibility: the admin sees every accessible employee, two rows each.
 select pg_temp.assert_true((select count(*) from public.employee_leave_balances())=8,'Admin sees two balance rows per accessible employee');
 -- (f) An authenticated non-HR, non-owner role gets zero rows.
@@ -97,7 +99,7 @@ select set_config('request.jwt.claims','{"sub":"26000000-0000-4000-8000-00000000
 select pg_temp.assert_true((select accrued from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=33.33,'Checkpoint accrual = payslip figures; the current month is not over yet');
 select pg_temp.assert_true((select consumed from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=32,'CRA paid leave inside the payslip month is not counted twice');
 select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000-4000-8000-000000000021','cp'))=1.33,'Checkpoint CP available');
-select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000-4000-8000-000000000021','rtt'))=0.1,'RTT ignores the CP checkpoint');
+select pg_temp.assert_true((select available from pg_temp.balance('26000000-0000-4000-8000-000000000021','rtt'))=-0.7,'RTT ignores the CP checkpoint');
 insert into public.cra_months(employee_id,month) values ('26000000-0000-4000-8000-000000000021',(select m0 from leave_anchor));
 insert into public.cra_entries(employee_id,month,day,part,status,project_id) values
  ('26000000-0000-4000-8000-000000000021',(select m0 from leave_anchor),(select m0 + 2 from leave_anchor),'full','paid_leave',null);

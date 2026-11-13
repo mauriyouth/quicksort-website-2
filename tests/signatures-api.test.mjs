@@ -119,7 +119,7 @@ function memoryClient(tables, ops, { failures = {} } = {}) {
   };
 }
 
-function fixture({ admin = true, youtrust: overrides = {}, readDocText, failures } = {}) {
+function fixture({ admin = true, youtrust: overrides = {}, readDocText, listFolderDocs, serviceAccount = SA, failures } = {}) {
   const tables = {
     user_roles: [{ user_id: "user-1", role: admin ? "admin" : "hr" }],
     hr_people: [{ id: PERSON, full_name: "Ada Lovelace", email: "ada@example.test" }],
@@ -168,13 +168,14 @@ function fixture({ admin = true, youtrust: overrides = {}, readDocText, failures
   const docs = {
     readDocText: log("readDocText", readDocText ?? (async () => DOC_TEXT)),
     fillTemplate: log("fillTemplate", async () => ({ docCopyId: "copy-1", pdf: PDF })),
+    listFolderDocs: log("listFolderDocs", listFolderDocs ?? (async () => [{ id: "doc-cdd", name: "Contrat CDD" }])),
   };
   const handler = createSignaturesHandler({
     createClient: () => client,
     createYoutrust: () => youtrust,
     docs,
     storage: async () => storage,
-    loadServiceAccount: async () => SA,
+    loadServiceAccount: async () => serviceAccount,
     now: () => new Date("2026-11-09T09:00:00Z"),
   });
   const count = (name) => calls.filter((c) => c.name === name).length;
@@ -198,7 +199,7 @@ async function draft(f) {
 }
 
 test("a non-admin gets 403 for every action", async () => {
-  const actions = ["get-settings", "save-settings", "list-templates", "save-template", "list-requests", "prepare", "preview", "send", "refresh", "cancel", "discard-draft"];
+  const actions = ["get-settings", "save-settings", "list-templates", "list-template-docs", "save-template", "list-requests", "prepare", "preview", "send", "refresh", "cancel", "discard-draft"];
   for (const action of actions) {
     const f = fixture({ admin: false });
     const r = await f.post({ action });
@@ -253,6 +254,33 @@ test("save-template parses the Doc ID and returns its fields", async () => {
   assert.equal(r.body.template.google_doc_id, "1AbCdEfGhIjKlMnOpQrStUv");
   assert.equal(f.calls.find((c) => c.name === "readDocText").args[1], "1AbCdEfGhIjKlMnOpQrStUv");
   assert.deepEqual(r.body.fields, ["prenom", "nom", "salaire_brut_mensuel", "clause_speciale"]);
+});
+
+test("list-template-docs without a templates folder lists nothing and never calls Drive", async () => {
+  const f = fixture();
+  const r = await f.post({ action: "list-template-docs" });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body, { folder: null, docs: [] });
+  assert.equal(f.count("listFolderDocs"), 0);
+});
+
+test("list-template-docs lists the Docs of the templates folder", async () => {
+  const f = fixture({ serviceAccount: { ...SA, templates_root_folder_id: "tpl-folder", templates_root_folder_name: "Templates contrats" } });
+  const r = await f.post({ action: "list-template-docs" });
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.folder, { id: "tpl-folder", name: "Templates contrats" });
+  assert.deepEqual(r.body.docs, [{ id: "doc-cdd", name: "Contrat CDD" }]);
+  assert.equal(f.calls.find((c) => c.name === "listFolderDocs").args[1], "tpl-folder");
+});
+
+test("list-template-docs on an unshared folder → 409 naming the service account", async () => {
+  const f = fixture({
+    serviceAccount: { ...SA, templates_root_folder_id: "tpl-folder" },
+    listFolderDocs: async () => { throw Object.assign(new Error("Drive answered 404."), { status: 404 }); },
+  });
+  const r = await f.post({ action: "list-template-docs" });
+  assert.equal(r.code, 409);
+  assert.match(r.body.error, /Share the templates folder with sa@proj\.iam\.gserviceaccount\.com/);
 });
 
 test("prepare marks known fields filled and unknown ones empty", async () => {

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { errorMessage } from '@quicksort/hr-db';
 import { Button, Input, NativeSelect, NativeSelectOption, Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, Textarea } from '@quicksort-sas/ui';
 import { cn } from 'cn';
-import { parsedProfileSchema, type ExperienceItem } from '../candidate-intake';
+import { certificationLines, educationLines, languageLines, parsedProfileSchema, type ExperienceItem } from '../candidate-intake';
 import { linkButton } from '../ui';
 import type { Application, ApplicationStage, Event, Person } from './domain';
 import { Readiness, stages, type RecordContext } from './PersonWorkspace';
@@ -130,7 +130,7 @@ export function CandidateApplication({ person, context, initialId, records }: {
   }, [currentId]);
 
   if (!current) return <>
-    <Empty>No application yet. Add this person to a hiring need from Recruitment to start one.</Empty>
+    <Empty>No application yet. Add this person to a hiring need from Recruiting → Talent pool.</Empty>
     <CandidateContext person={person} context={context} cv={cv} cvError={cvError} preview={() => setPreviewing(true)} getToken={getToken} />
     <ResumePreview person={person} cv={cv} open={previewing} close={() => setPreviewing(false)} />
   </>;
@@ -407,12 +407,14 @@ function CandidateContext({ person, context, application, cv, cvError, preview, 
 }) {
   const { workspace, run, busy } = context;
   // Profile edits send only the changed field; the command keeps the rest.
-  const save = (fields: Partial<Pick<Person, 'skills' | 'languages' | 'degrees' | 'certifications' | 'experience' | 'linkedin_url'>>) => run({ kind: 'update_person', person_id: person.id, expected_version: person.version, full_name: person.full_name, ...fields }, '').then(() => undefined);
+  const save = (fields: Partial<Pick<Person, 'skills' | 'languages' | 'degrees' | 'certifications' | 'experience' | 'linkedin_url' | 'headline' | 'summary'>>) => run({ kind: 'update_person', person_id: person.id, expected_version: person.version, full_name: person.full_name, ...fields }, '').then(() => undefined);
   const opportunity = application ? workspace.opportunities.find(item => item.id === application.opportunity_id) : undefined;
   const experience = newestFirst(person.experience);
   const now = experience.find(item => !item.end);
   return <>
-    <ResumeCard cv={cv} error={cvError} preview={preview} />
+    <ResumeCard cv={cv} error={cvError} preview={preview}>
+      <ResumeImport person={person} save={save} busy={busy} getToken={getToken} hasCv={!!cv} />
+    </ResumeCard>
     <section className={cn(card, 'flex flex-col gap-4 p-5')}>
       <h2 className={cardTitle}>At a glance</h2>
       <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
@@ -426,7 +428,8 @@ function CandidateContext({ person, context, application, cv, cvError, preview, 
         {person.linkedin_url && <Glance term="LinkedIn"><a className="inline-flex items-center gap-1 font-medium" href={person.linkedin_url} target="_blank" rel="noopener noreferrer">LinkedIn profile <ArrowUpRight className="size-3" aria-hidden="true" /></a></Glance>}
       </dl>
     </section>
-    <Experience person={person} items={experience} save={save} busy={busy} getToken={getToken} hasCv={!!cv} />
+    <ProfileDescription summary={person.summary} save={save} busy={busy} />
+    <Experience items={experience} save={save} busy={busy} />
     <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
       <SkillsLanguages person={person} experience={experience} save={save} busy={busy} />
       <EducationCertifications person={person} save={save} busy={busy} />
@@ -442,8 +445,9 @@ function Glance({ term, children }: { term: string; children: ReactNode }) {
   </div>;
 }
 
-function ResumeCard({ cv, error, preview }: { cv: FiledCv | null | undefined; error: string; preview: () => void }) {
-  return <section className={cn(card, 'flex flex-wrap items-center justify-between gap-4 px-5 py-4')}>
+function ResumeCard({ cv, error, preview, children }: { cv: FiledCv | null | undefined; error: string; preview: () => void; children?: ReactNode }) {
+  return <section className={cn(card, 'flex flex-col gap-3 px-5 py-4')}>
+    <div className="flex flex-wrap items-center justify-between gap-4">
     <div className="flex min-w-0 items-center gap-3.5">
       <button type="button" disabled={!cv} onClick={preview} aria-label="Preview resume" className="flex h-[72px] w-14 flex-none flex-col gap-1 rounded border border-border bg-background px-[7px] py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring enabled:cursor-pointer disabled:opacity-50">
         <span className="block h-[5px] w-[70%] rounded-[1px] bg-foreground" />
@@ -460,6 +464,8 @@ function ResumeCard({ cv, error, preview }: { cv: FiledCv | null | undefined; er
       <Button variant="outline" onClick={preview}>Preview</Button>
       <a className={linkButton({ variant: 'outline' })} href={`https://drive.google.com/uc?export=download&id=${encodeURIComponent(cv.id)}`}>Download</a>
     </div>}
+    </div>
+    {children}
   </section>;
 }
 
@@ -491,27 +497,52 @@ function ResumePreview({ person, cv, open, close }: { person: Person; cv: FiledC
   </Sheet>;
 }
 
-const blankPosition: ExperienceItem = { title: '', company: '', contract_type: '', start: '', end: '', location: '', summary: '', skills: [] };
+/** Adds the lines of `extra` that `current` does not have yet (case-insensitive). */
+/** A degree or certification without its years: "MSc — Sorbonne — 2013–2015" → "msc — sorbonne". */
+const withoutYears = (line: string) => parts(line).filter(part => !/^(19|20)\d{2}(\s*[–-]\s*(19|20)\d{2})?$/.test(part)).join(' — ').toLowerCase();
+/**
+ * Merges CV entries into stored lines matched without their years: an entry
+ * already listed is replaced by the CV's version (e.g. "2015" → "2013–2015"),
+ * a new one is appended. undefined when nothing changes.
+ */
+function mergeDated(current: string[], extra: string) {
+  const next = [...current];
+  for (const entry of lines(extra)) {
+    const index = next.findIndex(line => withoutYears(line) === withoutYears(entry));
+    if (index < 0) next.push(entry);
+    else if (next[index] !== entry && parts(entry).length >= parts(next[index]).length) next[index] = entry;
+  }
+  return next.join('\n') === current.join('\n') ? undefined : next.join('\n');
+}
+function mergeLines(current: string[], extra: string, join: string) {
+  const known = new Set(current.map(item => item.toLowerCase()));
+  const added = (join === '\n' ? lines(extra) : listed(extra)).filter(item => !known.has(item.toLowerCase()) && known.add(item.toLowerCase()));
+  return added.length ? [...current, ...added].join(join) : undefined;
+}
 
-function Experience({ person, items, save, busy, getToken, hasCv }: {
+/**
+ * Reads the person's CV filed on Google Drive and proposes its experience,
+ * education, certifications, languages and skills. Positions replace the
+ * listed ones; the other sections only gain entries they do not have yet.
+ */
+function ResumeImport({ person, save, busy, getToken, hasCv }: {
   person: Person;
-  items: ExperienceItem[];
-  save: (fields: { experience?: ExperienceItem[]; linkedin_url?: string }) => Promise<void>;
+  save: (fields: Partial<Pick<Person, 'skills' | 'languages' | 'degrees' | 'certifications' | 'experience' | 'linkedin_url' | 'headline' | 'summary'>>) => Promise<void>;
   busy: boolean;
   getToken: () => Promise<string | null | undefined>;
   hasCv: boolean;
 }) {
-  const [adding, setAdding] = useState(false);
-  const [showAll, setShowAll] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [found, setFound] = useState<{ experience: ExperienceItem[]; linkedinUrl: string } | null>(null);
+  const [done, setDone] = useState<{ text: string; previous: Partial<Person> | null } | null>(null);
   const [error, setError] = useState('');
-  const total = items.reduce((sum, item) => sum + months(item.start, item.end), 0);
-  const shown = showAll ? items : items.slice(0, 3);
+  // The CV takes a few seconds to read: merge into the record and save with
+  // whatever is current when the answer arrives, not when the button was clicked.
+  const latest = useRef({ person, save });
+  latest.current = { person, save };
   async function importFromResume() {
     setImporting(true);
     setError('');
-    setFound(null);
+    setDone(null);
     try {
       const token = await getToken();
       if (!token) throw new Error('Your session expired. Sign in again.');
@@ -526,28 +557,98 @@ function Experience({ person, items, save, busy, getToken, hasCv }: {
         const failure = z.object({ error: z.string() }).safeParse(result);
         throw new Error(failure.success ? failure.data.error : `Resume extraction failed (${response.status}).`);
       }
-      const profile = z.object({ profile: parsedProfileSchema }).parse(result).profile;
-      if (!profile.experience.length) throw new Error('No positions were found in the CV.');
-      setFound({ experience: profile.experience, linkedinUrl: profile.linkedinUrl });
+      const found = z.object({ profile: parsedProfileSchema }).parse(result).profile;
+      const current = latest.current.person;
+      // Positions are replaced by the CV's; the other sections only gain what they lack.
+      const changes: Partial<Person> = Object.fromEntries(Object.entries({
+        summary: !current.summary.trim() && found.summary.trim() ? found.summary.trim() : undefined,
+        experience: found.experience.length ? found.experience : undefined,
+        degrees: mergeDated(lines(current.degrees), educationLines(found.education)),
+        certifications: mergeDated(lines(current.certifications), certificationLines(found.certifications)),
+        languages: mergeLines(lines(current.languages), languageLines(found.languages), '\n'),
+        skills: mergeLines(listed(current.skills), found.skills.join(', '), ', '),
+        headline: !current.headline && found.headline ? found.headline : undefined,
+        linkedin_url: !current.linkedin_url && found.linkedinUrl ? found.linkedinUrl : undefined
+      }).filter(([, value]) => value !== undefined));
+      const added = (key: 'degrees' | 'certifications' | 'languages') => lines(changes[key] ?? '').filter(line => !lines(current[key]).includes(line)).length;
+      const updated = [
+        changes.summary && 'description',
+        changes.experience && plural(found.experience.length, 'position'),
+        changes.degrees && plural(added('degrees'), 'degree'),
+        changes.certifications && plural(added('certifications'), 'certification'),
+        changes.languages && plural(added('languages'), 'language'),
+        changes.skills && plural(listed(changes.skills).length - listed(current.skills).length, 'skill')
+      ].filter(Boolean);
+      if (!Object.keys(changes).length) return setDone({ text: 'Resume read. The profile already has everything it contains.', previous: null });
+      const previous = Object.fromEntries(Object.keys(changes).map(key => [key, current[key as keyof Person]])) as Partial<Person>;
+      await latest.current.save(changes);
+      setDone({ text: `Updated from the resume${updated.length ? `: ${updated.join(', ')}` : ''}.`, previous });
     } catch (failure) {
       setError(errorMessage(failure));
     } finally {
       setImporting(false);
     }
   }
-  return <section className={cn(card, 'flex flex-col gap-4 p-5')}>
-    <CardHead title="Experience" action={<div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" disabled={!hasCv || importing || busy} title={hasCv ? undefined : 'No CV filed on Google Drive'} onClick={() => void importFromResume()}>{importing ? 'Reading the CV…' : 'Import from resume'}</Button>
-      <Button variant="outline" size="sm" onClick={() => setAdding(true)}>+ Add</Button>
-    </div>} />
+  return <>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+      <span className={quiet}>Update the description, experience, education, certifications, languages and skills from the CV.</span>
+      <Button variant="outline" size="sm" disabled={!hasCv || importing || busy} title={hasCv ? undefined : 'No CV filed on Google Drive'} onClick={() => void importFromResume()}>{importing ? 'Updating from the CV…' : 'Import from resume'}</Button>
+    </div>
     {error && <p role="alert" className="m-0 text-[13px] text-destructive">{error}</p>}
-    {found && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted px-4 py-3 text-sm">
-      <span>{plural(found.experience.length, 'position')} found in the CV.{items.length ? ` This replaces the ${plural(items.length, 'position')} listed now.` : ''}</span>
+    {done && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted px-4 py-3 text-sm">
+      <span>{done.text}</span>
       <div className="flex gap-2">
-        <Button size="sm" disabled={busy} onClick={() => void save({ experience: found.experience, ...(!person.linkedin_url && found.linkedinUrl ? { linkedin_url: found.linkedinUrl } : {}) }).then(() => setFound(null), () => {})}>{items.length ? 'Replace' : 'Add positions'}</Button>
-        <Button size="sm" variant="ghost" onClick={() => setFound(null)}>Cancel</Button>
+        {done.previous && <Button size="sm" variant="outline" disabled={busy} onClick={() => {
+          const previous = done.previous!;
+          void latest.current.save(previous).then(() => setDone(null), failure => setError(errorMessage(failure)));
+        }}>Undo</Button>}
+        <Button size="sm" variant="ghost" onClick={() => setDone(null)}>Close</Button>
       </div>
     </div>}
+  </>;
+}
+
+/** The profile / "About me" paragraph of the resume, editable in place. */
+function ProfileDescription({ summary, save, busy }: { summary: string; save: (fields: { summary?: string }) => Promise<void>; busy: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(summary);
+  const [error, setError] = useState('');
+  return <section className={cn(card, 'flex flex-col gap-3 p-5')}>
+    <CardHead title="Description" action={!editing && <Button type="button" variant="ghost" size="sm" onClick={() => {
+      setValue(summary);
+      setError('');
+      setEditing(true);
+    }}>{summary.trim() ? 'Edit' : '+ Add'}</Button>} />
+    {editing ? <form className="flex flex-col gap-2" onSubmit={event => {
+      event.preventDefault();
+      setError('');
+      void save({ summary: value.trim() }).then(() => setEditing(false), failure => setError(errorMessage(failure)));
+    }}>
+      <Textarea aria-label="Profile description" autoFocus rows={5} maxLength={5000} value={value} placeholder="The profile or “About me” paragraph of the resume" onChange={event => setValue(event.target.value)} onKeyDown={event => {
+        if (event.key === 'Escape') setEditing(false);
+      }} />
+      {error && <p role="alert" className="m-0 text-[13px] text-destructive">{error}</p>}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={busy || value.trim() === summary.trim()}>Save</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+      </div>
+    </form> : summary.trim() ? <p className="m-0 text-sm leading-relaxed whitespace-pre-line text-foreground/90">{summary}</p> : <p className={cn('m-0', quiet)}>No description yet. Import it from the resume or write one.</p>}
+  </section>;
+}
+
+const blankPosition: ExperienceItem = { title: '', company: '', contract_type: '', start: '', end: '', location: '', summary: '', skills: [] };
+
+function Experience({ items, save, busy }: {
+  items: ExperienceItem[];
+  save: (fields: { experience?: ExperienceItem[] }) => Promise<void>;
+  busy: boolean;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const total = items.reduce((sum, item) => sum + months(item.start, item.end), 0);
+  const shown = showAll ? items : items.slice(0, 3);
+  return <section className={cn(card, 'flex flex-col gap-4 p-5')}>
+    <CardHead title="Experience" action={<Button variant="outline" size="sm" onClick={() => setAdding(true)}>+ Add</Button>} />
     {adding && <PositionForm busy={busy} cancel={() => setAdding(false)} save={position => save({ experience: newestFirst([position, ...items]) }).then(() => setAdding(false))} />}
     {items.length ? <ol className="m-0 flex list-none flex-col p-0">
       {shown.map((item, index) => <li key={`${item.company}-${item.start}-${index}`} className="group/position flex gap-3.5 pb-[18px] last:pb-0">
@@ -647,10 +748,13 @@ function EducationCertifications({ person, save, busy }: { person: Person; save:
   return <section className={cn(card, 'flex flex-col gap-4 p-5')}>
     <div className="flex flex-col gap-3">
       <CardHead title="Education" action={<AddButton onClick={() => setAdding('degree')} />} />
-      {adding === 'degree' && <InlineAdd label="New degree" placeholder="Degree — School — Year" busy={busy} onSave={value => save({ degrees: [...degrees, value].join('\n') })} onCancel={() => setAdding('')} />}
+      {adding === 'degree' && <InlineAdd label="New degree" placeholder="Degree — School — 2016–2018" busy={busy} onSave={value => save({ degrees: [...degrees, value].join('\n') })} onCancel={() => setAdding('')} />}
       {degrees.map(line => {
         const [degree, ...rest] = parts(line);
-        const year = rest.length > 1 || /^\d{4}$/.test(rest[0] ?? '') ? rest.pop() : '';
+        // Trailing years, typed as "2016–2018" or split by a spaced dash ("2016 - 2018").
+        const years: string[] = [];
+        while (rest.length && /^(19|20)\d{2}(\s*[–-]\s*(19|20)\d{2})?$/.test(rest[rest.length - 1])) years.unshift(rest.pop()!);
+        const year = years.join('–').replace(/\s*[–-]\s*/g, '–');
         return <div key={line} className="flex gap-3">
           <span aria-hidden="true" className="flex size-9 flex-none items-center justify-center rounded-lg bg-muted"><GraduationCap className="size-[18px]" /></span>
           <div className="flex min-w-0 flex-col gap-0.5">

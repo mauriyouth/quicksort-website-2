@@ -83,6 +83,24 @@ export async function readDocText(sa: ServiceAccount, docId: string, deps: Googl
   return parts.join("");
 }
 
+export type TemplateDoc = { id: string; name: string };
+
+/** The Google Docs directly inside the templates folder, by name (one page of up to 200 is plenty). */
+export async function listFolderDocs(sa: ServiceAccount, folderId: string, deps: GoogleDocsDeps = {}): Promise<TemplateDoc[]> {
+  const drive = deps.driveApi || driveApi;
+  const found = await drive<{ files?: TemplateDoc[] }>(sa, "/files", {
+    query: {
+      q: `'${folderId}' in parents and mimeType='application/vnd.google-apps.document' and trashed=false`,
+      fields: "files(id,name)",
+      orderBy: "name",
+      pageSize: "200",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+    },
+  });
+  return (found.files || []).map(({ id, name }) => ({ id, name }));
+}
+
 export function assertNoPlaceholders(text: string): void {
   const left = extractFields(text);
   if (left.length) throw new Error(`These fields were not filled: ${left.join(", ")}`);

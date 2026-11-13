@@ -8,6 +8,8 @@ import { storedPricingLines } from "../../src/sales/pricing-lines.ts";
 import type { ToInvoiceRow } from "./month.ts";
 import { ProviderError } from "./provider.ts";
 import type { DraftLine, InvoiceDraft, InvoicingProvider, ProviderInvoice } from "./provider.ts";
+import { linkCandidates, queryInvoices } from "./list.ts";
+import type { ListParams } from "./list.ts";
 import { reconcile } from "./sync.ts";
 import type { InvoicingSettings } from "./settings.ts";
 
@@ -326,7 +328,18 @@ async function storeImportedLines(ctx: LifecycleCtx, remote: ProviderInvoice[]) 
   if (added.error) throw new Error("Could not import invoice lines.", { cause: added.error });
 }
 
-export async function listInvoices(ctx: LifecycleCtx, refresh: boolean) {
+// PostgREST caps a response at 1000 rows: read the whole table in stable batches.
+const READ_BATCH = 1000;
+async function allInvoices(ctx: LifecycleCtx): Promise<Row[]> {
+  const out: Row[] = [];
+  for (let from = 0; ; from += READ_BATCH) {
+    const rows = await many(ctx.client.from("invoices").select("*").order("id").range(from, from + READ_BATCH - 1), "Could not read invoices.");
+    out.push(...rows);
+    if (rows.length < READ_BATCH) return out;
+  }
+}
+
+export async function listInvoices(ctx: LifecycleCtx, refresh: boolean, params: ListParams) {
   let lastSyncedAt = ctx.settings.lastSyncedAt;
   let syncError: string | null = null;
   // Qonto sync is manual (Refresh button): it pages through every remote invoice, too slow for each page load.
@@ -336,8 +349,14 @@ export async function listInvoices(ctx: LifecycleCtx, refresh: boolean) {
       syncError = error instanceof ProviderError || error instanceof HttpError ? error.message : "Could not refresh invoices from Qonto.";
     }
   }
-  const rows = await many(ctx.client.from("invoices").select("*").order("issue_date", { ascending: false }), "Could not read invoices.");
-  return { invoices: await decorate(ctx, rows), lastSyncedAt, ...(syncError ? { syncError } : {}) };
+  // Names are joined on every row first: search matches client, project and consultant names.
+  const rows = await decorate(ctx, await allInvoices(ctx));
+  return { ...queryInvoices(rows, params, parisToday(ctx.now())), lastSyncedAt, ...(syncError ? { syncError } : {}) };
+}
+
+export async function invoiceLinkCandidates(ctx: LifecycleCtx, target: { projectId: string; billedClientId: string | null; month: string }) {
+  const rows = await many(ctx.client.from("invoices").select("*").eq("source", "imported").is("employee_id", null).neq("status", "canceled"), "Could not read invoices.");
+  return { invoices: linkCandidates(await decorate(ctx, rows), target) };
 }
 
 export async function invoiceDetail(ctx: LifecycleCtx, id: string) {

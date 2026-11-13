@@ -5,7 +5,7 @@ import { z } from 'zod';
 /**
  * Leave balances and accrual rates. Balances are derived server-side by the
  * employee_leave_balances RPC (accrual per calendar month from the
- * employment start date — CP once each month is over, RTT from its start —
+ * employment start date — CP and RTT once each month is over —
  * minus weighted CRA consumption); this module is the
  * only TS surface for them. Rates live in leave_accrual_settings, edited on
  * the Global settings screen, mirroring the admin_statuses pattern.

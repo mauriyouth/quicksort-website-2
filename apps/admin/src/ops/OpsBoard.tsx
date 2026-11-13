@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bold, Eye, GripVertical, Heading2, Italic, Link2, List, PenLine, Plus, Search, Trash2, X } from "lucide-react";
+import { Bold, Eye, GripVertical, Heading2, Italic, Link2, List, PenLine, Plus, Search, Trash2, Users, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -48,8 +48,14 @@ import "./ops.css";
  * columns; cards carry a title, free-form Markdown content, a priority and an
  * owner. Cards move by drag-and-drop or via the move control in the card
  * editor — same explicit fallback pattern as the sales pipeline board.
+ *
+ * Rendered for admins (every board) and, in the employee portal, for
+ * employees: RLS returns only the boards they own or that are shared with
+ * them (20261220090000_ops_boards_employee_access.sql). The owner (or an
+ * admin) renames and shares a board; everyone on it works its cards.
  */
 type Board = Row<"ops_boards">;
+type Share = Row<"ops_board_shares">;
 type Column = Row<"ops_columns">;
 type Card = Row<"ops_cards">;
 
@@ -88,8 +94,18 @@ function firstInitial(name: string): string {
   return (name.trim().charAt(0) || "?").toUpperCase();
 }
 
-export function OpsBoard({ actorEmail }: { actorEmail: string }) {
+export function OpsBoard({
+  actorEmail,
+  actorId,
+  isAdmin,
+}: {
+  actorEmail: string;
+  actorId: string;
+  isAdmin: boolean;
+}) {
   const [boards, setBoards] = useState<Board[]>([]);
+  const [shares, setShares] = useState<Share[]>([]); // shares of the open board
+  const [sharing, setSharing] = useState(false); // share dialog open
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [columns, setColumns] = useState<Column[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
@@ -138,17 +154,21 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
     if (!id) {
       setColumns([]);
       setCards([]);
+      setShares([]);
       return;
     }
     try {
-      const [columnsResult, cardsResult] = await Promise.all([
+      const [columnsResult, cardsResult, sharesResult] = await Promise.all([
         db().from("ops_columns").select("*").eq("board_id", id).order("position"),
         db().from("ops_cards").select("*").eq("board_id", id).order("position"),
+        db().from("ops_board_shares").select("*").eq("board_id", id).order("email"),
       ]);
       if (columnsResult.error) throw columnsResult.error;
       if (cardsResult.error) throw cardsResult.error;
       setColumns(columnsResult.data || []);
       setCards(cardsResult.data || []);
+      // Sharing arrives with its own migration; the board still works without it.
+      setShares(sharesResult.error ? [] : sharesResult.data || []);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -162,12 +182,13 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
   }, [loadBoards]);
 
   useEffect(() => {
-    document.title = "Operations board · Quicksort Admin";
+    document.title = isAdmin ? "Operations board · Quicksort Admin" : "Board · Quicksort";
     void load();
-  }, [load]);
+  }, [load, isAdmin]);
 
   useEffect(() => {
     setSearch("");
+    setSharing(false);
     setQuickTitle("");
     setAddingTo("");
     setEditing(null);
@@ -217,6 +238,8 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
   }
 
   const board = boards.find((b) => b.id === boardId);
+  /** Owner or admin: may rename and share the board. */
+  const canManage = (b: Board) => isAdmin || (!!b.owner_id && b.owner_id === actorId);
   const visibleCards = useMemo(() => {
     const query = search.trim().toLowerCase();
     return query
@@ -239,6 +262,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
         .insert({
           name,
           description,
+          owner_id: actorId,
           position: boards.length,
           updated_at: new Date().toISOString(),
         })
@@ -416,9 +440,9 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
                 "shrink-0 gap-2 rounded-full pr-3 pl-1",
                 b.id === boardId ? "bg-card text-foreground" : "text-muted-foreground",
               )}
-              title="Click to open · double-click to rename"
+              title={canManage(b) ? "Click to open · double-click to rename" : "Shared with you"}
               onClick={() => setBoardId(b.id)}
-              onDoubleClick={() => setRenamingBoard(b.id)}
+              onDoubleClick={() => canManage(b) && setRenamingBoard(b.id)}
             >
               <span
                 className={cn(
@@ -430,6 +454,9 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
                 {firstInitial(b.name)}
               </span>
               <span className="max-w-44 truncate">{b.name}</span>
+              {!isAdmin && b.owner_id !== actorId && (
+                <Users className="size-3.5 opacity-60" aria-label="Shared with you" />
+              )}
               <span className="num text-xs opacity-60">{counts[b.id] || 0}</span>
             </Button>
           ),
@@ -448,6 +475,7 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
       {!loading && !boards.length && (
         <EmptyState title="No boards yet">
           Use "New board" above to create one, set its columns, then add cards.
+          {!isAdmin && " Boards a colleague shares with you appear here too."}
         </EmptyState>
       )}
 
@@ -474,6 +502,22 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
           {selectedId && (
             <span className="ml-auto hidden items-center gap-1.5 sm:inline-flex">
               <Kbd>Space</Kbd> assign to me · <Kbd>Enter</Kbd> edit · <Kbd>Esc</Kbd> deselect
+            </span>
+          )}
+          {canManage(board) ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(!selectedId && "ml-auto")}
+              onClick={() => setSharing(true)}
+            >
+              <Users data-icon="inline-start" />
+              {shares.length ? `Shared with ${shares.length}` : "Share"}
+            </Button>
+          ) : (
+            <span className={cn("inline-flex items-center gap-1.5", !selectedId && "ml-auto")}>
+              <Users className="size-3.5" aria-hidden="true" />
+              Shared with you
             </span>
           )}
         </div>
@@ -655,6 +699,34 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
         </div>
       )}
 
+      {sharing && board && (
+        <ShareDialog
+          board={board}
+          shares={shares}
+          actorEmail={actorEmail}
+          busy={busy}
+          onClose={() => setSharing(false)}
+          onAdd={(email) =>
+            action(async () => {
+              const result = await db()
+                .from("ops_board_shares")
+                .insert({ board_id: board.id, email });
+              if (result.error) throw result.error;
+            }, `"${board.name}" shared with ${email}.`)
+          }
+          onRemove={(email) =>
+            void action(async () => {
+              const result = await db()
+                .from("ops_board_shares")
+                .delete()
+                .eq("board_id", board.id)
+                .eq("email", email);
+              if (result.error) throw result.error;
+            }, `${email} removed from "${board.name}".`)
+          }
+        />
+      )}
+
       {creatingBoard && (
         <BoardCreator
           busy={busy}
@@ -685,6 +757,119 @@ export function OpsBoard({ actorEmail }: { actorEmail: string }) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Share a board with colleagues by email. Suggestions come from
+ * ops_share_directory() (open employments + admins); any address is
+ * accepted so a share can be prepared before the account exists.
+ */
+function ShareDialog({
+  board,
+  shares,
+  actorEmail,
+  busy,
+  onClose,
+  onAdd,
+  onRemove,
+}: {
+  board: Board;
+  shares: Share[];
+  actorEmail: string;
+  busy: boolean;
+  onClose: () => void;
+  onAdd: (email: string) => Promise<void>;
+  onRemove: (email: string) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [people, setPeople] = useState<{ email: string; full_name: string }[]>([]);
+  useEffect(() => {
+    void db()
+      .rpc("ops_share_directory")
+      .then((r) => setPeople(r.error ? [] : r.data || []));
+  }, []);
+  const shared = new Set(shares.map((s) => s.email));
+  const me = actorEmail.toLowerCase();
+  const suggestions = people.filter((p) => p.email !== me && !shared.has(p.email));
+  const nameOf = (address: string) => people.find((p) => p.email === address)?.full_name;
+  const next = email.trim().toLowerCase();
+  const valid = /^[^@\s]+@[^@\s]+$/.test(next) && next !== me && !shared.has(next);
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Share "{board.name}"</DialogTitle>
+          <DialogDescription>
+            People you add can see this board and add, edit and move its cards.
+            Only you can rename or re-share it.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!valid || busy) return;
+            void onAdd(next).then(() => setEmail(""));
+          }}
+        >
+          <Input
+            type="email"
+            list="ops-share-people"
+            className="min-w-0 flex-1"
+            value={email}
+            maxLength={200}
+            placeholder="name@quicksort.fr"
+            aria-label="Colleague email"
+            autoFocus
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <datalist id="ops-share-people">
+            {suggestions.map((p) => (
+              <option key={p.email} value={p.email}>
+                {p.full_name}
+              </option>
+            ))}
+          </datalist>
+          <Button type="submit" disabled={busy || !valid}>
+            Share
+          </Button>
+        </form>
+        {shares.length ? (
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
+            {shares.map((s) => (
+              <li key={s.email} className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1.5 text-sm">
+                <Avatar size="sm" aria-hidden="true">
+                  <AvatarFallback>{initials(s.email)}</AvatarFallback>
+                </Avatar>
+                <span className="min-w-0 flex-1 truncate">
+                  {nameOf(s.email) ? <>{nameOf(s.email)} <span className="text-muted-foreground">{s.email}</span></> : s.email}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground"
+                  aria-label={`Remove ${s.email}`}
+                  title="Remove access"
+                  disabled={busy}
+                  onClick={() => onRemove(s.email)}
+                >
+                  <X />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="m-0 text-sm text-muted-foreground">Not shared with anyone yet.</p>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

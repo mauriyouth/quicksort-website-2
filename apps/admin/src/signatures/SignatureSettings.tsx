@@ -26,7 +26,8 @@ const errorText = (e: unknown, fallback: string) => (e instanceof Error && e.mes
  * write-only API key and webhook secret, Quicksort's signatory, the webhook
  * URL to paste into Youtrust) and the Google Doc templates that contracts are
  * filled from. Templates are read through the Google Drive service account,
- * so each Doc must be shared with it.
+ * so each Doc must be shared with it. When Settings → Google Drive contracts
+ * names a templates folder, its Docs are offered in a list instead of a link.
  */
 export function SignatureSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -176,6 +177,9 @@ function YoutrustCard({ settings, onSaved }: { settings: Settings | null; onSave
 }
 
 type Draft = { id?: string; name: string; googleDocUrl: string; signers: SignerKind; typeCode: string; active: boolean };
+type TemplateDocs = { folder: { id: string; name: string } | null; docs: { id: string; name: string }[] };
+/** The Doc ID inside a Google Docs link (the server parses it the same way), or the value itself. */
+const docIdOf = (value: string) => /\/document\/(?:u\/\d+\/)?d\/([\w-]{10,})/.exec(value)?.[1] || value;
 const blank: Draft = { name: "", googleDocUrl: "", signers: "person_and_quicksort", typeCode: "", active: true };
 
 function TemplatesCard({
@@ -193,7 +197,28 @@ function TemplatesCard({
   const [fields, setFields] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [folderDocs, setFolderDocs] = useState<TemplateDocs | null>(null);
+  const [folderError, setFolderError] = useState("");
   const typeLabel = (code: string) => types.find((t) => t.code === code)?.label || code;
+  const docsOpen = !!draft;
+
+  // Listed each time the form opens, so Docs just added to the folder show up.
+  useEffect(() => {
+    if (!docsOpen) return;
+    let cancelled = false;
+    setFolderError("");
+    postSignatures<TemplateDocs>({ action: "list-template-docs" }).then(
+      (result) => !cancelled && setFolderDocs(result),
+      (e) => {
+        if (cancelled) return;
+        setFolderDocs(null);
+        setFolderError(errorText(e, "Could not list the templates folder."));
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [docsOpen]);
   const set = (patch: Partial<Draft>) => setDraft((current) => (current ? { ...current, ...patch } : current));
 
   async function save(event: FormEvent) {
@@ -244,7 +269,10 @@ function TemplatesCard({
         )
       }
     >
-      <SettingsRow label="Service account" hint="Share each template Doc with this address">
+      <SettingsRow
+        label="Service account"
+        hint={folderDocs?.folder ? `Share the "${folderDocs.folder.name}" folder with this address` : "Share each template Doc, or the templates folder, with this address"}
+      >
         {serviceAccountEmail ? <span className="font-mono text-xs break-all">{serviceAccountEmail}</span> : <Hint>Connect Google Drive in Settings → Google Drive contracts first.</Hint>}
       </SettingsRow>
       <div className="py-5 first:pt-0 last:pb-0">
@@ -305,15 +333,25 @@ function TemplatesCard({
             <SettingsRow label="Name">
               <Input aria-label="Template name" required value={draft.name} onChange={(e) => set({ name: e.target.value })} placeholder="Contrat CDI" />
             </SettingsRow>
-            <SettingsRow label="Google Doc link">
-              <Input
-                aria-label="Google Doc link"
-                required
-                value={draft.googleDocUrl}
-                onChange={(e) => set({ googleDocUrl: e.target.value })}
-                placeholder="https://docs.google.com/document/d/…"
-              />
-            </SettingsRow>
+            {folderDocs?.folder ? (
+              <SettingsRow label="Google Doc" hint={`From the "${folderDocs.folder.name}" folder`}>
+                <TemplateDocSelect
+                  docs={folderDocs.docs}
+                  value={draft.googleDocUrl ? docIdOf(draft.googleDocUrl) : ""}
+                  onChange={(doc) => set({ googleDocUrl: doc?.id || "", ...(doc && !draft.name.trim() ? { name: doc.name } : {}) })}
+                />
+              </SettingsRow>
+            ) : (
+              <SettingsRow label="Google Doc link" hint={folderError || undefined}>
+                <Input
+                  aria-label="Google Doc link"
+                  required
+                  value={draft.googleDocUrl}
+                  onChange={(e) => set({ googleDocUrl: e.target.value })}
+                  placeholder="https://docs.google.com/document/d/…"
+                />
+              </SettingsRow>
+            )}
             <SettingsRow label="Signers">
               <NativeSelect aria-label="Signers" value={draft.signers} onChange={(e) => set({ signers: e.target.value as SignerKind })}>
                 {(Object.keys(SIGNER_LABELS) as SignerKind[]).map((kind) => (
@@ -362,5 +400,41 @@ function TemplatesCard({
         </form>
       )}
     </SettingsCard>
+  );
+}
+
+/** The folder's Docs; a saved template whose Doc sits elsewhere stays selectable. */
+function TemplateDocSelect({
+  docs,
+  value,
+  onChange,
+}: {
+  docs: TemplateDocs["docs"];
+  value: string;
+  onChange: (doc: TemplateDocs["docs"][number] | null) => void;
+}) {
+  const outside = value && !docs.some((d) => d.id === value);
+  return (
+    <>
+      <NativeSelect
+        aria-label="Google Doc"
+        required
+        value={value}
+        onChange={(e) => onChange(docs.find((d) => d.id === e.target.value) || (e.target.value ? { id: e.target.value, name: "" } : null))}
+      >
+        <NativeSelectOption value="">{docs.length ? "Choose a Doc" : "No Google Docs in this folder yet"}</NativeSelectOption>
+        {outside && <NativeSelectOption value={value}>Current Doc (outside the folder)</NativeSelectOption>}
+        {docs.map((d) => (
+          <NativeSelectOption key={d.id} value={d.id}>
+            {d.name}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+      {value && (
+        <a className="text-xs text-muted-foreground underline" href={`https://docs.google.com/document/d/${value}/edit`} target="_blank" rel="noreferrer">
+          Open in Google Docs
+        </a>
+      )}
+    </>
   );
 }

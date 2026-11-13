@@ -32,14 +32,15 @@ const SYSTEM_PROMPT = `Tu classes les débits bancaires d'une société de servi
 Lignes possibles :
 - loyer : loyer et charges du bureau (bail, coworking, électricité, internet du bureau).
 - outils : outils et abonnements (SaaS, cloud, licences IA, téléphonie).
-- marketing : marketing et communication (salons, événements, publicité, goodies).
+- marketing : marketing, communication et réceptions (salons, événements, publicité, goodies, restaurants, repas d'affaires et déjeuners avec clients ou prospects).
 - honoraires : honoraires de professions réglementées (expert-comptable, avocat, commissaire aux comptes).
 - deplacements : frais de déplacement (train, avion, hôtel, taxi/VTC, carburant, péage, parking, location de voiture courte durée, notes de frais de déplacement).
-- divers : autres charges fixes (frais bancaires, assurance, mutuelle, fournitures, notes de frais hors déplacements).
-- hors_charges_fixes : tout ce qui n'est PAS une charge fixe, à savoir : salaires nets, URSSAF / retraite / prévoyance / prélèvement à la source, freelances et sous-traitance, TVA, impôts (IS, CFE…), virements internes, remboursements, chasseurs de têtes, achats de matériel, commission d'affacturage.
+- divers : autres charges fixes (frais bancaires, assurance, fournitures, notes de frais hors déplacements et hors repas).
+- hors_charges_fixes : tout ce qui n'est PAS une charge fixe, à savoir : salaires nets, URSSAF / retraite / prévoyance / mutuelle (Alan, Allianz, Malakoff…) / titres-restaurant (Swile, Pluxee, Edenred…) / médecine du travail / prélèvement à la source, freelances et sous-traitance, TVA, impôts (IS, CFE…), virements internes, remboursements, chasseurs de têtes, achats de matériel, commission d'affacturage.
 
 Règles :
-- Les déplacements (y compris remboursés en note de frais) vont dans deplacements ; les autres notes de frais et la mutuelle vont dans divers.
+- Les déplacements (y compris remboursés en note de frais) vont dans deplacements ; les restaurants et repas d'affaires (y compris en note de frais) vont dans marketing ; les autres notes de frais vont dans divers.
+- Mutuelle, titres-restaurant et médecine du travail sont des charges sociales déjà comptées ailleurs : hors_charges_fixes. Ne confonds pas un restaurant (marketing) avec un émetteur de titres-restaurant (hors_charges_fixes).
 - Utilise exactement l'un de ces identifiants : ${FIXED_CHARGE_LINES.join(", ")}.
 - Donne une confidence entre 0 et 1 ; en cas de doute, mets une confidence basse.
 - Les corrections manuelles fournies en exemples priment sur ces règles pour les mêmes contreparties.

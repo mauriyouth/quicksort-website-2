@@ -71,6 +71,7 @@ async function mock(page: Page, requests: unknown[] = [], answers: Record<string
         { id: TEMPLATE, name: 'Contrat CDI', google_doc_id: '1AbCdEfGhIjKlMnOpQrStUvWxYz', signers: 'person_and_quicksort', type_code: 'EMPLOYMENT_CONTRACT', active: true },
         { id: OTHER_TEMPLATE, name: 'Attestation', google_doc_id: '2AbCdEfGhIjKlMnOpQrStUvWxYz', signers: 'quicksort', type_code: 'OTHER', active: true },
       ] });
+      case 'list-template-docs': return json(route, { folder: null, docs: [] });
       case 'list-requests': return json(route, { requests });
       case 'prepare': return json(route, {
         fields: [{ name: 'nom_complet', value: 'Ada Test', known: true }, { name: 'clause_speciale', value: '', known: false }],
@@ -91,9 +92,45 @@ test('the settings tab shows the webhook URL and the service account to share te
   await page.goto(new URL('/settings', harness.url).href);
   await expect(page.getByLabel('Webhook URL')).toHaveValue('https://admin.quicksort.test/api/youtrust-webhook');
   await expect(page.getByText('drive-bot@quicksort.iam.gserviceaccount.com')).toBeVisible();
-  await expect(page.getByText('Share each template Doc with this address')).toBeVisible();
+  await expect(page.getByText('Share each template Doc, or the templates folder, with this address')).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Contrat CDI', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'CDI contract', exact: true })).toBeVisible();
+});
+
+test('without a templates folder, a new template takes a Google Doc link', async ({ page }) => {
+  await mock(page);
+  await page.goto(new URL('/settings', harness.url).href);
+  await page.getByRole('button', { name: 'Add template' }).click();
+  await expect(page.getByLabel('Google Doc link')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Google Doc', exact: true })).toHaveCount(0);
+});
+
+test('with a templates folder, a new template picks a Doc from it and saves its ID', async ({ page }) => {
+  const DOC = '3AbCdEfGhIjKlMnOpQrStUvWxYz';
+  const calls = await mock(page, [], {
+    'list-template-docs': { body: { folder: { id: 'tpl-folder', name: 'Templates contrats' }, docs: [{ id: DOC, name: 'Contrat CDD' }] } },
+    'save-template': { body: { template: { id: '54000000-0000-4000-8000-0000000000b9', name: 'Contrat CDD', google_doc_id: DOC, signers: 'person_and_quicksort', type_code: 'EMPLOYMENT_CONTRACT', active: true }, fields: ['nom'] } },
+  });
+  await page.goto(new URL('/settings', harness.url).href);
+  await page.getByRole('button', { name: 'Add template' }).click();
+  await expect(page.getByText('Share the "Templates contrats" folder with this address')).toBeVisible();
+  await expect(page.getByLabel('Google Doc link')).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Google Doc', exact: true }).selectOption({ label: 'Contrat CDD' });
+  await expect(page.getByLabel('Template name')).toHaveValue('Contrat CDD');
+  await page.getByLabel('Document type').selectOption({ label: 'CDI contract' });
+  await page.getByRole('button', { name: 'Save template' }).click();
+  await expect(page.getByText('Fields found:')).toBeVisible();
+  expect(calls.find((call) => call.action === 'save-template')).toMatchObject({ name: 'Contrat CDD', googleDocUrl: DOC });
+});
+
+test('editing a template whose Doc is outside the folder keeps it selected', async ({ page }) => {
+  await mock(page, [], {
+    'list-template-docs': { body: { folder: { id: 'tpl-folder', name: 'Templates contrats' }, docs: [{ id: '3AbCdEfGhIjKlMnOpQrStUvWxYz', name: 'Contrat CDD' }] } },
+  });
+  await page.goto(new URL('/settings', harness.url).href);
+  await page.getByRole('button', { name: 'Edit Contrat CDI' }).click();
+  await expect(page.getByRole('combobox', { name: 'Google Doc', exact: true })).toHaveValue('1AbCdEfGhIjKlMnOpQrStUvWxYz');
+  await expect(page.getByRole('option', { name: 'Current Doc (outside the folder)' })).toHaveCount(1);
 });
 
 test('sending stays disabled until the unknown field is filled, and Build preview shows the PDF', async ({ page }) => {

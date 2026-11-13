@@ -6,9 +6,10 @@ import { SpotlightSearch, type SpotlightSalesContact } from "./SpotlightSearch";
 import { HrWorkspace } from "./hr/HrWorkspace";
 import { loadWorkspace } from "./hr/data";
 import type { Workspace } from "./hr/domain";
-import { Opportunities } from "./sales/Opportunities";
+import { NEEDS_LIST, needUrl } from "./hr/HiringNeed";
 import { Projects } from "./sales/Projects";
 import { Invoicing } from "./sales/invoicing/Invoicing";
+import { FreelancerInvoices } from "./sales/freelancer-invoices/FreelancerInvoices";
 import { DocumentAlerts } from "./documents/DocumentAlerts";
 import { OpsBoard } from "./ops/OpsBoard";
 import { CompanyAdmin } from "./ops/CompanyAdmin";
@@ -63,6 +64,7 @@ const PayslipImport = lazy(() =>
 const PayslipsMonth = lazy(() =>
   import("./payslips/PayslipsMonth").then((m) => ({ default: m.PayslipsMonth })),
 );
+const Checks = lazy(() => import("./ops/checks/Checks.tsx").then((m) => ({ default: m.Checks })));
 const BusinessPlan = lazy(() =>
   import("./ops/business-plan/BusinessPlan").then((m) => ({ default: m.BusinessPlan })),
 );
@@ -98,9 +100,9 @@ const nav = [
       { id: "sales-pipeline", href: "/sales/pipeline", label: "Pipeline" },
       { id: "sales-clients", href: "/sales/clients", label: "Clients" },
       { id: "sales-people", href: "/sales/people", label: "Contacts" },
-      { id: "opportunities", href: "/sales/opportunities", label: "Opportunities" },
       { id: "sales-projects", href: "/sales/projects", label: "Projects" },
       { id: "sales-invoicing", href: "/sales/invoicing", label: "Invoicing" },
+      { id: "sales-freelancer-invoices", href: "/sales/freelancer-invoices", label: "Freelancer invoices" },
     ],
   },
   {
@@ -111,6 +113,7 @@ const nav = [
     children: [
       { id: "operations", href: "/operations", label: "Board" },
       { id: "ops-business-plan", href: "/operations/business-plan", label: "Business plan" },
+      { id: "ops-checks", href: "/operations/checks", label: "Checks" },
       { id: "ops-admin", href: "/operations/admin", label: "Admin" },
     ],
   },
@@ -122,6 +125,7 @@ const nav = [
     children: [
       { id: "hr-overview", href: "/hr", label: "Overview" },
       { id: "recruiting", href: "/hr/recruiting", label: "Recruiting" },
+      { id: "hr-opportunities", href: NEEDS_LIST, label: "Opportunities" },
       { id: "hr-people", href: "/hr/people", label: "People" },
       { id: "journeys", href: "/hr/journeys", label: "Journeys" },
       { id: "hr-documents", href: "/hr/documents", label: "Documents" },
@@ -183,7 +187,7 @@ export default function App() {
         </AuthGate>
       ) : staff ? (
         <AuthGate auth={auth}>
-          {auth.session && <Admin email={auth.session.user.email || ""} isOwner={auth.isOwner} role={auth.role === "hr" ? "hr" : "admin"} />}
+          {auth.session && <Admin email={auth.session.user.email || ""} userId={auth.session.user.id} isOwner={auth.isOwner} role={auth.role === "hr" ? "hr" : "admin"} />}
         </AuthGate>
       ) : (
         <AuthGate auth={auth}>
@@ -220,7 +224,7 @@ function StaffingWorkspace({ email }: { email: string }) {
     </Routes>
   </AdminShell>;
 }
-function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role: "hr" | "admin" }) {
+function Admin({ email, userId, isOwner, role }: { email: string; userId: string; isOwner: boolean; role: "hr" | "admin" }) {
   const workspaceNav = role === "hr" ? nav.filter(item => item.id === "hr" || item.id === "account") : isOwner ? ownerNav : nav;
   // Legacy (pre-merge) paths resolve to their new section, so the redirect
   // routes below render instead of falling into the not-found state.
@@ -234,6 +238,8 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     ...LEGACY_RECRUITING_PATHS.map((href) => ({ id: "recruiting", href })),
     { id: "journeys", href: "/hr/onboarding" },
     { id: "journeys", href: "/hr/offboarding" },
+    // Opportunities moved to HR as hiring needs.
+    { id: "hr-opportunities", href: "/sales/opportunities" },
   ];
   const location = useLocation();
   const routerNavigate = useNavigate();
@@ -436,7 +442,8 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     const route = allRoutes.find((item) => item.id === id);
     if (!route) return navigate(id);
     const url = new URL(route.href, window.location.origin);
-    const { person, application, employment, ...rest } = params;
+    const { person, application, employment, need, ...rest } = params;
+    if (need) url.pathname = needUrl(need);
     if (person) {
       // Person records route as paths, not query params:
       // /hr/people/<id>[/tab], /hr/people/<id>/employments/<employmentId>.
@@ -501,18 +508,18 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     "sales-pipeline",
     "sales-clients",
     "sales-people",
-    "opportunities",
     "sales-projects",
     "sales-invoicing",
+    "sales-freelancer-invoices",
   ];
   const isSales = salesTabIds.includes(tab);
   const hrTabIds = [
     "hr",
-    "hr-overview", "recruiting", "hr-people", "journeys",
+    "hr-overview", "recruiting", "hr-opportunities", "hr-people", "journeys",
     "hr-documents", "hr-payslips", "jobs",
   ];
   const isHr = hrTabIds.includes(tab);
-  const isOps = tab === "operations" || tab === "ops-business-plan" || tab === "ops-admin";
+  const isOps = tab === "operations" || tab === "ops-business-plan" || tab === "ops-checks" || tab === "ops-admin";
   // One shared top menu on every page: the section name plus its screens
   // as tabs. Section landing routes resolve to their first screen
   // ("/sales" → Dashboard, "/hr" → Pipeline); single-screen pages show the
@@ -585,7 +592,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         {isOwner && <Route path="/admin-access" element={<AccessManager />} />}
         <Route path="/events" element={<EventsManager />} />
         <Route path="/hr" element={<HrWorkspace view="overview" actorEmail={email} role={role} openProject={openProject} />} />
-        <Route path="/hr/recruiting" element={<HrWorkspace view="recruiting" actorEmail={email} role={role} openProject={openProject} />} />
+        <Route path="/hr/recruiting/*" element={<HrWorkspace view="recruiting" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/people/*" element={<HrWorkspace view="people" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/journeys" element={<HrWorkspace view="journeys" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/documents" element={<DocumentAlerts />} />
@@ -595,15 +602,19 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/sales/pipeline" element={<PipelineBoard />} />
         <Route path="/sales/clients/*" element={<Clients actorEmail={email} />} />
         <Route path="/sales/people" element={<People actorEmail={email} />} />
-        <Route path="/sales/opportunities" element={<Opportunities actorEmail={email} />} />
+        <Route path="/sales/opportunities" element={<Navigate to={NEEDS_LIST} replace />} />
         <Route path="/sales/projects" element={<Projects actorEmail={email} />} />
         <Route path="/sales/projects/:projectId" element={<Projects actorEmail={email} />} />
         <Route path="/sales/invoicing/*" element={<Invoicing />} />
-        <Route path="/operations" element={<OpsBoard actorEmail={email} />} />
+        <Route path="/sales/freelancer-invoices/*" element={<FreelancerInvoices />} />
+        <Route path="/operations" element={<OpsBoard actorEmail={email} actorId={userId} isAdmin={role === "admin"} />} />
+        {/* Employees reach their boards at /operations/board in the portal. */}
+        <Route path="/operations/board" element={<Navigate to="/operations" replace />} />
         <Route
           path="/operations/business-plan"
           element={<Suspense fallback={null}><BusinessPlan actorEmail={email} /></Suspense>}
         />
+        <Route path="/operations/checks" element={<Suspense fallback={null}><Checks /></Suspense>} />
         {role === "admin" && <Route path="/operations/admin" element={<CompanyAdmin />} />}
         <Route path="/blog-posts" element={<BlogManager />} />
         <Route path="/administration" element={<AdminSettings />} />
@@ -667,7 +678,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
             <section className="panel">
               <div className="panel-head">
                 <h2>Latest opportunities</h2>
-                <button className="link-button" onClick={() => navigate("opportunities")}>
+                <button className="link-button" onClick={() => routerNavigate(NEEDS_LIST)}>
                   View all
                 </button>
               </div>

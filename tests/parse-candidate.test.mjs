@@ -42,6 +42,9 @@ const profile = {
   location: "Paris, France",
   linkedinUrl: "https://www.linkedin.com/in/ada-lovelace",
   experience: [],
+  education: [{ degree: "MSc Computer Science", school: "Sorbonne", start_year: "2013", end_year: "2015" }],
+  certifications: [{ name: "CKA", issuer: "CNCF", year: "2021" }],
+  languages: [{ language: "English", level: "C1" }],
   yearsExperience: 9,
   skills: ["Kubernetes", "Go", "Terraform"],
   summary: "Platform engineer with nine years of experience running Kubernetes estates.",
@@ -50,6 +53,7 @@ const profile = {
 
 function makeParser({ role = "admin", output = profile, fail = false, calls = [], storage } = {}) {
   return createParser({
+    loadKimiSettings: async () => ({ apiKey: "", model: "" }),
     createClient: async () => clientWith(role, storage),
     loadAiSettings: async () => ({ apiKey: "sk-test-key", model: "gpt-4.1-mini" }),
     generateText: async (args) => {
@@ -213,6 +217,7 @@ test("surfaces provider failures without leaking internals", async () => {
 
 function failingParser(error, model = "gpt-4.1-mini") {
   return createParser({
+    loadKimiSettings: async () => ({ apiKey: "", model: "" }),
     createClient: async () => clientWith(),
     loadAiSettings: async () => ({ apiKey: "sk-test-key", model }),
     generateText: async () => { throw error; },
@@ -291,6 +296,7 @@ test("drive: parses the person's newest CV filed on Google Drive", async (t) => 
   });
   const calls = [];
   const parser = createParser({
+    loadKimiSettings: async () => ({ apiKey: "", model: "" }),
     createClient: async () => ({
       rpc: async () => ({ data: "user-1", error: null }),
       from: (table) => ({

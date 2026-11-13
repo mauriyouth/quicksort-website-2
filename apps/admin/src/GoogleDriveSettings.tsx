@@ -32,6 +32,8 @@ type Status = {
   recruitmentRootFolderName?: string | null;
   companyRootFolderId?: string | null;
   companyRootFolderName?: string | null;
+  templatesRootFolderId?: string | null;
+  templatesRootFolderName?: string | null;
 };
 
 /**
@@ -53,6 +55,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
   const [peopleRootFolderId, setPeopleRootFolderId] = useState("");
   const [recruitmentRootFolderId, setRecruitmentRootFolderId] = useState("");
   const [companyRootFolderId, setCompanyRootFolderId] = useState("");
+  const [templatesRootFolderId, setTemplatesRootFolderId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -80,6 +83,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
     setPeopleRootFolderId(next.peopleRootFolderId || "");
     setRecruitmentRootFolderId(next.recruitmentRootFolderId || "");
     setCompanyRootFolderId(next.companyRootFolderId || "");
+    setTemplatesRootFolderId(next.templatesRootFolderId || "");
   }
 
   useEffect(() => {
@@ -103,8 +107,9 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
               peopleRootFolderId: peopleRootFolderId.trim(),
               recruitmentRootFolderId: recruitmentRootFolderId.trim(),
               companyRootFolderId: companyRootFolderId.trim(),
+              templatesRootFolderId: templatesRootFolderId.trim(),
             },
-      )) as { rootFolderName?: string; peopleRootFolderName?: string | null; recruitmentRootFolderName?: string | null; companyRootFolderName?: string | null };
+      )) as { rootFolderName?: string; peopleRootFolderName?: string | null; recruitmentRootFolderName?: string | null; companyRootFolderName?: string | null; templatesRootFolderName?: string | null };
       setServiceAccountJson("");
       applyStatus(await request());
       setMessage(
@@ -114,7 +119,7 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
               result.peopleRootFolderName ? `, HR documents to "${result.peopleRootFolderName}"` : ""
             }${result.recruitmentRootFolderName ? `, candidate CVs to "${result.recruitmentRootFolderName}"` : ""}${
               result.companyRootFolderName ? `, company documents to "${result.companyRootFolderName}"` : ""
-            }.`,
+            }${result.templatesRootFolderName ? `, templates from "${result.templatesRootFolderName}"` : ""}.`,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the Google Drive connection.");
@@ -134,10 +139,10 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
           status.rootFolderName ? `, root folder "${status.rootFolderName}"` : ""
         }${status.peopleRootFolderName ? `, HR folder "${status.peopleRootFolderName}"` : ", no HR folder yet"}${
           status.recruitmentRootFolderName ? `, CV folder "${status.recruitmentRootFolderName}"` : ""
-        }${status.companyRootFolderName ? `, company folder "${status.companyRootFolderName}"` : ""}${status.updatedAt ? `, saved ${new Date(status.updatedAt).toLocaleString()}` : ""}.`
+        }${status.companyRootFolderName ? `, company folder "${status.companyRootFolderName}"` : ""}${status.templatesRootFolderName ? `, templates folder "${status.templatesRootFolderName}"` : ""}${status.updatedAt ? `, saved ${new Date(status.updatedAt).toLocaleString()}` : ""}.`
       : "No Google Drive service account connected yet.";
 
-  const canSave = !(busy || !(serviceAccountJson.trim() || (configured && (rootFolderId.trim() || peopleRootFolderId.trim() || recruitmentRootFolderId.trim() || companyRootFolderId.trim()))));
+  const canSave = !(busy || !(serviceAccountJson.trim() || (configured && (rootFolderId.trim() || peopleRootFolderId.trim() || recruitmentRootFolderId.trim() || companyRootFolderId.trim() || templatesRootFolderId.trim()))));
   return (
     <div className="flex flex-col gap-4">
       <PageAlerts error={error} message={message} />
@@ -272,6 +277,22 @@ export function GoogleDriveSettings({ isOwner }: { isOwner: boolean }) {
                 Quicksort's own papers, filed from <strong>Operations → Admin</strong>: attestation de régularité fiscale, attestation
                 de vigilance URSSAF, extrait Kbis, assurances, and bilans (annual and intermediate, by year). Use a Shared Drive folder
                 shared with the service account and the admins.
+              </Hint>
+            </SettingsRow>
+
+            <SettingsRow
+              label="Contract templates folder ID or URL"
+              hint={status?.templatesRootFolderName ? `Current: "${status.templatesRootFolderName}"` : "Optional, for Settings → Signatures"}
+            >
+              <Input
+                value={templatesRootFolderId}
+                onChange={e => setTemplatesRootFolderId(e.target.value)}
+                placeholder="ID or URL of the templates folder"
+                aria-label="Contract templates folder ID"
+              />
+              <Hint>
+                Google Docs with <strong>{"{{field}}"}</strong> placeholders, offered when adding a template in{" "}
+                <strong>Settings → Signatures</strong>. Share the folder once with the service account and every Doc in it can be used.
               </Hint>
             </SettingsRow>
           </>

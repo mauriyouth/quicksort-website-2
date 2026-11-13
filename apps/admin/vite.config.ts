@@ -50,6 +50,8 @@ function apiRoutes(): Plugin {
     '/api/invoicing': '/api/invoicing.ts',
     '/api/bank-transactions': '/api/bank-transactions.ts',
     '/api/bank-transactions-cron': '/api/bank-transactions-cron.ts',
+    '/api/freelancer-invoices': '/api/freelancer-invoices.ts',
+    '/api/freelancer-invoices-cron': '/api/freelancer-invoices-cron.ts',
     '/api/google-drive': '/api/google-drive.ts',
     '/api/recruitment-cv': '/api/recruitment-cv.ts',
     '/api/documents': '/api/documents.ts',

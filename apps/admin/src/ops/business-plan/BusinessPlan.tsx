@@ -124,9 +124,10 @@ const GROUPS: { title: string; fields: Field[] }[] = [
     { key: "primeChasseur", label: "Prime chasseur par vente", unit: "€", step: 50 },
   ] },
   { title: "Charges fixes mensuelles", fields: [
+    { key: "fPresident", label: "Salaire chargé président", unit: "€", step: 500 },
     { key: "fLoyer", label: "Loyer et locaux", unit: "€", step: 100 },
     { key: "fOutils", label: "Outils, cloud, licences IA", unit: "€", step: 100 },
-    { key: "fMarketing", label: "Marketing et événements", unit: "€", step: 100 },
+    { key: "fMarketing", label: "Marketing, événements et réceptions", unit: "€", step: 100 },
     { key: "fHonoraires", label: "Honoraires", unit: "€", step: 100 },
     { key: "fDeplacements", label: "Frais de déplacement", unit: "€", step: 100 },
     { key: "fDivers", label: "Divers", unit: "€", step: 100 },
@@ -185,6 +186,7 @@ function monthInputs(
     ventes: ventes(m),
     departs: departs(m),
     structure: agg.structure[m],
+    structureCp: agg.structureLines[m].reduce((t, l) => (l.contractType !== "Internship" && l.salary ? t + l.cost : t), 0),
     fixed: fixed[m] ?? undefined,
     vat: vat[m] ?? undefined,
     cotConsultants: agg.salaryLines[m] ? socialCharges(agg.salaryLines[m]!, h) : undefined,
@@ -852,8 +854,8 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                     hint={`point bas : ${kEur(plan.totals.tresoMin)}`}
                     formula={[
                       "= trésorerie au 1er janvier + encaissements − coûts de production − charges variables − charges fixes",
-                      `= ${kEur(H!.tresoDebut)} + ${kEur(sumOf(plan.series.enc))} − ${kEur(sumOf(plan.series.prod))} − ${kEur(sumOf(plan.series.varr))} − ${kEur(sumOf(plan.series.fix))}`,
-                      "Les dotations aux amortissements ne sortent pas de trésorerie.",
+                      `= ${kEur(H!.tresoDebut)} + ${kEur(sumOf(plan.series.enc))} − ${kEur(sumOf(plan.series.prod) - sumOf(plan.series.cpc))} − ${kEur(sumOf(plan.series.varr))} − ${kEur(sumOf(plan.series.fix) - sumOf(plan.series.cps))}`,
+                      "Les dotations aux amortissements et la provision congés payés ne sortent pas de trésorerie.",
                     ]}
                   />
                 </StatGroup>
@@ -1182,7 +1184,7 @@ export function BusinessPlan({ actorEmail }: { actorEmail: string }) {
                 freelances = jours CRA × taux journalier · salaires = salaire mensuel brut (stagiaires : gratification) · cotisations sociales = URSSAF et retraite en % du brut + mutuelle, tickets restaurant et médecine du travail par salarié, au prorata du mois (hypothèses calées sur l'arrêté comptable ; stagiaires exclus) · inter-contrat =
                 salariés sans mission sur le mois · départs = sorties d'employés. Salaires structure : personnes listées en structure, sur leur période
                 (par défaut de l'embauche à la sortie ; prévisionnel : dernier salaire connu), hors jours ouvrés en mission,
-                comptés en salaires consultants, au prorata de l'allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses. TVA (trésorerie seulement) : mois clôturés couverts par Qonto = TVA des factures payées − TVA des dépenses − paiements DGFIP ; sinon 20 % des encaissements − 20 % des freelances et charges fixes hors salaires, solde reversé le mois suivant.
+                comptés en salaires consultants, au prorata de l'allocation. Charges fixes (hors salaires structure) : transactions Qonto HT classées, mois clôturés ; hypothèses sinon. Autres charges variables : hypothèses. Provision congés payés (non décaissée) = (congés acquis du mois − jours de congés payés pris) × salaire brut journalier × (1 + taux URSSAF et retraite) ; jours pris : CRA des consultants sur les mois clôturés, calendrier des hypothèses sinon et pour la structure ; stagiaires exclus. TVA (trésorerie seulement) : mois clôturés couverts par Qonto = TVA des factures payées − TVA des dépenses − paiements DGFIP ; sinon 20 % des encaissements − 20 % des freelances et charges fixes hors salaires, solde reversé le mois suivant.
                 Prévisionnel : un consultant vendu est facturé dès son mois de vente · IS simplifié sur le résultat d'exploitation annuel positif (EBE − dotations) ·
                 encaissements décalés du délai client, les coûts sont payés le mois même.
               </footer>

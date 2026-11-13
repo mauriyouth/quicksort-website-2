@@ -61,7 +61,7 @@ const TITLES: Record<DetailKind, string> = {
   cme: "Médecine du travail",
   loyer: "Loyer et locaux",
   outils: "Outils, cloud et licences IA",
-  marketing: "Marketing et événements",
+  marketing: "Marketing, événements et réceptions",
   honoraires: "Honoraires (comptable, juridique)",
   deplacements: "Frais de déplacement",
   divers: "Divers",
@@ -534,7 +534,7 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
         {actual
           ? "Mois réel : salaire mensuel brut en vigueur sur le mois, pour chaque personne de structure en poste."
           : "Mois prévisionnel : dernier salaire brut connu, pour chaque personne de structure en poste ce mois-ci (jusqu'à sa sortie)."}{" "}
-        Période commençant ou finissant en cours de mois : au prorata des jours ouvrés. Stagiaires : gratification seule. Les cotisations sociales sont sur la ligne « Cotisations sociales structure ».{" "}
+        Période commençant ou finissant en cours de mois : au prorata des jours ouvrés. Stagiaires : gratification seule. Les cotisations sociales sont sur la ligne « dont cotisations sociales structure », sous « Salaires chargés structure ».{" "}
         Les jours ouvrés en mission (confirmée, active ou terminée, au prorata de l'allocation) basculent en salaires consultants.
         Hors période, et pour les autres salariés : consultant (inter-contrat sans mission).
       </p>
@@ -663,7 +663,7 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
             <SalaryRoster rows={rows} multiplier={multiplier} total={total} />
           )}
           <p className="m-0 text-xs leading-relaxed text-muted-foreground">
-            Salaire mensuel brut en vigueur sur le mois (stagiaires : gratification). Les cotisations patronales sont sur la ligne « Cotisations sociales consultants ».
+            Salaire mensuel brut en vigueur sur le mois (stagiaires : gratification). Les cotisations patronales sont sur la ligne « dont cotisations sociales consultants », sous « Salaires chargés consultants ».
             Inter-contrat = salarié sans mission confirmée, active ou terminée sur le mois. Les freelances sont comptés dans la ligne
             « Freelances », les salariés sans aucune mission dans les charges de structure.
           </p>

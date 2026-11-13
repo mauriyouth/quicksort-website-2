@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { CalendarDays, Clock3, Plus, RefreshCw, Search, Users, MapPin, ArrowUpRight } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useSession } from '@clerk/react';
+import { CalendarDays, Clock3, Plus, RefreshCw, Search, Users, MapPin, ArrowUpRight, ArrowLeft, BriefcaseBusiness } from 'lucide-react';
 import { db, errorMessage } from '@quicksort/hr-db';
 import { cn } from 'cn';
 import {
@@ -43,8 +44,10 @@ import { balanceFor, fmtDays, useLeaveBalances } from '../cra/balances';
 import { accruesLeave, monthDays } from '../cra/domain';
 import './workspace.css';
 import { DocumentAlertsQueue } from '../documents/DocumentAlerts';
+import { copyCv } from './recruitmentCv';
 import { PersonPhoto } from '../documents/PersonPhoto';
 import { PaidLeaveAdjust } from './PaidLeaveAdjust';
+import { HiringNeedPage, NEEDS_LIST, needRoute, needUrl } from './HiringNeed';
 export type HrView = 'overview' | 'recruiting' | 'people' | 'journeys';
 const viewTitles: Record<HrView, string> = {
   overview: 'Overview',
@@ -59,9 +62,10 @@ type PageContext = RecordContext & {
 const getParam = (key: string) => new URLSearchParams(window.location.search).get(key) ?? '';
 // Person records route as paths, not query params: /hr/people/<personId> with
 // the record tab as the next segment. Tab keys map to URL segments (the
-// internal "history" tab lives at .../activity).
+// internal "history" tab lives at .../activity). A record URL without a tab
+// segment opens the tab that fits the person (see defaultPersonTab).
 const TAB_SEGMENTS: Record<PersonTab, string> = {
-  profile: '',
+  profile: 'profile',
   applications: 'applications',
   employment: 'employments',
   projects: 'projects',
@@ -69,20 +73,21 @@ const TAB_SEGMENTS: Record<PersonTab, string> = {
   history: 'activity'
 };
 const SEGMENT_TABS: Record<string, PersonTab> = {
+  profile: 'profile',
   applications: 'applications',
   employments: 'employment',
   projects: 'projects',
   cra: 'cra',
   activity: 'history'
 };
-const personRoute = (): { personId: string; tab: PersonTab; employmentId: string } => {
+const personRoute = (): { personId: string; tab: PersonTab | null; employmentId: string } => {
   // The CRA tab pins the viewed month as extra segments:
   // /hr/people/<id>/cra/2026/10 (the CRA screen owns them; the record
   // router keeps resolving the tab and ignores the tail). The employments
   // tab pins the selected employment: /hr/people/<id>/employments/<employmentId>.
   const match = window.location.pathname.match(/^\/hr\/people\/([^/]+?)(?:\/([^/]+?)(?:\/(\d{4})\/(0[1-9]|1[0-2])|\/([^/]+?))?)?\/?$/);
-  if (!match) return { personId: '', tab: 'profile', employmentId: '' };
-  const tab = SEGMENT_TABS[match[2] ?? ''] ?? 'profile';
+  if (!match) return { personId: '', tab: null, employmentId: '' };
+  const tab = match[2] ? SEGMENT_TABS[match[2]] ?? 'profile' : null;
   return { personId: match[1], tab, employmentId: tab === 'employment' ? decodeURIComponent(match[5] ?? '') : '' };
 };
 // The People list keeps its filters (?q=, ?group=) in the URL; carry them
@@ -93,8 +98,8 @@ const listFilters = () => {
   for (const key of ['q', 'group']) if (params.get(key)) kept.set(key, params.get(key) ?? '');
   return kept;
 };
-const personUrl = (id: string, tab: PersonTab, params = new URLSearchParams(), employmentId = '') => {
-  const segment = TAB_SEGMENTS[tab];
+const personUrl = (id: string, tab: PersonTab | null, params = new URLSearchParams(), employmentId = '') => {
+  const segment = tab ? TAB_SEGMENTS[tab] : '';
   const record = tab === 'employment' && employmentId ? `/${encodeURIComponent(employmentId)}` : '';
   const url = new URL(`/hr/people/${id}${segment ? `/${segment}` : ''}${record}`, window.location.origin);
   url.search = params.toString();
@@ -106,6 +111,39 @@ const withParam = (key: string, value: string) => {
   if (value) url.searchParams.set(key, value);else url.searchParams.delete(key);
   return url.pathname + url.search + url.hash;
 };
+/** The tab a record opens on when the URL names none: employment for staff, applications for candidates. */
+function defaultPersonTab(workspace: Workspace, personId: string): PersonTab {
+  if (workspace.employees.some(employee => employee.person_id === personId && employee.status !== 'ended')) return 'employment';
+  if (workspace.applications.some(application => application.person_id === personId && application.status === 'active')) return 'applications';
+  return 'profile';
+}
+const CONTRACT_KIND: Record<string, { title: string; group: string; list: string }> = {
+  CDI: { title: 'Employee · CDI', group: 'cdi', list: 'CDI' },
+  CDD: { title: 'Employee · CDD', group: 'cdd', list: 'CDD' },
+  Freelance: { title: 'Freelance', group: 'freelance', list: 'Freelance' },
+  Internship: { title: 'Intern', group: 'interns', list: 'Interns' },
+  Apprenticeship: { title: 'Apprentice', group: 'alternants', list: 'Alternants' }
+};
+/**
+ * What this person is to Quicksort right now, and the list they belong to:
+ * staff (by contract) and alumni live under People, candidates and the
+ * talent pool under Recruiting.
+ */
+export function personKind(workspace: Workspace, personId: string) {
+  const employees = workspace.employees.filter(employee => employee.person_id === personId);
+  const live = employees.find(employee => employee.status !== 'ended');
+  if (live) {
+    const kind = CONTRACT_KIND[live.contract_type] ?? { title: 'Employee', group: 'no_contract', list: 'No contract' };
+    return { title: live.status === 'active' ? kind.title : `${kind.title} · ${label(live.status)}`, live: true, back: { href: `/hr/people?group=${kind.group}`, label: `People · ${kind.list}` } };
+  }
+  if (employees.length) return { title: 'Alumni', live: false, back: { href: '/hr/people?group=alumni', label: 'People · Alumni' } };
+  const active = workspace.applications.filter(application => application.person_id === personId && application.status === 'active');
+  if (active.length) {
+    const need = active.length === 1 ? workspace.opportunities.find(opportunity => opportunity.id === active[0].opportunity_id)?.title : '';
+    return { title: active.length > 1 ? `Candidate · ${active.length} applications` : need ? `Candidate · ${need}` : 'Candidate', live: false, back: { href: '/hr/recruiting', label: 'Recruiting · Applications' } };
+  }
+  return { title: 'Talent pool', live: false, back: { href: '/hr/recruiting?recruiting=talent', label: 'Recruiting · Talent pool' } };
+}
 export function HrWorkspace({
   view,
   actorEmail,
@@ -125,7 +163,8 @@ export function HrWorkspace({
   const [intake, setIntake] = useState(false);
   const [myCra, setMyCra] = useState(false);
   const [personId, setPersonId] = useState(() => personRoute().personId);
-  const [personTab, setPersonTab] = useState<PersonTab>(() => personRoute().tab);
+  // null: the URL names no tab, so the record opens on the one that fits the person.
+  const [personTab, setPersonTab] = useState<PersonTab | null>(() => personRoute().tab);
   const [applicationId, setApplicationId] = useState(() => getParam('application'));
   const [employeeId, setEmployeeId] = useState(() => personRoute().employmentId || getParam('employment'));
   const location = useLocation();
@@ -156,7 +195,7 @@ export function HrWorkspace({
     const employment = getParam('employment');
     if (!getParam('person') && !(legacy && employment)) return;
     const application = getParam('application');
-    const tab: PersonTab = application ? 'applications' : employment ? 'employment' : 'profile';
+    const tab: PersonTab | null = application ? 'applications' : employment ? 'employment' : null;
     const params = listFilters();
     if (application) params.set('application', application);
     navigate(personUrl(legacy, tab, params, employment), { replace: true });
@@ -171,7 +210,7 @@ export function HrWorkspace({
     setEmployeeId(route.employmentId || getParam('employment'));
   }, [location.pathname, location.search]);
   const open: OpenPerson = (id, application, employee) => {
-    const tab: PersonTab = application ? 'applications' : employee ? 'employment' : 'profile';
+    const tab: PersonTab | null = application ? 'applications' : employee ? 'employment' : null;
     const params = listFilters();
     if (application) params.set('application', application);
     navigate(personUrl(id, tab, params, employee));
@@ -209,6 +248,7 @@ export function HrWorkspace({
   const selectedAlumni = !selectedLive && selectedEmployees.length > 0;
   const selectedApplicationCount = workspace && selectedPerson ? workspace.applications.filter(application => application.person_id === selectedPerson.id).length : 0;
   const canRecruit = !!workspace?.capabilities.recruit;
+  const needId = view === 'recruiting' ? needRoute(location.pathname) : '';
   const canStaff = !!workspace?.capabilities.staff;
   const context = workspace ? {
     workspace,
@@ -220,7 +260,7 @@ export function HrWorkspace({
     openProject
   } : null;
   return <div className="flex min-w-0 flex-col gap-6" aria-busy={loading}>
-    {!(selectedPerson && canRecruit) && <PageHeading eyebrow="People operations" title={viewTitles[view]} action={<div className="flex flex-wrap gap-2">
+    {!(selectedPerson && canRecruit) && !(needId && canRecruit) && <PageHeading eyebrow="People operations" title={viewTitles[view]} action={<div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={loading || busy} onClick={() => {
           setLoading(true);
           setError('');
@@ -235,11 +275,11 @@ export function HrWorkspace({
       <span role="status">Loading the HR workspace…</span>
     </Empty> : context && (canRecruit || canStaff) ? <>
       {view === 'overview' && !selectedPerson && <Overview context={context} />}
-      {view === 'recruiting' && !selectedPerson && <Recruiting context={context} />}
+      {view === 'recruiting' && !selectedPerson && (needId && canRecruit ? <HiringNeedPage needId={needId} context={context} /> : <Recruiting context={context} />)}
       {view === 'people' && !selectedPerson && <People context={context} />}
       {view === 'journeys' && !selectedPerson && <Journeys context={context} />}
       {intake && canRecruit && <Dialog title="Add a person" close={() => setIntake(false)}>
-        <Intake actorEmail={actorEmail} run={run} busy={busy} positions={context.workspace.opportunities} onAdded={warning => {
+        <Intake actorEmail={actorEmail} run={run} busy={busy} positions={context.workspace.opportunities.filter(opportunity => !opportunity.archived_at)} onAdded={warning => {
           setIntake(false);
           if (warning) setError(warning);
         }} />
@@ -247,7 +287,7 @@ export function HrWorkspace({
       {myCra && <Dialog title="My CRA" className="sm:max-w-5xl" close={() => setMyCra(false)}>
         <CraScreen audience="employee" draftOwner={actorEmail} />
       </Dialog>}
-      {selectedPerson && canRecruit && <PersonPage person={selectedPerson} context={context} live={selectedLive} alumni={selectedAlumni} applicationCount={selectedApplicationCount} tab={personTab} onNavigate={navigatePersonTab} initialApplication={applicationId} initialEmployment={employeeId} />}
+      {selectedPerson && canRecruit && <PersonPage person={selectedPerson} context={context} live={selectedLive} alumni={selectedAlumni} applicationCount={selectedApplicationCount} tab={personTab ?? defaultPersonTab(context.workspace, selectedPerson.id)} onNavigate={navigatePersonTab} initialApplication={applicationId} initialEmployment={employeeId} />}
     </> : !loading && !error && <Empty>This workspace is available to HR and authorized staffing managers.</Empty>}
   </div>;
 }
@@ -318,12 +358,12 @@ function PersonPage({
   initialApplication?: string | null;
   initialEmployment?: string | null;
 }) {
-  const status = live ? label(live.status) : alumni ? 'Alumni' : applicationCount ? 'Candidate' : 'Talent pool';
+  const kind = personKind(context.workspace, person.id);
   const availability = live ? available(context.workspace, live, today()) : null;
   const employees = context.workspace.employees.filter(employee => employee.person_id === person.id);
   const lastCra = useLastCra(employees);
   // Remaining leave across every employment period of this person, net of
-  // CRA consumption (per calendar month from each start: CP at month end, RTT at its start).
+  // CRA consumption (per calendar month from each start: CP and RTT at month end).
   const { balances, error: balanceError, reload: reloadBalances } = useLeaveBalances(employees.map(employee => employee.id));
   // Paid leave is adjusted on the live employment, else the latest one.
   const leaveEmployee = live && accruesLeave(live) ? live : [...employees].filter(accruesLeave).sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
@@ -347,7 +387,8 @@ function PersonPage({
   })}${craTally ? ` · ${craTally}` : lastCra.filled > 0 && lastCra.workdays > 0 ? ' · Complete' : ''}`;
   const stat = 'flex min-w-0 flex-col gap-1';
   return <div className="flex min-w-0 flex-col">
-    <header className="mx-auto w-full max-w-[1120px] border-b border-border pb-5">
+    <header className="mx-auto flex w-full max-w-[1120px] flex-col gap-4 border-b border-border pb-5">
+      <Link to={kind.back.href} className="inline-flex w-fit items-center gap-1.5 text-[13px] text-muted-foreground no-underline hover:text-foreground"><ArrowLeft className="size-3.5" aria-hidden="true" />{kind.back.label}</Link>
       {/* Person header: breadcrumb and title merged, name shown once */}
       <section className="flex flex-wrap items-center gap-x-8 gap-y-5">
         <div className="flex min-w-0 flex-[1_1_auto] items-center gap-4">
@@ -357,8 +398,8 @@ function PersonPage({
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground [&>*:not(:first-child)]:before:mr-2 [&>*:not(:first-child)]:before:text-faint [&>*:not(:first-child)]:before:content-['·']">
               {person.headline && <span>{person.headline}</span>}
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-foreground">
-                <span className={cn('size-1.5 rounded-full', live ? 'bg-success' : 'bg-faint')} aria-hidden="true" />
-                {status}
+                <span className={cn('size-1.5 rounded-full', kind.live ? 'bg-success' : 'bg-faint')} aria-hidden="true" />
+                {kind.title}
               </span>
               {availability !== null && <span>{availability}% available today</span>}
               {person.location && <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" aria-hidden="true" />{person.location}</span>}
@@ -735,17 +776,19 @@ function Recruiting({
     run,
     open
   } = context;
-  const [tab, setTab] = useState(() => getParam('recruiting') || 'board');
   const navigate = useNavigate();
+  const location = useLocation();
+  // Hiring needs have their own path (/hr/recruiting/needs); other views use ?recruiting=.
+  const tab = /^\/hr\/recruiting\/needs\/?$/.test(location.pathname) ? 'needs' : new URLSearchParams(location.search).get('recruiting') || 'board';
   const [query, setQuery] = useState('');
   const [opportunityId, setOpportunityId] = useState('');
   const [overStage, setOverStage] = useState<ApplicationStage | ''>('');
   const [dragId, setDragId] = useState('');
+  const openNeeds = workspace.opportunities.filter(opportunity => !opportunity.archived_at);
   const applications = workspace.applications.filter(application => application.status === 'active' && (!opportunityId || application.opportunity_id === opportunityId) && `${personName(workspace, application.person_id)} ${workspace.people.find(person => person.id === application.person_id)?.skills ?? ''}`.toLowerCase().includes(query.toLowerCase()));
   return <>
     <ViewTabs label="Recruiting views" value={tab} onChange={value => {
-      setTab(value);
-      navigate(withParam('recruiting', value), { replace: true });
+      navigate(value === 'needs' ? NEEDS_LIST : value === 'board' ? '/hr/recruiting' : `/hr/recruiting?recruiting=${value}`, { replace: true });
     }} items={[{
       value: 'board',
       title: 'Applications',
@@ -753,7 +796,7 @@ function Recruiting({
     }, {
       value: 'needs',
       title: 'Hiring needs',
-      count: workspace.opportunities.length
+      count: openNeeds.length
     }, {
       value: 'interviews',
       title: 'Interviews',
@@ -762,13 +805,17 @@ function Recruiting({
       value: 'offers',
       title: 'Offers',
       count: workspace.offers.length
+    }, {
+      value: 'talent',
+      title: 'Talent pool',
+      count: talentPool(workspace).length
     }]} />
     {tab === 'board' && <>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <SearchField value={query} change={setQuery} placeholder="Search applications by person or skill" />
         <NativeSelect aria-label="Hiring need" className="w-full sm:w-64" value={opportunityId} onChange={event => setOpportunityId(event.target.value)}>
           <NativeSelectOption value="">All hiring needs</NativeSelectOption>
-          {workspace.opportunities.map(opportunity => <NativeSelectOption key={opportunity.id} value={opportunity.id}>
+          {openNeeds.map(opportunity => <NativeSelectOption key={opportunity.id} value={opportunity.id}>
             {opportunity.title}
           </NativeSelectOption>)}
         </NativeSelect>
@@ -806,7 +853,16 @@ function Recruiting({
                 {stageApplications.length}
               </span>
             </h3>
-            {stageApplications.map(application => {
+            {(opportunityId ? [{ key: opportunityId, title: '', items: stageApplications }] : [...openNeeds.map(opportunity => ({ key: opportunity.id, title: opportunity.title, items: stageApplications.filter(application => application.opportunity_id === opportunity.id) })), {
+              key: '',
+              title: 'Hiring need',
+              items: stageApplications.filter(application => !openNeeds.some(opportunity => opportunity.id === application.opportunity_id))
+            }]).filter(group => group.items.length).map(group => <div key={group.key} className="flex flex-col gap-2.5" role="group" aria-label={group.title || undefined}>
+              {group.title && <h4 className="m-0 flex items-baseline justify-between gap-2 px-1 pt-1 text-xs font-medium text-muted-foreground">
+                {group.key ? <button type="button" className="min-w-0 cursor-pointer truncate rounded-sm text-left underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring" title={`Open hiring need · ${group.title}`} onClick={() => navigate(needUrl(group.key))}>{group.title}</button> : <span className="truncate">{group.title}</span>}
+                <span className="num font-normal">{group.items.length}</span>
+              </h4>}
+              {group.items.map(application => {
               const person = workspace.people.find(item => item.id === application.person_id);
               const opportunity = workspace.opportunities.find(item => item.id === application.opportunity_id);
               const age = Math.max(0, Math.floor((Date.now() - new Date(application.stage_entered_at).getTime()) / 86400000));
@@ -832,11 +888,20 @@ function Recruiting({
                     <strong className="block truncate text-sm font-medium">
                       {person?.full_name ?? 'Unknown person'}
                     </strong>
-                    <small className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    {opportunityId && <small className="mt-0.5 block truncate text-xs text-muted-foreground">
                       {opportunity?.title ?? 'Hiring need'}
-                    </small>
+                    </small>}
                   </span>
                 </div>
+                {(() => {
+                  // Current position from the CV (no end month), else the newest one.
+                  const position = person?.experience.find(item => !item.end) ?? [...(person?.experience ?? [])].sort((a, b) => b.start.localeCompare(a.start))[0];
+                  const role = position ? [position.title, position.company].filter(Boolean).join(' · ') : '';
+                  return role ? <p className="m-0 flex min-w-0 items-center gap-1.5 text-xs text-foreground/80" title={role}>
+                    <BriefcaseBusiness className="size-3 flex-none" aria-hidden="true" />
+                    <span className="truncate">{position?.end ? `Previously ${role}` : role}</span>
+                  </p> : null;
+                })()}
                 {person?.headline && <p className="m-0 line-clamp-2 text-xs leading-normal text-muted-foreground" title={person.headline}>
                   {person.headline}
                 </p>}
@@ -845,6 +910,7 @@ function Recruiting({
                 </div>
               </div>;
             })}
+            </div>)}
             {empty && <div className={cn('flex min-h-14 items-center justify-center rounded-lg border border-dashed border-border px-2 py-3.5 text-center text-xs text-muted-foreground group-data-dragging/board:border-faint', slim ? 'flex-none' : 'flex-1', over && 'text-foreground')}>
               {dragId ? over ? 'Release to move here' : 'Drop here' : slim ? 'Empty' : 'No candidates'}
             </div>}
@@ -854,6 +920,7 @@ function Recruiting({
       <p className="m-0 text-xs text-muted-foreground">Drag a candidate onto another stage to move them, or click a card to open the full record.</p>
     </>}
     {tab === 'needs' && <Requisitions context={context} />}
+    {tab === 'talent' && <TalentPool context={context} />}
     {tab === 'interviews' && <Section title="Interview schedule" detail="Interview status and invitation status are separate facts.">
       {workspace.interviews.length ? <Card className="py-0">
         <Table>
@@ -937,141 +1004,182 @@ function Recruiting({
     </Section>}
   </>;
 }
-function RequisitionForm({
-  opportunity,
-  onSaved,
-  context: {
-    workspace,
-    run,
-    busy,
-    actorEmail
+/**
+ * People Quicksort knows but who are neither candidates nor staff: added
+ * without an application, or whose applications were all rejected or
+ * withdrawn. Never employed — alumni stay under People.
+ */
+function talentPool(workspace: Workspace) {
+  const employed = new Set(workspace.employees.map(employee => employee.person_id));
+  const applying = new Set(workspace.applications.filter(application => application.status === 'active').map(application => application.person_id));
+  return workspace.people.filter(person => !employed.has(person.id) && !applying.has(person.id));
+}
+function TalentPool({ context }: { context: PageContext }) {
+  const { workspace, open } = context;
+  const [query, setQuery] = useState(() => getParam('tq'));
+  const [adding, setAdding] = useState<Person | null>(null);
+  const navigate = useNavigate();
+  const needle = query.trim().toLowerCase();
+  const people = talentPool(workspace).filter(person => !needle || `${person.full_name} ${person.headline} ${person.skills} ${person.location}`.toLowerCase().includes(needle)).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const lastApplication = (person: Person) => workspace.applications.filter(application => application.person_id === person.id).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  return <Section title="Talent pool" detail="People you know who have no open application and were never employed: added without a position, or rejected or withdrawn earlier.">
+    <SearchField value={query} change={value => {
+      setQuery(value);
+      navigate(withParam('tq', value), { replace: true });
+    }} placeholder="Search by name, headline, skill or location" />
+    {people.length ? <Card className="py-0">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Person</TableHead>
+            <TableHead>Skills</TableHead>
+            <TableHead>Last application</TableHead>
+            <TableHead>Updated</TableHead>
+            <TableHead><span className="sr-only">Actions</span></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {people.map(person => {
+            const last = lastApplication(person);
+            const skills = person.skills.split(/[\n,]/).map(skill => skill.trim()).filter(Boolean);
+            return <TableRow key={person.id}>
+              <TableCell className="h-auto py-3">
+                <PersonLink personId={person.id} name={person.full_name} detail={person.headline || person.location} open={() => open(person.id)} />
+              </TableCell>
+              <TableCell className="max-w-64 text-[13px] whitespace-normal text-muted-foreground">
+                {skills.length ? `${skills.slice(0, 4).join(', ')}${skills.length > 4 ? ` +${skills.length - 4}` : ''}` : '—'}
+              </TableCell>
+              <TableCell className="text-[13px] whitespace-normal">
+                {last ? <>
+                  {workspace.opportunities.find(opportunity => opportunity.id === last.opportunity_id)?.title ?? 'Hiring need'}
+                  <span className="block text-muted-foreground">{label(last.status)} at {label(last.stage)}{last.reason ? ` · ${last.reason}` : ''}</span>
+                </> : <span className="text-muted-foreground">Never applied</span>}
+              </TableCell>
+              <TableCell className="num text-[13px] text-muted-foreground">{date(person.updated_at)}</TableCell>
+              <TableCell className="text-right">
+                <Button variant="outline" size="sm" onClick={() => setAdding(person)}>Add to a hiring need</Button>
+              </TableCell>
+            </TableRow>;
+          })}
+        </TableBody>
+      </Table>
+    </Card> : <Empty>{needle ? 'Nobody in the talent pool matches this search.' : 'The talent pool is empty. People added without a position, and candidates who were rejected or withdrew, appear here.'}</Empty>}
+    {adding && <AddToHiringNeed person={adding} context={context} close={() => setAdding(null)} />}
+  </Section>;
+}
+function AddToHiringNeed({ person, context, close }: { person: Person; context: PageContext; close: () => void }) {
+  const { workspace, run, busy, open } = context;
+  const { session } = useSession();
+  // A person can't hold two active applications for the same need.
+  const taken = new Set(workspace.applications.filter(application => application.person_id === person.id && application.status === 'active').map(application => application.opportunity_id));
+  const needs = workspace.opportunities.filter(opportunity => ['approved', 'published'].includes(opportunity.status) && !opportunity.archived_at && !taken.has(opportunity.id));
+  const [needId, setNeedId] = useState(needs[0]?.id ?? '');
+  const [source, setSource] = useState('rediscovery');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [warning, setWarning] = useState<{ applicationId: string; text: string } | null>(null);
+  async function add() {
+    const need = needs.find(opportunity => opportunity.id === needId);
+    if (!need) return;
+    setSaving(true);
+    setError('');
+    try {
+      const result = await run({ kind: 'create_application', person_id: person.id, opportunity_id: need.id, source }, `${person.full_name} added to "${need.title}".`);
+      const applicationId = result?.application_id ?? '';
+      // Best-effort: copy the person's filed CV into <year>/<position> on Drive.
+      const copied = await copyCv(() => session?.getToken({ template: 'supabase' }) ?? Promise.resolve(null), { personId: person.id, personName: person.full_name, position: { title: need.title, openedAt: need.created_at } });
+      if (copied) setWarning({ applicationId, text: copied });
+      else {
+        close();
+        open(person.id, applicationId || undefined);
+      }
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setSaving(false);
+    }
   }
-}: {
-  opportunity?: Opportunity;
-  onSaved?: () => void;
-  context: PageContext;
-}) {
-  const [jobId, setJobId] = useState(opportunity?.job_id ?? '');
-  const job = workspace.jobs.find(item => item.id === jobId);
-  const save: RunCommand = async (input, success) => {
-    await run(input, success);
-    onSaved?.();
-  };
-  return <Form run={save} busy={busy} button={opportunity ? 'Save hiring need' : 'Create hiring need'} success={opportunity ? 'Hiring need updated.' : 'Hiring need created and approved. Applications can now be opened.'} submit={data => ({
-    kind: opportunity ? 'update_requisition' : 'create_requisition',
-    ...(opportunity ? {
-      opportunity_id: opportunity.id,
-      expected_version: opportunity.version
-    } : {}),
-    title: job?.title ?? text(data, 'title'),
-    hiring_mode: text(data, 'hiring_mode'),
-    skill_family: text(data, 'skill_family'),
-    owner_email: text(data, 'owner_email'),
-    job_id: nullable(data, 'job_id'),
-    project_id: nullable(data, 'project_id'),
-    client_ids: data.getAll('client_ids').map(String),
-    justification: text(data, 'justification')
-  })}>
-    <UiField className="min-w-0 gap-1.5">
-      <FieldLabel htmlFor="hr-requisition-job">
-        Linked job post
-      </FieldLabel>
-      <NativeSelect id="hr-requisition-job" className="w-full" name="job_id" value={jobId} onChange={event => setJobId(event.target.value)} aria-describedby="hr-requisition-job-hint">
-        <NativeSelectOption value="">Not set</NativeSelectOption>
-        {workspace.jobs.map(item => <NativeSelectOption key={item.id} value={item.id}>
-          {`${item.title}${item.published ? ' · Published' : ' · Draft'}`}
-        </NativeSelectOption>)}
-      </NativeSelect>
-      <p id="hr-requisition-job-hint" className="m-0 text-xs text-muted-foreground">
-        The role title and requirements come from the linked job post.
-      </p>
-    </UiField>
-    {job ? <p className="col-span-full m-0 text-[13px] text-muted-foreground">Role and requirements are taken from "{job.title}".</p> : <Field name="title" label="Role to hire" value={opportunity?.title} required hint="Named manually until a job post is linked. The post then provides the title and requirements." />}
-    <Field name="hiring_mode" label="Hiring mode" value={opportunity?.hiring_mode ?? 'sur_mission'} options={[{
-      value: 'sur_mission',
-      label: 'For a client mission'
-    }, {
-      value: 'sur_profil',
-      label: 'Ahead of demand'
-    }]} required />
-    <Field name="skill_family" label="Skill family" value={opportunity?.skill_family} />
-    <Field name="owner_email" label="Hiring owner" type="email" value={opportunity?.owner_email ?? actorEmail} required />
-    <Field name="project_id" label="Staffing project" options={workspace.projects.map(project => ({
-      value: project.id,
-      label: project.title
-    }))} value={opportunity?.project_id} />
-    <SearchMultiField name="client_ids" label="Linked clients" values={opportunity?.client_ids ?? []} options={workspace.clients.map(client => ({
-      value: client.id,
-      label: client.name
-    }))} placeholder="Search clients…" hint="Search and add one or several clients behind this hiring need." />
-    <Field name="justification" label="Commercial hiring justification" type="textarea" value={opportunity?.justification} hint="For a profile hire, explain the pipeline demand and expected staffing." />
-  </Form>;
+  return <Dialog title={`Add ${person.full_name} to a hiring need`} close={close}>
+    <div className="flex flex-col gap-4 p-5 sm:p-6">
+      {warning ? <>
+        <p role="status" className="m-0 text-sm">The application was created. {warning.text}</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={close}>Close</Button>
+          <Button onClick={() => {
+            close();
+            open(person.id, warning.applicationId || undefined);
+          }}>Open the application</Button>
+        </div>
+      </> : needs.length ? <>
+        <UiField className="gap-1.5">
+          <FieldLabel htmlFor="talent-need">Hiring need</FieldLabel>
+          <NativeSelect id="talent-need" className="w-full" value={needId} onChange={event => setNeedId(event.target.value)}>
+            {needs.map(opportunity => <NativeSelectOption key={opportunity.id} value={opportunity.id}>{opportunity.title}</NativeSelectOption>)}
+          </NativeSelect>
+        </UiField>
+        <UiField className="gap-1.5">
+          <FieldLabel htmlFor="talent-source">Source</FieldLabel>
+          <NativeSelect id="talent-source" className="w-full" value={source} onChange={event => setSource(event.target.value)}>
+            {['rediscovery', 'referral', 'linkedin', 'career_site', 'job_board', 'spontaneous', 'other'].map(value => <NativeSelectOption key={value} value={value}>{label(value)}</NativeSelectOption>)}
+          </NativeSelect>
+        </UiField>
+        {error && <p role="alert" className="m-0 text-[13px] text-destructive">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" disabled={saving} onClick={close}>Cancel</Button>
+          <Button disabled={saving || busy || !needId} onClick={() => void add()}>{saving ? 'Adding…' : 'Create application'}</Button>
+        </div>
+      </> : <>
+        <Empty>No approved or published hiring need is open for this person. Create one under Hiring needs first.</Empty>
+        <div className="flex justify-end"><Button variant="outline" onClick={close}>Close</Button></div>
+      </>}
+    </div>
+  </Dialog>;
 }
 function Requisitions({
   context
 }: {
   context: PageContext;
 }) {
-  const {
-    workspace,
-    run,
-    busy
-  } = context;
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editing, setEditing] = useState<Opportunity | null>(null);
+  const { workspace } = context;
+  const navigate = useNavigate();
+  const [archivedView, setArchivedView] = useState(false);
+  const archivedCount = workspace.opportunities.filter(opportunity => opportunity.archived_at).length;
+  const listed = workspace.opportunities.filter(opportunity => !!opportunity.archived_at === archivedView);
   return <>
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <span className="text-[13px] text-muted-foreground">{workspace.opportunities.length} hiring needs · linked to job posts and clients</span>
-      <Button onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" /> Create hiring need</Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-[13px] text-muted-foreground">{listed.length} {archivedView ? 'archived' : 'open'} hiring needs · linked to job posts and clients</span>
+        {(archivedCount > 0 || archivedView) && <Button variant="ghost" size="sm" onClick={() => setArchivedView(value => !value)}>{archivedView ? 'Show open needs' : `Show archived (${archivedCount})`}</Button>}
+      </div>
+      <Button onClick={() => navigate(needUrl('new'))}><Plus aria-hidden="true" /> Create hiring need</Button>
     </div>
-    {createOpen && <Dialog title="Create a hiring need" close={() => setCreateOpen(false)}>
-      <RequisitionForm context={context} onSaved={() => setCreateOpen(false)} />
-    </Dialog>}
-    {editing && <Dialog title={`Edit hiring need / ${editing.title}`} close={() => setEditing(null)}>
-      <RequisitionForm opportunity={editing} context={context} onSaved={() => setEditing(null)} />
-    </Dialog>}
-    {!workspace.opportunities.length && <Empty>Hiring starts with an approved need linked to a mission or a justified profile hire.</Empty>}
+    {!listed.length && <Empty>{archivedView ? 'No archived hiring needs.' : 'Hiring starts with an approved need linked to a mission or a justified profile hire.'}</Empty>}
     <div className="flex flex-col gap-3">
-    {workspace.opportunities.map(opportunity => {
+    {listed.map(opportunity => {
       const job = workspace.jobs.find(item => item.id === opportunity.job_id);
       const clients = workspace.clients.filter(client => opportunity.client_ids.includes(client.id));
-      const editable = ['draft', 'pending_approval', 'approved'].includes(opportunity.status);
-      return <Card size="sm" key={opportunity.id}>
-        <CardContent className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-1">
-            <h3 className="m-0 text-[15px] font-medium">
-              {opportunity.title}
-            </h3>
-            <small className="text-xs text-muted-foreground">{opportunity.hiring_mode === 'sur_mission' ? 'Client mission' : 'Ahead of demand'} · {opportunity.owner_email || 'Unassigned'} · {workspace.applications.filter(application => application.opportunity_id === opportunity.id).length} applications{job ? ` · Job post: ${job.title}${job.published ? ' (published)' : ' (draft)'}` : ''}{clients.length ? ` · ${clients.length === 1 ? 'Client' : 'Clients'}: ${clients.map(client => client.name).join(', ')}` : ''}</small>
-          </div>
-          <div className="flex items-center gap-2">
-            {editable && <Button variant="outline" size="sm" onClick={() => setEditing(opportunity)}>Edit</Button>}
-            <Tag tone={['approved', 'published'].includes(opportunity.status) ? 'good' : 'quiet'}>
-              {label(opportunity.status)}
-            </Tag>
-          </div>
-        </div>
-        {opportunity.client_need && <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
-          {opportunity.client_need}
-        </p>}
-        {opportunity.justification && <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">Hiring justification: {opportunity.justification}</p>}
-        {opportunity.status === 'approved' && <details className="group/details rounded-lg border border-border p-4">
-          <summary className="cursor-pointer text-[13px] font-medium group-open/details:mb-4">Publish the connected job post</summary>
-          <Form run={run} busy={busy} button="Publish job post" success="Connected job post published and requisition updated." submit={data => ({
-            kind: 'publish_requisition',
-            opportunity_id: opportunity.id,
-            expected_version: opportunity.version,
-            job_id: text(data, 'job_id')
-          })}>
-            <Field name="job_id" label="Connected job post" value={opportunity.job_id} options={workspace.jobs.map(job => ({
-              value: job.id,
-              label: `${job.title}${job.published ? ' · Published' : ' · Draft'}`
-            }))} required hint="Create a public job post in Job posts first, then connect it here." />
-          </Form>
-        </details>}
-        </CardContent>
-      </Card>;
+      const applications = workspace.applications.filter(application => application.opportunity_id === opportunity.id);
+      const active = applications.filter(application => application.status === 'active').length;
+      return <Link key={opportunity.id} to={needUrl(opportunity.id)} className="block rounded-xl text-inherit no-underline outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <Card size="sm" className="transition-colors hover:border-faint">
+          <CardContent className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-col gap-1">
+                <h3 className="m-0 text-[15px] font-medium">
+                  {opportunity.title}
+                </h3>
+                <small className="text-xs text-muted-foreground">{opportunity.hiring_mode === 'sur_mission' ? 'Client mission' : 'Ahead of demand'} · {opportunity.owner_email || 'Unassigned'} · {active} active of {applications.length} applications{job ? ` · Job post: ${job.title}${job.published ? ' (published)' : ' (draft)'}` : ''}{clients.length ? ` · ${clients.length === 1 ? 'Client' : 'Clients'}: ${clients.map(client => client.name).join(', ')}` : ''}</small>
+              </div>
+              {opportunity.archived_at ? <Tag tone="quiet">Archived {date(opportunity.archived_at)}</Tag> : <Tag tone={['approved', 'published'].includes(opportunity.status) ? 'good' : 'quiet'}>
+                {label(opportunity.status)}
+              </Tag>}
+            </div>
+            {opportunity.client_need && <p className="m-0 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
+              {opportunity.client_need}
+            </p>}
+          </CardContent>
+        </Card>
+      </Link>;
     })}
     </div>
   </>;

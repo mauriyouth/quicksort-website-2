@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, FilePlus2, Plus, RefreshCw, RotateCcw, Search, Settings as SettingsIcon, X,
@@ -65,11 +65,14 @@ type Panel = { invoiceId: string; craChanged: boolean; warning: string };
 
 const rowKey = (r: ToInvoiceRow) => `${r.projectId}:${r.employeeId}`;
 const canCreate = (r: ToInvoiceRow) => r.status === "not_invoiced" && r.blockers.length === 0;
-const unassigned = (i: Invoice) => i.source === "imported" && !i.project_id && !i.ignored;
 const billingMonth = (i: Invoice) => (i.period_month ?? i.issue_date ?? "").slice(0, 7);
+type GroupBy = "client" | "month";
+const GROUP_BY_KEY = "invoicing.groupBy";
+function storedGroupBy(): GroupBy {
+  try { return localStorage.getItem(GROUP_BY_KEY) === "month" ? "month" : "client"; } catch { return "client"; }
+}
 const statusOf = (i: Invoice) => invoiceStatusLabel(i.status, i.due_date);
 const num = (v: number | string | null | undefined) => { const n = Number(v ?? 0); return Number.isFinite(n) ? n : 0; };
-const sumTtc = (l: Invoice[]) => l.reduce((a, i) => a + num(i.total_ttc), 0);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "—";
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
@@ -161,12 +164,21 @@ export function Invoicing() {
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
+  const [groupBy, setGroupByState] = useState<GroupBy>(storedGroupBy);
+  const setGroupBy = (g: GroupBy) => { setGroupByState(g); try { localStorage.setItem(GROUP_BY_KEY, g); } catch { /* per-viewer convenience only */ } };
   const [assigning, setAssigning] = useState<string | null>(null);
   const [assignTo, setAssignTo] = useState<Record<string, string>>({});
   const [linking, setLinking] = useState<string | null>(null);
 
-  // Any filter change sends the list back to its first page.
-  useEffect(() => { setPage(1); }, [tab, query, statusFilter, clientFilter, monthFilter, dateFrom, dateTo, perPage]);
+  // The server filters the list; wait for typing to settle before asking it.
+  const [listQuery, setListQuery] = useState("");
+  useEffect(() => { const t = setTimeout(() => setListQuery(query.trim()), 250); return () => clearTimeout(t); }, [query]);
+
+  // Any filter change sends the list back to its first page. Reset while rendering, not in an
+  // effect, so the list is fetched once with page 1 rather than once more with the stale page.
+  const filterKey = [tab, listQuery, statusFilter, clientFilter, monthFilter, dateFrom, dateTo, perPage, groupBy].join("|");
+  const [pagedFor, setPagedFor] = useState(filterKey);
+  if (pagedFor !== filterKey) { setPagedFor(filterKey); setPage(1); }
 
   const loadSettings = useCallback(async () => {
     try { setSettings(await api.get<Settings>({ resource: "settings" })); }
@@ -182,11 +194,20 @@ export function Invoicing() {
     } catch (e) { setRows(null); setRowsError(errorText(e, "Could not load the month.")); }
   }, [api]);
 
+  // Only the latest request may land: an older, slower page must not overwrite a newer filter.
+  const listSeq = useRef(0);
+  const listTab = tab === "unassigned" ? "unassigned" : "invoices";
   const loadList = useCallback(async (refresh = false) => {
+    const seq = ++listSeq.current;
     setListError("");
-    try { setList(await api.get<InvoicesList>({ resource: "invoices", ...(refresh ? { refresh: "1" } : {}) })); }
-    catch (e) { setListError(errorText(e, "Could not load invoices.")); }
-  }, [api]);
+    try {
+      const r = await api.get<InvoicesList>({
+        resource: "invoices", tab: listTab, q: listQuery, status: statusFilter, client: clientFilter, month: monthFilter,
+        from: dateFrom, to: dateTo, page: String(page), perPage: String(perPage), group: groupBy, ...(refresh ? { refresh: "1" } : {}),
+      });
+      if (seq === listSeq.current) setList(r);
+    } catch (e) { if (seq === listSeq.current) setListError(errorText(e, "Could not load invoices.")); }
+  }, [api, listTab, listQuery, statusFilter, clientFilter, monthFilter, dateFrom, dateTo, page, perPage, groupBy]);
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
   useEffect(() => { void loadRows(month); }, [loadRows, month]);
@@ -264,38 +285,21 @@ export function Invoicing() {
   const today = parisToday();
   const presets = useMemo(() => rangePresets(today), [today]);
   const q = query.trim().toLowerCase();
-  const invoices = useMemo(() => list?.invoices ?? [], [list]);
-  const unassignedList = invoices.filter(unassigned);
-  const clientOptions = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const i of invoices) if (i.billed_client_id) m.set(i.billed_client_id, i.client_name ?? "Unknown client");
-    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [invoices]);
-  const monthOptions = useMemo(() => [...new Set(invoices.map(billingMonth).filter(Boolean))].sort().reverse(), [invoices]);
-
-  // Every filter but status — the status chips count against this set.
+  // One page, already filtered and sorted by the server.
+  const pageList = useMemo(() => list?.invoices ?? [], [list]);
+  const clientOptions = list?.options.clients ?? [];
+  const monthOptions = list?.options.months ?? [];
   const [lo, hi] = dateFrom && dateTo && dateFrom > dateTo ? [dateTo, dateFrom] : [dateFrom, dateTo];
-  const base = invoices.filter((i) => {
-    if (tab === "unassigned" && !unassigned(i)) return false;
-    const issued = (i.issue_date ?? "").slice(0, 10);
-    if (lo && (!issued || issued < lo)) return false;
-    if (hi && (!issued || issued > hi)) return false;
-    if (monthFilter && billingMonth(i) !== monthFilter) return false;
-    if (clientFilter === "none" && i.billed_client_id) return false;
-    if (clientFilter && clientFilter !== "none" && i.billed_client_id !== clientFilter) return false;
-    if (q && ![i.number, i.client_name, i.project_title, i.purchase_order, i.consultant_name].join(" ").toLowerCase().includes(q)) return false;
-    return true;
-  });
-  const filtered = base
-    .filter((i) => !statusFilter || statusOf(i) === statusFilter)
-    .sort((a, b) => billingMonth(b).localeCompare(billingMonth(a)) || (b.issue_date ?? "").localeCompare(a.issue_date ?? ""));
-  const pages = Math.max(1, Math.ceil(filtered.length / perPage));
-  const current = Math.min(page, pages);
-  const start = (current - 1) * perPage;
-  const pageList = filtered.slice(start, start + perPage);
+  const total = list?.total ?? 0;
+  const pages = list?.pages ?? 1;
+  const current = list?.page ?? page;
+  const start = (current - 1) * (list?.perPage ?? perPage);
+  const statusCount = (s: StatusLabel | "all") => list?.statusCounts[s] ?? 0;
   const groups: { key: string; items: Invoice[] }[] = [];
+  // Group by what the server ordered the page by (it may still be answering an older toggle).
+  const pageGroupBy = list?.group ?? groupBy;
   for (const i of pageList) {
-    const key = billingMonth(i);
+    const key = pageGroupBy === "client" ? (i.billed_client_id ?? "") : billingMonth(i);
     if (groups[groups.length - 1]?.key === key) groups[groups.length - 1].items.push(i);
     else groups.push({ key, items: [i] });
   }
@@ -328,15 +332,14 @@ export function Invoicing() {
 
   const tabs: [Tab, string, number | null][] = [
     ["to-invoice", "To invoice", rows ? pending.length : null],
-    ["invoices", "Invoices", list ? invoices.length : null],
-    ["unassigned", "Unassigned", list ? unassignedList.length : null],
+    ["invoices", "Invoices", list ? list.counts.invoices : null],
+    ["unassigned", "Unassigned", list ? list.counts.unassigned : null],
   ];
 
   const scope = monthFilter ? monthLabel(monthFilter)
     : lo && hi ? `${shortDate(lo)} to ${shortDate(hi)}` : lo ? `since ${shortDate(lo)}` : hi ? `until ${shortDate(hi)}` : "all time";
-  const byStatus = (s: StatusLabel) => base.filter((i) => statusOf(i) === s);
-  const paidF = byStatus("Paid"), validatedF = byStatus("Validated"), overdueF = byStatus("Overdue");
-  const unassignedF = base.filter(unassigned);
+  const zero = { count: 0, ttc: 0 };
+  const { paid: paidF, unpaid: unpaidF, overdue: overdueF, unassigned: unassignedF } = list?.kpis ?? { paid: zero, unpaid: zero, overdue: zero, unassigned: zero };
   const kpis: { label: string; value: string; sub: string; strong?: boolean }[] = tab === "to-invoice"
     ? [
       { label: "To invoice", value: money(sumHt(pending)), sub: `${plural(pending.length, "timesheet")} · ${monthLabel(month).split(" ")[0]}`, strong: pending.length > 0 },
@@ -345,14 +348,16 @@ export function Invoicing() {
       { label: "Average daily rate", value: monthDays ? rateLabel(Math.round(monthTotal / monthDays)) : "—", sub: `Across ${days(monthDays)}` },
     ]
     : [
-      { label: "Collected", value: money(sumTtc(paidF)), sub: `${paidF.length} paid · ${scope}` },
-      { label: "Not paid", value: money(sumTtc([...validatedF, ...overdueF])), sub: `${plural(validatedF.length + overdueF.length, "invoice")} · ${overdueF.length} overdue` },
-      { label: "Overdue", value: money(sumTtc(overdueF)), sub: `${plural(overdueF.length, "invoice")} past due date`, strong: overdueF.length > 0 },
-      { label: "Needs a project", value: money(sumTtc(unassignedF)), sub: `${plural(unassignedF.length, "invoice")} to assign` },
+      { label: "Collected", value: money(paidF.ttc), sub: `${paidF.count} paid · ${scope}` },
+      { label: "Not paid", value: money(unpaidF.ttc), sub: `${plural(unpaidF.count, "invoice")} · ${overdueF.count} overdue` },
+      { label: "Overdue", value: money(overdueF.ttc), sub: `${plural(overdueF.count, "invoice")} past due date`, strong: overdueF.count > 0 },
+      { label: "Needs a project", value: money(unassignedF.ttc), sub: `${plural(unassignedF.count, "invoice")} to assign` },
     ];
 
   const colsTs = 8;
-  const colsInv = 6;
+  // The Client column repeats the group header when grouped by client.
+  const showClientCol = pageGroupBy !== "client";
+  const colsInv = showClientCol ? 6 : 5;
 
   return (
     <div className="@container flex flex-col gap-6">
@@ -373,8 +378,7 @@ export function Invoicing() {
           </div>
         }
       >
-        Monthly régie invoices from CRA timesheets → drafted and sent through Qonto
-        <span className="mt-1 block text-xs">Last sync {dateTime(list?.lastSyncedAt)}{list ? ` · ${plural(invoices.length, "invoice")}` : ""}</span>
+        <span className="block text-xs">Last sync {dateTime(list?.lastSyncedAt)}{list ? ` · ${plural(list.counts.invoices, "invoice")}` : ""}</span>
       </PageHeading>
 
       {(error || warning || message || (notConnected && tab !== "settings")) && (
@@ -388,6 +392,72 @@ export function Invoicing() {
             </Alert>
           )}
         </div>
+      )}
+
+      {/* Filters sit above the KPIs: the figures below count what they select. */}
+      {listView && (
+        <Card aria-label="Invoice filters">
+          <CardContent className="flex min-w-0 flex-col gap-4">
+            <div className="flex w-full flex-wrap items-center gap-2">
+              <InputGroup className="min-w-56 flex-1">
+                <InputGroupAddon><Search /></InputGroupAddon>
+                <InputGroupInput type="search" aria-label="Search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search invoice, client or PO" />
+              </InputGroup>
+              <NativeSelect aria-label="Billing month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
+                <NativeSelectOption value="">All months</NativeSelectOption>
+                {monthOptions.map((m) => <NativeSelectOption key={m} value={m}>{monthLabel(m)}</NativeSelectOption>)}
+              </NativeSelect>
+              <NativeSelect aria-label="Client" value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
+                <NativeSelectOption value="">All clients</NativeSelectOption>
+                {clientOptions.map(([id, name]) => <NativeSelectOption key={id} value={id}>{name}</NativeSelectOption>)}
+                <NativeSelectOption value="none">No client</NativeSelectOption>
+              </NativeSelect>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2" role="group" aria-label="Filters">
+              <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2" role="group" aria-label="Issue date range">
+                <span className="label-mono">Issued</span>
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 [&_.date-field-root]:w-[168px] [&_.date-field-trigger]:h-10 [&_.date-field-trigger]:py-0">
+                  <DateField aria-label="Issued from" placeholder="From" value={dateFrom} max={dateTo || undefined} onChange={setDateFrom} />
+                  <span aria-hidden="true" className="text-muted-foreground">→</span>
+                  <DateField aria-label="Issued until" placeholder="To" value={dateTo} min={dateFrom || undefined} onChange={setDateTo} />
+                </div>
+                <ToggleGroup variant="outline" aria-label="Quick ranges" className="max-w-full overflow-x-auto"
+                  value={presets.filter((p) => dateFrom === p.from && dateTo === p.to).map((p) => p.label)}
+                  onValueChange={(v) => { const p = presets.find((x) => x.label === v[0]); if (p) { setDateFrom(p.from); setDateTo(p.to); } }}>
+                  {presets.map((p) => <ToggleGroupItem key={p.label} value={p.label}>{p.label}</ToggleGroupItem>)}
+                </ToggleGroup>
+              </div>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2" role="group" aria-label="Status">
+                <span className="label-mono">Status</span>
+                <ToggleGroup variant="outline" size="sm" aria-label="Status" className="max-w-full overflow-x-auto"
+                  value={[statusFilter || "all"]}
+                  onValueChange={(v) => { if (v[0]) setStatusFilter(v[0] === "all" ? "" : (v[0] as StatusLabel)); }}>
+                  {(["", ...STATUS_FILTERS] as const).filter((s) => s !== "Draft" || statusFilter === s || statusCount(s) > 0).map((s) => (
+                    <ToggleGroupItem key={s || "all"} value={s || "all"} className="gap-1.5">
+                      {s || "All"}<span className="num text-xs text-muted-foreground">{statusCount(s || "all")}</span>
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
+              <div className="flex min-w-0 items-center gap-2" role="group" aria-label="Group by">
+                <span className="label-mono">Group by</span>
+                <ToggleGroup variant="outline" size="sm" aria-label="Group by" value={[groupBy]}
+                  onValueChange={(v) => { if (v[0] === "client" || v[0] === "month") setGroupBy(v[0]); }}>
+                  <ToggleGroupItem value="client">Client</ToggleGroupItem>
+                  <ToggleGroupItem value="month">Month</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{plural(total, "invoice")}{hasFilters ? " match" : ""}</span>
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" onClick={resetFilters}><RotateCcw data-icon="inline-start" /> Reset filters</Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {tab !== "settings" && (
@@ -572,64 +642,14 @@ export function Invoicing() {
 
       {listView && (
         <Card aria-label={tab === "unassigned" ? "Unassigned invoices" : "Invoices"}>
-          <CardHeader className="flex min-w-0 flex-col gap-4">
-            {list?.syncError && (
+          {list?.syncError && (
+            <CardHeader>
               <Alert variant="warning" role="alert">
                 <AlertTriangle aria-hidden="true" />
                 <AlertDescription>Qonto sync failed: {list.syncError} The list below may be out of date.</AlertDescription>
               </Alert>
-            )}
-            <div className="flex w-full flex-wrap items-center gap-2">
-              <InputGroup className="min-w-56 flex-1">
-                <InputGroupAddon><Search /></InputGroupAddon>
-                <InputGroupInput type="search" aria-label="Search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search invoice, client or PO" />
-              </InputGroup>
-              <NativeSelect aria-label="Billing month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
-                <NativeSelectOption value="">All months</NativeSelectOption>
-                {monthOptions.map((m) => <NativeSelectOption key={m} value={m}>{monthLabel(m)}</NativeSelectOption>)}
-              </NativeSelect>
-              <NativeSelect aria-label="Client" value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
-                <NativeSelectOption value="">All clients</NativeSelectOption>
-                {clientOptions.map(([id, name]) => <NativeSelectOption key={id} value={id}>{name}</NativeSelectOption>)}
-                <NativeSelectOption value="none">No client</NativeSelectOption>
-              </NativeSelect>
-            </div>
-            <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2" role="group" aria-label="Filters">
-              <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2" role="group" aria-label="Issue date range">
-                <span className="label-mono">Issued</span>
-                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 [&_.date-field-root]:w-[168px] [&_.date-field-trigger]:h-10 [&_.date-field-trigger]:py-0">
-                  <DateField aria-label="Issued from" placeholder="From" value={dateFrom} max={dateTo || undefined} onChange={setDateFrom} />
-                  <span aria-hidden="true" className="text-muted-foreground">→</span>
-                  <DateField aria-label="Issued until" placeholder="To" value={dateTo} min={dateFrom || undefined} onChange={setDateTo} />
-                </div>
-                <ToggleGroup variant="outline" aria-label="Quick ranges" className="max-w-full overflow-x-auto"
-                  value={presets.filter((p) => dateFrom === p.from && dateTo === p.to).map((p) => p.label)}
-                  onValueChange={(v) => { const p = presets.find((x) => x.label === v[0]); if (p) { setDateFrom(p.from); setDateTo(p.to); } }}>
-                  {presets.map((p) => <ToggleGroupItem key={p.label} value={p.label}>{p.label}</ToggleGroupItem>)}
-                </ToggleGroup>
-              </div>
-            </div>
-            <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2">
-              <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2" role="group" aria-label="Status">
-                <span className="label-mono">Status</span>
-                <ToggleGroup variant="outline" size="sm" aria-label="Status" className="max-w-full overflow-x-auto"
-                  value={[statusFilter || "all"]}
-                  onValueChange={(v) => { if (v[0]) setStatusFilter(v[0] === "all" ? "" : (v[0] as StatusLabel)); }}>
-                  {(["", ...STATUS_FILTERS] as const).filter((s) => s !== "Draft" || statusFilter === s || byStatus(s).length > 0).map((s) => (
-                    <ToggleGroupItem key={s || "all"} value={s || "all"} className="gap-1.5">
-                      {s || "All"}<span className="num text-xs text-muted-foreground">{s ? byStatus(s).length : base.length}</span>
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </div>
-              <div className="ml-auto flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{plural(filtered.length, "invoice")}{hasFilters ? " match" : ""}</span>
-                {hasFilters && (
-                  <Button variant="ghost" size="sm" onClick={resetFilters}><RotateCcw data-icon="inline-start" /> Reset filters</Button>
-                )}
-              </div>
-            </div>
-          </CardHeader>
+            </CardHeader>
+          )}
 
           <CardContent className="flex flex-col gap-4">
             {tab === "unassigned" && (
@@ -639,9 +659,9 @@ export function Invoicing() {
 
             {!list ? (
               !listError && <p role="status" className="m-0 text-sm text-muted-foreground">Loading invoices…</p>
-            ) : filtered.length === 0 ? (
+            ) : total === 0 ? (
               <EmptyState
-                title={invoices.length === 0 ? "No invoices yet" : tab === "unassigned" && !hasFilters ? "Nothing to assign" : "No invoices match these filters"}
+                title={list.counts.invoices === 0 ? "No invoices yet" : tab === "unassigned" && !hasFilters ? "Nothing to assign" : "No invoices match these filters"}
                 action={hasFilters ? <Button variant="outline" size="sm" onClick={resetFilters}>Reset filters</Button> : undefined}
               >
                 {hasFilters ? "Try another month or widen the date range" : undefined}
@@ -651,7 +671,7 @@ export function Invoicing() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Invoice</TableHead>
-                    <TableHead className="hidden xl:table-cell">Client</TableHead>
+                    {showClientCol && <TableHead className="hidden xl:table-cell">Client</TableHead>}
                     <TableHead>Project / PO</TableHead>
                     <TableHead>Issued</TableHead>
                     <TableHead numeric>Amount TTC</TableHead>
@@ -660,20 +680,22 @@ export function Invoicing() {
                 </TableHeader>
                 <TableBody>
                   {groups.map((g) => {
-                    const all = filtered.filter((i) => billingMonth(i) === g.key);
-                    const live = all.filter((i) => i.status !== "canceled");
+                    const sum = list.groups[g.key] ?? { count: g.items.length, ttc: 0 };
+                    const title = pageGroupBy === "client"
+                      ? (g.items[0]?.client_name || (g.key ? "Unknown client" : "No client"))
+                      : (g.key ? monthLabel(g.key) : "No date");
                     return (
                       <Fragment key={g.key || "none"}>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
                           <TableCell colSpan={colsInv} className="h-10">
                             <div className="flex items-baseline justify-between gap-3">
                               <span>
-                                <span className="font-medium">{g.key ? monthLabel(g.key) : "No date"}</span>
+                                <span className={cn("font-medium", pageGroupBy === "client" && !g.key && "text-muted-foreground")}>{title}</span>
                                 <span className="ml-2 text-xs text-muted-foreground">
-                                  {plural(all.length, "invoice")}{all.length > g.items.length ? " · continues on another page" : ""}
+                                  {plural(sum.count, "invoice")}{sum.count > g.items.length ? " · continues on another page" : ""}
                                 </span>
                               </span>
-                              <span className="num text-[13px] font-medium">{money(sumTtc(live))}</span>
+                              <span className="num text-[13px] font-medium">{money(sum.ttc)}</span>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -693,9 +715,9 @@ export function Invoicing() {
                                     {i.source === "cra" ? "from CRA" : "via Qonto import"}
                                     {i.consultant_name && <> · {i.consultant_person_id ? <Link className="underline-offset-4 hover:text-foreground hover:underline" to={`/hr/people/${i.consultant_person_id}`}>{i.consultant_name}</Link> : i.consultant_name}</>}
                                   </div>
-                                  <div className="text-xs text-muted-foreground xl:hidden">{i.client_name || "No client"}</div>
+                                  {showClientCol && <div className="text-xs text-muted-foreground xl:hidden">{i.client_name || "No client"}</div>}
                                 </TableCell>
-                                <TableCell className={cn("hidden whitespace-normal xl:table-cell", !i.client_name && "text-muted-foreground")}>{i.client_name || "No client"}</TableCell>
+                                {showClientCol && <TableCell className={cn("hidden whitespace-normal xl:table-cell", !i.client_name && "text-muted-foreground")}>{i.client_name || "No client"}</TableCell>}
                                 <TableCell className="whitespace-normal">
                                   {i.project_id ? (
                                     <>
@@ -755,7 +777,7 @@ export function Invoicing() {
 
             <nav className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4" aria-label="Pagination">
               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                <span className="num">{filtered.length === 0 ? "0 invoices" : `${start + 1}-${Math.min(start + perPage, filtered.length)} of ${filtered.length}`}</span>
+                <span className="num">{total === 0 ? "0 invoices" : `${start + 1}-${Math.min(start + pageList.length, total)} of ${total}`}</span>
                 <label className="flex items-center gap-2">Rows per page
                   <NativeSelect size="sm" value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}>
                     {PER_PAGE.map((n) => <NativeSelectOption key={n} value={n}>{n}</NativeSelectOption>)}

@@ -1,3 +1,4 @@
+import type { StatusLabel } from "./format";
 // Browser-side copies of the /api/invoicing response shapes
 // (server/invoicing/*.ts). Kept here so the server modules never land in
 // the browser bundle.
@@ -80,7 +81,24 @@ export type InvoiceDetail = {
   // Imported invoices on a project: the consultants staffed on it.
   consultants?: { id: string; name: string }[];
 };
-export type InvoicesList = { invoices: Invoice[]; lastSyncedAt: string | null; syncError?: string };
+type Sum = { count: number; ttc: number };
+/** One page of the Invoices / Unassigned list, filtered and aggregated on the server. */
+export type InvoicesList = {
+  invoices: Invoice[];
+  total: number;
+  page: number;
+  perPage: number;
+  pages: number;
+  statusCounts: Record<StatusLabel | "all", number>;
+  kpis: { paid: Sum; unpaid: Sum; overdue: Sum; unassigned: Sum };
+  group: "month" | "client";
+  /** Group headers on this page, keyed by billing month (YYYY-MM) or billed client id ("" = no client). */
+  groups: Record<string, Sum>;
+  options: { clients: [string, string][]; months: string[] };
+  counts: { invoices: number; unassigned: number };
+  lastSyncedAt: string | null;
+  syncError?: string;
+};
 
 export type InvoicingSettings = {
   provider: "qonto";

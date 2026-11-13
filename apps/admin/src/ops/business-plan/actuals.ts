@@ -296,7 +296,7 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
   }
 
   // CRA days per employee per month (half-days count 0.5): client days, leave, everything filled.
-  type CraTally = { client: number; leave: number; filled: number };
+  type CraTally = { client: number; leave: number; cp: number; filled: number };
   const LEAVE = new Set(["paid_leave", "rtt", "unpaid_leave"]);
   const craTally = new Map<string, Map<string, CraTally>>();
   const craDays = new Map<string, Map<string, number>>();
@@ -305,10 +305,11 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     const d = e.part === "am" || e.part === "pm" ? 0.5 : 1;
     const status = e.status ?? "client_project";
     const byEmp = craTally.get(key) || new Map<string, CraTally>();
-    const t = byEmp.get(e.employee_id) || { client: 0, leave: 0, filled: 0 };
+    const t = byEmp.get(e.employee_id) || { client: 0, leave: 0, cp: 0, filled: 0 };
     t.filled += d;
     if (status === "client_project") t.client += d;
     else if (LEAVE.has(status)) t.leave += d;
+    if (status === "paid_leave") t.cp += d;
     byEmp.set(e.employee_id, t);
     craTally.set(key, byEmp);
     if (status !== "client_project") continue;
@@ -459,6 +460,12 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
     let sal = 0, inter = 0;
     // Salaried consultants' working days (holidays excluded), billed and leave days, on their consultant share.
     let jo = 0, jfs = 0, abs = 0, craComplete = true;
+    // Paid-leave provision inputs (interns and missing salaries excluded), at a yearly daily
+    // rate (monthly gross × 12 / working days of the year): the acquisition base (daily rate ×
+    // presence share of the month) and the gross cost of the paid-leave days taken.
+    let cpAcqBase = 0, cpTakenCost = 0;
+    const monthJo = workingDaysBetween(from, to);
+    const yearJo = workingDaysBetween(`${year}-01-01`, `${year}-12-31`);
     const tally = craTally.get(key);
     const lines: SalaryLine[] = [];
     for (const e of src.employees) {
@@ -488,6 +495,11 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
       jo += workDays;
       jfs += client;
       abs += (t?.leave ?? 0) * share;
+      if (e.contract_type !== "Internship" && salary && yearJo) {
+        const daily = (salary * multFor(e) * 12) / yearJo;
+        if (monthJo) cpAcqBase += (daily * workDays) / monthJo;
+        cpTakenCost += daily * (t?.cp ?? 0) * share;
+      }
       if (Math.min(workDays, client + ((t?.filled ?? 0) - (t?.client ?? 0)) * share) < workDays) craComplete = false;
       lines.push({
         employeeId: e.id,
@@ -520,6 +532,8 @@ export function aggregateActuals(src: PlanSources, year: number, openFrom: numbe
       jfs,
       jf: jfs + fLines.reduce((t, l) => t + l.days, 0),
       abs,
+      cpAcqBase,
+      cpTakenCost,
       craComplete,
     });
   }

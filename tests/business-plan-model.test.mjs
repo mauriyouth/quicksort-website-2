@@ -23,7 +23,7 @@ const forecast = (i) => ({ actual: null, ventes: VENTES[i], departs: DEPARTS[i],
 /** The design mockup's renderVals() math, kept verbatim as the oracle. */
 function mockup(P, ventes, departs) {
   const cal = workingCalendar(2026, P), pf = P.pctFree / 100;
-  const R = { cons: [], ca: [], prod: [], varr: [], fix: [], eb: [], mb: [], treso: [] };
+  const R = { cons: [], ca: [], prod: [], varr: [], fix: [], eb: [], mb: [], treso: [], cpc: [], cps: [] };
   let c = START, cash = P.tresoDebut;
   const lag = Math.max(0, Math.round(P.dso / 30));
   for (let i = 0; i < 12; i++) {
@@ -33,15 +33,20 @@ function mockup(P, ventes, departs) {
     const ca = nf * jo * P.tjm + ns * jo * taci * P.tjm;
     // Salaries are gross; employer social charges are added per salaried consultant.
     const cot = ns * (P.salaire * P.tauxCharges / 100 + P.mutuelle + P.ticketsResto + P.medecine / 12);
-    const prod = nf * jo * P.coutFree + ns * P.salaire + cot;
+    // Paid-leave provision (non-cash): days acquired − days taken, at the daily gross, loaded.
+    const cpDays = P.congesAn / 12 - cal.cp[i], loaded = 1 + P.tauxCharges / 100;
+    const yearJo = cal.jo.reduce((x, y) => x + y, 0);
+    const cpc = (ns * P.salaire * 12 * cpDays * loaded) / yearJo, cps = (STRUCTURE * 12 * cpDays * loaded) / yearJo;
+    const prod = nf * jo * P.coutFree + ns * P.salaire + cot + cpc;
     const varr = ca * P.commFactor / 100 + ventes[i] * P.primeIC + ventes[i] * P.primeChasseur;
     const mb = ca - prod - varr;
-    const fix = STRUCTURE + P.fLoyer + P.fOutils + P.fMarketing + P.fHonoraires + P.fDeplacements + P.fDivers;
+    const fix = STRUCTURE + cps + P.fPresident + P.fLoyer + P.fOutils + P.fMarketing + P.fHonoraires + P.fDeplacements + P.fDivers;
+    R.cpc.push(cpc); R.cps.push(cps);
     R.cons.push(c); R.ca.push(ca); R.prod.push(prod); R.varr.push(varr); R.mb.push(mb); R.fix.push(fix); R.eb.push(mb - fix);
   }
   for (let i = 0; i < 12; i++) {
     const enc = i - lag >= 0 ? R.ca[i - lag] : R.ca[0];
-    cash = cash + enc - R.prod[i] - R.varr[i] - R.fix[i];
+    cash = cash + enc - (R.prod[i] - R.cpc[i]) - R.varr[i] - (R.fix[i] - R.cps[i]);
     R.treso.push(cash);
   }
   return R;
@@ -58,7 +63,7 @@ test("all-forecast year reproduces the design mockup", () => {
   assert.equal(r.totals.consFin, 18 + 16 - 6);
   assert.equal(r.totals.ventes, 16);
   assert.equal(r.totals.departs, 6);
-  assert.equal(planRows(r).length, 50);
+  assert.equal(planRows(r).length, 55);
 });
 
 test("actual months override the forecast and headcount carries forward", () => {
@@ -327,7 +332,7 @@ test("a salaried employee without mission outside the structure list is inter-co
 test("forecast months carry the structure cost into the P&L", () => {
   const r = computePlan(DEFAULT_HYPOTHESES, VENTES.map((_, i) => ({ ...forecast(i), structure: i * 1000 })), START, 2026);
   assert.equal(r.series.fs[3], 3000);
-  assert.equal(r.series.fix[3], 3000 + DEFAULT_HYPOTHESES.fLoyer + DEFAULT_HYPOTHESES.fOutils + DEFAULT_HYPOTHESES.fMarketing + DEFAULT_HYPOTHESES.fHonoraires + DEFAULT_HYPOTHESES.fDeplacements + DEFAULT_HYPOTHESES.fDivers);
+  assert.equal(r.series.fix[3], 3000 + r.series.cps[3] + DEFAULT_HYPOTHESES.fPresident + DEFAULT_HYPOTHESES.fLoyer + DEFAULT_HYPOTHESES.fOutils + DEFAULT_HYPOTHESES.fMarketing + DEFAULT_HYPOTHESES.fHonoraires + DEFAULT_HYPOTHESES.fDeplacements + DEFAULT_HYPOTHESES.fDivers);
 });
 
 test("structure cost is prorated on working days in arrival and exit months", () => {
@@ -482,9 +487,10 @@ test("computePlan uses fixed actuals on closed months and hypotheses on open mon
   const real = computePlan(h, [{ actual: closed, ventes: 0, departs: 0, structure: 5000, fixed }], 0, 2026);
   assert.equal(real.series.fl[0], 1000);
   assert.equal(real.series.fd[0], 100);
-  assert.equal(real.series.fix[0], 5000 + 2500);
-  assert.equal(real.series.eb[0], real.series.mb[0] - 7500);
-  assert.equal(real.series.treso[0], h.tresoDebut + real.series.enc[0] - 0 - real.series.prod[0] - real.series.varr[0] - 7500 + real.series.tva[0]);
+  assert.equal(real.series.fix[0], 5000 + real.series.cps[0] + h.fPresident + 2500);
+  assert.equal(real.series.eb[0], real.series.mb[0] - real.series.fix[0]);
+  // The paid-leave provision is non-cash.
+  assert.equal(real.series.treso[0], h.tresoDebut + real.series.enc[0] - 0 - (real.series.prod[0] - real.series.cpc[0]) - real.series.varr[0] - 7500 + real.series.tva[0]);
   const open = computePlan(h, [{ actual: null, ventes: 0, departs: 0, structure: 5000, fixed }], 0, 2026);
   assert.equal(open.series.fl[0], h.fLoyer);
 });
@@ -585,7 +591,7 @@ test("travel costs: own fixed line, real on closed months, hypothesis otherwise,
   const p = computePlan(h, [{ actual: closed, ventes: 0, departs: 0, structure: 0, fixed: r.fixed[2] }, forecast(1)], 0, 2026);
   assert.equal(p.series.fdp[0], 1234);
   assert.equal(p.series.fdp[1], 2000);
-  assert.ok(Math.abs(p.series.fix[1] - (STRUCTURE + h.fLoyer + h.fOutils + h.fMarketing + h.fHonoraires + 2000 + h.fDivers)) < 1e-6);
+  assert.ok(Math.abs(p.series.fix[1] - (STRUCTURE + p.series.cps[1] + h.fPresident + h.fLoyer + h.fOutils + h.fMarketing + h.fHonoraires + 2000 + h.fDivers)) < 1e-6);
   const S = p.series;
   assert.ok(Math.abs(S.tvaDed[1] - VAT_RATE * (S.free[1] + S.fl[1] + S.fo[1] + S.fm[1] + S.fh[1] + S.fdp[1] + S.fd[1])) < 1e-6);
 });
@@ -628,9 +634,9 @@ test("computePlan: consultant charges in production costs, structure charges in 
   const S = r.series;
   assert.equal(S.cotc[0], 3640);
   assert.equal(S.cots[0], 1820);
-  assert.equal(S.prod[0], 10000 + 3640);
-  assert.equal(S.mb[0], 50000 - 13640 - S.varr[0]);
-  assert.equal(S.fix[0], 5000 + 1820 + S.fl[0] + S.fo[0] + S.fm[0] + S.fh[0] + S.fdp[0] + S.fd[0]);
+  assert.equal(S.prod[0], 10000 + 3640 + S.cpc[0]);
+  assert.equal(S.mb[0], 50000 - S.prod[0] - S.varr[0]);
+  assert.equal(S.fix[0], 5000 + 1820 + S.cps[0] + S.fpr[0] + S.fl[0] + S.fo[0] + S.fm[0] + S.fh[0] + S.fdp[0] + S.fd[0]);
   assert.equal(S.cu[0], 4500); assert.equal(S.cmu[0], 450); assert.equal(S.ctr[0], 480); assert.equal(S.cme[0], 30);
   assert.equal(S.cot[0], 5460);
 });
@@ -642,16 +648,22 @@ test("computePlan: forecast consultant charges from salaried headcount", () => {
   assert.equal(r.series.cots[0], 0);
 });
 
-test("planRows: gross salary lines, charge lines and the social-charges section", () => {
+test("planRows: loaded salary lines with gross and charges as sub-rows, and the memo charges section", () => {
   const rows = planRows(computePlan(H_COT, [forecast(0)], 0, 2026));
   const labels = rows.map((r) => r.label);
-  assert.ok(labels.includes("Salaires consultants (brut)"));
-  assert.ok(labels.includes("Salaires structure (brut)"));
-  const prodTotal = labels.indexOf("Total coûts de production");
-  assert.equal(labels[prodTotal - 1], "Cotisations sociales consultants");
-  assert.equal(labels[labels.indexOf("Salaires structure (brut)") + 1], "Cotisations sociales structure");
-  const sec = labels.indexOf("Cotisations sociales");
-  assert.deepEqual(labels.slice(sec + 1, sec + 6), ["URSSAF et retraite", "Mutuelle", "Tickets restaurant", "Médecine du travail", "Total cotisations sociales"]);
+  const cons = labels.indexOf("Salaires chargés consultants");
+  assert.deepEqual(labels.slice(cons, cons + 6), [
+    "Salaires chargés consultants", "— dont salaires bruts consultants", "— dont inter-contrats", "— dont cotisations sociales consultants",
+    "Provision congés payés consultants", "Total coûts de production",
+  ]);
+  const struct = labels.indexOf("Salaires chargés structure");
+  assert.deepEqual(labels.slice(struct, struct + 4), ["Salaires chargés structure", "— dont salaires bruts structure", "— dont cotisations sociales structure", "Provision congés payés structure"]);
+  // Loaded = gross + employer charges, the very amounts the totals deduct.
+  const r = computePlan(H_COT, [forecast(0)], 0, 2026);
+  assert.equal(rows[cons].values[0], r.series.sal[0] + r.series.cotc[0]);
+  assert.equal(rows[struct].values[0], r.series.fs[0] + r.series.cots[0]);
+  const sec = labels.indexOf("Détail des cotisations sociales (déjà incluses ci-dessus)");
+  assert.deepEqual(labels.slice(sec + 1, sec + 6), ["URSSAF et retraite", "Mutuelle", "Tickets restaurant", "Médecine du travail", "Total cotisations sociales (pour info)"]);
   assert.ok(sec > labels.indexOf("Marge d’exploitation (EBIT / CA)") && sec < labels.indexOf("Trésorerie"));
 });
 
@@ -663,8 +675,8 @@ test("socialChargesOf: one person's charges, prorated; interns and missing salar
 
 test("planRows: both social-charge lines open a drill-down", () => {
   const rows = planRows(computePlan(H_COT, [forecast(0)], 0, 2026));
-  assert.equal(rows.find((r) => r.label === "Cotisations sociales consultants").key, "cotc");
-  assert.equal(rows.find((r) => r.label === "Cotisations sociales structure").key, "cots");
+  assert.equal(rows.find((r) => r.label === "— dont cotisations sociales consultants").key, "cotc");
+  assert.equal(rows.find((r) => r.label === "— dont cotisations sociales structure").key, "cots");
 });
 
 test("a forecast year starts from the previous year's December", () => {
@@ -676,7 +688,8 @@ test("a forecast year starts from the previous year's December", () => {
   // Next year carries both headcount and cash forward.
   const next = computePlan({ ...DEFAULT_HYPOTHESES, tresoDebut: prev.totals.treso }, [{ actual: null, ventes: 1, departs: 0, structure: 0 }], prev.totals.consFin, 2026);
   assert.equal(next.series.cons[0], 17);
-  assert.equal(next.series.treso[0] - next.series.enc[0] + next.series.prod[0] + next.series.varr[0] + next.series.fix[0] - next.series.tva[0], prev.totals.treso);
+  const N = next.series;
+  assert.ok(Math.abs(N.treso[0] - N.enc[0] + (N.prod[0] - N.cpc[0]) + N.varr[0] + (N.fix[0] - N.cps[0]) - N.tva[0] - prev.totals.treso) < 1e-6);
 });
 
 test("chargeItemOf: social-charge payees by item", () => {
@@ -952,4 +965,29 @@ test("craIncompleteNote flags the yearly figures built on incomplete closed mont
   assert.equal(craIncompleteNote(computePlan(DEFAULT_HYPOTHESES, months, 0, 2026)), "CRA incomplet sur 2 mois");
   assert.equal(craIncompleteNote(computePlan(DEFAULT_HYPOTHESES, [months[0]], 0, 2026)), "CRA incomplet sur 1 mois");
   assert.equal(craIncompleteNote(computePlan(DEFAULT_HYPOTHESES, months.slice(2), 0, 2026)), "");
+});
+
+test("paid-leave provision: acquired minus taken, loaded, non-cash, nets to zero over a stable year", () => {
+  const h = { ...DEFAULT_HYPOTHESES, pctFree: 0, congesAn: 25, tauxCharges: 30 };
+  const flat = Array.from({ length: 12 }, () => ({ actual: null, ventes: 0, departs: 0, structure: 4000 }));
+  const r = computePlan(h, flat, 10, 2026);
+  const S = r.series, sum = (a) => a.reduce((x, y) => x + y, 0);
+  // Stable headcount: acquired = taken over the year, so the provision nets to zero.
+  assert.ok(Math.abs(sum(S.cpc)) < 1e-6);
+  assert.ok(Math.abs(sum(S.cps)) < 1e-6);
+  // Built up outside August, released in August (half the yearly leave).
+  assert.ok(S.cpc[0] > 0 && S.cpc[7] < 0);
+  // Interns excluded from structure: structureCp overrides the structure base.
+  const ns = computePlan(h, [{ actual: null, ventes: 0, departs: 0, structure: 4000, structureCp: 0 }], 10, 2026);
+  assert.equal(ns.series.cps[0], 0);
+});
+
+test("paid-leave provision on a closed month comes from the CRA leave actually taken", () => {
+  const h = { ...DEFAULT_HYPOTHESES, congesAn: 24, tauxCharges: 30 };
+  // 2 consultants at 4 400 € over 22 working days: 400 € per acquired day; 3 CP days taken at 200 €/day.
+  const closed = { cons: 2, ca: 0, free: 0, sal: 8800, inter: 0, ventes: 0, departs: 0, enc: 0, cpAcqBase: 400, cpTakenCost: 600 };
+  const r = computePlan(h, [{ actual: closed, ventes: 0, departs: 0, structure: 0 }], 0, 2026);
+  assert.ok(Math.abs(r.series.cpc[0] - (2 * 400 - 600) * 1.3) < 1e-6);
+  const row = planRows(r).find((x) => x.label === "Provision congés payés consultants");
+  assert.equal(row.values[0], r.series.cpc[0]);
 });

@@ -88,6 +88,20 @@ test('people documents use the HR root, and fail clearly when it is not connecte
   await assert.rejects(createDriveStorage(clientsOnly).ensureFolder('people', ['x']), /No HR documents folder is connected/);
 });
 
+test('company documents use the company root, linked, and fail clearly when it is not connected', async t => {
+  const calls = mockDrive(t);
+  const root = await createDriveStorage({ ...settings, company_root_folder_id: 'company-root', company_root_folder_name: 'Admin Quicksort' }).ensureFolder('company', []);
+  assert.deepEqual(root, { id: 'company-root', name: 'Admin Quicksort', link: 'https://drive.google.com/drive/folders/company-root' });
+  assert.equal(calls.length, 0);
+  await assert.rejects(createDriveStorage(settings).ensureFolder('company', []), /No company documents folder is connected/);
+});
+
+test('company folders sit right under the company root', () => {
+  assert.deepEqual(folderPath({ kind: 'company', companyName: 'Quicksort' }, 'urssaf'), { root: 'company', path: ['02_Attestation_URSSAF'] });
+  assert.deepEqual(folderPath({ kind: 'company', companyName: 'Quicksort' }, ''), { root: 'company', path: [] });
+  assert.equal(documentFileName('COMPANY_OTHER', 'Quicksort', 'x.pdf', 'Statuts à jour', null, '2026-01-15'), 'quicksort_statuts_a_jour_2026_01_15.pdf');
+});
+
 test('prepareUpload opens a resumable session and tells the browser how to PUT', async t => {
   const calls = mockDrive(t);
   const target = await createDriveStorage(settings).prepareUpload({ id: 'folder-1', name: '01_Identite', link: null }, { name: 'cni.pdf', mimeType: 'application/pdf', size: 2048 });

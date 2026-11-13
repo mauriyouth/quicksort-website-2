@@ -14,6 +14,11 @@ export type StatusLabels = typeof statusLabels;
 export function isFreelance(employee: { contract_type?: string | null }) {
   return employee.contract_type === 'Freelance';
 }
+// CP/RTT only accrue on salaried contracts. Freelance and Internal
+// employments have no leave balance anywhere the UI shows one.
+export function accruesLeave(employee: { contract_type?: string | null }) {
+  return employee.contract_type !== 'Freelance' && employee.contract_type !== 'Internal';
+}
 export const partSchema = z.enum(['full', 'am', 'pm']);
 export type Part = z.infer<typeof partSchema>;
 const dateSchema = z.iso.date();

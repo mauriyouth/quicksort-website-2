@@ -1,18 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
-import { atNoon, buildCells, isOutOfRange, parseISO, toISO } from "./date-field-calendar";
+import { CalendarDays, X } from "lucide-react";
+import { Calendar, Popover, PopoverContent, PopoverTrigger } from "@quicksort-sas/ui";
+import { cn } from "cn";
+import { atNoon, isOutOfRange, parseISO, toISO } from "./date-field-calendar";
 
 /**
- * Design-system date picker, shared across the admin app.
- *
- * Renders a field that matches `.qs-input` (border, radius, padding, focus
- * ring) and opens a token-styled calendar popover. When `name` is given, a
- * hidden input keeps the `YYYY-MM-DD` contract with the parent <form>, so
- * submit handlers are unchanged.
+ * Design-system date picker, shared across the admin app: the
+ * @quicksort-sas/ui date-picker pattern (a Popover around the package
+ * Calendar). When `name` is given, a hidden input keeps the `YYYY-MM-DD`
+ * contract with the parent <form>, so submit handlers are unchanged.
  *
  * Supports both modes:
  *  - uncontrolled: `defaultValue` + `name` (form submissions)
  *  - controlled: `value` + `onChange` (filters, live state)
+ *
+ * Keyboard: Enter/Space/ArrowDown on the field opens the calendar on the
+ * picked day (or today, clamped to min/max); arrows, Home/End and
+ * PageUp/PageDown move inside it, Enter picks, Escape closes.
+ *
+ * The `date-field-root` / `date-field-trigger` class names stay as hooks for
+ * hosts that size the field (e.g. the invoicing filters).
  */
 
 type Props = {
@@ -34,20 +41,17 @@ type Props = {
   "aria-label"?: string;
 };
 
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
-
-const MONTH_FMT: Intl.DateTimeFormatOptions = { month: "long", year: "numeric" };
 const DAY_FMT: Intl.DateTimeFormatOptions = {
   day: "numeric",
   month: "short",
   year: "numeric",
 };
 
-const shiftDays = (d: Date, days: number) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+const monthOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+
+/** Same chrome as the package DatePicker trigger (h-10, input border, focus ring). */
+const TRIGGER =
+  "date-field-trigger inline-flex h-10 w-full min-w-0 items-center gap-2.5 rounded-lg border border-input bg-transparent px-3 text-left text-[15px] text-foreground transition-[border-color,box-shadow] duration-150 outline-none select-none hover:border-[color-mix(in_srgb,var(--input),var(--foreground)_35%)] focus-visible:border-foreground focus-visible:ring-2 focus-visible:ring-ring/15 data-[popup-open]:border-foreground disabled:pointer-events-none disabled:opacity-45 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground";
 
 export function DateField({
   name,
@@ -65,109 +69,37 @@ export function DateField({
     () => parseISO((isControlled ? value : defaultValue) || "") ?? null,
   );
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<Date>(
-    () => selected ?? new Date(),
-  );
-  // Roving-tabindex focus date inside the grid (tracked, not derived from
-  // the DOM, so arrow keys stay correct across month transitions).
-  const [focusDate, setFocusDate] = useState<Date | null>(null);
-
-  const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
+  const [month, setMonth] = useState<Date>(() => monthOf(selected ?? new Date()));
 
   useEffect(() => {
     if (isControlled) setSelected(parseISO(value || "") ?? null);
   }, [isControlled, value]);
 
-  const today = useMemo(() => atNoon(new Date()), []);
-  const cells = useMemo(() => buildCells(view), [view]);
-  const weekdays = useMemo(
-    // Column headers anchored on a known Monday.
-    () =>
-      Array.from({ length: 7 }, (_, i) =>
-        new Date(2024, 0, 1 + i).toLocaleDateString(undefined, {
-          weekday: "short",
-        }),
-      ),
-    [],
-  );
-
   const minDate = useMemo(() => {
-    if (!min) return null;
-    const d = parseISO(min);
+    const d = min ? parseISO(min) : null;
     return d ? atNoon(d) : null;
   }, [min]);
   const maxDate = useMemo(() => {
-    if (!max) return null;
-    const d = parseISO(max);
+    const d = max ? parseISO(max) : null;
     return d ? atNoon(d) : null;
   }, [max]);
 
-  const clampDate = (d: Date): Date => {
-    if (minDate && isOutOfRange(d, minDate, null)) return minDate;
-    if (maxDate && isOutOfRange(d, null, maxDate)) return maxDate;
-    return d;
-  };
-
-  const isDisabled = (d: Date) => isOutOfRange(d, minDate, maxDate);
-
-  /** True when the given month (0-based) contains at least one enabled day. */
-  const monthEnabled = (year: number, month: number) => {
-    const first = new Date(year, month, 1, 12);
-    const last = new Date(year, month + 1, 0, 12);
-    return (
-      (minDate === null || last >= minDate) &&
-      (maxDate === null || first <= maxDate)
-    );
-  };
-
-  const canPrev = monthEnabled(view.getFullYear(), view.getMonth() - 1);
-  const canNext = monthEnabled(view.getFullYear(), view.getMonth() + 1);
-
-  // Close on click outside.
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
-
-  // When the grid re-renders (month shift, open), move focus to the cell
-  // matching focusDate.
-  useEffect(() => {
-    if (!open || !focusDate) return;
-    const cell = gridRef.current?.querySelector<HTMLButtonElement>(
-      `[data-date="${toISO(focusDate)}"]`,
-    );
-    cell?.focus();
-  }, [open, focusDate, view]);
-
-  const shiftMonth = (delta: number) => {
-    const year = view.getFullYear();
-    const month = view.getMonth() + delta;
-    if (!monthEnabled(year, month)) return;
-    setView(new Date(year, month, 1));
-  };
-
   const openPicker = () => {
-    const anchor = clampDate(selected ?? today);
-    setView(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
-    setFocusDate(anchor);
+    // Open on the picked day, or today, kept inside min/max.
+    let anchor = atNoon(selected ?? new Date());
+    if (minDate && isOutOfRange(anchor, minDate, null)) anchor = minDate;
+    if (maxDate && isOutOfRange(anchor, null, maxDate)) anchor = maxDate;
+    setMonth(monthOf(anchor));
     setOpen(true);
   };
 
-  const pick = (date: Date) => {
+  const pick = (date: Date | undefined) => {
+    if (!date) return;
     const d = atNoon(date);
     setSelected(d);
-    setView(new Date(d.getFullYear(), d.getMonth(), 1));
+    setMonth(monthOf(d));
     setOpen(false);
-    triggerRef.current?.focus();
     onChange?.(toISO(d));
   };
 
@@ -177,180 +109,62 @@ export function DateField({
     onChange?.("");
   };
 
-  const moveFocus = (from: Date, delta: number) => {
-    let next = shiftDays(from, delta);
-    // Skip over disabled days, like a native date input does.
-    let guard = 0;
-    while (isDisabled(atNoon(next)) && guard < 62) {
-      next = shiftDays(next, delta);
-      guard += 1;
-    }
-    if (next.getMonth() !== view.getMonth()) {
-      setView(new Date(next.getFullYear(), next.getMonth(), 1));
-    }
-    setFocusDate(next);
-  };
-
-  const onDayKeyDown = (e: React.KeyboardEvent, date: Date) => {
-    switch (e.key) {
-      case "ArrowLeft":
-        e.preventDefault();
-        moveFocus(date, -1);
-        break;
-      case "ArrowRight":
-        e.preventDefault();
-        moveFocus(date, 1);
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        moveFocus(date, -7);
-        break;
-      case "ArrowDown":
-        e.preventDefault();
-        moveFocus(date, 7);
-        break;
-      case "Home":
-        e.preventDefault();
-        moveFocus(date, -((date.getDay() + 6) % 7));
-        break;
-      case "End":
-        e.preventDefault();
-        moveFocus(date, 6 - ((date.getDay() + 6) % 7));
-        break;
-      case "PageUp":
-        e.preventDefault();
-        shiftMonth(-1);
-        break;
-      case "PageDown":
-        e.preventDefault();
-        shiftMonth(1);
-        break;
-      case "Escape":
-        e.preventDefault();
-        setOpen(false);
-        triggerRef.current?.focus();
-        break;
-      case "Enter":
-      case " ":
-        e.preventDefault();
-        pick(date);
-        break;
-      default:
-        break;
-    }
-  };
+  const disabledDays = [
+    ...(minDate ? [{ before: minDate }] : []),
+    ...(maxDate ? [{ after: maxDate }] : []),
+  ];
+  const clearable = !!selected && !required;
 
   return (
-    <div className="date-field-root" ref={rootRef}>
+    <div className="date-field-root relative w-full min-w-0">
       {/* Keeps the form contract: YYYY-MM-DD submitted under `name`. */}
       {name && (
-        <input
-          type="hidden"
-          name={name}
-          value={selected ? toISO(selected) : ""}
-          readOnly
-        />
+        <input type="hidden" name={name} value={selected ? toISO(selected) : ""} readOnly />
       )}
-      <div className={`date-field${selected ? "" : " is-empty"}`}>
-        <button
+      <Popover open={open} onOpenChange={(next) => (next ? openPicker() : setOpen(false))}>
+        <PopoverTrigger
           ref={triggerRef}
           type="button"
-          className="date-field-trigger"
-          aria-haspopup="dialog"
-          aria-expanded={open}
           aria-label={ariaLabel}
-          onClick={() => (open ? setOpen(false) : openPicker())}
+          className={cn(TRIGGER, clearable && "pr-9")}
           onKeyDown={(e) => {
-            if ((e.key === "ArrowDown" || e.key === "Enter") && !open) {
+            if (e.key === "ArrowDown" && !open) {
               e.preventDefault();
               openPicker();
             }
           }}
         >
-          <span className="date-field-value">
-            {selected
-              ? selected.toLocaleDateString(undefined, DAY_FMT)
-              : placeholder}
+          <CalendarDays aria-hidden />
+          <span className={cn("min-w-0 flex-1 truncate", selected ? "num" : "text-muted-foreground")}>
+            {selected ? selected.toLocaleDateString(undefined, DAY_FMT) : placeholder}
           </span>
-          <CalendarDays size={16} aria-hidden />
-        </button>
-        {selected && !required && (
-          <button
-            type="button"
-            className="date-field-clear"
-            aria-label="Clear date"
-            tabIndex={-1}
-            onClick={clear}
-          >
-            <X size={13} aria-hidden />
-          </button>
-        )}
-      </div>
-
-      {open && (
-        <div
-          className="date-popover"
-          role="dialog"
-          aria-modal="false"
-          aria-label={view.toLocaleDateString(undefined, MONTH_FMT)}
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto gap-0 overflow-hidden p-0">
+          <Calendar
+            mode="single"
+            required
+            selected={selected ?? undefined}
+            onSelect={pick}
+            month={month}
+            onMonthChange={setMonth}
+            startMonth={minDate ?? undefined}
+            endMonth={maxDate ?? undefined}
+            disabled={disabledDays}
+            weekStartsOn={1}
+            autoFocus
+          />
+        </PopoverContent>
+      </Popover>
+      {clearable && (
+        <button
+          type="button"
+          aria-label="Clear date"
+          tabIndex={-1}
+          onClick={clear}
+          className="absolute top-1/2 right-2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
-          <div className="date-popover-head">
-            <button
-              type="button"
-              className="date-nav"
-              aria-label="Previous month"
-              disabled={!canPrev}
-              onClick={() => shiftMonth(-1)}
-            >
-              <ChevronLeft size={15} aria-hidden />
-            </button>
-            <div className="date-month" aria-live="polite">
-              {view.toLocaleDateString(undefined, MONTH_FMT)}
-            </div>
-            <button
-              type="button"
-              className="date-nav"
-              aria-label="Next month"
-              disabled={!canNext}
-              onClick={() => shiftMonth(1)}
-            >
-              <ChevronRight size={15} aria-hidden />
-            </button>
-          </div>
-          <div className="date-weekdays">
-            {weekdays.map((w, i) => (
-              <span key={`${w}-${i}`} aria-hidden>
-                {w}
-              </span>
-            ))}
-          </div>
-          <div className="date-grid" role="grid" ref={gridRef}>
-            {cells.map((date) => (
-              <button
-                key={toISO(date)}
-                type="button"
-                data-date={toISO(date)}
-                role="gridcell"
-                tabIndex={focusDate && sameDay(date, focusDate) ? 0 : -1}
-                disabled={isDisabled(date)}
-                aria-selected={selected ? sameDay(date, selected) : undefined}
-                aria-current={sameDay(date, today) ? "date" : undefined}
-                className={[
-                  "date-day",
-                  date.getMonth() === view.getMonth() ? "" : "is-out",
-                  selected && sameDay(date, selected) ? "is-selected" : "",
-                  sameDay(date, today) ? "is-today" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={() => pick(date)}
-                onKeyDown={(e) => onDayKeyDown(e, date)}
-              >
-                {date.getDate()}
-              </button>
-            ))}
-          </div>
-        </div>
+          <X className="size-3.5" aria-hidden />
+        </button>
       )}
     </div>
   );

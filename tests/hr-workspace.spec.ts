@@ -38,11 +38,26 @@ async function mock(page: Page, {
   failFirstTask = false,
   staleSuggestion = false,
   payslips = false,
+  admin = false,
+  contractStage = false,
+  signed = true,
+  signatureRequests = [] as Array<Record<string, unknown>>,
 } = {}) {
   const suggestions: Suggestion[] = [];
   const snapshot = { ...structuredClone(seed), suggestions, salaries: [] as never[] };
   const requests: Request[] = [];
+  const signatureCalls: Array<Record<string, unknown>> = [];
   if (staffingOnly) snapshot.capabilities = { recruit: false, approve_offer: false, approve_direction: false, staff: true, admin: false };
+  if (admin) snapshot.capabilities = { ...snapshot.capabilities, admin: true };
+  // Sam's latest application, still open at the Contract stage.
+  if (contractStage) Object.assign(snapshot.applications[0], { status: 'active', stage: 'contract' });
+  await page.route('**/api/signatures', async (route) => {
+    const body = route.request().postDataJSON();
+    signatureCalls.push(body);
+    if (body.action === 'list-requests') return reply(route, { requests: signatureRequests });
+    if (body.action === 'list-templates') return reply(route, { templates: [] });
+    return reply(route, {}, 400);
+  });
   if (staleSuggestion) {
     const employee = snapshot.employees.find((item) => item.status === 'preboarding');
     const person = snapshot.people.find((item) => item.id === employee?.person_id);
@@ -87,7 +102,7 @@ async function mock(page: Page, {
     if (url.pathname.endsWith('/rpc/hr_workspace_snapshot')) return reply(route, snapshot);
     if (url.pathname.endsWith('/rpc/hr_application_requirements')) return reply(route, [
       { key: 'screening', label: 'Screening evidence reviewed', done: true },
-      { key: 'signatures', label: 'Contract signed by the candidate and employer', done: true },
+      { key: 'signatures', label: 'The contract is signed in Youtrust', done: signed },
     ]);
     if (url.pathname.endsWith('/profiles')) return reply(route, snapshot.people.map((person) => ({ id: person.id, full_name: person.full_name, email: person.email })));
     if (url.pathname.endsWith('/rpc/hr_command')) {
@@ -108,7 +123,7 @@ async function mock(page: Page, {
     }
     return reply(route, []);
   });
-  return { snapshot, requests, rpcs, moves };
+  return { snapshot, requests, rpcs, moves, signatureCalls };
 }
 
 test('all connected HR views render at desktop and mobile widths without page overflow', async ({ page }, info) => {
@@ -145,8 +160,8 @@ test('a rehire record retains both application and employment histories', async 
   await page.goto(`${harness.url}?view=people`);
   await page.getByRole('button', { name: /Sam Rivera/ }).click();
   await page.getByRole('tab', { name: /Applications/ }).click();
-  await expect(page.getByLabel('Application history').locator('option')).toHaveCount(2);
-  await expect(page.getByText('Both signatures recorded', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Application', { exact: true }).locator('option')).toHaveCount(2);
+  await expect(page.getByText('Signed in Youtrust', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: /Employment/ }).click();
   await expect(page.getByLabel('Employment period').locator('option')).toHaveCount(2);
   await expect(page.getByRole('heading', { name: 'Journey checklist' })).toBeVisible();
@@ -285,20 +300,38 @@ test('creating a hiring need takes the role from the linked job post and links c
   await page.goto(`${harness.url}?view=recruiting`);
   await page.getByRole('tab', { name: 'Hiring needs' }).click();
   await page.getByRole('button', { name: 'Create hiring need', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  // Without a job post the role is named manually.
-  await dialog.getByLabel('Role to hire').fill('Support Engineer');
-  // Linking a job post replaces the manual role: title and requirements come from the post.
-  await dialog.getByLabel('Linked job post').selectOption(job.id);
-  await expect(dialog.getByLabel('Role to hire')).toHaveCount(0);
-  await expect(dialog.getByText(`Role and requirements are taken from “${job.title}”.`, { exact: true })).toBeVisible();
-  await dialog.getByLabel('Search Linked clients').fill('Test');
-  await dialog.getByRole('button', { name: client.name, exact: true }).click();
-  await expect(dialog.getByText(client.name, { exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: 'Create hiring need', exact: true }).click();
-  expect(requests.map((request) => request.kind)).toEqual(['create_requisition']);
-  expect(requests[0]).toMatchObject({ title: job.title, job_id: job.id, client_ids: [client.id] });
+  // Creating a hiring need is a page, not a popup.
+  await expect(page.getByRole('heading', { name: 'New hiring need', level: 1 })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  // Without a job post the role is named manually.
+  await page.getByLabel('Role to hire').fill('Support Engineer');
+  // Linking a job post replaces the manual role: title and requirements come from the post.
+  await page.getByLabel('Linked job post').selectOption(job.id);
+  await expect(page.getByLabel('Role to hire')).toHaveCount(0);
+  await expect(page.getByText(`Role and requirements are taken from “${job.title}”.`, { exact: true })).toBeVisible();
+  await page.getByLabel('Search Linked clients').fill('Test');
+  await page.getByRole('button', { name: client.name, exact: true }).click();
+  await expect(page.getByText(client.name, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Create hiring need', exact: true }).click();
+  await expect.poll(() => requests.map((request) => request.kind)).toEqual(['create_requisition']);
+  expect(requests[0]).toMatchObject({ title: job.title, job_id: job.id, client_ids: [client.id] });
+});
+
+test('a hiring need opens as a page with its applications, and can be archived but not deleted once it has applications', async ({ page }, info) => {
+  const { requests } = await mock(page);
+  const need = seed.opportunities.find((item) => item.title === 'Data Engineer')!;
+  await page.goto(`${harness.url}?view=recruiting`);
+  await page.getByRole('tab', { name: 'Hiring needs' }).click();
+  await page.getByRole('link', { name: /Data Engineer/ }).click();
+  await expect(page.getByRole('heading', { name: 'Data Engineer', level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Recruiting · Hiring needs' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Applications' })).toBeVisible();
+  // Its only application is closed, so archiving is allowed; deleting would orphan it.
+  await expect(page.getByRole('button', { name: 'Delete' })).toBeDisabled();
+  await page.screenshot({ path: info.outputPath('hiring-need.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Archive' }).click();
+  await expect.poll(() => requests.map((request) => request.kind)).toEqual(['archive_requisition']);
+  expect(requests[0]).toMatchObject({ opportunity_id: need.id, expected_version: need.version });
 });
 
 async function openSamEmployment(page: Page) {
@@ -348,4 +381,101 @@ test('moving a payslip confirms the target, calls the API with toPersonId and of
   await expect(page.getByText("Reset Sam Rivera's matricule to 00026?")).toHaveCount(0);
   expect(rpcs).toHaveLength(1);
   expect(rpcs[0]).toMatchObject({ employee_id: SAM_EMPLOYEE, matricule: '00026' });
+});
+
+const SAM_APPLICATION = seed.applications[0].id;
+const signatureRequest = (title: string, application_id: string | null) => ({
+  id: crypto.randomUUID(), person_id: SAM, template_id: null, title, type_code: 'CONTRACT_CDI', signers: [], supersedes: null,
+  status: 'sent', error: '', youtrust_request_id: 'yt-1', signed_document_id: null, audit_document_id: null, application_id,
+  created_at: '2026-11-02T10:00:00Z', updated_at: '2026-11-02T10:00:00Z',
+});
+
+async function openSamApplication(page: Page) {
+  await page.goto(`${harness.url}?view=people`);
+  await page.getByRole('button', { name: /Sam Rivera/ }).click();
+  await page.getByRole('tab', { name: /Applications/ }).click();
+}
+
+test('an admin sends the hiring contract from the application at the Contract stage', async ({ page }) => {
+  const { signatureCalls } = await mock(page, {
+    admin: true, contractStage: true,
+    signatureRequests: [signatureRequest('Contrat CDI Sam', SAM_APPLICATION), signatureRequest('Avenant télétravail', null)],
+  });
+  await openSamApplication(page);
+  await expect(page.getByRole('heading', { name: 'Contract signature' })).toBeVisible();
+  await expect(page.getByText('The hiring contract for this application. Once signed in Youtrust, the person can be hired.')).toBeVisible();
+  // Only the request sent from this application is listed; amendments from the employment page are not.
+  await expect(page.getByRole('row', { name: /Contrat CDI Sam/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Avenant télétravail/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Send for signature' })).toBeVisible();
+  expect(signatureCalls.find((call) => call.action === 'list-requests')).toMatchObject({ personId: SAM });
+  await expect(page.getByText('Countersign as employer')).toHaveCount(0);
+});
+
+test('an HR user sees whether the contract is signed but cannot send it', async ({ page }) => {
+  await mock(page, { contractStage: true, signed: false });
+  await openSamApplication(page);
+  await expect(page.getByRole('heading', { name: 'Contract signature' })).toBeVisible();
+  await expect(page.getByText('Not signed yet. An admin sends the contract from this page.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send for signature' })).toHaveCount(0);
+  await expect(page.getByText('Countersign as employer')).toHaveCount(0);
+});
+
+test('the hire prerequisites include the Youtrust signature', async ({ page }) => {
+  await mock(page, { contractStage: true });
+  await openSamApplication(page);
+  await expect(page.getByRole('heading', { name: 'Hire and start preboarding' })).toBeVisible();
+  await expect(page.getByText('The contract is signed in Youtrust')).toBeVisible();
+  await expect(page.getByText('Countersign as employer')).toHaveCount(0);
+});
+
+test('Import from resume reads the CV and saves it to the record in one click, with undo', async ({ page }) => {
+  const { requests, snapshot } = await mock(page);
+  Object.assign(snapshot.people.find((person) => person.id === SAM)!, { degrees: 'BSc Mathematics — Sorbonne — 2013' });
+  await page.route('**/api/recruitment-cv', (route) => reply(route, { file: { id: 'drive-cv-1', name: 'Sam Rivera - CV.pdf', createdTime: '2026-11-01T10:00:00Z' } }));
+  const parses: unknown[] = [];
+  await page.route('**/api/parse-candidate', (route) => {
+    parses.push(route.request().postDataJSON());
+    return reply(route, { model: 'kimi-k2.6', profile: {
+      fullName: 'Sam Rivera', email: '', phone: '', headline: 'Platform engineer', currentRole: 'Lead engineer', company: 'Contoso',
+      location: '', linkedinUrl: '', yearsExperience: 8, skills: ['TypeScript', 'Kubernetes'],
+      experience: [{ title: 'Lead engineer', company: 'Contoso', contract_type: 'CDI', start: '2021-03', end: '', location: 'Paris', summary: 'Leads the platform team.', skills: ['Kubernetes'] }],
+      education: [{ degree: 'MSc Computer Science', school: 'Sorbonne', start_year: '2013', end_year: '2015' }, { degree: 'BSc Mathematics', school: 'Sorbonne', start_year: '2010', end_year: '2013' }],
+      certifications: [{ name: 'CKA', issuer: 'CNCF', year: '2021' }],
+      languages: [{ language: 'English', level: 'C1' }],
+      summary: 'Engineer who builds reliable platforms.', confidence: 'high',
+    } });
+  });
+  await openSamApplication(page);
+  await page.getByRole('button', { name: 'Import from resume' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Updated from the resume' })).toContainText('description, 1 position, 2 degrees, 1 certification, 1 language, 1 skill');
+  expect(parses).toEqual([{ profile: { kind: 'drive', personId: SAM } }]);
+  // Saved straight away — no separate Apply step.
+  const update = requests.filter((item) => item.kind === 'update_person');
+  expect(update).toHaveLength(1);
+  expect(update[0]).toMatchObject({
+    person_id: SAM,
+    summary: 'Engineer who builds reliable platforms.',
+    // The stored "BSc Mathematics — Sorbonne — 2013" gains its range instead of being listed twice.
+    degrees: 'BSc Mathematics — Sorbonne — 2010–2013\nMSc Computer Science — Sorbonne — 2013–2015',
+    certifications: 'CKA — CNCF — 2021',
+    languages: 'English — C1',
+    skills: 'TypeScript, PostgreSQL, Kubernetes',
+    headline: 'Platform engineer',
+    experience: [expect.objectContaining({ title: 'Lead engineer', company: 'Contoso' })],
+  });
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(() => requests.filter((item) => item.kind === 'update_person').length).toBe(2);
+  expect(requests.filter((item) => item.kind === 'update_person')[1]).toMatchObject({ person_id: SAM, summary: '', degrees: 'BSc Mathematics — Sorbonne — 2013', skills: 'TypeScript, PostgreSQL', experience: [] });
+});
+
+test('education shows the start and end year of each degree', async ({ page }) => {
+  const { snapshot } = await mock(page);
+  Object.assign(snapshot.people.find((person) => person.id === SAM)!, { degrees: 'MSc Computer Science — Sorbonne — 2013–2015\nLicence Maths — Lyon 1 — 2010 - 2013\nBac S — Lycée Henri-IV — 2010' });
+  await openSamApplication(page);
+  const education = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Education' }) });
+  await expect(education.getByText('2013–2015', { exact: true })).toBeVisible();
+  await expect(education.getByText('2010–2013', { exact: true })).toBeVisible();
+  await expect(education.getByText('2010', { exact: true })).toBeVisible();
+  await expect(education.getByText('Lyon 1', { exact: true })).toBeVisible();
 });

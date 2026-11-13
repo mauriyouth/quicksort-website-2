@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-
-# Internal utility surface — reachable by URL, kept out of search.
-Disallow: /email-signature

@@ -1,23 +1,60 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  AlertCircle, AlertTriangle, ArrowUpRight, Check, Clock, ChevronDown, ChevronLeft, ChevronRight, FilePlus2, Plus, RefreshCw, RotateCcw, Search, Settings as SettingsIcon, X,
+  AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, FilePlus2, Plus, RefreshCw, RotateCcw, Search, Settings as SettingsIcon, X,
 } from "lucide-react";
 import { db, errorMessage } from "@quicksort/hr-db";
-import { Notice } from "@quicksort/hr-ui";
+import { cn } from "cn";
+import {
+  Alert,
+  AlertDescription,
+  Avatar,
+  AvatarFallback,
+  Badge,
+  Button,
+  ButtonGroup,
+  ButtonGroupText,
+  Card,
+  CardContent,
+  CardHeader,
+  Checkbox,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  NativeSelect,
+  NativeSelectOption,
+  Stat,
+  StatGroup,
+  StatLabel,
+  StatSource,
+  StatUnit,
+  StatValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  Toggle,
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@quicksort-sas/ui";
+import { EmptyState, PageAlerts, PageHeading } from "../../ui";
 import { DateField } from "../../DateField";
 import { errorText, useInvoicingApi } from "./api";
 import { LinkInvoiceStrip } from "./LinkInvoiceStrip";
 import { InvoiceDraftPanel } from "./InvoiceDraftPanel";
 import { InvoicingSettings } from "./InvoicingSettings";
+import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 import {
   blockerLabel, dateTime, days, invoiceRowLabel, invoiceStatusLabel, money, monthLabel, parisToday, rate as rateLabel, rowOpener, previousMonth, shiftMonth, shortDate,
 } from "./format";
 import type { StatusLabel } from "./format";
 import type { DraftResponse, Invoice, InvoicesList, InvoicingSettings as Settings, InvoiceResponse, ToInvoiceRow } from "./types";
-import "../sales.css";
-import "../project-form.css";
-import "./invoicing.css";
 
 type Tab = "to-invoice" | "invoices" | "unassigned" | "settings";
 const BASE = "/sales/invoicing";
@@ -28,11 +65,14 @@ type Panel = { invoiceId: string; craChanged: boolean; warning: string };
 
 const rowKey = (r: ToInvoiceRow) => `${r.projectId}:${r.employeeId}`;
 const canCreate = (r: ToInvoiceRow) => r.status === "not_invoiced" && r.blockers.length === 0;
-const unassigned = (i: Invoice) => i.source === "imported" && !i.project_id && !i.ignored;
 const billingMonth = (i: Invoice) => (i.period_month ?? i.issue_date ?? "").slice(0, 7);
+type GroupBy = "client" | "month";
+const GROUP_BY_KEY = "invoicing.groupBy";
+function storedGroupBy(): GroupBy {
+  try { return localStorage.getItem(GROUP_BY_KEY) === "month" ? "month" : "client"; } catch { return "client"; }
+}
 const statusOf = (i: Invoice) => invoiceStatusLabel(i.status, i.due_date);
 const num = (v: number | string | null | undefined) => { const n = Number(v ?? 0); return Number.isFinite(n) ? n : 0; };
-const sumTtc = (l: Invoice[]) => l.reduce((a, i) => a + num(i.total_ttc), 0);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "—";
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
@@ -77,16 +117,6 @@ function pageNumbers(page: number, pages: number): number[] {
   if (page < pages - 2) out.push(0);
   out.push(pages);
   return out;
-}
-
-function StatusBadge({ label }: { label: string }) {
-  const key = label.split(" ")[0].toLowerCase();
-  return (
-    <span className={`inv-status inv-status--${key}`}>
-      {key === "paid" ? <Check size={14} aria-hidden="true" /> : key === "validated" ? <Clock size={13} aria-hidden="true" /> : key === "overdue" ? <AlertCircle size={13} aria-hidden="true" /> : null}
-      {label}
-    </span>
-  );
 }
 
 /**
@@ -134,12 +164,21 @@ export function Invoicing() {
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
+  const [groupBy, setGroupByState] = useState<GroupBy>(storedGroupBy);
+  const setGroupBy = (g: GroupBy) => { setGroupByState(g); try { localStorage.setItem(GROUP_BY_KEY, g); } catch { /* per-viewer convenience only */ } };
   const [assigning, setAssigning] = useState<string | null>(null);
   const [assignTo, setAssignTo] = useState<Record<string, string>>({});
   const [linking, setLinking] = useState<string | null>(null);
 
-  // Any filter change sends the list back to its first page.
-  useEffect(() => { setPage(1); }, [tab, query, statusFilter, clientFilter, monthFilter, dateFrom, dateTo, perPage]);
+  // The server filters the list; wait for typing to settle before asking it.
+  const [listQuery, setListQuery] = useState("");
+  useEffect(() => { const t = setTimeout(() => setListQuery(query.trim()), 250); return () => clearTimeout(t); }, [query]);
+
+  // Any filter change sends the list back to its first page. Reset while rendering, not in an
+  // effect, so the list is fetched once with page 1 rather than once more with the stale page.
+  const filterKey = [tab, listQuery, statusFilter, clientFilter, monthFilter, dateFrom, dateTo, perPage, groupBy].join("|");
+  const [pagedFor, setPagedFor] = useState(filterKey);
+  if (pagedFor !== filterKey) { setPagedFor(filterKey); setPage(1); }
 
   const loadSettings = useCallback(async () => {
     try { setSettings(await api.get<Settings>({ resource: "settings" })); }
@@ -155,11 +194,20 @@ export function Invoicing() {
     } catch (e) { setRows(null); setRowsError(errorText(e, "Could not load the month.")); }
   }, [api]);
 
+  // Only the latest request may land: an older, slower page must not overwrite a newer filter.
+  const listSeq = useRef(0);
+  const listTab = tab === "unassigned" ? "unassigned" : "invoices";
   const loadList = useCallback(async (refresh = false) => {
+    const seq = ++listSeq.current;
     setListError("");
-    try { setList(await api.get<InvoicesList>({ resource: "invoices", ...(refresh ? { refresh: "1" } : {}) })); }
-    catch (e) { setListError(errorText(e, "Could not load invoices.")); }
-  }, [api]);
+    try {
+      const r = await api.get<InvoicesList>({
+        resource: "invoices", tab: listTab, q: listQuery, status: statusFilter, client: clientFilter, month: monthFilter,
+        from: dateFrom, to: dateTo, page: String(page), perPage: String(perPage), group: groupBy, ...(refresh ? { refresh: "1" } : {}),
+      });
+      if (seq === listSeq.current) setList(r);
+    } catch (e) { if (seq === listSeq.current) setListError(errorText(e, "Could not load invoices.")); }
+  }, [api, listTab, listQuery, statusFilter, clientFilter, monthFilter, dateFrom, dateTo, page, perPage, groupBy]);
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
   useEffect(() => { void loadRows(month); }, [loadRows, month]);
@@ -237,38 +285,21 @@ export function Invoicing() {
   const today = parisToday();
   const presets = useMemo(() => rangePresets(today), [today]);
   const q = query.trim().toLowerCase();
-  const invoices = useMemo(() => list?.invoices ?? [], [list]);
-  const unassignedList = invoices.filter(unassigned);
-  const clientOptions = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const i of invoices) if (i.billed_client_id) m.set(i.billed_client_id, i.client_name ?? "Unknown client");
-    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [invoices]);
-  const monthOptions = useMemo(() => [...new Set(invoices.map(billingMonth).filter(Boolean))].sort().reverse(), [invoices]);
-
-  // Every filter but status — the status chips count against this set.
+  // One page, already filtered and sorted by the server.
+  const pageList = useMemo(() => list?.invoices ?? [], [list]);
+  const clientOptions = list?.options.clients ?? [];
+  const monthOptions = list?.options.months ?? [];
   const [lo, hi] = dateFrom && dateTo && dateFrom > dateTo ? [dateTo, dateFrom] : [dateFrom, dateTo];
-  const base = invoices.filter((i) => {
-    if (tab === "unassigned" && !unassigned(i)) return false;
-    const issued = (i.issue_date ?? "").slice(0, 10);
-    if (lo && (!issued || issued < lo)) return false;
-    if (hi && (!issued || issued > hi)) return false;
-    if (monthFilter && billingMonth(i) !== monthFilter) return false;
-    if (clientFilter === "none" && i.billed_client_id) return false;
-    if (clientFilter && clientFilter !== "none" && i.billed_client_id !== clientFilter) return false;
-    if (q && ![i.number, i.client_name, i.project_title, i.purchase_order, i.consultant_name].join(" ").toLowerCase().includes(q)) return false;
-    return true;
-  });
-  const filtered = base
-    .filter((i) => !statusFilter || statusOf(i) === statusFilter)
-    .sort((a, b) => billingMonth(b).localeCompare(billingMonth(a)) || (b.issue_date ?? "").localeCompare(a.issue_date ?? ""));
-  const pages = Math.max(1, Math.ceil(filtered.length / perPage));
-  const current = Math.min(page, pages);
-  const start = (current - 1) * perPage;
-  const pageList = filtered.slice(start, start + perPage);
+  const total = list?.total ?? 0;
+  const pages = list?.pages ?? 1;
+  const current = list?.page ?? page;
+  const start = (current - 1) * (list?.perPage ?? perPage);
+  const statusCount = (s: StatusLabel | "all") => list?.statusCounts[s] ?? 0;
   const groups: { key: string; items: Invoice[] }[] = [];
+  // Group by what the server ordered the page by (it may still be answering an older toggle).
+  const pageGroupBy = list?.group ?? groupBy;
   for (const i of pageList) {
-    const key = billingMonth(i);
+    const key = pageGroupBy === "client" ? (i.billed_client_id ?? "") : billingMonth(i);
     if (groups[groups.length - 1]?.key === key) groups[groups.length - 1].items.push(i);
     else groups.push({ key, items: [i] });
   }
@@ -301,15 +332,14 @@ export function Invoicing() {
 
   const tabs: [Tab, string, number | null][] = [
     ["to-invoice", "To invoice", rows ? pending.length : null],
-    ["invoices", "Invoices", list ? invoices.length : null],
-    ["unassigned", "Unassigned", list ? unassignedList.length : null],
+    ["invoices", "Invoices", list ? list.counts.invoices : null],
+    ["unassigned", "Unassigned", list ? list.counts.unassigned : null],
   ];
 
   const scope = monthFilter ? monthLabel(monthFilter)
-    : lo && hi ? `${shortDate(lo)} – ${shortDate(hi)}` : lo ? `since ${shortDate(lo)}` : hi ? `until ${shortDate(hi)}` : "all time";
-  const byStatus = (s: StatusLabel) => base.filter((i) => statusOf(i) === s);
-  const paidF = byStatus("Paid"), validatedF = byStatus("Validated"), overdueF = byStatus("Overdue");
-  const unassignedF = base.filter(unassigned);
+    : lo && hi ? `${shortDate(lo)} to ${shortDate(hi)}` : lo ? `since ${shortDate(lo)}` : hi ? `until ${shortDate(hi)}` : "all time";
+  const zero = { count: 0, ttc: 0 };
+  const { paid: paidF, unpaid: unpaidF, overdue: overdueF, unassigned: unassignedF } = list?.kpis ?? { paid: zero, unpaid: zero, overdue: zero, unassigned: zero };
   const kpis: { label: string; value: string; sub: string; strong?: boolean }[] = tab === "to-invoice"
     ? [
       { label: "To invoice", value: money(sumHt(pending)), sub: `${plural(pending.length, "timesheet")} · ${monthLabel(month).split(" ")[0]}`, strong: pending.length > 0 },
@@ -318,408 +348,460 @@ export function Invoicing() {
       { label: "Average daily rate", value: monthDays ? rateLabel(Math.round(monthTotal / monthDays)) : "—", sub: `Across ${days(monthDays)}` },
     ]
     : [
-      { label: "Collected", value: money(sumTtc(paidF)), sub: `${paidF.length} paid · ${scope}` },
-      { label: "Not paid", value: money(sumTtc([...validatedF, ...overdueF])), sub: `${plural(validatedF.length + overdueF.length, "invoice")} · ${overdueF.length} overdue` },
-      { label: "Overdue", value: money(sumTtc(overdueF)), sub: `${plural(overdueF.length, "invoice")} past due date`, strong: overdueF.length > 0 },
-      { label: "Needs a project", value: money(sumTtc(unassignedF)), sub: `${plural(unassignedF.length, "invoice")} to assign` },
+      { label: "Collected", value: money(paidF.ttc), sub: `${paidF.count} paid · ${scope}` },
+      { label: "Not paid", value: money(unpaidF.ttc), sub: `${plural(unpaidF.count, "invoice")} · ${overdueF.count} overdue` },
+      { label: "Overdue", value: money(overdueF.ttc), sub: `${plural(overdueF.count, "invoice")} past due date`, strong: overdueF.count > 0 },
+      { label: "Needs a project", value: money(unassignedF.ttc), sub: `${plural(unassignedF.count, "invoice")} to assign` },
     ];
 
-  return (
-    <div className="inv-page">
-      <header className="inv-head">
-        <div className="inv-head-text">
-          <h1>Invoicing</h1>
-          <p className="projects-lede">Monthly régie invoices from CRA timesheets → drafted and sent through Qonto</p>
-        </div>
-        <div className="inv-head-actions">
-          {tab === "to-invoice" && (
-            <div className="inv-month" role="group" aria-label="Billing month">
-              <button type="button" aria-label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))} disabled={locked}><ChevronLeft size={18} /></button>
-              <span>{monthLabel(month)}</span>
-              <button type="button" aria-label="Next month" onClick={() => setMonth(shiftMonth(month, 1))} disabled={locked}><ChevronRight size={18} /></button>
-            </div>
-          )}
-          <span className="inv-sync">Last sync {dateTime(list?.lastSyncedAt)}{list ? ` · ${plural(invoices.length, "invoice")}` : ""}</span>
-          <button type="button" className="inv-btn" disabled={locked} onClick={() => void syncQonto()}>
-            <RefreshCw size={16} className={busy === "refresh" ? "inv-spin" : undefined} /> {busy === "refresh" ? "Syncing…" : "Sync Qonto"}
-          </button>
-        </div>
-      </header>
+  const colsTs = 8;
+  // The Client column repeats the group header when grouped by client.
+  const showClientCol = pageGroupBy !== "client";
+  const colsInv = showClientCol ? 6 : 5;
 
-      <Notice error>{error}</Notice>
-      <Notice>{warning}</Notice>
-      <Notice>{message}</Notice>
-      {notConnected && tab !== "settings" && (
-        <Notice>Qonto is not connected yet. <Link to={TAB_PATHS.settings}>Open Invoicing settings</Link> to add the API credentials.</Notice>
+  return (
+    <div className="@container flex flex-col gap-6">
+      <PageHeading
+        title="Invoicing"
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            {tab === "to-invoice" && (
+              <ButtonGroup aria-label="Billing month">
+                <Button variant="outline" size="icon" aria-label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))} disabled={locked}><ChevronLeft /></Button>
+                <ButtonGroupText className="w-36 justify-center bg-transparent">{monthLabel(month)}</ButtonGroupText>
+                <Button variant="outline" size="icon" aria-label="Next month" onClick={() => setMonth(shiftMonth(month, 1))} disabled={locked}><ChevronRight /></Button>
+              </ButtonGroup>
+            )}
+            <Button variant="outline" disabled={locked} onClick={() => void syncQonto()}>
+              <RefreshCw data-icon="inline-start" className={busy === "refresh" ? "animate-spin" : undefined} /> {busy === "refresh" ? "Syncing…" : "Sync Qonto"}
+            </Button>
+          </div>
+        }
+      >
+        <span className="block text-xs">Last sync {dateTime(list?.lastSyncedAt)}{list ? ` · ${plural(list.counts.invoices, "invoice")}` : ""}</span>
+      </PageHeading>
+
+      {(error || warning || message || (notConnected && tab !== "settings")) && (
+        <div className="flex flex-col gap-2">
+          <PageAlerts error={error} />
+          {warning && <Alert variant="warning" role="status"><AlertDescription>{warning}</AlertDescription></Alert>}
+          <PageAlerts message={message} />
+          {notConnected && tab !== "settings" && (
+            <Alert variant="warning" role="status">
+              <AlertDescription>Qonto is not connected yet. <Link to={TAB_PATHS.settings}>Open Invoicing settings</Link> to add the API credentials.</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+
+      {/* Filters sit above the KPIs: the figures below count what they select. */}
+      {listView && (
+        <Card aria-label="Invoice filters">
+          <CardContent className="flex min-w-0 flex-col gap-4">
+            <div className="flex w-full flex-wrap items-center gap-2">
+              <InputGroup className="min-w-56 flex-1">
+                <InputGroupAddon><Search /></InputGroupAddon>
+                <InputGroupInput type="search" aria-label="Search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search invoice, client or PO" />
+              </InputGroup>
+              <NativeSelect aria-label="Billing month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
+                <NativeSelectOption value="">All months</NativeSelectOption>
+                {monthOptions.map((m) => <NativeSelectOption key={m} value={m}>{monthLabel(m)}</NativeSelectOption>)}
+              </NativeSelect>
+              <NativeSelect aria-label="Client" value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
+                <NativeSelectOption value="">All clients</NativeSelectOption>
+                {clientOptions.map(([id, name]) => <NativeSelectOption key={id} value={id}>{name}</NativeSelectOption>)}
+                <NativeSelectOption value="none">No client</NativeSelectOption>
+              </NativeSelect>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2" role="group" aria-label="Filters">
+              <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2" role="group" aria-label="Issue date range">
+                <span className="label-mono">Issued</span>
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 [&_.date-field-root]:w-[168px] [&_.date-field-trigger]:h-10 [&_.date-field-trigger]:py-0">
+                  <DateField aria-label="Issued from" placeholder="From" value={dateFrom} max={dateTo || undefined} onChange={setDateFrom} />
+                  <span aria-hidden="true" className="text-muted-foreground">→</span>
+                  <DateField aria-label="Issued until" placeholder="To" value={dateTo} min={dateFrom || undefined} onChange={setDateTo} />
+                </div>
+                <ToggleGroup variant="outline" aria-label="Quick ranges" className="max-w-full overflow-x-auto"
+                  value={presets.filter((p) => dateFrom === p.from && dateTo === p.to).map((p) => p.label)}
+                  onValueChange={(v) => { const p = presets.find((x) => x.label === v[0]); if (p) { setDateFrom(p.from); setDateTo(p.to); } }}>
+                  {presets.map((p) => <ToggleGroupItem key={p.label} value={p.label}>{p.label}</ToggleGroupItem>)}
+                </ToggleGroup>
+              </div>
+            </div>
+            <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2" role="group" aria-label="Status">
+                <span className="label-mono">Status</span>
+                <ToggleGroup variant="outline" size="sm" aria-label="Status" className="max-w-full overflow-x-auto"
+                  value={[statusFilter || "all"]}
+                  onValueChange={(v) => { if (v[0]) setStatusFilter(v[0] === "all" ? "" : (v[0] as StatusLabel)); }}>
+                  {(["", ...STATUS_FILTERS] as const).filter((s) => s !== "Draft" || statusFilter === s || statusCount(s) > 0).map((s) => (
+                    <ToggleGroupItem key={s || "all"} value={s || "all"} className="gap-1.5">
+                      {s || "All"}<span className="num text-xs text-muted-foreground">{statusCount(s || "all")}</span>
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
+              <div className="flex min-w-0 items-center gap-2" role="group" aria-label="Group by">
+                <span className="label-mono">Group by</span>
+                <ToggleGroup variant="outline" size="sm" aria-label="Group by" value={[groupBy]}
+                  onValueChange={(v) => { if (v[0] === "client" || v[0] === "month") setGroupBy(v[0]); }}>
+                  <ToggleGroupItem value="client">Client</ToggleGroupItem>
+                  <ToggleGroupItem value="month">Month</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{plural(total, "invoice")}{hasFilters ? " match" : ""}</span>
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" onClick={resetFilters}><RotateCcw data-icon="inline-start" /> Reset filters</Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {tab !== "settings" && (
-        <section className="inv-kpis" aria-label="Summary">
-          {kpis.map((k) => (
-            <div key={k.label} className={`inv-kpi${k.strong ? " strong" : ""}`}>
-              <span className="inv-kpi-label">{k.label}</span>
-              <span className="inv-kpi-value">{k.value}</span>
-              <span className="inv-kpi-sub">{k.sub}</span>
-            </div>
-          ))}
-        </section>
+        <Card aria-label="Summary">
+          <CardContent>
+            <StatGroup>
+              {kpis.map((k) => (
+                <Stat key={k.label} size="sm" pivot={tab !== "to-invoice" && k.strong}>
+                  <StatValue className="group-data-[size=sm]/stat:text-[22px] @5xl:group-data-[size=sm]/stat:text-[28px]"><Figure value={k.value} /></StatValue>
+                  <StatLabel>{k.label}</StatLabel>
+                  <StatSource>{k.sub}</StatSource>
+                </Stat>
+              ))}
+            </StatGroup>
+          </CardContent>
+        </Card>
       )}
 
-      <section className="projects-card" aria-label="Billing">
-        <div className="projects-toolbar">
-          <div className="projects-tabs" role="tablist" aria-label="Invoicing views">
+      <div className="flex items-end justify-between gap-3 border-b border-border">
+        <Tabs value={tab === "settings" ? null : tab} onValueChange={(v) => { if (typeof v === "string" && v !== tab && v in TAB_PATHS) navigate(v === "to-invoice" ? monthPath(month) : TAB_PATHS[v as Tab]); }}>
+          <TabsList variant="line" aria-label="Invoicing views" className="h-10 gap-5">
             {tabs.map(([id, label, count]) => (
-              <button key={id} type="button" role="tab" aria-selected={tab === id}
-                className={`projects-tab${tab === id ? " on" : ""}`} onClick={() => navigate(id === "to-invoice" ? monthPath(month) : TAB_PATHS[id])}>
-                {label}{count !== null && <span className="inv-count">{count}</span>}
-              </button>
+              <TabsTrigger key={id} value={id} className="gap-1.5">
+                {label}
+                {count !== null && <span className="num text-xs text-muted-foreground">{count}</span>}
+              </TabsTrigger>
             ))}
-          </div>
-          <div className="projects-toolbar-right">
-            {tab !== "settings" && (
-              <label className="projects-search">
-                <Search size={16} aria-hidden="true" />
-                <span className="projects-search-label">Search</span>
-                <input type="search" value={query} onChange={(e) => setQuery(e.target.value)}
-                  placeholder={tab === "to-invoice" ? "Search consultant or project" : "Search invoice, client or PO"} />
-              </label>
-            )}
-            <button type="button" className={`projects-refresh${tab === "settings" ? " on" : ""}`} aria-label="Invoicing settings" title="Invoicing settings"
-              aria-pressed={tab === "settings"} onClick={() => navigate(tab === "settings" ? monthPath(month) : TAB_PATHS.settings)}>
-              <SettingsIcon size={18} />
-            </button>
-            {tab === "to-invoice" && invoiced.length > 0 && (
-              <button type="button" className="inv-text-btn" aria-pressed={showInvoiced} onClick={() => setShowInvoiced((v) => !v)}>
+          </TabsList>
+        </Tabs>
+        <Button variant={tab === "settings" ? "secondary" : "ghost"} size="icon-sm" className="mb-1" aria-label="Invoicing settings" title="Invoicing settings"
+          aria-pressed={tab === "settings"} onClick={() => navigate(tab === "settings" ? monthPath(month) : TAB_PATHS.settings)}>
+          <SettingsIcon />
+        </Button>
+      </div>
+
+      {tab === "to-invoice" && (
+        <Card aria-label="To invoice">
+          <CardHeader className="flex flex-wrap items-center gap-2">
+            <InputGroup className="min-w-56 flex-1">
+              <InputGroupAddon><Search /></InputGroupAddon>
+              <InputGroupInput type="search" aria-label="Search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search consultant or project" />
+            </InputGroup>
+            {invoiced.length > 0 && (
+              <Toggle variant="outline" pressed={showInvoiced} onPressedChange={() => setShowInvoiced((v) => !v)}>
                 {showInvoiced ? "Hide invoiced" : `Show invoiced (${invoiced.length})`}
-              </button>
+              </Toggle>
             )}
-            {tab === "to-invoice" && (
-              <button type="button" className="inv-cta" disabled={locked || selected.size === 0} onClick={() => void createSelected()}>
-                <FilePlus2 size={16} /> {busy === "create:bulk" ? "Creating…" : selected.size ? `Create ${plural(selected.size, "draft")}` : "Create drafts"}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {listView && list?.syncError && (
-          <div className="inv-sync-error" role="alert"><AlertTriangle size={16} /> Qonto sync failed: {list.syncError} The list below may be out of date.</div>
-        )}
-
-        {tab === "to-invoice" && (
-          <>
-            {rowsError && <div className="inv-panel"><Notice error>{rowsError}</Notice></div>}
+            <Button variant="pivot" disabled={locked || selected.size === 0} onClick={() => void createSelected()}>
+              <FilePlus2 data-icon="inline-start" /> {busy === "create:bulk" ? "Creating…" : selected.size ? `Create ${plural(selected.size, "draft")}` : "Create drafts"}
+            </Button>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <PageAlerts error={rowsError} />
             {!rows ? (
-              !rowsError && <p className="projects-empty">Loading {monthLabel(month)}…</p>
+              !rowsError && <p role="status" className="m-0 text-sm text-muted-foreground">Loading {monthLabel(month)}…</p>
             ) : rows.length === 0 ? (
-              <p className="projects-empty">
-                {settings && !settings.startMonth
+              <EmptyState
+                title={settings && !settings.startMonth
                   ? "Set the invoicing start month in Settings first."
                   : settings?.startMonth && month < settings.startMonth
                     ? `Invoicing starts in ${monthLabel(settings.startMonth)}.`
                     : `No régie CRA days in ${monthLabel(month)}.`}
-              </p>
+              />
             ) : shownRows.length === 0 ? (
-              <p className="projects-empty">
-                All of {monthLabel(month)} is invoiced.{" "}
-                <button type="button" className="inv-text-btn" onClick={() => setShowInvoiced(true)}>Show {plural(invoiced.length, "invoiced timesheet")}</button>
-              </p>
+              <EmptyState
+                title={`All of ${monthLabel(month)} is invoiced.`}
+                action={<Button variant="outline" size="sm" onClick={() => setShowInvoiced(true)}>Show {plural(invoiced.length, "invoiced timesheet")}</Button>}
+              />
             ) : (
-              <div className="projects-table-scroll inv-scroll">
-                <div className="inv-grid inv-grid--ts">
-                  <div className="inv-grid-head">
-                    <div className="inv-cell-check">
-                      <input type="checkbox" aria-label="Select all ready rows" disabled={locked || eligible.length === 0}
+              <Table aria-label={`To invoice · ${monthLabel(month)}`}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox aria-label="Select all ready rows" disabled={locked || eligible.length === 0}
                         checked={eligible.length > 0 && eligible.every((r) => selected.has(rowKey(r)))}
-                        onChange={(e) => setSelected(e.target.checked ? new Set(eligible.map(rowKey)) : new Set())} />
-                    </div>
-                    <div>Consultant · Project</div><div>Billed client</div><div className="num">Days</div><div className="num">Daily rate</div>
-                    <div className="num">Amount HT</div><div>Status</div><div><span className="projects-search-label">Action</span></div>
-                  </div>
-                  {visibleRows.length === 0 && <p className="projects-empty">No consultant matches “{query}”.</p>}
+                        onCheckedChange={(v) => setSelected(v === true ? new Set(eligible.map(rowKey)) : new Set())} />
+                    </TableHead>
+                    <TableHead>Consultant · Project</TableHead>
+                    <TableHead className="hidden xl:table-cell">Billed client</TableHead>
+                    <TableHead numeric>Days</TableHead>
+                    <TableHead numeric className="hidden xl:table-cell">Daily rate</TableHead>
+                    <TableHead numeric>Amount HT</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead><span className="sr-only">Action</span></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleRows.length === 0 && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={colsTs} className="h-20 text-center text-muted-foreground">No consultant matches "{query}".</TableCell>
+                    </TableRow>
+                  )}
                   {visibleRows.map((r) => {
                     const k = rowKey(r);
-                    const isPending = r.status === "not_invoiced";
                     const rate = r.amountHt !== null && r.days ? Math.round((num(r.amountHt) / r.days) * 100) / 100 : null;
                     return (
                       <Fragment key={k}>
-                      <div className={`inv-grid-row${isPending ? " pending" : ""}`}>
-                        <div className="inv-cell-check">
-                          {canCreate(r) && (
-                            <input type="checkbox" aria-label={`Select ${r.consultantName}`} disabled={locked} checked={selected.has(k)}
-                              onChange={(e) => setSelected((prev) => { const n = new Set(prev); if (e.target.checked) n.add(k); else n.delete(k); return n; })} />
-                          )}
-                        </div>
-                        <div className="inv-who">
-                          <span className="inv-avatar" aria-hidden="true">{initials(r.consultantName)}</span>
-                          <span className="inv-who-text">
-                            {r.personId && r.consultantName
-                              ? <Link className="inv-name" to={`/hr/people/${r.personId}`}>{r.consultantName}</Link>
-                              : <span className="inv-name">{r.consultantName || "—"}</span>}
-                            <Link className="inv-meta" to={`/sales/projects/${r.projectId}`}>{r.projectTitle}</Link>
-                          </span>
-                        </div>
-                        <div className="inv-dim">{r.billedClientName || "—"}</div>
-                        <div className="num">
-                          {r.personId ? <Link className="inv-plain" to={`/hr/people/${r.personId}/cra/${month.replace("-", "/")}`} title="Open the CRA for this month">{days(r.days)}</Link> : days(r.days)}
-                        </div>
-                        <div className="num inv-dim">{rate !== null ? rateLabel(rate) : "—"}</div>
-                        <div className="num inv-strong">{r.amountHt !== null ? money(r.amountHt) : "—"}</div>
-                        <div className="inv-status-cell">
-                          <div className="inv-row-status">
-                            {r.status === "not_invoiced"
-                              ? <span className="inv-status inv-status--none"><span className="inv-dot" />To invoice</span>
-                              : <StatusBadge label={invoiceStatusLabel(r.status, null)} />}
-                            {r.craChanged && <span className="inv-flag">CRA changed</span>}
-                          </div>
-                          {[...r.blockers, ...r.warnings].map((b) => (
-                            <Link key={b} className={`inv-blocker${r.blockers.includes(b as never) ? "" : " inv-blocker--warn"}`} to={fixLink(r, b)}>
-                              {blockerLabel(b)}
-                            </Link>
-                          ))}
-                        </div>
-                        <div className="inv-cell-action">
-                          {r.invoiceId ? (
-                            <button type="button" className="inv-open" disabled={locked}
-                              onClick={() => setPanel({ invoiceId: r.invoiceId as string, craChanged: r.craChanged, warning: "" })}>
-                              Open<ArrowUpRight size={14} />
-                            </button>
-                          ) : (
-                            <div className="inv-action-stack">
-                              <button type="button" className="inv-btn sm" disabled={locked || !canCreate(r)} onClick={() => void createOne(r)}>
-                                {busy === `create:${k}` ? "Creating…" : "Create draft"}
-                              </button>
-                              <button type="button" className="inv-text-btn sm" disabled={locked} aria-expanded={linking === k}
-                                onClick={() => setLinking(linking === k ? null : k)}>
-                                Link Qonto invoice
-                              </button>
+                        <TableRow>
+                          <TableCell>
+                            {canCreate(r) && (
+                              <Checkbox aria-label={`Select ${r.consultantName}`} disabled={locked} checked={selected.has(k)}
+                                onCheckedChange={(v) => setSelected((prev) => { const n = new Set(prev); if (v === true) n.add(k); else n.delete(k); return n; })} />
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-normal">
+                            <div className="flex items-center gap-3">
+                              <Avatar aria-hidden="true" className="hidden @2xl:flex"><AvatarFallback>{initials(r.consultantName)}</AvatarFallback></Avatar>
+                              <div className="flex min-w-0 flex-col">
+                                {r.personId && r.consultantName
+                                  ? <Link className="font-medium underline-offset-4 hover:underline" to={`/hr/people/${r.personId}`}>{r.consultantName}</Link>
+                                  : <span className="font-medium">{r.consultantName || "—"}</span>}
+                                <Link className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" to={`/sales/projects/${r.projectId}`}>{r.projectTitle}</Link>
+                                <span className="text-xs text-muted-foreground xl:hidden">{r.billedClientName || "—"}</span>
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                      {linking === k && (
-                        <LinkInvoiceStrip api={api} month={month} disabled={locked} target={r} onClose={() => setLinking(null)}
-                          onLinked={(inv) => { setLinking(null); setMessage(`${inv.number || "The invoice"} now covers this CRA.`); refreshAll(); }} />
-                      )}
+                          </TableCell>
+                          <TableCell className="hidden whitespace-normal text-muted-foreground xl:table-cell">{r.billedClientName || "—"}</TableCell>
+                          <TableCell numeric>
+                            {r.personId ? <Link className="underline-offset-4 hover:underline" to={`/hr/people/${r.personId}/cra/${month.replace("-", "/")}`} title="Open the CRA for this month">{days(r.days)}</Link> : days(r.days)}
+                          </TableCell>
+                          <TableCell numeric className="hidden text-muted-foreground xl:table-cell">{rate !== null ? rateLabel(rate) : "—"}</TableCell>
+                          <TableCell numeric className="font-medium">{r.amountHt !== null ? money(r.amountHt) : "—"}</TableCell>
+                          <TableCell className="whitespace-normal">
+                            <div className="flex flex-wrap items-center gap-1">
+                              <InvoiceStatusBadge label={r.status === "not_invoiced" ? "To invoice" : invoiceStatusLabel(r.status, null)} />
+                              {r.craChanged && <Badge variant="warning">CRA changed</Badge>}
+                            </div>
+                            {[...r.blockers, ...r.warnings].map((b) => (
+                              <Link key={b} to={fixLink(r, b)}
+                                className={cn("mt-1.5 block text-xs underline-offset-4 hover:underline", r.blockers.includes(b as never) ? "text-destructive" : "text-muted-foreground")}>
+                                {blockerLabel(b)}
+                              </Link>
+                            ))}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {r.invoiceId ? (
+                              <Button variant="outline" size="sm" disabled={locked}
+                                onClick={() => setPanel({ invoiceId: r.invoiceId as string, craChanged: r.craChanged, warning: "" })}>
+                                Open <ArrowUpRight data-icon="inline-end" />
+                              </Button>
+                            ) : (
+                              <div className="flex flex-col items-end gap-1">
+                                <Button variant="outline" size="sm" disabled={locked || !canCreate(r)} onClick={() => void createOne(r)}>
+                                  {busy === `create:${k}` ? "Creating…" : "Create draft"}
+                                </Button>
+                                <Button variant="link" size="xs" className="h-auto px-0 text-muted-foreground" disabled={locked} aria-expanded={linking === k}
+                                  onClick={() => setLinking(linking === k ? null : k)}>
+                                  Link Qonto invoice
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                        {linking === k && (
+                          <TableRow className="hover:bg-transparent">
+                            <TableCell colSpan={colsTs} className="whitespace-normal">
+                              <LinkInvoiceStrip api={api} month={month} disabled={locked} target={r} onClose={() => setLinking(null)}
+                                onLinked={(inv) => { setLinking(null); setMessage(`${inv.number || "The invoice"} now covers this CRA.`); refreshAll(); }} />
+                            </TableCell>
+                          </TableRow>
+                        )}
                       </Fragment>
                     );
                   })}
-                  <div className="inv-grid-foot">
-                    <div />
-                    <div className="inv-span-2 inv-muted-cell">{plural(visibleRows.length, "timesheet")}</div>
-                    <div className="num inv-strong">{days(footDays)}</div>
-                    <div />
-                    <div className="num inv-total">{money(sumHt(visibleRows))}</div>
-                    <div className="inv-span-2 inv-muted-cell">HT · VAT applied in Qonto</div>
-                  </div>
-                </div>
-              </div>
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell />
+                    <TableCell className="text-xs font-normal text-muted-foreground">{plural(visibleRows.length, "timesheet")}</TableCell>
+                    <TableCell className="hidden xl:table-cell" />
+                    <TableCell numeric>{days(footDays)}</TableCell>
+                    <TableCell className="hidden xl:table-cell" />
+                    <TableCell numeric className="text-sm">{money(sumHt(visibleRows))}</TableCell>
+                    <TableCell colSpan={2} className="text-xs font-normal text-muted-foreground">HT · VAT applied in Qonto</TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
             )}
-          </>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        {listView && (
-          <>
-            <div className="inv-filters" role="group" aria-label="Filters">
-              <div className="inv-field" role="group" aria-label="Issue date range">
-                <span className="inv-field-label">Issue date</span>
-                <div className="inv-range-row">
-                  <div className="inv-range">
-                    <DateField aria-label="Issued from" placeholder="From" value={dateFrom} max={dateTo || undefined} onChange={setDateFrom} />
-                    <span aria-hidden="true" className="inv-dim">→</span>
-                    <DateField aria-label="Issued until" placeholder="To" value={dateTo} min={dateFrom || undefined} onChange={setDateTo} />
-                  </div>
-                  <div className="inv-presets" role="group" aria-label="Quick ranges">
-                    {presets.map((p) => {
-                      const on = dateFrom === p.from && dateTo === p.to;
-                      return (
-                        <button key={p.label} type="button" className={`inv-preset${on ? " on" : ""}`} aria-pressed={on}
-                          onClick={() => { setDateFrom(p.from); setDateTo(p.to); }}>{p.label}</button>
-                      );
-                    })}
-                  </div>
-                  <div className="inv-filters-end">
-                    <span className="inv-dim">{plural(filtered.length, "invoice")}{hasFilters ? " match" : ""}</span>
-                    {hasFilters && (
-                      <button type="button" className="inv-text-btn" onClick={resetFilters}><RotateCcw size={14} /> Reset filters</button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <label className="inv-field">
-                <span className="inv-field-label">Billing month</span>
-                <span className="inv-select">
-                  <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
-                    <option value="">All months</option>
-                    {monthOptions.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-                  </select>
-                  <ChevronDown size={16} aria-hidden="true" />
-                </span>
-              </label>
-              <label className="inv-field">
-                <span className="inv-field-label">Client</span>
-                <span className="inv-select">
-                  <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
-                    <option value="">All clients</option>
-                    {clientOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-                    <option value="none">No client</option>
-                  </select>
-                  <ChevronDown size={16} aria-hidden="true" />
-                </span>
-              </label>
-              <div className="inv-field" role="group" aria-label="Status">
-                <span className="inv-field-label">Status</span>
-                <div className="inv-chips">
-                  {(["", ...STATUS_FILTERS] as const).filter((s) => s !== "Draft" || statusFilter === s || byStatus(s).length > 0).map((s) => (
-                    <button key={s || "all"} type="button" className={`inv-chip${statusFilter === s ? " on" : ""}`} aria-pressed={statusFilter === s}
-                      onClick={() => setStatusFilter(s)}>
-                      {s || "All"}<span>{s ? byStatus(s).length : base.length}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+      {listView && (
+        <Card aria-label={tab === "unassigned" ? "Unassigned invoices" : "Invoices"}>
+          {list?.syncError && (
+            <CardHeader>
+              <Alert variant="warning" role="alert">
+                <AlertTriangle aria-hidden="true" />
+                <AlertDescription>Qonto sync failed: {list.syncError} The list below may be out of date.</AlertDescription>
+              </Alert>
+            </CardHeader>
+          )}
 
+          <CardContent className="flex flex-col gap-4">
             {tab === "unassigned" && (
-              <p className="inv-hint">Invoices created directly in Qonto that no project claims yet. Attach each to its project, or mark it as not project-related.</p>
+              <p className="m-0 text-sm text-muted-foreground">Invoices created directly in Qonto that no project claims yet. Attach each to its project, or mark it as not project-related.</p>
             )}
-            {listError && <div className="inv-panel"><Notice error>{listError}</Notice></div>}
+            <PageAlerts error={listError} />
 
-            <div className="projects-table-scroll inv-scroll">
-              <div className="inv-grid inv-grid--inv">
-                <div className="inv-grid-head">
-                  <div>Invoice</div><div>Client</div><div>Project / PO</div><div>Issued</div><div className="num">Amount TTC</div><div>Status</div>
-                </div>
-                {!list ? (
-                  !listError && <p className="projects-empty">Loading invoices…</p>
-                ) : filtered.length === 0 ? (
-                  <div className="inv-empty-state">
-                    <strong>{invoices.length === 0 ? "No invoices yet" : tab === "unassigned" && !hasFilters ? "Nothing to assign" : "No invoices match these filters"}</strong>
-                    {hasFilters && (
-                      <>
-                        <span className="inv-dim">Try another month or widen the date range</span>
-                        <button type="button" className="inv-btn sm" onClick={resetFilters}>Reset filters</button>
-                      </>
-                    )}
-                  </div>
-                ) : groups.map((g) => {
-                  const all = filtered.filter((i) => billingMonth(i) === g.key);
-                  const live = all.filter((i) => i.status !== "canceled");
-                  return (
-                    <Fragment key={g.key || "none"}>
-                      <div className="inv-group">
-                        <div>
-                          <span className="inv-group-label">{g.key ? monthLabel(g.key) : "No date"}</span>
-                          <span className="inv-group-count">
-                            {plural(all.length, "invoice")}{all.length > g.items.length ? " · continues on another page" : ""}
-                          </span>
-                        </div>
-                        <span className="inv-group-total">{money(sumTtc(live))}</span>
-                      </div>
-                      {g.items.map((i) => {
-                        const label = invoiceRowLabel(i);
-                        const status = statusOf(i);
-                        const canceled = i.status === "canceled";
-                        const due = i.due_date?.slice(0, 10);
-                        const late = status === "Overdue" && due ? daysBetween(due, today) : 0;
-                        return (
-                          <Fragment key={i.id}>
-                            <div className={`inv-grid-row inv-row-open${canceled ? " canceled" : ""}`} aria-label={`Open ${i.number || "draft invoice"}`}
-                              {...rowOpener(() => setPanel({ invoiceId: i.id, craChanged: false, warning: "" }), locked)}>
-                              <div className="inv-who-text">
-                                <span className="inv-num">{i.number || "Draft"}</span>
-                                <span className="inv-meta">
-                                  {i.source === "cra" ? "from CRA" : "via Qonto import"}
-                                  {i.consultant_name && <> · {i.consultant_person_id ? <Link className="inv-plain" to={`/hr/people/${i.consultant_person_id}`}>{i.consultant_name}</Link> : i.consultant_name}</>}
+            {!list ? (
+              !listError && <p role="status" className="m-0 text-sm text-muted-foreground">Loading invoices…</p>
+            ) : total === 0 ? (
+              <EmptyState
+                title={list.counts.invoices === 0 ? "No invoices yet" : tab === "unassigned" && !hasFilters ? "Nothing to assign" : "No invoices match these filters"}
+                action={hasFilters ? <Button variant="outline" size="sm" onClick={resetFilters}>Reset filters</Button> : undefined}
+              >
+                {hasFilters ? "Try another month or widen the date range" : undefined}
+              </EmptyState>
+            ) : (
+              <Table aria-label="Invoices">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Invoice</TableHead>
+                    {showClientCol && <TableHead className="hidden xl:table-cell">Client</TableHead>}
+                    <TableHead>Project / PO</TableHead>
+                    <TableHead>Issued</TableHead>
+                    <TableHead numeric>Amount TTC</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {groups.map((g) => {
+                    const sum = list.groups[g.key] ?? { count: g.items.length, ttc: 0 };
+                    const title = pageGroupBy === "client"
+                      ? (g.items[0]?.client_name || (g.key ? "Unknown client" : "No client"))
+                      : (g.key ? monthLabel(g.key) : "No date");
+                    return (
+                      <Fragment key={g.key || "none"}>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableCell colSpan={colsInv} className="h-10">
+                            <div className="flex items-baseline justify-between gap-3">
+                              <span>
+                                <span className={cn("font-medium", pageGroupBy === "client" && !g.key && "text-muted-foreground")}>{title}</span>
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  {plural(sum.count, "invoice")}{sum.count > g.items.length ? " · continues on another page" : ""}
                                 </span>
-                              </div>
-                              <div className={i.client_name ? undefined : "inv-dim"}>{i.client_name || "No client"}</div>
-                              <div className="inv-who-text">
-                                {i.project_id ? (
-                                  <>
-                                    <Link className="inv-plain" to={`/sales/projects/${i.project_id}`}>{i.project_title || "Project"}</Link>
-                                    {i.purchase_order && <span className="inv-mono">{i.purchase_order}</span>}
-                                  </>
-                                ) : i.ignored ? (
-                                  <span className="inv-dim">Not project-related</span>
-                                ) : canceled ? (
-                                  <span className="inv-dim">—</span>
-                                ) : (
-                                  <button type="button" className={`inv-assign${assigning === i.id ? " on" : ""}`} aria-label={`Assign a project to ${i.number || "this invoice"}`}
-                                    aria-expanded={assigning === i.id} disabled={locked} onClick={() => setAssigning(assigning === i.id ? null : i.id)}>
-                                    <Plus size={14} /> Assign project
-                                  </button>
-                                )}
-                              </div>
-                              <div className="inv-who-text">
-                                <span className="inv-dim-2">{shortDate(i.issue_date)}</span>
-                                {(status === "Validated" || status === "Overdue") && due && (
-                                  <span className={status === "Overdue" ? "inv-late" : "inv-due"}>
-                                    Due {shortDate(due)}{late > 0 ? ` · ${plural(late, "day")} late` : ""}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="num inv-strong inv-amount">{money(i.total_ttc, i.currency)}</div>
-                              <div><StatusBadge label={label} /></div>
+                              </span>
+                              <span className="num text-[13px] font-medium">{money(sum.ttc)}</span>
                             </div>
-                            {assigning === i.id && (
-                              <div className="inv-assign-strip">
-                                <span>Attach <strong>{i.number || "this invoice"}</strong> to</span>
-                                <span className="inv-select">
-                                  <select aria-label="Project" autoFocus value={assignTo[i.id] ?? ""} disabled={locked}
-                                    onChange={(e) => setAssignTo((prev) => ({ ...prev, [i.id]: e.target.value }))}>
-                                    <option value="">Choose a project</option>
-                                    {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-                                  </select>
-                                  <ChevronDown size={16} aria-hidden="true" />
-                                </span>
-                                <button type="button" className="inv-btn sm" disabled={locked || !assignTo[i.id]} onClick={() => void assign(i, assignTo[i.id])}>
-                                  {busy === `assign:${i.id}` ? "Saving…" : "Assign"}
-                                </button>
-                                <button type="button" className="inv-text-btn" disabled={locked} onClick={() => void assign(i, null)}>Not project-related</button>
-                                <button type="button" className="inv-range-clear" aria-label="Close" onClick={() => setAssigning(null)}><X size={16} /></button>
-                              </div>
-                            )}
-                          </Fragment>
-                        );
-                      })}
-                    </Fragment>
-                  );
-                })}
-              </div>
-            </div>
+                          </TableCell>
+                        </TableRow>
+                        {g.items.map((i) => {
+                          const label = invoiceRowLabel(i);
+                          const status = statusOf(i);
+                          const canceled = i.status === "canceled";
+                          const due = i.due_date?.slice(0, 10);
+                          const late = status === "Overdue" && due ? daysBetween(due, today) : 0;
+                          return (
+                            <Fragment key={i.id}>
+                              <TableRow className={cn("cursor-pointer", canceled && "text-muted-foreground", locked && "cursor-default")} aria-label={`Open ${i.number || "draft invoice"}`}
+                                {...rowOpener(() => setPanel({ invoiceId: i.id, craChanged: false, warning: "" }), locked)}>
+                                <TableCell className="whitespace-normal">
+                                  <div className={cn("num font-medium whitespace-nowrap", canceled && "line-through")}>{i.number || "Draft"}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {i.source === "cra" ? "from CRA" : "via Qonto import"}
+                                    {i.consultant_name && <> · {i.consultant_person_id ? <Link className="underline-offset-4 hover:text-foreground hover:underline" to={`/hr/people/${i.consultant_person_id}`}>{i.consultant_name}</Link> : i.consultant_name}</>}
+                                  </div>
+                                  {showClientCol && <div className="text-xs text-muted-foreground xl:hidden">{i.client_name || "No client"}</div>}
+                                </TableCell>
+                                {showClientCol && <TableCell className={cn("hidden whitespace-normal xl:table-cell", !i.client_name && "text-muted-foreground")}>{i.client_name || "No client"}</TableCell>}
+                                <TableCell className="whitespace-normal">
+                                  {i.project_id ? (
+                                    <>
+                                      <Link className="underline-offset-4 hover:underline" to={`/sales/projects/${i.project_id}`}>{i.project_title || "Project"}</Link>
+                                      {i.purchase_order && <div className="num text-xs text-muted-foreground">{i.purchase_order}</div>}
+                                    </>
+                                  ) : i.ignored ? (
+                                    <span className="text-muted-foreground">Not project-related</span>
+                                  ) : canceled ? (
+                                    <span className="text-muted-foreground">—</span>
+                                  ) : (
+                                    <Button variant="outline" size="xs" aria-label={`Assign a project to ${i.number || "this invoice"}`}
+                                      aria-expanded={assigning === i.id} disabled={locked} onClick={() => setAssigning(assigning === i.id ? null : i.id)}>
+                                      <Plus data-icon="inline-start" /> Assign project
+                                    </Button>
+                                  )}
+                                </TableCell>
+                                <TableCell className="whitespace-normal">
+                                  <div className="num text-[13px]">{shortDate(i.issue_date)}</div>
+                                  {(status === "Validated" || status === "Overdue") && due && (
+                                    <div className={cn("text-xs", status === "Overdue" ? "text-destructive" : "text-muted-foreground")}>
+                                      Due {shortDate(due)}{late > 0 ? ` · ${plural(late, "day")} late` : ""}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell numeric className="font-medium">{money(i.total_ttc, i.currency)}</TableCell>
+                                <TableCell><InvoiceStatusBadge label={label} /></TableCell>
+                              </TableRow>
+                              {assigning === i.id && (
+                                <TableRow className="hover:bg-transparent">
+                                  <TableCell colSpan={colsInv} className="whitespace-normal">
+                                    <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/60 px-3 py-2 text-sm">
+                                      <span className="text-muted-foreground">Attach <strong className="font-medium text-foreground">{i.number || "this invoice"}</strong> to</span>
+                                      <NativeSelect size="sm" className="max-w-full" aria-label="Project" autoFocus value={assignTo[i.id] ?? ""} disabled={locked}
+                                        onChange={(e) => setAssignTo((prev) => ({ ...prev, [i.id]: e.target.value }))}>
+                                        <NativeSelectOption value="">Choose a project</NativeSelectOption>
+                                        {projects.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.title}</NativeSelectOption>)}
+                                      </NativeSelect>
+                                      <Button size="sm" disabled={locked || !assignTo[i.id]} onClick={() => void assign(i, assignTo[i.id])}>
+                                        {busy === `assign:${i.id}` ? "Saving…" : "Assign"}
+                                      </Button>
+                                      <Button variant="ghost" size="sm" disabled={locked} onClick={() => void assign(i, null)}>Not project-related</Button>
+                                      <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label="Close" onClick={() => setAssigning(null)}><X /></Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
 
-            <nav className="inv-pager" aria-label="Pagination">
-              <div className="inv-pager-left">
-                <span className="inv-dim-2">{filtered.length === 0 ? "0 invoices" : `${start + 1}–${Math.min(start + perPage, filtered.length)} of ${filtered.length}`}</span>
-                <label className="inv-pager-size">Rows per page
-                  <span className="inv-select sm">
-                    <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}>
-                      {PER_PAGE.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                    <ChevronDown size={16} aria-hidden="true" />
-                  </span>
+            <nav className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4" aria-label="Pagination">
+              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                <span className="num">{total === 0 ? "0 invoices" : `${start + 1}-${Math.min(start + pageList.length, total)} of ${total}`}</span>
+                <label className="flex items-center gap-2">Rows per page
+                  <NativeSelect size="sm" value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}>
+                    {PER_PAGE.map((n) => <NativeSelectOption key={n} value={n}>{n}</NativeSelectOption>)}
+                  </NativeSelect>
                 </label>
               </div>
-              <div className="inv-pager-pages">
-                <button type="button" className="inv-page-arrow" aria-label="Previous page" disabled={current <= 1} onClick={() => setPage(current - 1)}><ChevronLeft size={18} /></button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon-sm" aria-label="Previous page" disabled={current <= 1} onClick={() => setPage(current - 1)}><ChevronLeft /></Button>
                 {pageNumbers(current, pages).map((n, idx) => n === 0
-                  ? <span key={`gap-${idx}`} className="inv-page-gap" aria-hidden="true">…</span>
+                  ? <span key={`gap-${idx}`} className="px-1 text-muted-foreground" aria-hidden="true">…</span>
                   : (
-                    <button key={n} type="button" className={`inv-page${n === current ? " on" : ""}`} aria-label={`Page ${n}`}
-                      aria-current={n === current ? "page" : undefined} onClick={() => setPage(n)}>{n}</button>
+                    <Button key={n} variant={n === current ? "outline" : "ghost"} size="icon-sm" className="num" aria-label={`Page ${n}`}
+                      aria-current={n === current ? "page" : undefined} onClick={() => setPage(n)}>{n}</Button>
                   ))}
-                <button type="button" className="inv-page-arrow" aria-label="Next page" disabled={current >= pages} onClick={() => setPage(current + 1)}><ChevronRight size={18} /></button>
+                <Button variant="ghost" size="icon-sm" aria-label="Next page" disabled={current >= pages} onClick={() => setPage(current + 1)}><ChevronRight /></Button>
               </div>
             </nav>
-          </>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        {tab === "settings" && (
-          <div className="inv-panel">
-            <InvoicingSettings api={api} focus={focus} onSaved={() => { void loadSettings(); refreshAll(); }} />
-          </div>
-        )}
-      </section>
+      {tab === "settings" && (
+        <InvoicingSettings api={api} focus={focus} onSaved={() => { void loadSettings(); refreshAll(); }} />
+      )}
 
       {panel && (
         <InvoiceDraftPanel
@@ -734,4 +816,10 @@ export function Invoicing() {
       )}
     </div>
   );
+}
+
+/** A money / rate figure with its € set as the stat unit. */
+function Figure({ value }: { value: string }) {
+  const m = value.match(/^(.*\S)\s*€$/);
+  return m ? <>{m[1]}<StatUnit>€</StatUnit></> : <>{value}</>;
 }

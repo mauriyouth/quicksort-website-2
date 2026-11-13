@@ -1,1 +1,0 @@
-export { IntelligenceFeaturesSection } from "./IntelligenceFeaturesSection";

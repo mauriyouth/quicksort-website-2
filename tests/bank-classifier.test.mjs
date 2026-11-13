@@ -63,7 +63,7 @@ test("system prompt lists every line and the exclusions", () => {
   const system = buildMessages([item("a")], [])[0];
   assert.equal(system.role, "system");
   for (const line of FIXED_CHARGE_LINES) assert.ok(system.content.includes(line), line);
-  for (const word of ["URSSAF", "chasseurs de têtes", "affacturage", "matériel", "mutuelle"]) {
+  for (const word of ["URSSAF", "chasseurs de têtes", "affacturage", "matériel", "mutuelle", "titres-restaurant", "repas d'affaires"]) {
     assert.ok(system.content.includes(word), word);
   }
 });

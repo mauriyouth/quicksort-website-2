@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { db } from "@quicksort/hr-db";
+import { experienceItemSchema, MAX_EXPERIENCE_ITEMS } from "../candidate-intake";
 import type { CommandResult, Requirement, Workspace } from "./domain";
 export type * from "./domain";
 const personSchema = z.object({
@@ -17,6 +18,13 @@ const personSchema = z.object({
   source: z.string(),
   owner_email: z.string(),
   contact_allowed: z.boolean(),
+  linkedin_url: z.string().catch(''),
+  summary: z.string().catch(''),
+  // Malformed positions are dropped rather than failing the whole workspace.
+  experience: z.array(z.unknown()).catch([]).transform(items => items.flatMap(item => {
+    const parsed = experienceItemSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  })),
   version: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -32,6 +40,7 @@ const applicationSchema = z.object({
   screening_recommendation: z.string(),
   source: z.string(),
   referrer: z.string(),
+  owner_email: z.string().catch(''),
   stage_entered_at: z.string(),
   version: z.number(),
   created_at: z.string(),
@@ -88,6 +97,7 @@ const opportunitySchema = z.object({
   decided_by: z.string(),
   decided_at: z.string().nullable(),
   decision_rationale: z.string(),
+  archived_at: z.string().nullable().default(null),
   version: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -207,33 +217,6 @@ const eventSchema = z.object({
   request_id: z.string(),
   created_at: z.string(),
 });
-const contractSchema = z.object({
-  offer_id: z.string().nullable(),
-  id: z.string(),
-  candidate_id: z.string(),
-  person_id: z.string().nullable(),
-  application_id: z.string().nullable(),
-  employee_id: z.string().nullable(),
-  title: z.string(),
-  storage_path: z.string(),
-  document_sha256: z.string(),
-  created_at: z.string(),
-});
-const signatureSchema = z.object({
-  contract_id: z.string(),
-  candidate_id: z.string(),
-  signer_name: z.string(),
-  consent_text: z.string(),
-  document_sha256: z.string(),
-  signed_at: z.string(),
-});
-const countersignatureSchema = z.object({
-  contract_id: z.string(),
-  actor_id: z.string(),
-  signer_name: z.string(),
-  document_sha256: z.string(),
-  signed_at: z.string(),
-});
 const suggestionSchema = z.object({
   id: z.string(),
   person_id: z.string().nullable(),
@@ -294,9 +277,6 @@ const workspaceSchema = z.object({
  exitItems: z.array(exitItemSchema),
  assignments: z.array(assignmentSchema),
  events: z.array(eventSchema),
- contracts: z.array(contractSchema),
- signatures: z.array(signatureSchema),
- countersignatures: z.array(countersignatureSchema),
  suggestions: z.array(suggestionSchema),
  projects: z.array(staffingProjectSchema),
  clients: z.array(staffingClientSchema),
@@ -308,7 +288,7 @@ const text = z.string();
 const date = z.iso.date();
 const nullableDate = date.nullable().optional();
 const version = { expected_version: z.number().int().positive() };
-const personFields = { full_name: text.trim().min(1).max(200), email: text.max(200).optional(), phone:text.max(40).optional(), headline:text.optional(),location:text.optional(),skills:text.optional(),languages:text.optional(),degrees:text.optional(),certifications:text.optional(),notes:text.optional(),source:text.optional(),owner_email:text.optional(),contact_allowed:z.boolean().optional() };
+const personFields = { full_name: text.trim().min(1).max(200), email: text.max(200).optional(), phone:text.max(40).optional(), headline:text.optional(),location:text.optional(),skills:text.optional(),languages:text.optional(),degrees:text.optional(),certifications:text.optional(),notes:text.optional(),source:text.optional(),owner_email:text.optional(),contact_allowed:z.boolean().optional(),linkedin_url:text.max(300).optional(),summary:text.max(5000).optional(),experience:z.array(experienceItemSchema).max(MAX_EXPERIENCE_ITEMS).optional() };
 const requisitionFields = {title:text.trim().min(1),hiring_mode:z.enum(['sur_mission','sur_profil']),job_id:uuid.nullable().optional(),project_id:uuid.nullable().optional(),client_ids:z.array(uuid).optional(),client_need:text.optional(),skill_family:text.optional(),owner_email:text.optional(),target_tjm:z.number().nonnegative().nullable().optional(),justification:text.optional()};
 const commandSchemas = {
  create_person:z.object({kind:z.literal('create_person'),...personFields}),
@@ -348,7 +328,9 @@ const commandSchemas = {
  create_requisition:z.object({kind:z.literal('create_requisition'),...requisitionFields}),
  update_requisition:z.object({kind:z.literal('update_requisition'),opportunity_id:uuid,...version,...requisitionFields}),
  publish_requisition:z.object({kind:z.literal('publish_requisition'),opportunity_id:uuid,...version,job_id:uuid}),
- countersign_contract:z.object({kind:z.literal('countersign_contract'),contract_id:uuid,signer_name:text.trim().min(2)}),
+ archive_requisition:z.object({kind:z.literal('archive_requisition'),opportunity_id:uuid,...version}),
+ restore_requisition:z.object({kind:z.literal('restore_requisition'),opportunity_id:uuid,...version}),
+ delete_requisition:z.object({kind:z.literal('delete_requisition'),opportunity_id:uuid,...version}),
  save_suggestion:z.object({kind:z.literal('save_suggestion'),person_id:uuid.nullable().optional(),application_id:uuid.nullable().optional(),employee_id:uuid.nullable().optional(),opportunity_id:uuid.nullable().optional(),suggestion_kind:suggestionSchema.shape.kind,payload:z.json(),sources:z.array(z.object({type:z.enum(['person','application','employee','task','assignment','opportunity','project']),id:uuid,version:z.number().int().positive()})).min(1),input_version:z.number().int().positive(),model:text.trim().min(1)}),
  review_suggestion:z.object({kind:z.literal('review_suggestion'),suggestion_id:uuid,status:z.enum(['accepted','dismissed'])}),
  import_person:z.object({kind:z.literal('import_person'),...personFields,external_source:text.trim().min(1),external_id:text.trim().min(1),rationale:text.trim().min(1),employment:z.object({role:text,start_date:date,end_date:nullableDate}).optional()}),
@@ -364,7 +346,10 @@ export async function loadWorkspace(): Promise<Workspace> {
 }
 export async function executeCommand(input: unknown): Promise<CommandResult> {
  const parsed = commandSchema.parse(input);
- const command = z.json().parse({...parsed,request_id:parsed.request_id ?? crypto.randomUUID()});
+ // Optional fields come back as `undefined` (a freelance rate has no salary_monthly);
+ // z.json() rejects them, and the RPC body would drop them anyway.
+ const present = Object.fromEntries(Object.entries(parsed).filter(([, v]) => v !== undefined));
+ const command = z.json().parse({...present,request_id:parsed.request_id ?? crypto.randomUUID()});
  const result = await db().rpc('hr_command',{command});
  if(result.error) throw result.error;
  return resultSchema.parse(result.data);

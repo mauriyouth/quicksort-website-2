@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { errorMessage } from '@quicksort/hr-db';
+import { Alert, AlertDescription, Button, Field, FieldDescription, FieldLabel, Input } from '@quicksort-sas/ui';
 import { Dialog } from './ui';
 import { checkpointBalance, deletePayslipCheckpoint, loadPayslipCheckpoint, savePayslipCheckpoint, type PayslipCheckpoint } from '../cra/balances';
 
@@ -36,7 +37,7 @@ export function PaidLeaveAdjust({ employeeId, personName, close, saved }: {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const errorRef = useRef<HTMLParagraphElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,26 +82,26 @@ export function PaidLeaveAdjust({ employeeId, personName, close, saved }: {
     }));
   }
 
-  return <Dialog title={`Adjust paid leave — ${personName}`} close={close}>
-    <form className="hr-form" onSubmit={submit}>
-      <p className="hr-source-list">
+  return <Dialog title={`Adjust paid leave · ${personName}`} className="sm:max-w-xl" close={close}>
+    <form className="flex flex-col gap-5" onSubmit={submit}>
+      <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">
         Copy the paid leave box (Congés N-1 / Congés N) from the latest payslip. The CP balance starts from it, then adds accrual for the months after it and subtracts paid leave booked in the CRA after that month.
       </p>
-      <div className="hr-fields">
-        <label className="hr-field hr-wide">
-          <span>Payslip month<span aria-hidden="true"> *</span></span>
-          <input type="month" name="period" required disabled={loading} value={values.period} onChange={event => setValues({ ...values, period: event.target.value })} />
-        </label>
-        {FIELDS.map(field => <label key={field.key} className="hr-field">
-          <span>{field.label}</span>
-          <input type="number" name={field.key} min={0} step={0.01} inputMode="decimal" disabled={loading} value={values[field.key]} placeholder="0" onChange={event => setValues({ ...values, [field.key]: event.target.value })} />
-        </label>)}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field className="col-span-full gap-1.5">
+          <FieldLabel htmlFor="leave-period" className="gap-1">Payslip month<span aria-hidden="true" className="text-muted-foreground">*</span></FieldLabel>
+          <Input id="leave-period" type="month" name="period" required disabled={loading} value={values.period} onChange={event => setValues({ ...values, period: event.target.value })} className="sm:max-w-60" />
+        </Field>
+        {FIELDS.map(field => <Field key={field.key} className="gap-1.5">
+          <FieldLabel htmlFor={`leave-${field.key}`}>{field.label}</FieldLabel>
+          <Input id={`leave-${field.key}`} type="number" name={field.key} min={0} step={0.01} inputMode="decimal" disabled={loading} value={values[field.key]} placeholder="0" className="num" onChange={event => setValues({ ...values, [field.key]: event.target.value })} />
+        </Field>)}
       </div>
-      <p className="hr-source-list" role="status">CP left on that payslip: <strong>{solde.toFixed(2)} days</strong></p>
-      {error && <p ref={errorRef} tabIndex={-1} role="alert" className="hr-error">{error}</p>}
-      <div className="hr-form-actions">
-        {existing && <button className="btn secondary" type="button" disabled={saving} onClick={() => void act(() => deletePayslipCheckpoint(employeeId))}>Remove adjustment</button>}
-        <button className="btn" type="submit" disabled={loading || saving || !values.period}>{saving ? 'Saving…' : 'Save'}</button>
+      <FieldDescription role="status" className="text-[13px]">CP left on that payslip: <strong className="font-medium text-foreground">{solde.toFixed(2)} days</strong></FieldDescription>
+      {error && <Alert ref={errorRef} tabIndex={-1} variant="destructive" className="outline-none"><AlertDescription>{error}</AlertDescription></Alert>}
+      <div className="flex flex-wrap justify-end gap-2">
+        {existing && <Button variant="outline" type="button" disabled={saving} onClick={() => void act(() => deletePayslipCheckpoint(employeeId))}>Remove adjustment</Button>}
+        <Button type="submit" disabled={loading || saving || !values.period}>{saving ? 'Saving…' : 'Save'}</Button>
       </div>
     </form>
   </Dialog>;

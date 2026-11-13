@@ -1,5 +1,19 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowUpRight, Download, Ellipsis, UserRoundPen } from "lucide-react";
+import {
+  Badge,
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Field,
+  FieldDescription,
+  FieldLabel,
+  Input,
+  NativeSelect,
+  NativeSelectOption,
+} from "@quicksort-sas/ui";
 import { db, errorMessage, type DocumentRecord } from "@quicksort/hr-db";
 import { downloadDocument, movePayslip, previewDocument } from "../documents/client";
 
@@ -37,6 +51,39 @@ async function setMatricule(employeeId: string, matricule: string) {
 }
 
 /** HR-only list of a person's filed payslips, with open, download and re-filing under another person. */
+/** Year filter (All · 2026 · 2025…) with counts, shared with the portal's MyPayslips. */
+export function PayslipYearFilter({ options, active, onPick }: { options: { id: string; label: string; count: number }[]; active: string; onPick: (id: string) => void }) {
+  return <div role="group" aria-label="Filter by year" className="flex flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
+    {options.map((option) =>
+      <button key={option.id} type="button" aria-pressed={active === option.id} onClick={() => onPick(option.id)}
+        className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm">
+        {option.label}<span className="text-xs font-normal text-muted-foreground">{option.count}</span>
+      </button>)}
+  </div>;
+}
+
+/** One payslip line: month badge, period, "Latest" marker and the row actions. */
+export function PayslipItem({ short, label, latest, latestVariant = "secondary", children }: { short: string; label: string; latest: boolean; latestVariant?: "secondary" | "pivot"; children: ReactNode }) {
+  return <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg p-3 transition-colors hover:bg-accent/60">
+    <span className="grid size-12 flex-none place-items-center rounded-md border border-border bg-background text-[13px] font-medium" aria-hidden="true">{short}</span>
+    <span className="flex min-w-0 flex-[1_1_10rem] flex-col gap-1">
+      <span className="flex flex-wrap items-center gap-2">
+        <span className="text-base font-medium">{label}</span>
+        {latest && <Badge variant={latestVariant}>Latest</Badge>}
+      </span>
+      <span className="text-[13px] text-muted-foreground">Bulletin de paie · PDF</span>
+    </span>
+    <span className="ml-auto flex flex-none items-center gap-1">{children}</span>
+  </li>;
+}
+
+export const PAYSLIP_TOOLBAR = "flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4";
+export const PAYSLIP_YEAR_TITLE = "m-0 px-3 pt-6 pb-2 text-[13px] font-medium tracking-[0.02em] text-muted-foreground";
+export const PAYSLIP_LIST = "m-0 grid list-none p-0 pt-2";
+const QUIET = "m-0 text-[13px] text-muted-foreground";
+const PANEL = "flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4";
+
+/** HR-only list of a person's filed payslips, with open, download and re-filing under another person. */
 export function PersonPayslips({ personId, personName, onChanged }: { personId: string; personName: string; onChanged?: () => void }) {
   const [rows, setRows] = useState<PayslipRow[] | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -47,18 +94,7 @@ export function PersonPayslips({ personId, personName, onChanged }: { personId: 
   const [busy, setBusy] = useState(false);
   const [reset, setReset] = useState<MatriculeReset | null>(null);
   const [year, setYear] = useState("all");
-  const [menu, setMenu] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menu) return;
-    const close = (event: MouseEvent | KeyboardEvent) => {
-      if (event instanceof KeyboardEvent ? event.key === "Escape" : !menuRef.current?.parentElement?.contains(event.target as Node)) setMenu(null);
-    };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", close);
-    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
-  }, [menu]);
+  const moveId = useId();
 
   const load = useCallback(async () => {
     const { data, error: loadError } = await db().from("documents")
@@ -76,7 +112,6 @@ export function PersonPayslips({ personId, personName, onChanged }: { personId: 
     setReset(null);
     setNotice("");
     setYear("all");
-    setMenu(null);
     load().catch((e) => live && setError(errorMessage(e)));
     loadCandidates().then((list) => live && setCandidates(list.filter((c) => c.id !== personId)), (e) => live && setError(errorMessage(e)));
     return () => { live = false; };
@@ -97,7 +132,6 @@ export function PersonPayslips({ personId, personName, onChanged }: { personId: 
     : `${visible.length} payslip${visible.length === 1 ? "" : "s"} in ${year}`;
 
   function startMove(row: PayslipRow) {
-    setMenu(null);
     setMoving(row);
     setTarget("");
     setNotice("");
@@ -127,78 +161,66 @@ export function PersonPayslips({ personId, personName, onChanged }: { personId: 
     });
   }
 
-  return <div className="payslips-person">
-    {rows === null && !error && <p className="hr-source-list">Loading payslips…</p>}
-    {rows?.length === 0 && <p className="hr-source-list">No payslips filed yet.</p>}
-    {!!rows?.length && <div className="payslips-person-toolbar">
-      <div className="payslips-person-filters">
-        {years.length > 1 && <div role="group" aria-label="Filter by year" className="payslips-person-years">
-          {[{ id: "all", label: "All", count: rows.length }, ...years.map((y) => ({ id: y, label: y, count: rows.filter((row) => slipYear(row) === y).length }))].map((option) =>
-            <button key={option.id} type="button" aria-pressed={year === option.id} onClick={() => { setYear(option.id); setMenu(null); }}>
-              {option.label}<span>{option.count}</span>
-            </button>)}
-        </div>}
-        <span className="payslips-person-summary">{summary}</span>
+  return <div className="flex min-w-0 flex-col gap-2">
+    {rows === null && !error && <p role="status" className={QUIET}>Loading payslips…</p>}
+    {rows?.length === 0 && <p className={QUIET}>No payslips filed yet.</p>}
+    {!!rows?.length && <div className={PAYSLIP_TOOLBAR}>
+      <div className="flex flex-wrap items-center gap-4">
+        {years.length > 1 && <PayslipYearFilter active={year} onPick={setYear}
+          options={[{ id: "all", label: "All", count: rows.length }, ...years.map((y) => ({ id: y, label: y, count: rows.filter((row) => slipYear(row) === y).length }))]} />}
+        <span className={QUIET}>{summary}</span>
       </div>
-      <button type="button" className="payslips-person-all" disabled={busy} onClick={() => attempt(async () => { for (const row of visible) await downloadDocument(row); })}>
-        <Download size={18} strokeWidth={1.5} aria-hidden="true" /> Download all
-      </button>
+      <Button variant="outline" disabled={busy} onClick={() => attempt(async () => { for (const row of visible) await downloadDocument(row); })}>
+        <Download data-icon="inline-start" aria-hidden="true" /> Download all
+      </Button>
     </div>}
-    {groups.map((group) => <div key={group.year} className="payslips-person-group">
-      {year === "all" && years.length > 1 && <h3>{group.year}</h3>}
-      <ul className="payslips-person-list">
-        {group.items.map((row) => <li key={row.id}>
-          <span className="payslips-person-badge" aria-hidden="true">{slipShort(row)}</span>
-          <span className="payslips-person-main">
-            <span className="payslips-person-name">
-              <span className="payslips-person-title">{slipLabel(row)}</span>
-              {row.id === rows![0].id && <span className="payslips-person-latest">Latest</span>}
-            </span>
-            <span className="payslips-person-meta">Bulletin de paie · PDF</span>
-          </span>
-          <span className="payslips-person-actions">
-            <button type="button" className="payslips-person-btn" disabled={busy} onClick={() => attempt(() => previewDocument(row))}>
-              Open <ArrowUpRight size={16} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-            <button type="button" className="payslips-person-btn icon" disabled={busy} aria-label={`Download ${row.title}`} title="Download" onClick={() => attempt(() => downloadDocument(row))}>
-              <Download size={20} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-            <button type="button" className="payslips-person-btn icon" aria-label={`More actions for ${slipLabel(row)}`} aria-haspopup="menu" aria-expanded={menu === row.id} onClick={() => setMenu(menu === row.id ? null : row.id)}>
-              <Ellipsis size={20} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-          </span>
-          {menu === row.id && <div ref={menuRef} role="menu" className="payslips-person-menu">
-            <button type="button" role="menuitem" disabled={busy} onClick={() => startMove(row)}>
-              <UserRoundPen size={18} strokeWidth={1.5} aria-hidden="true" /> Move to another person…
-            </button>
-            <span>Use only if this payslip was filed to the wrong person.</span>
-          </div>}
-        </li>)}
+    {groups.map((group) => <div key={group.year}>
+      {year === "all" && years.length > 1 && <h3 className={PAYSLIP_YEAR_TITLE}>{group.year}</h3>}
+      <ul className={PAYSLIP_LIST}>
+        {group.items.map((row) => <PayslipItem key={row.id} short={slipShort(row)} label={slipLabel(row)} latest={row.id === rows![0].id}>
+          <Button variant="ghost" disabled={busy} onClick={() => attempt(() => previewDocument(row))}>
+            Open <ArrowUpRight data-icon="inline-end" aria-hidden="true" />
+          </Button>
+          <Button variant="ghost" size="icon" disabled={busy} aria-label={`Download ${row.title}`} title="Download" onClick={() => attempt(() => downloadDocument(row))}>
+            <Download aria-hidden="true" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`More actions for ${slipLabel(row)}`} />}>
+              <Ellipsis aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem disabled={busy} onClick={() => startMove(row)}>
+                <UserRoundPen aria-hidden="true" /> Move to another person…
+              </DropdownMenuItem>
+              <p className="m-0 px-2 pt-1 pb-1.5 text-xs leading-normal text-muted-foreground">Use only if this payslip was filed to the wrong person.</p>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </PayslipItem>)}
       </ul>
     </div>)}
-    {moving && <div className="payslips-person-move">
-      <label className="hr-field">
-        <span>Move {moving.title} to</span>
-        <select value={target} onChange={(event) => setTarget(event.target.value)} aria-label="Move payslip to">
-          <option value="">Select a person…</option>
-          {candidates.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </label>
-      {target && <p role="status">Move {moving.title} from {personName} to {targetName}?</p>}
-      <div className="hr-emp-actions">
-        <button type="button" className="hr-emp-ghost" disabled={busy || !target} onClick={confirmMove}>Confirm move</button>
-        <button type="button" className="hr-emp-ghost plain" disabled={busy} onClick={() => setMoving(null)}>Cancel</button>
+    {moving && <div className={PANEL}>
+      <Field className="gap-1.5">
+        <FieldLabel htmlFor={moveId}>Move {moving.title} to</FieldLabel>
+        <NativeSelect id={moveId} className="w-full" value={target} onChange={(event) => setTarget(event.target.value)} aria-label="Move payslip to">
+          <NativeSelectOption value="">Select a person…</NativeSelectOption>
+          {candidates.map((c) => <NativeSelectOption key={c.id} value={c.id}>{c.name}</NativeSelectOption>)}
+        </NativeSelect>
+      </Field>
+      {target && <p role="status" className="m-0 text-[13px]">Move {moving.title} from {personName} to {targetName}?</p>}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={busy || !target} onClick={confirmMove}>Confirm move</Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => setMoving(null)}>Cancel</Button>
       </div>
     </div>}
-    {notice && <p role="status" className="hr-source-list">{notice}</p>}
-    {reset && <div className="payslips-person-move">
-      <p role="status">Reset {personName}'s matricule to {reset.value}?</p>
-      <div className="hr-emp-actions">
-        <button type="button" className="hr-emp-ghost" disabled={busy} onClick={confirmReset}>Reset matricule</button>
-        <button type="button" className="hr-emp-ghost plain" disabled={busy} onClick={() => setReset(null)}>Keep current</button>
+    {notice && <p role="status" className={QUIET}>{notice}</p>}
+    {reset && <div className={PANEL}>
+      <p role="status" className="m-0 text-[13px]">Reset {personName}'s matricule to {reset.value}?</p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={busy} onClick={confirmReset}>Reset matricule</Button>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => setReset(null)}>Keep current</Button>
       </div>
     </div>}
-    {error && <p role="alert" className="hr-error">{error}</p>}
+    {error && <p role="alert" className="m-0 text-[13px] text-destructive">{error}</p>}
   </div>;
 }
 
@@ -208,6 +230,7 @@ export function MatriculeEdit({ employeeId, current, onSaved }: { employeeId: st
   const [value, setValue] = useState(current);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const id = useId();
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -224,20 +247,20 @@ export function MatriculeEdit({ employeeId, current, onSaved }: { employeeId: st
     }
   }
 
-  if (!editing) return <span className="hr-emp-value">
+  if (!editing) return <span className="inline-flex flex-wrap items-baseline gap-2">
     {current}
-    <button type="button" className="hr-emp-mini" onClick={() => { setValue(current); setError(""); setEditing(true); }}>Change</button>
+    <Button variant="link" size="sm" className="h-auto px-0 font-sans" onClick={() => { setValue(current); setError(""); setEditing(true); }}>Change</Button>
   </span>;
-  return <form className="payslips-matricule" onSubmit={save}>
-    <label className="hr-field">
-      <span>Matricule</span>
-      <input value={value} onChange={(event) => setValue(event.target.value)} maxLength={20} required />
-      <small>Silae employee number for salaried staff</small>
-    </label>
-    <div className="hr-emp-actions">
-      <button type="submit" className="hr-emp-ghost" disabled={saving}>Save matricule</button>
-      <button type="button" className="hr-emp-ghost plain" disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
+  return <form className="flex max-w-xs flex-col gap-2.5 font-sans" onSubmit={save}>
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={id}>Matricule</FieldLabel>
+      <Input id={id} value={value} onChange={(event) => setValue(event.target.value)} maxLength={20} required aria-describedby={`${id}-hint`} />
+      <FieldDescription id={`${id}-hint`} className="text-xs">Silae employee number for salaried staff</FieldDescription>
+    </Field>
+    <div className="flex flex-wrap gap-2">
+      <Button type="submit" size="sm" disabled={saving}>Save matricule</Button>
+      <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={() => setEditing(false)}>Cancel</Button>
     </div>
-    {error && <p role="alert" className="hr-error">{error}</p>}
+    {error && <p role="alert" className="m-0 text-[13px] text-destructive">{error}</p>}
   </form>;
 }

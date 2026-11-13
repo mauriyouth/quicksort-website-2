@@ -159,3 +159,13 @@ test('access: HR or admin only, and the CV folder must be configured', async t =
   assert.equal(res.code, 503);
   assert.equal(res.body.code, 'not-configured');
 });
+
+test('find: returns the newest filed CV, or null when none is filed', async t => {
+  mockDrive(t, { files: [{ id: 'cv-9', name: 'Jane Doe.pdf', parents: ['p'], appProperties: { quicksortPersonId: personId } }] });
+  let res = await post({ action: 'find', personId });
+  assert.equal(res.code, 200, JSON.stringify(res.body));
+  assert.equal(res.body.file.id, 'cv-9');
+  res = await post({ action: 'find', personId: '55555555-5555-4555-8555-555555555555' });
+  assert.equal(res.code, 200);
+  assert.equal(res.body.file, null);
+});

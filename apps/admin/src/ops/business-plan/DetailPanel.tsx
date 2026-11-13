@@ -1,11 +1,39 @@
-import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-import type { Aggregate, BankRow, SalaryLine, StructureEntry } from "./actuals";
-import { fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type FixedLineKey, type Hypotheses, type PlanResult, type VatActual, VAT_RATE } from "./model";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { cn } from "cn";
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Button,
+  Input,
+  NativeSelect,
+  NativeSelectOption,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  Stat,
+  StatLabel,
+  StatUnit,
+  StatValue,
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@quicksort-sas/ui";
+import { chargeItemOf, socialChargesOf, type Aggregate, type ChargeItem, type BankRow, type FreelanceLine, type MoveLine, type SalaryLine, type StructureEntry } from "./actuals";
+import { chargesTotal, fmt, type ChargeRowKey, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type FixedLineKey, type Hypotheses, type PlanResult, type VatActual, VAT_RATE } from "./model";
 
 /**
  * Drill-down panel for the P&L rows "Chiffre d’affaires", "Salaires
- * consultants chargés", "Freelances", "Salaires structure chargés",
+ * consultants (brut)", "Freelances", "Salaires structure (brut)",
  * "Inter-contrats", "Encaissements clients", "TVA (effet trésorerie)" and the
  * five fixed-charge lines.
  * Closed months list the invoices, named people or Qonto transactions behind
@@ -13,19 +41,27 @@ import { fmt, MONTH_NAMES, pct, type FixedActuals, type FixedChargeLine, type Fi
  * forecast months show the formula plus today's named team, the base the
  * forecast projects from.
  */
-export type DetailKind = "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | FixedLineKey;
+export type DetailKind = "ventes" | "departs" | "ca" | "sal" | "free" | "fs" | "inter" | "enc" | "tva" | "cotc" | "cots" | ChargeRowKey | FixedLineKey;
 
 const TITLES: Record<DetailKind, string> = {
-  ca: "Chiffre d’affaires",
-  sal: "Salaires consultants chargés",
+  ventes: "Nb de ventes",
+  departs: "Nb de départs",
+  ca: "Chiffre d'affaires",
+  sal: "Salaires consultants (brut)",
   free: "Freelances",
-  fs: "Salaires structure chargés",
+  fs: "Salaires structure (brut)",
   inter: "Inter-contrats",
   enc: "Encaissements clients",
   tva: "TVA (effet trésorerie)",
+  cotc: "Cotisations sociales consultants",
+  cots: "Cotisations sociales structure",
+  cu: "URSSAF et retraite",
+  cmu: "Mutuelle",
+  ctr: "Tickets restaurant",
+  cme: "Médecine du travail",
   loyer: "Loyer et locaux",
   outils: "Outils, cloud et licences IA",
-  marketing: "Marketing et événements",
+  marketing: "Marketing, événements et réceptions",
   honoraires: "Honoraires (comptable, juridique)",
   deplacements: "Frais de déplacement",
   divers: "Divers",
@@ -77,64 +113,56 @@ export function DetailPanel({
   onClose: () => void;
 }) {
   const { year, month, plan } = body;
-  const panel = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    panel.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
   const actual = plan.actual[month];
 
   return (
-    <div className="bp-drawer-backdrop" onClick={onClose}>
-      <div
-        ref={panel}
-        className="bp-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="bp-detail-title"
-        tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="bp-drawer-head">
-          <div>
-            <div className="bp-meta">{TITLES[kind]}</div>
-            <h2 id="bp-detail-title">
-              {MONTH_NAMES[month]} {year}{" "}
-              <span className={`bp-chip${actual ? "" : " is-muted"}`}>{actual ? "Réel" : "Prévisionnel"}</span>
-            </h2>
-          </div>
-          <button type="button" className="bp-icon" onClick={onClose} aria-label="Fermer">
-            <X size={18} />
-          </button>
-        </div>
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent className="gap-0 data-[side=right]:sm:max-w-[640px]">
+        <SheetHeader className="gap-2">
+          <span className="label-mono">{TITLES[kind]}</span>
+          <SheetTitle className="flex flex-wrap items-center gap-3 text-2xl">
+            {MONTH_NAMES[month]} {year}{" "}
+            <Badge variant={actual ? "secondary" : "outline"}>{actual ? "Réel" : "Prévisionnel"}</Badge>
+          </SheetTitle>
+          <SheetDescription className="sr-only">Détail du mois et des données derrière le chiffre.</SheetDescription>
+        </SheetHeader>
 
-        <div className="bp-months" role="tablist" aria-label="Mois">
-          {MONTH_NAMES.map((name, m) => (
-            <button
-              key={name}
-              type="button"
-              role="tab"
-              aria-selected={m === month}
-              className={`bp-month${m === month ? " is-on" : ""}${plan.actual[m] ? " is-actual" : ""}`}
-              onClick={() => onMonth(m)}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-6 *:shrink-0">
+          <ToggleGroup
+            spacing={1}
+            variant="outline"
+            size="sm"
+            aria-label="Mois"
+            className="w-full flex-wrap"
+            value={[String(month)]}
+            onValueChange={(v) => { if (v[0] !== undefined) onMonth(Number(v[0])); }}
+          >
+            {MONTH_NAMES.map((name, m) => (
+              <ToggleGroupItem
+                key={name}
+                value={String(m)}
+                className={cn("px-2.5 text-xs", !plan.actual[m] && "text-muted-foreground")}
+                title={plan.actual[m] ? "Mois réel" : "Mois prévisionnel"}
+              >
+                {name}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
 
-        {kind === "ca" ? <RevenueBody {...body} />
+          {kind === "ventes" || kind === "departs" ? <MovesBody key={kind} which={kind} {...body} />
+          : kind === "ca" ? <RevenueBody {...body} />
           : kind === "sal" ? <SalaryBody {...body} />
           : kind === "fs" ? <StructureBody {...body} />
           : kind === "inter" ? <InterBody {...body} />
           : kind === "enc" ? <CollectionBody {...body} />
           : kind === "tva" ? <VatBody {...body} />
+          : kind === "cotc" || kind === "cots" ? <ChargesBody {...body} forStructure={kind === "cots"} />
+          : kind === "cu" || kind === "cmu" || kind === "ctr" || kind === "cme" ? <ChargePaymentsBody key={kind} row={kind} {...body} />
           : kind === "free" ? <FreelanceBody {...body} />
           : <FixedBody key={kind} line={kind} {...body} />}
-      </div>
-    </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -144,6 +172,19 @@ const monthStartOf = (year: number, month: number) => `${year}-${String(month + 
 
 const STATUS: Record<string, string> = { paid: "Payée", finalized: "Émise" };
 
+/** Invoices grouped by client, biggest client first; invoices keep their order within a client. */
+function groupByClient<L extends { client?: string | null; amount: number }>(lines: L[]) {
+  const groups = new Map<string, { client: string; total: number; lines: L[] }>();
+  for (const l of lines) {
+    const client = l.client?.trim() || "Sans client";
+    const g = groups.get(client) ?? { client, total: 0, lines: [] };
+    g.total += l.amount;
+    g.lines.push(l);
+    groups.set(client, g);
+  }
+  return [...groups.values()].sort((a, b) => b.total - a.total || a.client.localeCompare(b.client, "fr"));
+}
+
 function RevenueBody({ month, plan, agg, hypotheses: H }: BodyProps) {
   const S = plan.series;
   const actual = plan.actual[month];
@@ -151,86 +192,95 @@ function RevenueBody({ month, plan, agg, hypotheses: H }: BodyProps) {
   const total = S.ca[month];
   const paid = rows?.filter((l) => l.status === "paid").reduce((t, l) => t + l.amount, 0) ?? 0;
   const byIssue = rows?.filter((l) => l.byIssueDate).length ?? 0;
+  const byClient = groupByClient(rows ?? []);
   const nf = S.cons[month] * (H.pctFree / 100);
   const ns = S.cons[month] - nf;
 
   return (
     <>
-      <div className="bp-drawer-stats">
-        <div><span>CA HT</span><strong>{eur(total)}</strong></div>
+      <PanelStats>
+        <PanelStat label={<>CA HT</>}>{eur(total)}</PanelStat>
         {actual ? (
           <>
-            <div><span>Factures</span><strong>{rows?.length ?? 0}</strong></div>
-            <div><span>dont payées</span><strong>{eur(paid)}</strong></div>
+            <PanelStat label={<>Factures</>}>{rows?.length ?? 0}</PanelStat>
+            <PanelStat label={<>dont payées</>}>{eur(paid)}</PanelStat>
           </>
         ) : (
           <>
-            <div><span>Consultants staffés</span><strong>{fmt(S.cons[month])}</strong></div>
-            <div><span>TJM moyen (hypothèse)</span><strong>{eur(H.tjm)}</strong></div>
+            <PanelStat label={<>Consultants staffés</>}>{fmt(S.cons[month])}</PanelStat>
+            <PanelStat label={<>TJM moyen (hypothèse)</>}>{eur(H.tjm)}</PanelStat>
           </>
         )}
-      </div>
+      </PanelStats>
 
       {actual && rows ? (
         <>
           {rows.length === 0 ? (
-            <p className="bp-meta">Aucune facture émise ou payée pour ce mois.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucune facture émise ou payée pour ce mois.</p>
           ) : (
-            <table className="bp-table">
-              <thead>
-                <tr>
-                  <th scope="col">Facture</th>
-                  <th scope="col">Statut</th>
-                  <th scope="col" className="num">Montant HT</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((l) => (
-                  <tr key={l.id}>
-                    <td>
-                      <span className="bp-name">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Facture</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead numeric>Montant HT</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {byClient.flatMap((g) => [
+                  <TableRow key={`client:${g.client}`} className="bg-muted/50 hover:bg-muted/50">
+                    <TableHead scope="rowgroup" colSpan={2} className="whitespace-normal text-foreground">
+                      {g.client}
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">{plural(g.lines.length, "facture")}</span>
+                    </TableHead>
+                    <TableCell numeric className="font-medium">{eur(g.total)}</TableCell>
+                  </TableRow>,
+                  ...g.lines.map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="whitespace-normal pl-6">
+                      <span className="font-medium">
                         {l.url ? <a href={l.url} target="_blank" rel="noreferrer">{l.number || "Sans numéro"}</a> : l.number || "Sans numéro"}
                       </span>
-                      {l.client && <span className="bp-sub"> · {l.client}</span>}
                       {(l.project || l.consultant) && (
-                        <div className="bp-sub">{[l.project, l.consultant].filter(Boolean).join(" · ")}</div>
+                        <div className="text-xs text-muted-foreground">{[l.project, l.consultant].filter(Boolean).join(" · ")}</div>
                       )}
-                      {l.byIssueDate && l.issueDate && <div className="bp-sub">Sans mois de prestation : émise le {frDate(l.issueDate)}</div>}
-                    </td>
-                    <td>
-                      <span className={`bp-tag${l.status === "paid" ? " is-on" : ""}`}>{STATUS[l.status] ?? l.status}</span>
-                      {l.status === "paid" && l.paidAt && <div className="bp-sub">le {frDate(l.paidAt)}</div>}
-                    </td>
-                    <td className="num">{eur(l.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row" colSpan={2}>Total</th>
-                  <td className="num">{eur(total)}</td>
-                </tr>
-              </tfoot>
-            </table>
+                      {l.byIssueDate && l.issueDate && <div className="text-xs text-muted-foreground">Sans mois de prestation : émise le {frDate(l.issueDate)}</div>}
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
+                      <Badge variant={l.status === "paid" ? "success" : "secondary"}>{STATUS[l.status] ?? l.status}</Badge>
+                      {l.status === "paid" && l.paidAt && <div className="text-xs text-muted-foreground">le {frDate(l.paidAt)}</div>}
+                    </TableCell>
+                    <TableCell numeric>{eur(l.amount)}</TableCell>
+                  </TableRow>
+                  )),
+                ])}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableHead scope="row" className="text-foreground" colSpan={2}>Total</TableHead>
+                  <TableCell numeric>{eur(total)}</TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
           )}
-          <p className="bp-note">
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
             Factures finalisées ou payées (hors factures ignorées), rattachées à leur{" "}
-            {agg.revenueBasis === "issue" ? "mois d’émission" : "mois de prestation"}
-            {byIssue > 0 && ` ; sans mois de prestation, à leur mois d’émission (${plural(byIssue, "facture")})`}. Montants hors taxes.
+            {agg.revenueBasis === "issue" ? "mois d'émission" : "mois de prestation"}
+            {byIssue > 0 && ` ; sans mois de prestation, à leur mois d'émission (${plural(byIssue, "facture")})`}. Montants hors taxes.
           </p>
         </>
       ) : (
-        <div className="bp-formula">
-          <div><span>Freelances staffés ({pct(H.pctFree / 100)})</span><strong>{dec(nf)}</strong></div>
-          <div><span>× jours facturables × TJM</span><strong>{eur(nf * H.jours * H.tjm)}</strong></div>
-          <div><span>Salariés staffés</span><strong>{dec(ns)}</strong></div>
-          <div><span>× jours × occupation {pct(H.occ / 100)} × TJM</span><strong>{eur(ns * H.jours * (H.occ / 100) * H.tjm)}</strong></div>
-          <div className="is-total"><span>= Chiffre d’affaires</span><strong>{eur(total)}</strong></div>
-          <p className="bp-note">
-            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « TJM moyen facturé », « Jours ouvrés facturables », « Taux d’occupation des salariés »
-            ou les ventes / départs pour ajuster.
+        <Formula>
+          <FormulaRow label={<>Freelances staffés ({pct(H.pctFree / 100)})</>}>{dec(nf)}</FormulaRow>
+          <FormulaRow label={<>× {fmt(plan.calendar.jo[month])} jours ouvrés × TJM</>}>{eur(nf * plan.calendar.jo[month] * H.tjm)}</FormulaRow>
+          <FormulaRow label={<>Salariés staffés</>}>{dec(ns)}</FormulaRow>
+          <FormulaRow label={<>× jours ouvrés × TACI du mois {pct(plan.calendar.taci[month])} × TJM</>}>{eur(ns * plan.calendar.jo[month] * plan.calendar.taci[month] * H.tjm)}</FormulaRow>
+          <FormulaRow total label={<>= Chiffre d'affaires</>}>{eur(total)}</FormulaRow>
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « TJM moyen facturé », « TACI cible des salariés », les congés et RTT
+            ou les ventes / départs pour ajuster. Les jours ouvrés suivent le calendrier (fériés exclus).
           </p>
-        </div>
+        </Formula>
       )}
     </>
   );
@@ -258,87 +308,87 @@ function CollectionBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
 
   return (
     <>
-      <div className="bp-drawer-stats">
-        <div><span>Encaissé HT</span><strong>{eur(total)}</strong></div>
+      <PanelStats>
+        <PanelStat label={<>Encaissé HT</>}>{eur(total)}</PanelStat>
         {actual ? (
           <>
-            <div><span>Factures payées</span><strong>{rows?.length ?? 0}</strong></div>
-            <div><span>Délai moyen de paiement</span><strong>{avgDelay === null ? "—" : `${avgDelay} j`}</strong></div>
+            <PanelStat label={<>Factures payées</>}>{rows?.length ?? 0}</PanelStat>
+            <PanelStat label={<>Délai moyen de paiement</>}>{avgDelay === null ? "—" : `${avgDelay} j`}</PanelStat>
           </>
         ) : (
           <>
-            <div><span>Délai client (hypothèse)</span><strong>{fmt(H.dso)} j</strong></div>
-            <div><span>Décalage</span><strong>{`${lag} mois`}</strong></div>
+            <PanelStat label={<>Délai client (hypothèse)</>}>{fmt(H.dso)} j</PanelStat>
+            <PanelStat label={<>Décalage</>}>{`${lag} mois`}</PanelStat>
           </>
         )}
-      </div>
+      </PanelStats>
 
       {actual && rows ? (
         <>
           {rows.length === 0 ? (
-            <p className="bp-meta">Aucune facture payée ce mois-ci.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucune facture payée ce mois-ci.</p>
           ) : (
-            <table className="bp-table">
-              <thead>
-                <tr>
-                  <th scope="col">Facture</th>
-                  <th scope="col">Payée le</th>
-                  <th scope="col" className="num">Montant HT</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Facture</TableHead>
+                  <TableHead>Payée le</TableHead>
+                  <TableHead numeric>Montant HT</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.map((l) => (
-                  <tr key={l.id}>
-                    <td>
-                      <span className="bp-name">
+                  <TableRow key={l.id}>
+                    <TableCell className="whitespace-normal">
+                      <span className="font-medium">
                         {l.url ? <a href={l.url} target="_blank" rel="noreferrer">{l.number || "Sans numéro"}</a> : l.number || "Sans numéro"}
                       </span>
-                      {l.client && <span className="bp-sub"> · {l.client}</span>}
+                      {l.client && <span className="text-xs text-muted-foreground"> · {l.client}</span>}
                       {(l.project || l.consultant) && (
-                        <div className="bp-sub">{[l.project, l.consultant].filter(Boolean).join(" · ")}</div>
+                        <div className="text-xs text-muted-foreground">{[l.project, l.consultant].filter(Boolean).join(" · ")}</div>
                       )}
-                      <div className="bp-sub">
+                      <div className="text-xs text-muted-foreground">
                         {[
                           l.periodMonth && `Prestation ${monthLabel(l.periodMonth)}`,
                           l.issueDate && `émise le ${frDate(l.issueDate)}`,
                         ].filter(Boolean).join(" · ")}
                       </div>
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
                       {l.paidAt ? frDate(l.paidAt) : "—"}
                       {l.paidAt && l.issueDate && Date.parse(l.paidAt) >= Date.parse(l.issueDate) && (
-                        <div className="bp-sub">{Math.round((Date.parse(l.paidAt) - Date.parse(l.issueDate)) / 86400000)} j</div>
+                        <div className="text-xs text-muted-foreground">{Math.round((Date.parse(l.paidAt) - Date.parse(l.issueDate)) / 86400000)} j</div>
                       )}
-                    </td>
-                    <td className="num">{eur(l.amount)}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell numeric>{eur(l.amount)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row" colSpan={2}>Total</th>
-                  <td className="num">{eur(total)}</td>
-                </tr>
-              </tfoot>
-            </table>
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableHead scope="row" className="text-foreground" colSpan={2}>Total</TableHead>
+                  <TableCell numeric>{eur(total)}</TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
           )}
-          <p className="bp-note">
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
             Factures payées (hors factures ignorées), rattachées à leur mois de paiement quel que soit le mois de prestation. Montants hors taxes.
           </p>
         </>
       ) : (
-        <div className="bp-formula">
+        <Formula>
           {source >= 0 ? (
-            <div><span>CA de {MONTH_NAMES[source]} {year} ({plan.actual[source] ? "réel" : "prévisionnel"})</span><strong>{eur(S.ca[source])}</strong></div>
+            <FormulaRow label={<>CA de {MONTH_NAMES[source]} {year} ({plan.actual[source] ? "réel" : "prévisionnel"})</>}>{eur(S.ca[source])}</FormulaRow>
           ) : (
-            <div><span>CA de {MONTH_NAMES[0]} {year} (mois source antérieur à l’année)</span><strong>{eur(S.ca[0] ?? 0)}</strong></div>
+            <FormulaRow label={<>CA de {MONTH_NAMES[0]} {year} (mois source antérieur à l'année)</>}>{eur(S.ca[0] ?? 0)}</FormulaRow>
           )}
-          <div className="is-total"><span>= Encaissements</span><strong>{eur(total)}</strong></div>
-          <p className="bp-note">
+          <FormulaRow total label={<>= Encaissements</>}>{eur(total)}</FormulaRow>
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
             Mois prévisionnel : le CA est encaissé {`${lag} mois`} après le mois de prestation (délai client {fmt(H.dso)} j ÷ 30, arrondi).
-            {source < 0 && " Le mois source tombant l’année précédente, on reprend le CA de janvier."} Modifiez « Délai de paiement clients » pour ajuster.
+            {source < 0 && " Le mois source tombant l'année précédente, on reprend le CA de janvier."} Modifiez « Délai de paiement clients » pour ajuster.
           </p>
-        </div>
+        </Formula>
       )}
     </>
   );
@@ -355,48 +405,48 @@ function VatBody({ month, plan, vat }: BodyProps) {
   const rate = `${fmt(VAT_RATE * 100)} %`;
   return (
     <>
-      <div className="bp-drawer-stats">
-        <div><span>Effet sur la trésorerie</span><strong>{signed(S.tva[month])}</strong></div>
-        <div><span>TVA encaissée</span><strong>{eur(S.tvaCol[month])}</strong></div>
-        <div><span>TVA reversée à l’État</span><strong>{eur(S.tvaRem[month])}</strong></div>
-      </div>
+      <PanelStats>
+        <PanelStat label={<>Effet sur la trésorerie</>}>{signed(S.tva[month])}</PanelStat>
+        <PanelStat label={<>TVA encaissée</>}>{eur(S.tvaCol[month])}</PanelStat>
+        <PanelStat label={<>TVA reversée à l'État</>}>{eur(S.tvaRem[month])}</PanelStat>
+      </PanelStats>
 
-      <div className="bp-formula">
-        <div><span>TVA encaissée{real ? " (factures payées ce mois)" : ` (${rate} des encaissements)`}</span><strong>{signed(S.tvaCol[month])}</strong></div>
-        <div><span>TVA payée aux fournisseurs{real ? " (dépenses Qonto du mois)" : ` (${rate} des freelances et charges fixes hors salaires)`}</span><strong>{signed(-S.tvaDed[month])}</strong></div>
-        <div><span>TVA reversée à l’État{real ? " (paiements DGFIP du mois)" : " (solde du mois précédent)"}</span><strong>{signed(-S.tvaRem[month])}</strong></div>
-        <div className="is-total"><span>= Effet TVA sur la trésorerie</span><strong>{signed(S.tva[month])}</strong></div>
-      </div>
+      <Formula>
+        <FormulaRow label={<>TVA encaissée{real ? " (factures payées ce mois)" : ` (${rate} des encaissements)`}</>}>{signed(S.tvaCol[month])}</FormulaRow>
+        <FormulaRow label={<>TVA payée aux fournisseurs{real ? " (dépenses Qonto du mois)" : ` (${rate} des freelances et charges fixes hors salaires)`}</>}>{signed(-S.tvaDed[month])}</FormulaRow>
+        <FormulaRow label={<>TVA reversée à l'État{real ? " (paiements DGFIP du mois)" : " (solde du mois précédent)"}</>}>{signed(-S.tvaRem[month])}</FormulaRow>
+        <FormulaRow total label={<>= Effet TVA sur la trésorerie</>}>{signed(S.tva[month])}</FormulaRow>
+      </Formula>
 
       {real && paid ? (
         paid.length === 0 ? (
-          <p className="bp-meta">Aucun paiement de TVA à l’État ce mois-ci.</p>
+          <p className="m-0 text-sm text-muted-foreground">Aucun paiement de TVA à l'État ce mois-ci.</p>
         ) : (
-          <table className="bp-table">
-            <thead>
-              <tr>
-                <th scope="col">Paiement DGFIP</th>
-                <th scope="col">Date</th>
-                <th scope="col" className="num">Montant</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Paiement DGFIP</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead numeric>Montant</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {paid.map((r) => (
-                <tr key={r.id}>
-                  <td><span className="bp-name">{r.label || r.counterparty || "DGFIP"}</span><div className="bp-sub">{r.reference}</div></td>
-                  <td>{frDate((r.settled_at ?? r.emitted_at ?? "").slice(0, 10))}</td>
-                  <td className="num">{eur(r.amount_cents / 100)}</td>
-                </tr>
+                <TableRow key={r.id}>
+                  <TableCell className="whitespace-normal"><span className="font-medium">{r.label || r.counterparty || "DGFIP"}</span><div className="text-xs text-muted-foreground">{r.reference}</div></TableCell>
+                  <TableCell className="whitespace-normal">{frDate((r.settled_at ?? r.emitted_at ?? "").slice(0, 10))}</TableCell>
+                  <TableCell numeric>{eur(r.amount_cents / 100)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )
       ) : null}
 
-      <p className="bp-note">
+      <p className="m-0 text-xs leading-relaxed text-muted-foreground">
         {real
           ? "Mois réel : TVA des factures clients payées ce mois, TVA indiquée par Qonto sur les dépenses du mois, et paiements de TVA à la DGFIP (référence « TVA-… CA3 »)."
-          : `Estimation : ${rate} sur les encaissements et sur les achats soumis à TVA (freelances et charges fixes hors salaires) ; le solde est reversé le mois suivant, jamais négatif (un crédit de TVA n’est pas remboursé ici).`}
+          : `Estimation : ${rate} sur les encaissements et sur les achats soumis à TVA (freelances et charges fixes hors salaires) ; le solde est reversé le mois suivant, jamais négatif (un crédit de TVA n'est pas remboursé ici).`}
         {" "}Le compte de résultat reste hors taxes : seule la trésorerie est concernée.
       </p>
     </>
@@ -417,7 +467,6 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
   const listed = new Map(structure.entries.map((s) => [s.employee_id, s]));
   const members = structure.employees.filter((e) => listed.has(e.id));
   const others = structure.employees.filter((e) => !listed.has(e.id));
-  const mult = String(multiplier).replace(".", ",");
   const save = async (id: string, entry: StructureEntry | null) => {
     setBusy(true);
     try {
@@ -430,90 +479,91 @@ function StructureBody({ year, month, plan, agg, multiplier, structure }: BodyPr
 
   return (
     <>
-      <div className="bp-drawer-stats">
-        <div><span>Total chargé</span><strong>{eur(total)}</strong></div>
-        <div><span>Personnes</span><strong>{counted.length}</strong></div>
-        {onMission > 0 && <div><span>En mission</span><strong>{onMission}</strong></div>}
-        <div><span>Multiplicateur de charges</span><strong>×{mult}</strong></div>
-      </div>
+      <PanelStats>
+        <PanelStat label={<>Total brut</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>Personnes</>}>{counted.length}</PanelStat>
+        {onMission > 0 && <PanelStat label={<>En mission</>}>{onMission}</PanelStat>}
+      </PanelStats>
       {missing > 0 && (
-        <p className="bp-warn">
+        <Alert variant="warning"><AlertDescription>
           {plural(missing, "personne")} sans salaire renseigné pour ce mois : compté{missing > 1 ? "s" : ""} à 0 €.
-        </p>
+        </AlertDescription></Alert>
       )}
       {rows.length === 0 ? (
-        <p className="bp-meta">Aucune personne de structure en poste ce mois-ci.</p>
+        <p className="m-0 text-sm text-muted-foreground">Aucune personne de structure en poste ce mois-ci.</p>
       ) : (
-        <table className="bp-table">
-          <thead>
-            <tr>
-              <th scope="col">Personne</th>
-              <th scope="col" className="num">Brut / mois</th>
-              <th scope="col" className="num">Chargé ×{mult}</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Personne</TableHead>
+              <TableHead numeric>Brut / mois</TableHead>
+              <TableHead numeric>Brut du mois</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((l) => (
-              <tr key={l.employeeId} className={l.staffed ? "is-gone" : undefined}>
-                <td>
-                  <span className="bp-name">{l.name}</span>
-                  {l.contractType && <span className="bp-sub"> · {l.contractType}</span>}
+              <TableRow key={l.employeeId} className={l.staffed ? "opacity-50" : undefined}>
+                <TableCell className="whitespace-normal">
+                  <span className="font-medium">{l.name}</span>
+                  {l.contractType && <span className="text-xs text-muted-foreground"> · {l.contractType}</span>}
                   {l.missionDays && (
                     <div>
-                      <span className="bp-tag is-on">En mission</span>{" "}
-                      <span className="bp-sub">{dec(l.missionDays)} j ouvrés en salaires consultants</span>
+                      <Badge variant="success">En mission</Badge>{" "}
+                      <span className="text-xs text-muted-foreground">{dec(l.missionDays)} j ouvrés en salaires consultants</span>
                     </div>
                   )}
-                  {l.exitDate && <div className="bp-sub">{l.exitDate < monthStartOf(year, month) ? "Sorti le " : "Sortie le "}{frDate(l.exitDate)}</div>}
-                </td>
-                <td className="num">{l.salary === null ? <span className="bp-sub">non renseigné</span> : eur(l.salary)}</td>
-                <td className="num">
+                  {l.exitDate && <div className="text-xs text-muted-foreground">{l.exitDate < monthStartOf(year, month) ? "Sorti le " : "Sortie le "}{frDate(l.exitDate)}</div>}
+                </TableCell>
+                <TableCell numeric>{l.salary === null ? <span className="text-xs text-muted-foreground">non renseigné</span> : eur(l.salary)}</TableCell>
+                <TableCell numeric>
                   {eur(l.cost)}
-                  {l.days && <div className="bp-sub">prorata {dec(l.days[0])}/{l.days[1]} j ouvrés</div>}
-                </td>
-              </tr>
+                  {l.days && <div className="text-xs text-muted-foreground">prorata {dec(l.days[0])}/{l.days[1]} j ouvrés</div>}
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th scope="row" colSpan={2}>Total</th>
-              <td className="num">{eur(total)}</td>
-            </tr>
-          </tfoot>
-        </table>
+          </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableHead scope="row" className="text-foreground" colSpan={2}>Total</TableHead>
+              <TableCell numeric>{eur(total)}</TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
       )}
-      <p className="bp-note">
+      <p className="m-0 text-xs leading-relaxed text-muted-foreground">
         {actual
-          ? "Mois réel : salaire mensuel brut en vigueur sur le mois × multiplicateur de charges, pour chaque personne de structure en poste."
-          : "Mois prévisionnel : dernier salaire connu × multiplicateur de charges, pour chaque personne de structure en poste ce mois-ci (jusqu’à sa sortie)."}{" "}
-        Période commençant ou finissant en cours de mois : au prorata des jours ouvrés. Stagiaires : coût = salaire × 1,4 (charges patronales très faibles).{" "}
-        Les jours ouvrés en mission (confirmée, active ou terminée, au prorata de l’allocation) basculent en salaires consultants.
+          ? "Mois réel : salaire mensuel brut en vigueur sur le mois, pour chaque personne de structure en poste."
+          : "Mois prévisionnel : dernier salaire brut connu, pour chaque personne de structure en poste ce mois-ci (jusqu'à sa sortie)."}{" "}
+        Période commençant ou finissant en cours de mois : au prorata des jours ouvrés. Stagiaires : gratification seule. Les cotisations sociales sont sur la ligne « dont cotisations sociales structure », sous « Salaires chargés structure ».{" "}
+        Les jours ouvrés en mission (confirmée, active ou terminée, au prorata de l'allocation) basculent en salaires consultants.
         Hors période, et pour les autres salariés : consultant (inter-contrat sans mission).
       </p>
 
-      <h3 className="bp-drawer-sub">Personnes de structure</h3>
+      <h3 className="m-0 mt-2 text-base font-medium">Personnes de structure</h3>
       {members.length === 0 ? (
-        <p className="bp-meta">Personne n’est listé en structure.</p>
+        <p className="m-0 text-sm text-muted-foreground">Personne n'est listé en structure.</p>
       ) : (
-        <table className="bp-table">
-          <tbody>
+        <Table>
+          <TableBody>
             {members.map((e) => (
               <StructureMember key={e.id} employee={e} entry={listed.get(e.id)!} busy={busy} onSave={(entry) => save(e.id, entry)} />
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
-      <div className="bp-structure-add">
-        <label className="bp-meta" htmlFor="bp-structure-pick">Ajouter en structure</label>
-        <select id="bp-structure-pick" className="bp-hin" value={pick} onChange={(e) => setPick(e.target.value)} disabled={busy}>
-          <option value="">Choisir un salarié…</option>
-          {others.map((e) => (
-            <option key={e.id} value={e.id}>{e.name}{e.detail ? ` — ${e.detail}` : ""}</option>
-          ))}
-        </select>
-        <button type="button" className="btn small" disabled={busy || !pick} onClick={() => save(pick, { employee_id: pick })}>
-          Ajouter
-        </button>
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium" htmlFor="bp-structure-pick">Ajouter en structure</label>
+        <div className="flex flex-wrap items-center gap-2">
+          <NativeSelect id="bp-structure-pick" className="min-w-56 flex-1" value={pick} onChange={(e) => setPick(e.target.value)} disabled={busy}>
+            <NativeSelectOption value="">Choisir un salarié…</NativeSelectOption>
+            {others.map((e) => (
+              <NativeSelectOption key={e.id} value={e.id}>{e.name}{e.detail ? `, ${e.detail}` : ""}</NativeSelectOption>
+            ))}
+          </NativeSelect>
+          <Button disabled={busy || !pick} onClick={() => save(pick, { employee_id: pick })}>
+            Ajouter
+          </Button>
+        </div>
       </div>
     </>
   );
@@ -540,42 +590,41 @@ function StructureMember({
   const changed = start !== (entry.start_date ?? "") || end !== (entry.end_date ?? "");
   const invalid = !!start && !!end && end < start;
   return (
-    <tr>
-      <td>
-        <span className="bp-name">{e.name}</span>
-        {e.detail && <div className="bp-sub">{e.detail}</div>}
-        <div className="bp-structure-period">
-          <label>
-            <span className="bp-sub">Du</span>
-            <input type="date" className="bp-hin" value={start} min={e.hired} onChange={(ev) => setStart(ev.target.value)} disabled={busy} />
+    <TableRow>
+      <TableCell className="whitespace-normal">
+        <span className="font-medium">{e.name}</span>
+        {e.detail && <div className="text-xs text-muted-foreground">{e.detail}</div>}
+        <div className="my-1.5 flex flex-wrap gap-2">
+          <label className="inline-flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Du</span>
+            <Input type="date" className="h-8 w-auto text-sm md:text-sm" value={start} min={e.hired} onChange={(ev) => setStart(ev.target.value)} disabled={busy} />
           </label>
-          <label>
-            <span className="bp-sub">au</span>
-            <input type="date" className="bp-hin" value={end} min={start || e.hired} onChange={(ev) => setEnd(ev.target.value)} disabled={busy} />
+          <label className="inline-flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">au</span>
+            <Input type="date" className="h-8 w-auto text-sm md:text-sm" value={end} min={start || e.hired} onChange={(ev) => setEnd(ev.target.value)} disabled={busy} />
           </label>
         </div>
-        <div className="bp-sub">
+        <div className={cn("text-xs", invalid ? "text-destructive" : "text-muted-foreground")}>
           {invalid
             ? "La fin doit suivre le début."
-            : `${start ? `Du ${frDate(start)}` : `Depuis l’embauche (${frDate(e.hired)})`} ${end ? `au ${frDate(end)}` : e.exit ? `jusqu’à la sortie (${frDate(e.exit)})` : "sans fin"}`}
+            : `${start ? `Du ${frDate(start)}` : `Depuis l'embauche (${frDate(e.hired)})`} ${end ? `au ${frDate(end)}` : e.exit ? `jusqu'à la sortie (${frDate(e.exit)})` : "sans fin"}`}
         </div>
-      </td>
-      <td className="num">
+      </TableCell>
+      <TableCell className="text-right align-top">
         {changed && (
-          <button
-            type="button"
-            className="btn small"
+          <Button
+            size="sm"
             disabled={busy || invalid}
             onClick={() => onSave({ employee_id: entry.employee_id, start_date: start || null, end_date: end || null })}
           >
             Enregistrer
-          </button>
+          </Button>
         )}{" "}
-        <button type="button" className="btn secondary small" disabled={busy} onClick={() => onSave(null)}>
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => onSave(null)}>
           Retirer
-        </button>
-      </td>
-    </tr>
+        </Button>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -592,62 +641,212 @@ function SalaryBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyP
   const currentTotal = current.reduce((t, l) => t + l.cost, 0);
   const currentWithSalary = current.filter((l) => l.salary !== null).length;
   const salariedCount = dec(S.cons[month] * (1 - H.pctFree / 100));
-  const mult = String(multiplier).replace(".", ",");
 
   return (
     <>
-      <div className="bp-drawer-stats">
-        <div><span>Total chargé</span><strong>{eur(total)}</strong></div>
-        <div><span>dont inter-contrats</span><strong>{eur(inter)}</strong></div>
-        <div><span>{actual ? "Consultants salariés" : "Salariés staffés (est.)"}</span>
-          <strong>{actual ? rows?.length ?? 0 : salariedCount}</strong>
-        </div>
-      </div>
+      <PanelStats>
+        <PanelStat label={<>Total brut</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>dont inter-contrats</>}>{eur(inter)}</PanelStat>
+        <PanelStat label={<>{actual ? "Consultants salariés" : "Salariés staffés (est.)"}</>}>{actual ? rows?.length ?? 0 : salariedCount}</PanelStat>
+      </PanelStats>
 
       {actual && rows ? (
         <>
           {missing > 0 && (
-            <p className="bp-warn">
+            <Alert variant="warning"><AlertDescription>
               {plural(missing, "consultant")} sans salaire renseigné pour ce mois : compté{missing > 1 ? "s" : ""} à 0 €.
-            </p>
+            </AlertDescription></Alert>
           )}
           {rows.length === 0 ? (
-            <p className="bp-meta">Aucun consultant salarié actif ce mois-ci.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucun consultant salarié actif ce mois-ci.</p>
           ) : (
             <SalaryRoster rows={rows} multiplier={multiplier} total={total} />
           )}
-          <p className="bp-note">
-            Salaire mensuel brut en vigueur sur le mois × multiplicateur de charges ({mult}, scénario choisi) pour estimer le coût employeur ; stagiaires × 1,4.
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+            Salaire mensuel brut en vigueur sur le mois (stagiaires : gratification). Les cotisations patronales sont sur la ligne « dont cotisations sociales consultants », sous « Salaires chargés consultants ».
             Inter-contrat = salarié sans mission confirmée, active ou terminée sur le mois. Les freelances sont comptés dans la ligne
             « Freelances », les salariés sans aucune mission dans les charges de structure.
           </p>
         </>
       ) : (
-        <div className="bp-formula">
-          <div><span>Consultants staffés</span><strong>{fmt(S.cons[month])}</strong></div>
-          <div><span>× part de salariés (1 − {pct(H.pctFree / 100)})</span><strong>{salariedCount}</strong></div>
-          <div><span>× salaire chargé / mois (hypothèse)</span><strong>{eur(H.salaire)}</strong></div>
-          <div className="is-total"><span>= Salaires consultants chargés</span><strong>{eur(total)}</strong></div>
-          <div><span>dont inter-contrats (1 − occupation {pct(H.occ / 100)})</span><strong>{eur(inter)}</strong></div>
-          <p className="bp-note">
-            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « Salaire chargé consultant / mois », « Part de freelances » ou
-            « Taux d’occupation » pour ajuster.
+        <Formula>
+          <FormulaRow label={<>Consultants staffés</>}>{fmt(S.cons[month])}</FormulaRow>
+          <FormulaRow label={<>× part de salariés (1 − {pct(H.pctFree / 100)})</>}>{salariedCount}</FormulaRow>
+          <FormulaRow label={<>× salaire brut / mois (hypothèse)</>}>{eur(H.salaire)}</FormulaRow>
+          <FormulaRow total label={<>= Salaires consultants (brut)</>}>{eur(total)}</FormulaRow>
+          <FormulaRow label={<>dont inter-contrats (intercontrat {pct(S.itc[month])})</>}>{eur(inter)}</FormulaRow>
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « Salaire brut consultant / mois », « Part de freelances » ou
+            « TACI cible des salariés » pour ajuster.
           </p>
-          <h3 className="bp-drawer-sub">Équipe salariée actuelle</h3>
+          <h3 className="m-0 mt-2 text-base font-medium">Équipe salariée actuelle</h3>
           {current.length === 0 ? (
-            <p className="bp-meta">Aucun consultant salarié en poste aujourd’hui.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucun consultant salarié en poste aujourd'hui.</p>
           ) : (
             <>
-              <p className="bp-note">
-                {plural(current.length, "consultant")} salarié{current.length > 1 ? "s" : ""} en poste aujourd’hui · coût chargé réel{" "}
+              <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+                {plural(current.length, "consultant")} salarié{current.length > 1 ? "s" : ""} en poste aujourd'hui · salaire brut réel{" "}
                 {eur(currentTotal)} / mois
                 {currentWithSalary > 0 && <> · moyenne {eur(currentTotal / currentWithSalary)} (hypothèse : {eur(H.salaire)})</>}
               </p>
               <SalaryRoster rows={current} multiplier={multiplier} total={currentTotal} monthStart={monthStartOf(year, month)} />
             </>
           )}
-        </div>
+        </Formula>
       )}
+    </>
+  );
+}
+
+/* ── Social charges ─────────────────────────────────────────────────── */
+
+function ChargesBody({ month, plan, agg, hypotheses: H, forStructure: structure }: BodyProps & { forStructure: boolean }) {
+  const S = plan.series;
+  const actual = plan.actual[month];
+  // Structure lines exist for every month (measured or projected); consultant lines only for closed months.
+  const rows = structure ? agg.structureLines[month] : actual ? agg.salaryLines[month] : null;
+  const total = structure ? S.cots[month] : S.cotc[month];
+  const people = (rows ?? []).map((l) => ({ l, c: socialChargesOf(l, H) }));
+  const heads = (rows ?? []).reduce((t, l) => t + (l.contractType !== "Internship" && l.salary ? l.cost / l.salary : 0), 0);
+  const salaried = S.cons[month] * (1 - H.pctFree / 100);
+  const gross = structure ? S.fs[month] : S.sal[month];
+  const perHead = H.mutuelle + H.ticketsResto + H.medecine / 12;
+
+  return (
+    <>
+      <PanelStats>
+        <PanelStat label={<>Total cotisations</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>soit</>}>{gross ? pct(total / gross) : "—"} du brut</PanelStat>
+        <PanelStat label={<>{rows ? "Salariés (équivalent mois)" : "Salariés (est.)"}</>}>{dec(rows ? heads : salaried)}</PanelStat>
+      </PanelStats>
+
+      {rows ? (
+        rows.length === 0 ? (
+          <p className="m-0 text-sm text-muted-foreground">Aucun salarié {structure ? "de structure" : "consultant"} ce mois-ci.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{structure ? "Personne" : "Consultant"}</TableHead>
+                <TableHead numeric>Brut du mois</TableHead>
+                <TableHead numeric>URSSAF et retraite</TableHead>
+                <TableHead numeric>Mutuelle, tickets, médecine</TableHead>
+                <TableHead numeric>Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {people.map(({ l, c }) => (
+                <TableRow key={l.employeeId}>
+                  <TableCell className="whitespace-normal">
+                    <span className="font-medium">{l.name}</span>
+                    {l.contractType === "Internship" && <div className="text-xs text-muted-foreground">stage : pas de cotisations</div>}
+                    {l.salary === null && <div className="text-xs text-muted-foreground">salaire non renseigné</div>}
+                    {l.salary !== null && l.cost < l.salary && <div className="text-xs text-muted-foreground">au prorata du mois ({pct(l.cost / l.salary)})</div>}
+                  </TableCell>
+                  <TableCell numeric>{eur(l.cost)}</TableCell>
+                  <TableCell numeric>{eur(c.urssaf)}</TableCell>
+                  <TableCell numeric>{eur(c.mutuelle + c.tickets + c.medecine)}</TableCell>
+                  <TableCell numeric>{eur(chargesTotal(c))}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell>Total</TableCell>
+                <TableCell numeric>{eur(people.reduce((t, p) => t + p.l.cost, 0))}</TableCell>
+                <TableCell numeric>{eur(people.reduce((t, p) => t + p.c.urssaf, 0))}</TableCell>
+                <TableCell numeric>{eur(people.reduce((t, p) => t + p.c.mutuelle + p.c.tickets + p.c.medecine, 0))}</TableCell>
+                <TableCell numeric>{eur(total)}</TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        )
+      ) : (
+        <Formula>
+          <FormulaRow label={<>Salaires consultants (brut)</>}>{eur(gross)}</FormulaRow>
+          <FormulaRow label={<>× URSSAF et retraite ({fmt(H.tauxCharges)} %)</>}>{eur((gross * H.tauxCharges) / 100)}</FormulaRow>
+          <FormulaRow label={<>+ salariés staffés (est. {dec(salaried)}) × {eur(perHead)} / mois</>}>{eur(salaried * perHead)}</FormulaRow>
+          <FormulaRow total label={<>= Cotisations sociales consultants</>}>{eur(total)}</FormulaRow>
+        </Formula>
+      )}
+
+      <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+        URSSAF et retraite = {fmt(H.tauxCharges)} % du brut ; par salarié et par mois : mutuelle {eur(H.mutuelle)}, tickets restaurant{" "}
+        {eur(H.ticketsResto)}, médecine du travail {eur(H.medecine / 12)} ({eur(H.medecine)} / an), au prorata de la part du mois comptée.
+        Stagiaires exclus. Hypothèses calées sur l'arrêté comptable de janvier–juillet 2026, modifiables dans « Hypothèses » → Cotisations sociales.
+      </p>
+    </>
+  );
+}
+
+/* ── Social-charge payments (Qonto) ─────────────────────────────────── */
+
+const ITEM_OF: Record<ChargeRowKey, ChargeItem> = { cu: "urssaf", cmu: "mutuelle", ctr: "tickets", cme: "medecine" };
+
+function ChargePaymentsBody({ row, month, plan, hypotheses: H, bank }: BodyProps & { row: ChargeRowKey }) {
+  const item = ITEM_OF[row];
+  const actual = plan.actual[month];
+  const total = plan.series[row][month];
+  const monthRows = bank.lines[month];
+  const covered = actual && monthRows !== null;
+  const payments = (monthRows ?? []).filter((r) => r.status === "completed" && chargeItemOf(r) === item);
+  const paid = payments.reduce((t, r) => t + r.amount_cents, 0) / 100;
+  const rule =
+    item === "urssaf" ? `${fmt(H.tauxCharges)} % du brut des salariés (consultants et structure)`
+    : item === "mutuelle" ? `${eur(H.mutuelle)} par salarié et par mois`
+    : item === "tickets" ? `${eur(H.ticketsResto)} par salarié et par mois`
+    : `${eur(H.medecine)} par salarié et par an, soit ${eur(H.medecine / 12)} par mois`;
+
+  return (
+    <>
+      <PanelStats>
+        <PanelStat label={<>Au plan (hypothèses)</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>Payé sur Qonto</>}>{covered ? eur(paid) : "—"}</PanelStat>
+        <PanelStat label={<>Paiements</>}>{covered ? payments.length : "—"}</PanelStat>
+      </PanelStats>
+
+      {!covered ? (
+        <p className="m-0 text-sm text-muted-foreground">
+          {actual ? "Pas de données Qonto pour ce mois." : "Mois prévisionnel : pas encore de paiements."}
+        </p>
+      ) : payments.length === 0 ? (
+        <p className="m-0 text-sm text-muted-foreground">Aucun paiement « {TITLES[row]} » reconnu sur Qonto ce mois-ci.</p>
+      ) : (
+        <Table className="[&_td]:align-top">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Transaction</TableHead>
+              <TableHead numeric>Montant</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {payments.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell className="num text-[13px] text-muted-foreground">{bankDay(r) ? frDate(bankDay(r)) : "—"}</TableCell>
+                <TableCell className="whitespace-normal">
+                  <span className="font-medium">{r.counterparty || "Sans contrepartie"}</span>
+                  {r.label && r.label !== r.counterparty && <div className="text-xs text-muted-foreground">{r.label}</div>}
+                  {r.reference && <div className="text-xs text-muted-foreground">{r.reference}</div>}
+                </TableCell>
+                <TableCell numeric>{cents(r.amount_cents)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableHead scope="row" className="text-foreground" colSpan={2}>Total</TableHead>
+              <TableCell numeric>{eur(paid)}</TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+      )}
+
+      <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+        Au plan : {rule}, au prorata du mois, stagiaires exclus (hypothèses modifiables dans « Hypothèses » → Cotisations sociales).
+        Payé sur Qonto : débits réglés du mois reconnus par le nom du bénéficiaire, montants TTC. Ils servent de contrôle et ne modifient pas le plan :
+        les cotisations sont souvent prélevées le mois suivant{item === "urssaf" ? " et incluent la part salariale" : ""}.
+      </p>
     </>
   );
 }
@@ -666,57 +865,122 @@ function InterBody({ year, month, plan, agg, hypotheses: H, multiplier }: BodyPr
 
   return (
     <>
-      <div className="bp-drawer-stats">
-        <div><span>Coût inter-contrats</span><strong>{eur(total)}</strong></div>
-        <div><span>{actual ? "Salariés sans mission" : "Salariés sans mission (auj.)"}</span>
-          <strong>{actual ? rows?.length ?? 0 : benched.length}</strong>
-        </div>
-        <div><span>Part des salaires consultants</span><strong>{pct(share)}</strong></div>
-      </div>
+      <PanelStats>
+        <PanelStat label={<>Coût inter-contrats</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>{actual ? "Salariés sans mission" : "Salariés sans mission (auj.)"}</>}>{actual ? rows?.length ?? 0 : benched.length}</PanelStat>
+        <PanelStat label={<>Part des salaires consultants</>}>{pct(share)}</PanelStat>
+      </PanelStats>
 
       {actual && rows ? (
         <>
           {missing > 0 && (
-            <p className="bp-warn">
+            <Alert variant="warning"><AlertDescription>
               {plural(missing, "consultant")} sans salaire renseigné pour ce mois : compté{missing > 1 ? "s" : ""} à 0 €.
-            </p>
+            </AlertDescription></Alert>
           )}
           {rows.length === 0 ? (
-            <p className="bp-meta">Aucun consultant salarié en inter-contrat ce mois-ci.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucun consultant salarié en inter-contrat ce mois-ci.</p>
           ) : (
             <SalaryRoster rows={rows} multiplier={multiplier} total={total} />
           )}
-          <p className="bp-note">
-            Inter-contrat = consultant salarié sans mission confirmée, active ou terminée sur le mois. Coût = salaire mensuel brut × multiplicateur
-            de charges. Les personnes de structure n’y figurent jamais.
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+            Inter-contrat = consultant salarié sans mission confirmée, active ou terminée sur le mois. Coût = salaire mensuel brut (cotisations à part). Les personnes de structure n'y figurent jamais.
           </p>
         </>
       ) : (
-        <div className="bp-formula">
-          <div><span>Salaires consultants chargés</span><strong>{eur(S.sal[month])}</strong></div>
-          <div><span>× (1 − occupation {pct(H.occ / 100)})</span><strong>{pct(1 - H.occ / 100)}</strong></div>
-          <div className="is-total"><span>= Inter-contrats</span><strong>{eur(total)}</strong></div>
-          <p className="bp-note">
-            Mois prévisionnel : part non occupée des salariés, d’après l’hypothèse « Taux d’occupation des salariés ».
+        <Formula>
+          <FormulaRow label={<>Salaires consultants (brut)</>}>{eur(S.sal[month])}</FormulaRow>
+          <FormulaRow label={<>× taux d'intercontrat (1 − TACI − congés / jours ouvrés)</>}>{pct(S.itc[month])}</FormulaRow>
+          <FormulaRow total label={<>= Inter-contrats</>}>{eur(total)}</FormulaRow>
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+            Mois prévisionnel : part non occupée des salariés, d'après « TACI cible des salariés » et les congés : 1 − TACI du mois − congés / jours ouvrés.
           </p>
-          <h3 className="bp-drawer-sub">Salariés sans mission aujourd’hui</h3>
+          <h3 className="m-0 mt-2 text-base font-medium">Salariés sans mission aujourd'hui</h3>
           {benched.length === 0 ? (
-            <p className="bp-meta">Aucun consultant salarié sans mission aujourd’hui.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucun consultant salarié sans mission aujourd'hui.</p>
           ) : (
             <>
-              <p className="bp-note">
-                {plural(benched.length, "consultant")} sans mission aujourd’hui · coût chargé réel {eur(benchedTotal)} / mois
+              <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+                {plural(benched.length, "consultant")} sans mission aujourd'hui · salaire brut réel {eur(benchedTotal)} / mois
               </p>
               <SalaryRoster rows={benched} multiplier={multiplier} total={benchedTotal} monthStart={monthStartOf(year, month)} />
             </>
           )}
-        </div>
+        </Formula>
       )}
     </>
   );
 }
 
+/* ── Ventes / départs ───────────────────────────────────────────────── */
+
+function MovesBody({ which, month, plan, agg }: BodyProps & { which: "ventes" | "departs" }) {
+  const actual = plan.actual[month];
+  const rows = (which === "ventes" ? agg.venteLines : agg.departLines)[month] ?? [];
+  const count = plan.series[which][month];
+  const free = rows.filter((l) => l.freelance).length;
+  const ventes = which === "ventes";
+
+  return (
+    <>
+      <PanelStats>
+        <PanelStat label={<>{ventes ? "Ventes" : "Départs"}{actual ? "" : " (saisi)"}</>}>{fmt(count)}</PanelStat>
+        {!actual && <PanelStat label={<>{ventes ? "Missions déjà prévues" : "Départs déjà prévus"}</>}>{rows.length}</PanelStat>}
+        <PanelStat label={<>Dont freelances</>}>{free}</PanelStat>
+      </PanelStats>
+
+      {rows.length === 0 ? (
+        <p className="m-0 text-sm text-muted-foreground">
+          {ventes
+            ? actual ? "Aucune mission n'a démarré ce mois-ci." : "Aucune mission ne démarre ce mois-ci pour l'instant."
+            : actual ? "Aucun départ ce mois-ci." : "Aucun départ prévu ce mois-ci pour l'instant."}
+        </p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Consultant</TableHead>
+              {ventes && <TableHead>Mission</TableHead>}
+              <TableHead>{ventes ? "Début" : "Sortie"}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((l: MoveLine, i) => (
+              <TableRow key={`${l.employeeId}-${l.date}-${i}`}>
+                <TableCell className="whitespace-normal">
+                  <span className="font-medium">{l.name}</span>
+                  {l.freelance && <span className="text-xs text-muted-foreground"> · Freelance</span>}
+                </TableCell>
+                {ventes && (
+                  <TableCell className="whitespace-normal">
+                    {l.project}
+                    {l.client && <div className="text-xs text-muted-foreground">{l.client}</div>}
+                  </TableCell>
+                )}
+                <TableCell className="whitespace-normal">
+                  <span className="num">{frDate(l.date)}</span>
+                  {!ventes && l.planned && <div className="text-xs text-muted-foreground">prévu</div>}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+
+      <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+        {ventes
+          ? "Vente = mission confirmée, active ou terminée qui démarre dans le mois (le premier staffing tient lieu de date de signature)."
+          : "Départ = sortie (date de fin, sinon date prévue) d'un freelance ou d'un consultant ; les personnes de structure ne comptent que si elles étaient en mission ce mois-là."}
+        {!actual && " Mois prévisionnel : le chiffre du plan est celui saisi dans le tableau ; la liste montre ce qui est déjà connu."}
+      </p>
+    </>
+  );
+}
+
 /* ── Freelances ─────────────────────────────────────────────────────── */
+
+/** Where a freelance line's cost comes from. */
+const FREELANCE_SOURCE: Record<FreelanceLine["source"], string> = { invoice: "Invoiced", cra: "CRA", estimate: "Estimate" };
 
 function FreelanceBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
   const S = plan.series;
@@ -724,8 +988,10 @@ function FreelanceBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
   const rows = agg.freelanceLines[month];
   const total = S.free[month];
   const days = rows?.reduce((t, l) => t + l.days, 0) ?? 0;
-  const missing = rows?.filter((l) => l.rate === null).length ?? 0;
-  const estimated = rows?.filter((l) => l.estimated).length ?? 0;
+  // An invoiced freelancer's cost does not depend on a rate on file.
+  const missing = rows?.filter((l) => l.rate === null && l.source !== "invoice").length ?? 0;
+  const estimated = rows?.filter((l) => l.source === "estimate").length ?? 0;
+  const invoiced = rows?.filter((l) => l.source === "invoice").length ?? 0;
   const current = agg.currentFreelancers;
   const rated = current.filter((l) => l.rate !== null);
   const avgRate = rated.length ? rated.reduce((t, l) => t + (l.rate ?? 0), 0) / rated.length : null;
@@ -733,112 +999,116 @@ function FreelanceBody({ year, month, plan, agg, hypotheses: H }: BodyProps) {
 
   return (
     <>
-      <div className="bp-drawer-stats">
-        <div><span>Coût total</span><strong>{eur(total)}</strong></div>
-        <div><span>{actual ? "Jours facturés" : "Jours (est.)"}</span><strong>{dec(actual ? days : nf * H.jours)}</strong></div>
-        <div><span>{actual ? "Freelances staffés" : "Freelances (est.)"}</span><strong>{actual ? rows?.length ?? 0 : dec(nf)}</strong></div>
-      </div>
+      <PanelStats>
+        <PanelStat label={<>Coût total</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>{actual ? "Jours facturés" : "Jours (est.)"}</>}>{dec(actual ? days : nf * plan.calendar.jo[month])}</PanelStat>
+        <PanelStat label={<>{actual ? "Freelances staffés" : "Freelances (est.)"}</>}>{actual ? rows?.length ?? 0 : dec(nf)}</PanelStat>
+      </PanelStats>
 
       {actual && rows ? (
         <>
           {missing > 0 && (
-            <p className="bp-warn">
+            <Alert variant="warning"><AlertDescription>
               {plural(missing, "freelance")} sans taux journalier renseigné : compté{missing > 1 ? "s" : ""} à 0 €.
-            </p>
+            </AlertDescription></Alert>
           )}
           {rows.length === 0 ? (
-            <p className="bp-meta">Aucun freelance staffé ce mois-ci.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucun freelance staffé ce mois-ci.</p>
           ) : (
-            <table className="bp-table">
-              <thead>
-                <tr>
-                  <th scope="col">Freelance</th>
-                  <th scope="col" className="num">Jours</th>
-                  <th scope="col" className="num">Taux / jour</th>
-                  <th scope="col" className="num">Coût</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Freelance</TableHead>
+                  <TableHead numeric>Jours</TableHead>
+                  <TableHead numeric>Taux / jour</TableHead>
+                  <TableHead numeric>Coût</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.map((l) => (
-                  <tr key={l.employeeId}>
-                    <td>
-                      <span className="bp-name">{l.name}</span>
-                      {l.exitDate && <div className="bp-sub">Fin le {frDate(l.exitDate)}</div>}
-                    </td>
-                    <td className="num">
+                  <TableRow key={l.employeeId}>
+                    <TableCell className="whitespace-normal">
+                      <span className="font-medium">{l.name}</span>
+                      {l.exitDate && <div className="text-xs text-muted-foreground">Fin le {frDate(l.exitDate)}</div>}
+                    </TableCell>
+                    <TableCell numeric>
                       {dec(l.days)}
-                      <div className="bp-sub">{l.estimated ? "estimé, sans CRA" : "CRA"}</div>
-                    </td>
-                    <td className="num">{l.rate === null ? <span className="bp-sub">non renseigné</span> : eur(l.rate)}</td>
-                    <td className="num">{eur(l.cost)}</td>
-                  </tr>
+                      <div className="text-xs text-muted-foreground">{l.estimated ? "estimé, sans CRA" : "CRA"}</div>
+                    </TableCell>
+                    <TableCell numeric>{l.rate === null ? <span className="text-xs text-muted-foreground">non renseigné</span> : eur(l.rate)}</TableCell>
+                    <TableCell numeric>
+                      {eur(l.cost)}
+                      <div className="text-xs text-muted-foreground">{FREELANCE_SOURCE[l.source]}</div>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row">Total</th>
-                  <td className="num">{dec(days)}</td>
-                  <td />
-                  <td className="num">{eur(total)}</td>
-                </tr>
-              </tfoot>
-            </table>
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableHead scope="row" className="text-foreground">Total</TableHead>
+                  <TableCell numeric>{dec(days)}</TableCell>
+                  <TableCell />
+                  <TableCell numeric>{eur(total)}</TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
           )}
-          <p className="bp-note">
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
             Jours = jours « Client Project » saisis dans le CRA (demi-journée = 0,5)
             {estimated > 0 && ` ; sans CRA ce mois-ci, jours ouvrés de la mission × allocation (${plural(estimated, "freelance")})`}.
-            Coût = jours × taux journalier en vigueur.
+            Coût = jours × taux journalier en vigueur
+            {invoiced > 0 && ` ; remplacé par le HT des factures reçues pour le mois, hors factures rejetées (${plural(invoiced, "freelance")})`}.
           </p>
         </>
       ) : (
-        <div className="bp-formula">
-          <div><span>Consultants staffés</span><strong>{fmt(S.cons[month])}</strong></div>
-          <div><span>× part de freelances ({pct(H.pctFree / 100)})</span><strong>{dec(nf)}</strong></div>
-          <div><span>× jours facturables / mois</span><strong>{fmt(H.jours)}</strong></div>
-          <div><span>× coût journalier freelance (hypothèse)</span><strong>{eur(H.coutFree)}</strong></div>
-          <div className="is-total"><span>= Freelances</span><strong>{eur(total)}</strong></div>
-          <p className="bp-note">
-            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « Coût journalier freelance », « Part de freelances » ou
-            « Jours ouvrés facturables » pour ajuster.
+        <Formula>
+          <FormulaRow label={<>Consultants staffés</>}>{fmt(S.cons[month])}</FormulaRow>
+          <FormulaRow label={<>× part de freelances ({pct(H.pctFree / 100)})</>}>{dec(nf)}</FormulaRow>
+          <FormulaRow label={<>× jours ouvrés du mois</>}>{fmt(plan.calendar.jo[month])}</FormulaRow>
+          <FormulaRow label={<>× coût journalier freelance (hypothèse)</>}>{eur(H.coutFree)}</FormulaRow>
+          <FormulaRow total label={<>= Freelances</>}>{eur(total)}</FormulaRow>
+          <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+            Mois prévisionnel : calculé depuis les hypothèses. Modifiez « Coût journalier freelance » ou « Part de freelances »
+            pour ajuster. Les jours ouvrés suivent le calendrier (fériés exclus).
           </p>
-          <h3 className="bp-drawer-sub">Freelances actuels</h3>
+          <h3 className="m-0 mt-2 text-base font-medium">Freelances actuels</h3>
           {current.length === 0 ? (
-            <p className="bp-meta">Aucun freelance en poste aujourd’hui.</p>
+            <p className="m-0 text-sm text-muted-foreground">Aucun freelance en poste aujourd'hui.</p>
           ) : (
             <>
-              <p className="bp-note">
-                {plural(current.length, "freelance")} aujourd’hui
+              <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+                {plural(current.length, "freelance")} aujourd'hui
                 {avgRate !== null && <> · taux moyen réel {eur(avgRate)} / jour (hypothèse : {eur(H.coutFree)})</>}
               </p>
-              <table className="bp-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Freelance</th>
-                    <th scope="col">Statut</th>
-                    <th scope="col" className="num">Taux / jour</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Freelance</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead numeric>Taux / jour</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {current.map((l) => {
                     const gone = !!l.exitDate && l.exitDate < monthStartOf(year, month);
                     return (
-                      <tr key={l.employeeId} className={gone ? "is-gone" : undefined}>
-                        <td>
-                          <span className="bp-name">{l.name}</span>
-                          {l.exitDate && <div className="bp-sub">{gone ? "Sorti le " : "Fin prévue le "}{frDate(l.exitDate)}</div>}
-                        </td>
-                        <td>
-                          <span className={`bp-tag${l.staffed ? " is-on" : ""}`}>{l.staffed ? "Staffé" : "Sans mission"}</span>
-                        </td>
-                        <td className="num">{l.rate === null ? <span className="bp-sub">non renseigné</span> : eur(l.rate)}</td>
-                      </tr>
+                      <TableRow key={l.employeeId} className={gone ? "opacity-50" : undefined}>
+                        <TableCell className="whitespace-normal">
+                          <span className="font-medium">{l.name}</span>
+                          {l.exitDate && <div className="text-xs text-muted-foreground">{gone ? "Sorti le " : "Fin prévue le "}{frDate(l.exitDate)}</div>}
+                        </TableCell>
+                        <TableCell className="whitespace-normal">
+                          <Badge variant={l.staffed ? "success" : "secondary"}>{l.staffed ? "Staffé" : "Sans mission"}</Badge>
+                        </TableCell>
+                        <TableCell numeric>{l.rate === null ? <span className="text-xs text-muted-foreground">non renseigné</span> : eur(l.rate)}</TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </>
           )}
-        </div>
+        </Formula>
       )}
     </>
   );
@@ -879,16 +1149,16 @@ function FixedBody({ line, month, plan, hypotheses: H, bank }: BodyProps & { lin
     const months = recent.length > 1 ? `${recent.length} derniers mois clôturés` : "dernier mois clôturé";
     return (
       <>
-        <div className="bp-drawer-stats">
-          <div><span>Montant HT (hypothèse)</span><strong>{eur(total)}</strong></div>
-          <div><span>{mean === null ? "Moyenne réelle" : `Moyenne réelle (${months})`}</span><strong>{mean === null ? "—" : eur(mean)}</strong></div>
-        </div>
-        <p className="bp-note">
+        <PanelStats>
+          <PanelStat label={<>Montant HT (hypothèse)</>}>{eur(total)}</PanelStat>
+          <PanelStat label={<>{mean === null ? "Moyenne réelle" : `Moyenne réelle (${months})`}</>}>{mean === null ? "—" : eur(mean)}</PanelStat>
+        </PanelStats>
+        <p className="m-0 text-xs leading-relaxed text-muted-foreground">
           {actual
             ? "Pas de données Qonto pour ce mois : hypothèse affichée."
-            : `Mois prévisionnel : hypothèse « ${TITLES[line]} » (${eur(hypothesis)} / mois), modifiable dans l’onglet Hypothèses.`}{" "}
+            : `Mois prévisionnel : hypothèse « ${TITLES[line]} » (${eur(hypothesis)} / mois), modifiable dans l'onglet Hypothèses.`}{" "}
           {mean === null
-            ? "Aucun mois clôturé de l’année n’est encore couvert par Qonto."
+            ? "Aucun mois clôturé de l'année n'est encore couvert par Qonto."
             : `Moyenne réelle : transactions Qonto HT classées sur ${recent.length > 1 ? `les ${recent.length} derniers mois clôturés couverts` : "le dernier mois clôturé couvert"}.`}
         </p>
       </>
@@ -909,77 +1179,78 @@ function FixedBody({ line, month, plan, hypotheses: H, bank }: BodyProps & { lin
 
   return (
     <>
-      <div className="bp-drawer-stats">
-        <div><span>Total HT</span><strong>{eur(total)}</strong></div>
-        <div><span>Transactions</span><strong>{mine.length}</strong></div>
-        <div><span>À vérifier</span><strong>{toReview}</strong></div>
-      </div>
-      {error && <p className="bp-warn">{error}</p>}
-      <div className="bp-bank-switch">
-        <h3 className="bp-drawer-sub">{others ? "Hors charges fixes et non classées" : TITLES[line]}</h3>
-        <button type="button" className="bp-link" onClick={() => setOthers(!others)}>
+      <PanelStats>
+        <PanelStat label={<>Total HT</>}>{eur(total)}</PanelStat>
+        <PanelStat label={<>Transactions</>}>{mine.length}</PanelStat>
+        <PanelStat label={<>À vérifier</>}>{toReview}</PanelStat>
+      </PanelStats>
+      {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 className="m-0 text-base font-medium">{others ? "Hors charges fixes et non classées" : TITLES[line]}</h3>
+        <Button variant="link" size="sm" className="h-auto px-0 text-left whitespace-normal" onClick={() => setOthers(!others)}>
           {others ? `Revenir à « ${TITLES[line]} »` : "Voir les transactions hors charges fixes et non classées"}
-        </button>
+        </Button>
       </div>
       {rows.length === 0 ? (
-        <p className="bp-meta">{others ? "Aucune transaction hors charges fixes ce mois-ci." : "Aucune transaction classée sur cette ligne ce mois-ci."}</p>
+        <p className="m-0 text-sm text-muted-foreground">{others ? "Aucune transaction hors charges fixes ce mois-ci." : "Aucune transaction classée sur cette ligne ce mois-ci."}</p>
       ) : (
-        <table className="bp-table bp-bank-table">
-          <thead>
-            <tr>
-              <th scope="col">Date</th>
-              <th scope="col">Transaction</th>
-              <th scope="col" className="num">Montant HT</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table className="[&_td]:align-top">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Transaction</TableHead>
+              <TableHead numeric>Montant HT</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((r) => (
-              <tr key={r.id}>
-                <td className="bp-bank-date">{bankDay(r) ? frDate(bankDay(r)) : "—"}</td>
-                <td>
-                  <span className="bp-name">{r.counterparty || "Sans contrepartie"}</span>
-                  {r.needs_review && <> <span className="bp-tag is-warn">à vérifier</span></>}
-                  {r.manual_line && <> <span className="bp-tag">corrigé</span></>}
-                  {r.label && r.label !== r.counterparty && <div className="bp-sub">{r.label}</div>}
-                  <div className="bp-bank-classify">
-                    <select
-                      className="bp-tin"
+              <TableRow key={r.id}>
+                <TableCell className="num text-[13px] text-muted-foreground">{bankDay(r) ? frDate(bankDay(r)) : "—"}</TableCell>
+                <TableCell className="whitespace-normal">
+                  <span className="font-medium">{r.counterparty || "Sans contrepartie"}</span>
+                  {r.needs_review && <> <Badge variant="warning">à vérifier</Badge></>}
+                  {r.manual_line && <> <Badge variant="outline">corrigé</Badge></>}
+                  {r.label && r.label !== r.counterparty && <div className="text-xs text-muted-foreground">{r.label}</div>}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <NativeSelect
+                      size="sm"
+                      className="max-w-full"
                       aria-label={`Ligne de ${r.counterparty || "la transaction"}`}
                       value={r.line ?? ""}
                       onChange={(e) => e.target.value && void classify(r.id, e.target.value as FixedChargeLine)}
                     >
-                      {r.line === null && <option value="">Non classée</option>}
+                      {r.line === null && <NativeSelectOption value="">Non classée</NativeSelectOption>}
                       {LINE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
+                        <NativeSelectOption key={o.value} value={o.value}>{o.label}</NativeSelectOption>
                       ))}
-                    </select>
+                    </NativeSelect>
                     {r.needs_review && r.line && (
-                      <button type="button" className="btn secondary small" onClick={() => void classify(r.id, r.line!)}>
+                      <Button variant="outline" size="sm" onClick={() => void classify(r.id, r.line!)}>
                         Valider
-                      </button>
+                      </Button>
                     )}
                   </div>
-                </td>
-                <td className="num">
+                </TableCell>
+                <TableCell numeric>
                   {cents(r.amount_ht_cents)}
-                  {r.amount_cents !== r.amount_ht_cents && <div className="bp-sub">{cents(r.amount_cents)} TTC</div>}
-                </td>
-              </tr>
+                  {r.amount_cents !== r.amount_ht_cents && <div className="text-xs text-muted-foreground">{cents(r.amount_cents)} TTC</div>}
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
+          </TableBody>
           {!others && (
-            <tfoot>
-              <tr>
-                <th scope="row" colSpan={2}>Total</th>
-                <td className="num">{eur(total)}</td>
-              </tr>
-            </tfoot>
+            <TableFooter>
+              <TableRow>
+                <TableHead scope="row" className="text-foreground" colSpan={2}>Total</TableHead>
+                <TableCell numeric>{eur(total)}</TableCell>
+              </TableRow>
+            </TableFooter>
           )}
-        </table>
+        </Table>
       )}
-      <p className="bp-note">
-        Débits Qonto réglés, classés par l’IA (Kimi) ou corrigés à la main, montants hors taxes (TTC − TVA ; sans TVA connue, HT = TTC).
-        Changer la ligne d’une transaction recalcule le plan ; la correction sert d’exemple aux prochains classements.
+      <p className="m-0 text-xs leading-relaxed text-muted-foreground">
+        Débits Qonto réglés, classés par l'IA (Kimi) ou corrigés à la main, montants hors taxes (TTC − TVA ; sans TVA connue, HT = TTC).
+        Changer la ligne d'une transaction recalcule le plan ; la correction sert d'exemple aux prochains classements.
       </p>
     </>
   );
@@ -1001,46 +1272,85 @@ function SalaryRoster({
   monthStart?: string;
 }) {
   return (
-    <table className="bp-table">
-      <thead>
-        <tr>
-          <th scope="col">Consultant</th>
-          <th scope="col">Statut</th>
-          <th scope="col" className="num">Brut / mois</th>
-          <th scope="col" className="num">Chargé ×{String(multiplier).replace(".", ",")}</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Consultant</TableHead>
+          <TableHead>Statut</TableHead>
+          <TableHead numeric>Brut / mois</TableHead>
+          <TableHead numeric>Brut du mois</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {rows.map((l) => {
           const gone = !!monthStart && !!l.exitDate && l.exitDate < monthStart;
           return (
-            <tr key={l.employeeId} className={gone ? "is-gone" : undefined}>
-              <td>
-                <span className="bp-name">{l.name}</span>
-                {l.contractType && <span className="bp-sub"> · {l.contractType}</span>}
-                {l.exitDate && <div className="bp-sub">{gone ? "Sorti le " : "Départ prévu le "}{frDate(l.exitDate)}</div>}
-              </td>
-              <td>
-                <span className={`bp-tag${l.staffed ? " is-on" : ""}`}>{l.staffed ? "Staffé" : "Inter-contrat"}</span>
-                {l.missionDays && <div className="bp-sub">structure, {dec(l.missionDays)} j en mission</div>}
-              </td>
-              <td className="num">{l.salary === null ? <span className="bp-sub">non renseigné</span> : eur(l.salary)}</td>
-              <td className="num">
+            <TableRow key={l.employeeId} className={gone ? "opacity-50" : undefined}>
+              <TableCell className="whitespace-normal">
+                <span className="font-medium">{l.name}</span>
+                {l.contractType && <span className="text-xs text-muted-foreground"> · {l.contractType}</span>}
+                {l.exitDate && <div className="text-xs text-muted-foreground">{gone ? "Sorti le " : "Départ prévu le "}{frDate(l.exitDate)}</div>}
+              </TableCell>
+              <TableCell className="whitespace-normal">
+                <Badge variant={l.staffed ? "success" : "secondary"}>{l.staffed ? "Staffé" : "Inter-contrat"}</Badge>
+                {l.missionDays && <div className="text-xs text-muted-foreground">structure, {dec(l.missionDays)} j en mission</div>}
+              </TableCell>
+              <TableCell numeric>{l.salary === null ? <span className="text-xs text-muted-foreground">non renseigné</span> : eur(l.salary)}</TableCell>
+              <TableCell numeric>
                 {eur(l.cost)}
-                {l.contractType === "Internship" && <span className="bp-sub"> ×1,4</span>}
-                {l.days && <div className="bp-sub">prorata {dec(l.days[0])}/{dec(l.days[1])} j ouvrés hors structure</div>}
-              </td>
-            </tr>
+                {l.contractType === "Internship" && <span className="text-xs text-muted-foreground"> stage</span>}
+                {l.days && <div className="text-xs text-muted-foreground">prorata {dec(l.days[0])}/{dec(l.days[1])} j ouvrés hors structure</div>}
+              </TableCell>
+            </TableRow>
           );
         })}
-      </tbody>
-      <tfoot>
-        <tr>
-          <th scope="row" colSpan={3}>Total</th>
-          <td className="num">{eur(total)}</td>
-        </tr>
-      </tfoot>
-    </table>
+      </TableBody>
+      <TableFooter>
+        <TableRow>
+          <TableHead scope="row" className="text-foreground" colSpan={3}>Total</TableHead>
+          <TableCell numeric>{eur(total)}</TableCell>
+        </TableRow>
+      </TableFooter>
+    </Table>
   );
 }
 
+/** Key figures at the top of the panel (one row of stats). */
+function PanelStats({ children }: { children: ReactNode }) {
+  return (
+    <div className="@container/stats rounded-lg border border-border bg-card p-4">
+      <div className="grid grid-cols-1 divide-y divide-border *:py-3 *:first:pt-0 *:last:pb-0 @md/stats:auto-cols-fr @md/stats:grid-flow-col @md/stats:divide-x @md/stats:divide-y-0 @md/stats:*:px-4 @md/stats:*:py-0 @md/stats:*:first:pl-0 @md/stats:*:last:pr-0">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function PanelStat({ label, children }: { label: ReactNode; children: ReactNode }) {
+  const m = typeof children === "string" ? children.match(/^(.*\S)\s*€$/) : null;
+  return (
+    <Stat size="sm">
+      <StatValue className="group-data-[size=sm]/stat:text-[20px]">{m ? <>{m[1]}<StatUnit>€</StatUnit></> : children}</StatValue>
+      <StatLabel>{label}</StatLabel>
+    </Stat>
+  );
+}
+
+/** Forecast formula: one operand per line, the result in bold. */
+function Formula({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col [&>p]:mt-3">{children}</div>;
+}
+
+function FormulaRow({ label, total, children }: { label: ReactNode; total?: boolean; children: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "flex items-baseline justify-between gap-4 border-b py-2.5 text-sm",
+        total ? "border-foreground/30 font-medium text-foreground" : "border-border text-muted-foreground",
+      )}
+    >
+      <span>{label}</span>
+      <strong className="num font-medium whitespace-nowrap text-foreground">{children}</strong>
+    </div>
+  );
+}

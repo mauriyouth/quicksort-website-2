@@ -1,6 +1,23 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@clerk/react";
-import { Notice } from "@quicksort/hr-ui";
+import { RefreshCw, Search } from "lucide-react";
+import {
+  Button,
+  Card,
+  CardContent,
+  Field,
+  FieldLabel,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@quicksort-sas/ui";
+import { EmptyState, PageAlerts } from "./ui";
 import { CandidateDetail } from "./CvAnalyzer";
 import { evaluationSchema, type CandidateResult } from "./analysis";
 
@@ -48,20 +65,44 @@ export function AnalysisHistory() {
     finally { setBusy(false); }
   }
   if (selected) return <CandidateDetail candidate={selected} backLabel="Analysis history" onBack={() => setSelected(null)} />;
-  return <div className="cv-workspace">
-    <Notice error>{error}</Notice>
-    <form className="cv-card cv-history-search" onSubmit={e => { e.preventDefault(); setPage(0); setFilter(search); setVersion(v => v + 1); }}>
-      <label htmlFor="history-search">Search candidate, job or file</label>
-      <input id="history-search" value={search} maxLength={120} onChange={e => setSearch(e.target.value)} />
-      <button className="cv-secondary" disabled={busy}>Search</button>
-      <button type="button" className="cv-secondary" disabled={busy} onClick={() => setVersion(v => v + 1)}>Refresh history</button>
-    </form>
-    <p className="cv-muted" role="status">{busy ? "Loading…" : `${total} saved evaluations`}</p>
-    {!busy && !error && !rows.length && <div className="cv-card">No saved evaluations found. Completed scans will appear here, including profiles outside the shortlist.</div>}
-    {rows.map(row => <article className="cv-card" key={row.id}>
-      <h2>{row.candidate_name}</h2><p className="cv-muted">{row.job_title} · {row.file_name} · {new Date(row.created_at).toLocaleString()}</p>
-      <div className="cv-inline"><button className="cv-secondary" disabled={busy} onClick={() => void open(row.id)}>Open evaluation</button><button className="cv-secondary" disabled={busy} onClick={() => void downloadSource(row.id)}>Download source CV</button></div>
-    </article>)}
-    <div className="cv-inline"><button className="cv-secondary" disabled={busy || page === 0} onClick={() => setPage(p => p - 1)}>Previous</button><span>Page {page + 1} of {Math.max(1, Math.ceil(total / 25))}</span><button className="cv-secondary" disabled={busy || (page + 1) * 25 >= total} onClick={() => setPage(p => p + 1)}>Next</button></div>
+  const pages = Math.max(1, Math.ceil(total / 25));
+  return <div className="flex flex-col gap-4">
+    <PageAlerts error={error} />
+    <Card size="sm">
+      <CardContent>
+        <form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); setPage(0); setFilter(search); setVersion(v => v + 1); }}>
+          <Field className="min-w-48 flex-1">
+            <FieldLabel htmlFor="history-search">Search candidate, job or file</FieldLabel>
+            <InputGroup>
+              <InputGroupAddon><Search /></InputGroupAddon>
+              <InputGroupInput id="history-search" value={search} maxLength={120} onChange={e => setSearch(e.target.value)} />
+            </InputGroup>
+          </Field>
+          <div className="flex gap-2">
+            <Button type="submit" disabled={busy}>Search</Button>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => setVersion(v => v + 1)}><RefreshCw data-icon="inline-start" aria-hidden="true" />Refresh history</Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+    <p className="m-0 text-sm text-muted-foreground" role="status">{busy ? "Loading…" : `${total} saved evaluations`}</p>
+    {!busy && !error && !rows.length && <EmptyState title="No saved evaluations found">Completed scans will appear here, including profiles outside the shortlist.</EmptyState>}
+    {rows.length > 0 && <ItemGroup className="gap-2">
+      {rows.map(row => <Item variant="outline" key={row.id} render={<article />} className="flex-wrap">
+        <ItemContent className="min-w-48">
+          <ItemTitle><h2 className="m-0 text-base font-medium">{row.candidate_name}</h2></ItemTitle>
+          <ItemDescription>{row.job_title} · {row.file_name} · {new Date(row.created_at).toLocaleString()}</ItemDescription>
+        </ItemContent>
+        <ItemActions className="flex-wrap">
+          <Button size="sm" disabled={busy} onClick={() => void open(row.id)}>Open evaluation</Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void downloadSource(row.id)}>Download source CV</Button>
+        </ItemActions>
+      </Item>)}
+    </ItemGroup>}
+    <nav className="flex items-center justify-between gap-3" aria-label="History pages">
+      <Button variant="outline" size="sm" disabled={busy || page === 0} onClick={() => setPage(p => p - 1)}>Previous</Button>
+      <span className="num text-sm text-muted-foreground">Page {page + 1} of {pages}</span>
+      <Button variant="outline" size="sm" disabled={busy || (page + 1) * 25 >= total} onClick={() => setPage(p => p + 1)}>Next</Button>
+    </nav>
   </div>;
 }

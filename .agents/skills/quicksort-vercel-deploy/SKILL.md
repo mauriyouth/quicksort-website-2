@@ -28,16 +28,14 @@ Authentication, team selection, project creation, domain assignment, and deploym
 
 Preserve each application's existing build configuration and use its directory as the Vercel root:
 
-- Public website: `apps/web`
-- Admin portal: `apps/admin`
+- Quicksort OS (admin): `apps/admin`
 - Candidate portal: `apps/candidate`
-- Business intelligence: `apps/intelligence`
 
-The Business Intelligence production domain is `business.quicksort.fr`. Its Vercel project must use `apps/intelligence` as the root directory and the checked-in `vercel.json`.
+The Quicksort OS production domain is `os.quicksort.fr`. Its Vercel project must use `apps/admin` as the root directory and the checked-in `vercel.json`.
 
 ## Deployment behavior
 
 - Create a separate Vercel project when the requested app is not already linked to the verified Mohamed destination. Never overwrite another app's link.
 - Use preview deployments by default. Deploy to production or attach a production domain only when the user explicitly requests it.
-- After deploying, verify the deployment status and open the returned URL. For `business.quicksort.fr`, also verify the custom-domain state and report any DNS record Vercel still requires.
+- After deploying, verify the deployment status and open the returned URL. For `os.quicksort.fr`, also verify the custom-domain state and report any DNS record Vercel still requires.
 - Report the verified account, team slug, Vercel project name, deployment URL, deployment status, and domain status. Do not report a step as complete merely because the command was issued.

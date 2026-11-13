@@ -99,7 +99,7 @@ export function useEconomicsSettings() {
     try {
       const result = await db().from('hr_economics_settings').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', true).select('id');
       if (result.error) throw result.error;
-      if (!result.data?.length) throw new Error('hr_economics_settings has no row — apply the migrations.');
+      if (!result.data?.length) throw new Error('hr_economics_settings has no row. Apply the migrations.');
       setValues((v) => ({ ...v, [key]: next }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e));

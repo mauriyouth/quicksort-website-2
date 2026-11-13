@@ -1,4 +1,4 @@
-import { createSign, randomUUID } from "node:crypto";
+import { createHash, createSign, randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { decryptApiKey } from "../../ai-settings.ts";
@@ -36,10 +36,16 @@ export const settingsSchema = serviceAccountSchema.extend({
   /** Candidate CVs (hiring pipeline): <root>/<year>/<position>/<candidate>.pdf. */
   recruitment_root_folder_id: z.string().min(1).max(200).optional(),
   recruitment_root_folder_name: z.string().max(500).optional(),
+  /** Company papers (Kbis, URSSAF, fiscal, insurance, bilans) — Operations → Admin. */
+  company_root_folder_id: z.string().min(1).max(200).optional(),
+  company_root_folder_name: z.string().max(500).optional(),
+  /** Google Doc contract templates, offered in Settings → Signatures. */
+  templates_root_folder_id: z.string().min(1).max(200).optional(),
+  templates_root_folder_name: z.string().max(500).optional(),
 });
 
 export type DriveSettings = z.infer<typeof settingsSchema>;
-type ServiceAccount = Pick<DriveSettings, "client_email" | "private_key">;
+export type ServiceAccount = Pick<DriveSettings, "client_email" | "private_key">;
 export type DriveFile = {
   id: string;
   name: string;
@@ -56,12 +62,10 @@ const base64url = (value: string) => Buffer.from(value, "utf8").toString("base64
 /** Short-lived access tokens are cached per service account until expiry. */
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
-function serviceJwt(sa: ServiceAccount) {
-  const now = Math.floor(Date.now() / 1000);
+/** Signs an RS256 JWT assertion with the service-account key (Drive, or Gmail via delegation). */
+export function signServiceAccountJwt(sa: ServiceAccount, claims: Record<string, unknown>) {
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = base64url(
-    JSON.stringify({ iss: sa.client_email, scope: DRIVE_SCOPE, aud: TOKEN_URL, iat: now, exp: now + 3600 }),
-  );
+  const payload = base64url(JSON.stringify(claims));
   let signature: string;
   try {
     const signer = createSign("RSA-SHA256");
@@ -73,7 +77,12 @@ function serviceJwt(sa: ServiceAccount) {
   return `${header}.${payload}.${signature}`;
 }
 
-async function driveToken(sa: ServiceAccount) {
+function serviceJwt(sa: ServiceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  return signServiceAccountJwt(sa, { iss: sa.client_email, scope: DRIVE_SCOPE, aud: TOKEN_URL, iat: now, exp: now + 3600 });
+}
+
+export async function driveToken(sa: ServiceAccount) {
   const hit = tokenCache.get(sa.client_email);
   if (hit && hit.expiresAt > Date.now() + 60_000) return hit.token;
   const response = await fetch(TOKEN_URL, {
@@ -119,7 +128,7 @@ function driveError(status: number, message: string, sa: Pick<DriveSettings, "cl
 async function failure(response: globalThis.Response, sa: ServiceAccount) {
   let message = "";
   try { message = ((await response.json()) as { error?: { message?: string } })?.error?.message || ""; } catch { /* bare status */ }
-  return driveError(response.status, message, sa);
+  return Object.assign(driveError(response.status, message, sa), { status: response.status });
 }
 
 export async function driveApi<T>(sa: ServiceAccount, path: string, opts: { method?: string; query?: Record<string, string>; body?: unknown } = {}): Promise<T> {
@@ -270,16 +279,22 @@ const toStoredFile = (file: DriveFile): StoredFile => ({
 });
 
 export function createDriveStorage(sa: DriveSettings): DocumentStorage {
-  const rootId = (root: StorageRoot) => {
-    if (root === "clients") return sa.root_folder_id;
+  const rootFolder = (root: StorageRoot): StorageFolder => {
+    if (root === "clients") return { id: sa.root_folder_id, name: sa.root_folder_name, link: null };
+    if (root === "company") {
+      if (!sa.company_root_folder_id)
+        throw new Error("No company documents folder is connected. Set it in Settings → Google Drive contracts (company documents folder).");
+      // The company root is the company's own folder, so it carries a link for "Open in Drive".
+      return { id: sa.company_root_folder_id, name: sa.company_root_folder_name || "", link: `https://drive.google.com/drive/folders/${sa.company_root_folder_id}` };
+    }
     if (!sa.people_root_folder_id)
       throw new Error("No HR documents folder is connected. Set the people root folder in Settings → Google Drive (shared with HR only).");
-    return sa.people_root_folder_id;
+    return { id: sa.people_root_folder_id, name: sa.people_root_folder_name || "", link: null };
   };
   return {
     provider: "gdrive",
     async ensureFolder(root, path) {
-      let folder: StorageFolder = { id: rootId(root), name: root === "clients" ? sa.root_folder_name : sa.people_root_folder_name || "", link: null };
+      let folder: StorageFolder = rootFolder(root);
       for (const name of path) folder = toFolder(await ensureChildFolder(sa, folder.id, name));
       return folder;
     },
@@ -295,6 +310,11 @@ export function createDriveStorage(sa: DriveSettings): DocumentStorage {
         headers: { "Content-Type": file.mimeType || "application/octet-stream" },
         fileId: null,
       };
+    },
+    async uploadFile(folder, file, bytes) {
+      const stored = toStoredFile(await uploadFileContent(sa, { name: file.name, mimeType: file.mimeType, data: Buffer.from(bytes) }, folder.id));
+      // Drive computes the checksum asynchronously; the registry wants one, so hash what we sent.
+      return { ...stored, size: stored.size ?? bytes.byteLength, sha256: stored.sha256 ?? createHash("sha256").update(bytes).digest("hex") };
     },
     async getFile(fileId) {
       return toStoredFile(await driveApi<DriveFile>(sa, `/files/${fileId}`, { query: { fields: FILE_FIELDS, supportsAllDrives: "true" } }));

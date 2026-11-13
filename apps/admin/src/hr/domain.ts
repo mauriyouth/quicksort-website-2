@@ -1,12 +1,14 @@
+import type { ExperienceItem } from '../candidate-intake';
+export type { ExperienceItem };
 export type ApplicationStage = 'application' | 'screening' | 'hr_interview' | 'technical_interview' | 'client_presentation' | 'decision' | 'offer' | 'contract';
 export type ApplicationStatus = 'active' | 'hired' | 'rejected' | 'withdrawn';
 export type EmploymentStatus = 'preboarding' | 'active' | 'offboarding' | 'ended';
 export type AssignmentStatus = 'proposed' | 'reserved' | 'confirmed' | 'active' | 'completed' | 'cancelled';
-export type Person = { id: string; full_name: string; email: string; phone: string; headline: string; location: string; skills: string; languages: string; degrees: string; certifications: string; notes: string; source: string; owner_email: string; contact_allowed: boolean; version: number; created_at: string; updated_at: string };
-export type Application = { id: string; person_id: string; opportunity_id: string; stage: ApplicationStage; status: ApplicationStatus; reason: string; screening_summary: string; screening_recommendation: string; source: string; referrer: string; stage_entered_at: string; version: number; created_at: string; updated_at: string };
+export type Person = { id: string; full_name: string; email: string; phone: string; headline: string; location: string; skills: string; languages: string; degrees: string; certifications: string; notes: string; source: string; owner_email: string; contact_allowed: boolean; linkedin_url: string; summary: string; experience: ExperienceItem[]; version: number; created_at: string; updated_at: string };
+export type Application = { id: string; person_id: string; opportunity_id: string; stage: ApplicationStage; status: ApplicationStatus; reason: string; screening_summary: string; screening_recommendation: string; source: string; referrer: string; owner_email: string; stage_entered_at: string; version: number; created_at: string; updated_at: string };
 export type Employee = { id: string; person_id: string; application_id: string | null; offer_id: string | null; matricule: string; role: string; contract_type: string; nationality: string; manager_email: string; parrain: string; start_date: string; end_date: string | null; planned_exit_date: string | null; status: EmploymentStatus; onboarding_completed_at: string | null; probation_status: 'pending' | 'confirmed' | 'extended' | 'ended'; probation_end: string | null; version: number; created_at: string; updated_at: string };
 export type Salary = { id: string; employee_id: string; rate_kind: 'monthly' | 'daily'; salary_monthly: number | null; daily_rate: number | null; start_date: string; end_date: string | null; rationale: string; version: number; created_at: string; updated_at: string };
-export type Opportunity = { id: string; title: string; hiring_mode: string; job_id: string | null; project_id: string | null; client_ids: string[]; client_need: string; skill_family: string; owner_email: string; target_tjm: number | null; status: string; justification: string; decided_by: string; decided_at: string | null; decision_rationale: string; version: number; created_at: string; updated_at: string };
+export type Opportunity = { id: string; title: string; hiring_mode: string; job_id: string | null; project_id: string | null; client_ids: string[]; client_need: string; skill_family: string; owner_email: string; target_tjm: number | null; status: string; justification: string; decided_by: string; decided_at: string | null; decision_rationale: string; archived_at: string | null; version: number; created_at: string; updated_at: string };
 export type Interview = { id: string; application_id: string; kind: 'hr' | 'technical' | 'client'; scheduled_at: string; panel: string; location: string; status: 'scheduled' | 'completed' | 'cancelled' | 'no_show'; scorecard: unknown; notes: string; invitation_status: 'manual' | 'pending' | 'delivered' | 'failed'; version: number; created_at: string };
 export type Offer = { id: string; application_id: string; title: string; contract_type: string; salary_monthly: number; cjm: number; target_tjm: number; margin_pct: number; status: 'draft' | 'pending_approval' | 'pending_direction' | 'approved' | 'shared' | 'accepted' | 'declined' | 'cancelled' | 'expired'; approver_note: string; decided_by: string; shared_at: string | null; response_at: string | null; valid_until: string | null; delivery_status: 'manual' | 'pending' | 'delivered' | 'failed'; version: number; created_at: string };
 export type JourneyTask = { id: string; employee_id: string; phase: 'preboarding' | 'onboarding' | 'probation'; title: string; assignee: string; due_date: string | null; required: boolean; dependency_id: string | null; evidence: string; completed_at: string | null; completed_by: string | null; version: number; created_at: string };
@@ -15,18 +17,15 @@ export type Exit = { id: string; employee_id: string; kind: string; status: 'ope
 export type ExitItem = { id: string; offboarding_id: string; title: string; required: boolean; completed_at: string | null; version: number; created_at: string };
 export type Assignment = { id: string; employee_id: string; project_id: string; position: string; pricing_line: string; allocation_pct: number; start_date: string; end_date: string | null; status: AssignmentStatus; version: number; created_at: string; updated_at: string };
 export type Event = { id: number; person_id: string; application_id: string | null; employee_id: string | null; kind: string; previous_state: string; next_state: string; actor_id: string; actor_email: string; rationale: string; request_id: string; created_at: string };
-export type Contract = { id: string; offer_id: string | null; candidate_id: string; person_id: string | null; application_id: string | null; employee_id: string | null; title: string; storage_path: string; document_sha256: string; created_at: string };
-export type Signature = { contract_id: string; candidate_id: string; signer_name: string; consent_text: string; document_sha256: string; signed_at: string };
-export type Countersignature = { contract_id: string; actor_id: string; signer_name: string; document_sha256: string; signed_at: string };
 export type SuggestionKind = 'interview_prep' | 'profile_summary' | 'onboarding_plan' | 'staffing_match' | 'handover' | 'alumni_reconnect' | 'job_description';
 export type Suggestion = { id: string; person_id: string | null; application_id: string | null; employee_id: string | null; opportunity_id: string | null; kind: SuggestionKind; payload: unknown; sources: unknown; input_version: number; model: string; status: 'draft' | 'accepted' | 'dismissed' | 'stale'; reviewed_by: string | null; reviewed_at: string | null; created_at: string };
 export type StaffingProject = { id: string; version: number; title: string; client_id: string | null; status: string; start_date: string | null; end_date: string | null; pricing_model: string; currency: string; tjm_profiles?: unknown };
 export type StaffingClient = { id: string; name: string };
 export type Account = { profile_id: string; person_id: string; linked_by: string; linked_at: string };
 export type Capabilities = { recruit: boolean; approve_offer: boolean; approve_direction: boolean; staff: boolean; admin: boolean };
-export type Workspace = { jobs: { id: string; title: string; published: boolean }[]; people: Person[]; applications: Application[]; employees: Employee[]; salaries: Salary[]; opportunities: Opportunity[]; interviews: Interview[]; offers: Offer[]; tasks: JourneyTask[]; reviews: Review[]; exits: Exit[]; exitItems: ExitItem[]; assignments: Assignment[]; events: Event[]; contracts: Contract[]; signatures: Signature[]; countersignatures: Countersignature[]; suggestions: Suggestion[]; projects: StaffingProject[]; clients: StaffingClient[]; accounts: Account[]; capabilities: Capabilities };
+export type Workspace = { jobs: { id: string; title: string; published: boolean }[]; people: Person[]; applications: Application[]; employees: Employee[]; salaries: Salary[]; opportunities: Opportunity[]; interviews: Interview[]; offers: Offer[]; tasks: JourneyTask[]; reviews: Review[]; exits: Exit[]; exitItems: ExitItem[]; assignments: Assignment[]; events: Event[]; suggestions: Suggestion[]; projects: StaffingProject[]; clients: StaffingClient[]; accounts: Account[]; capabilities: Capabilities };
 export type Requirement = { key: string; label: string; done: boolean };
-export type ProfileInput = Pick<Person, 'full_name'> & Partial<Pick<Person, 'email' | 'phone' | 'headline' | 'location' | 'skills' | 'languages' | 'degrees' | 'certifications' | 'notes' | 'source' | 'owner_email' | 'contact_allowed'>>;
+export type ProfileInput = Pick<Person, 'full_name'> & Partial<Pick<Person, 'email' | 'phone' | 'headline' | 'location' | 'skills' | 'languages' | 'degrees' | 'certifications' | 'notes' | 'source' | 'owner_email' | 'contact_allowed' | 'linkedin_url' | 'summary' | 'experience'>>;
 type Versioned = { expected_version: number };
 type PersonTarget = { person_id: string; application_id?: string; employee_id?: string };
 type RequisitionInput = Pick<Opportunity, 'title' | 'hiring_mode'> & Partial<Pick<Opportunity, 'job_id' | 'project_id' | 'client_ids' | 'client_need' | 'skill_family' | 'owner_email' | 'target_tjm' | 'justification'>>;
@@ -37,6 +36,8 @@ export type CommandIntent =
  | { kind: 'create_application'; person_id: string; opportunity_id: string; source?: string; referrer?: string }
  | ({ kind: 'move_application'; application_id: string; to_stage: ApplicationStage; rationale?: string } & Versioned)
  | ({ kind: 'dispose_application'; application_id: string; status: 'rejected' | 'withdrawn'; reason: string } & Versioned)
+ | ({ kind: 'reopen_application'; application_id: string; rationale?: string } & Versioned)
+ | ({ kind: 'assign_application_owner'; application_id: string; owner_email: string } & Versioned)
  | ({ kind: 'add_note'; rationale: string } & PersonTarget)
  | { kind: 'schedule_interview'; application_id: string; interview_kind: 'hr' | 'technical' | 'client'; scheduled_at: string; panel: string; location?: string }
  | ({ kind: 'complete_interview'; interview_id: string; scorecard: unknown; notes: string } & Versioned)
@@ -67,7 +68,7 @@ export type CommandIntent =
  | ({ kind: 'create_requisition' } & RequisitionInput)
  | ({ kind: 'update_requisition'; opportunity_id: string } & Versioned & RequisitionInput)
  | ({ kind: 'publish_requisition'; opportunity_id: string; job_id: string } & Versioned)
- | { kind: 'countersign_contract'; contract_id: string; signer_name: string }
+ | ({ kind: 'archive_requisition' | 'restore_requisition' | 'delete_requisition'; opportunity_id: string } & Versioned)
  | { kind: 'save_suggestion'; person_id?: string | null; application_id?: string | null; employee_id?: string | null; opportunity_id?: string | null; suggestion_kind: SuggestionKind; payload: unknown; sources: unknown; input_version: number; model: string }
  | { kind: 'review_suggestion'; suggestion_id: string; status: 'accepted' | 'dismissed' }
  | ({ kind: 'import_person'; external_source: string; external_id: string; employment?: { role: string; start_date: string; end_date?: string | null }; rationale: string } & ProfileInput);

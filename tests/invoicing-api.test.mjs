@@ -44,7 +44,7 @@ function memoryClient(tables, ops, { failures = {}, hooks = {} } = {}) {
     rpc: async () => ({ data: "user-1", error: null }),
     from(table) {
       const filters = [];
-      let mode = "select", payload, options, returning = false, single = null, orderBy = null;
+      let mode = "select", payload, options, returning = false, single = null, orderBy = null, window = null;
       const cmp = (fn) => (c, v) => { filters.push((r) => fn(r[c], v)); return q; };
       const q = {
         select() { if (mode !== "select") returning = true; return q; },
@@ -54,6 +54,7 @@ function memoryClient(tables, ops, { failures = {}, hooks = {} } = {}) {
         is: cmp((a, b) => (a ?? null) === b),
         order(c, o = {}) { orderBy = { c, asc: o.ascending !== false }; return q; },
         limit() { return q; },
+        range(from, to) { window = [from, to + 1]; return q; },
         insert(v) { mode = "insert"; payload = v; return q; },
         update(v) { mode = "update"; payload = v; return q; },
         upsert(v, o) { mode = "upsert"; payload = v; options = o; return q; },
@@ -77,7 +78,7 @@ function memoryClient(tables, ops, { failures = {}, hooks = {} } = {}) {
         if (mode === "select") {
           const list = rows.filter(match).map(copy);
           if (orderBy) list.sort((a, b) => ((a[orderBy.c] ?? "") < (b[orderBy.c] ?? "") ? -1 : (a[orderBy.c] ?? "") > (b[orderBy.c] ?? "") ? 1 : 0) * (orderBy.asc ? 1 : -1));
-          return shape(list);
+          return shape(window ? list.slice(...window) : list);
         }
         if (mode === "insert") {
           hooks[`${table}.insert`]?.(tables);
@@ -413,6 +414,73 @@ test("sync keeps manual project assignment", async () => {
   assert.equal(r.body.lastSyncedAt, "2026-10-28T09:00:00.000Z");
   assert.equal(r.body.invoices.length, 1);
 });
+test("listing invoices without refresh never calls Qonto, even when the last sync is old", async () => {
+  let calls = 0;
+  const f = fixture({
+    invoices: [craInvoice({ id: "inv-1", provider_invoice_id: "q-1" })],
+    provider: { listInvoices: async () => { calls += 1; return []; } },
+  });
+  f.tables.invoicing_settings[0].last_synced_at = null;
+  const r = await f.request("GET", { query: { resource: "invoices" } });
+  assert.equal(r.code, 200);
+  assert.equal(calls, 0);
+  assert.equal(r.body.invoices.length, 1);
+});
+test("invoices returns one filtered page with aggregates over the whole filtered set", async () => {
+  const imported = (n, over = {}) => ({ id: `imp-${n}`, provider_invoice_id: `q-${n}`, source: "imported", status: "finalized", project_id: null, billed_client_id: CLIENT,
+    number: `F-${n}`, issue_date: `2026-09-${String(n).padStart(2, "0")}`, period_month: "2026-09-01", due_date: "2026-12-31", total_ttc: 100, ...over });
+  const f = fixture({ invoices: [
+    ...Array.from({ length: 5 }, (_, k) => imported(k + 1)),
+    imported(6, { status: "paid", project_id: PROJECT, period_month: "2026-08-01", issue_date: "2026-08-20" }),
+    imported(7, { due_date: "2026-10-01", billed_client_id: null }),
+  ] });
+  const r = await f.request("GET", { query: { resource: "invoices", perPage: "2", page: "2" } });
+  assert.equal(r.code, 200);
+  assert.equal(r.body.total, 7);
+  assert.equal(r.body.pages, 4);
+  assert.deepEqual(r.body.invoices.map((i) => i.number), ["F-4", "F-3"]);
+  assert.equal(r.body.invoices[0].client_name, "Acme");
+  assert.deepEqual(r.body.groups, { "2026-09": { count: 6, ttc: 600 } });
+  assert.equal(r.body.statusCounts.all, 7);
+  assert.equal(r.body.statusCounts.Overdue, 1);
+  assert.equal(r.body.statusCounts.Paid, 1);
+  assert.deepEqual(r.body.kpis.unpaid, { count: 6, ttc: 600 });
+  assert.deepEqual(r.body.counts, { invoices: 7, unassigned: 6 });
+  assert.deepEqual(r.body.options.months, ["2026-09", "2026-08"]);
+
+  const unassigned = await f.request("GET", { query: { resource: "invoices", tab: "unassigned", status: "Overdue" } });
+  assert.deepEqual(unassigned.body.invoices.map((i) => i.number), ["F-7"]);
+  const search = await f.request("GET", { query: { resource: "invoices", q: "data platform" } });
+  assert.deepEqual(search.body.invoices.map((i) => i.number), ["F-6"]);
+  const noClient = await f.request("GET", { query: { resource: "invoices", client: "none", from: "2026-09-07", to: "2026-09-01" } });
+  assert.deepEqual(noClient.body.invoices.map((i) => i.number), ["F-7"]);
+  const pastEnd = await f.request("GET", { query: { resource: "invoices", perPage: "25", page: "9" } });
+  assert.equal(pastEnd.body.page, 1);
+  assert.equal(pastEnd.body.invoices.length, 7);
+  assert.equal((await f.request("GET", { query: { resource: "invoices", perPage: "500" } })).code, 400);
+  // By client: the client's invoices (newest first), then those without a client; headers carry each group's total.
+  const byClient = await f.request("GET", { query: { resource: "invoices", group: "client", perPage: "3", page: "3" } });
+  assert.equal(byClient.body.group, "client");
+  assert.deepEqual(byClient.body.invoices.map((i) => i.number), ["F-7"]);
+  assert.deepEqual(byClient.body.groups, { "": { count: 1, ttc: 100 } });
+  const allByClient = await f.request("GET", { query: { resource: "invoices", group: "client" } });
+  assert.deepEqual(allByClient.body.invoices.map((i) => i.number), ["F-5", "F-4", "F-3", "F-2", "F-1", "F-6", "F-7"]);
+  assert.deepEqual(allByClient.body.groups, { [CLIENT]: { count: 6, ttc: 600 }, "": { count: 1, ttc: 100 } });
+  assert.equal((await f.request("GET", { query: { resource: "invoices", group: "year" } })).code, 400);
+  assert.equal((await f.request("GET", { query: { resource: "invoices", status: "Lost" } })).code, 400);
+});
+test("link-candidates lists unclaimed imports, same project first", async () => {
+  const f = fixture({ invoices: [
+    { id: "a", source: "imported", status: "finalized", project_id: null, billed_client_id: CLIENT, employee_id: null, period_month: "2026-09-01", issue_date: "2026-09-30" },
+    { id: "b", source: "imported", status: "finalized", project_id: PROJECT, billed_client_id: CLIENT, employee_id: null, period_month: "2026-08-01", issue_date: "2026-08-31" },
+    { id: "c", source: "imported", status: "canceled", project_id: PROJECT, billed_client_id: CLIENT, employee_id: null },
+    { id: "d", source: "imported", status: "finalized", project_id: PROJECT, billed_client_id: CLIENT, employee_id: EMP },
+    { id: "e", source: "imported", status: "finalized", project_id: P2, billed_client_id: CLIENT, employee_id: null },
+  ] });
+  const r = await f.request("GET", { query: { resource: "link-candidates", projectId: PROJECT, billedClientId: CLIENT, month: "2026-09" } });
+  assert.equal(r.code, 200);
+  assert.deepEqual(r.body.invoices.map((i) => i.id), ["b", "a"]);
+});
 test("sync imports unknown invoices with the provider and removes vanished drafts", async () => {
   const f = fixture({
     invoices: [craInvoice({ id: "inv-gone", provider_invoice_id: "q-gone" })],
@@ -456,7 +524,7 @@ test("month and project resources list consultant months to invoice", async () =
   assert.equal(month.body.rows[0].amountHt, "11700.00");
   const project = await f.request("GET", { query: { resource: "project", projectId: PROJECT } });
   assert.equal(project.code, 200);
-  assert.deepEqual(project.body.rows.map((r) => [r.employeeId, r.status]), [[EMP, "not_invoiced"]]);
+  assert.deepEqual(project.body.rows.map((r) => [r.employeeId, r.status, r.profile]), [[EMP, "not_invoiced", "Data Engineer"]]);
   assert.deepEqual(project.body.totals, { invoicedHt: "0.00", paidTtc: "0.00", outstandingTtc: "0.00" });
 });
 test("project totals sum validated and paid invoices", async () => {
@@ -469,6 +537,19 @@ test("project totals sum validated and paid invoices", async () => {
   assert.deepEqual(r.body.totals, { invoicedHt: "300.30", paidTtc: "240.24", outstandingTtc: "120.12" });
   assert.equal(r.body.rows.length, 0);
   assert.deepEqual(r.body.consultants, [{ id: EMP, name: "Jane Doe" }]);
+});
+test("project resource tags invoices and pending months with their TJM profile", async () => {
+  const f = fixture({ invoices: [
+    craInvoice({ status: "finalized", total_ht: 100 }),
+    craInvoice({ id: "inv-imp", source: "imported", period_month: null, issue_date: "2026-09-05", status: "paid" }),
+    craInvoice({ id: "inv-none", source: "imported", employee_id: null, period_month: null, issue_date: "2026-09-05" }),
+  ] });
+  f.tables.invoice_lines.push({ id: "l-1", invoice_id: "inv-1", position: 0, pricing_line: "Lead Data Engineer" });
+  const r = await f.request("GET", { query: { resource: "project", projectId: PROJECT } });
+  assert.equal(r.code, 200);
+  assert.deepEqual(r.body.profiles, ["Data Engineer"]);
+  // Lines win; else the consultant's staffing for the month before issue; else none.
+  assert.deepEqual(Object.fromEntries(r.body.invoices.map((i) => [i.id, i.profile])), { "inv-1": "Lead Data Engineer", "inv-imp": "Data Engineer", "inv-none": null });
 });
 test("invoice resource returns lines and events", async () => {
   const f = fixture();

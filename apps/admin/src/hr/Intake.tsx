@@ -3,7 +3,8 @@ import { useSession } from '@clerk/react';
 import { Upload, Sparkles } from 'lucide-react';
 import { z } from 'zod';
 import { db, errorMessage } from '@quicksort/hr-db';
-import { MAX_INTAKE_PDF_BYTES, parsedProfileSchema, type ParsedProfile } from '../candidate-intake';
+import { MAX_INTAKE_PDF_BYTES, certificationLines, educationLines, languageLines, parsedProfileSchema, type ParsedProfile } from '../candidate-intake';
+import { Button, Card, CardContent, Checkbox, Field as UiField, FieldLabel } from '@quicksort-sas/ui';
 import { Field, Form, Tag, checked, text, type RunCommand } from './ui';
 import type { Opportunity } from './domain';
 import { fileCv } from './recruitmentCv';
@@ -113,9 +114,9 @@ export function Intake({
     const warnings: string[] = [];
     if (position) {
       try {
-        await run({ kind: 'create_application', person_id: personId, opportunity_id: position.id }, `Person added and linked to “${position.title}”.`);
+        await run({ kind: 'create_application', person_id: personId, opportunity_id: position.id }, `Person added and linked to "${position.title}".`);
       } catch (failure) {
-        warnings.push(`The person was saved, but the application to “${position.title}” failed: ${errorMessage(failure)}`);
+        warnings.push(`The person was saved, but the application to "${position.title}" failed: ${errorMessage(failure)}`);
       }
     }
     const path = storagePath.current;
@@ -133,29 +134,31 @@ export function Intake({
     onAdded(warnings.join(' '));
   };
   return <>
-    <div className="hr-card">
-      <div className="hr-card-head">
-        <div>
-          <div className="hr-inline">
-            <Sparkles size={16} aria-hidden="true" />
-            <h3>Start with a resume</h3>
+    <Card size="sm">
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex max-w-prose min-w-0 flex-1 flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-4" aria-hidden="true" />
+              <h3 className="m-0 text-[15px] font-medium">Start with a resume</h3>
+            </div>
+            <p className="m-0 text-[13px] leading-relaxed text-muted-foreground">Extract a profile from a PDF, then review and edit every field before saving. You can also enter the person manually.</p>
           </div>
-          <p>Extract a profile from a PDF, then review and edit every field before saving. You can also enter the person manually.</p>
+          <Button variant="outline" disabled={parsing || busy} onClick={() => fileRef.current?.click()}>
+            <Upload aria-hidden="true" />
+            {parsing ? 'Extracting…' : 'Choose PDF'}
+          </Button>
         </div>
-        <button className="btn secondary" disabled={parsing || busy} onClick={() => fileRef.current?.click()}>
-          <Upload size={15} aria-hidden="true" />
-          {parsing ? 'Extracting…' : 'Choose PDF'}
-        </button>
-      </div>
-      <input ref={fileRef} hidden type="file" accept="application/pdf,.pdf" aria-label="Resume PDF" onChange={event => void parse(event.target.files?.[0])} />
-      {profile && <>
-        <Tag tone="quiet">Extraction confidence: {profile.confidence}</Tag>
-        <p>Source: {fileName}. Extracted facts are suggestions until you save the reviewed profile.</p>
-      </>}
-      {error && <p role="alert" className="hr-error">
-        {error}
-      </p>}
-    </div>
+        <input ref={fileRef} hidden type="file" accept="application/pdf,.pdf" aria-label="Resume PDF" onChange={event => void parse(event.target.files?.[0])} />
+        {profile && <div className="flex flex-col items-start gap-2">
+          <Tag tone="quiet">Extraction confidence: {profile.confidence}</Tag>
+          <p className="m-0 text-[13px] text-muted-foreground">Source: {fileName}. Extracted facts are suggestions until you save the reviewed profile.</p>
+        </div>}
+        {error && <p role="alert" className="m-0 text-[13px] text-destructive">
+          {error}
+        </p>}
+      </CardContent>
+    </Card>
     <div ref={formRef}>
       <Form key={fileName || 'manual'} title={profile ? 'Review the extracted profile' : 'Person details'} run={reviewedRun} busy={busy || parsing} button="Save reviewed person" success="Person added to the talent pool. Open their record to create an application." submit={data => ({
         kind: 'create_person',
@@ -163,8 +166,15 @@ export function Intake({
         email: text(data, 'email'),
         phone: text(data, 'phone'),
         headline: text(data, 'headline'),
+        summary: text(data, 'summary'),
         location: text(data, 'location'),
         skills: text(data, 'skills'),
+        degrees: text(data, 'degrees'),
+        certifications: text(data, 'certifications'),
+        languages: text(data, 'languages'),
+        linkedin_url: text(data, 'linkedin_url'),
+        // Positions are not editable here; they come from the parsed CV and are edited on the record.
+        experience: profile?.experience ?? [],
         notes: text(data, 'notes'),
         source: text(data, 'source'),
         owner_email: text(data, 'owner_email'),
@@ -174,20 +184,28 @@ export function Intake({
         <Field name="position_id" label="Position" options={openPositions.map(position => ({
           value: position.id,
           label: position.title
-        }))} hint={profile ? 'The CV is filed on Google Drive under <year>/<position>, or “Candidatures spontanées” when no position is set.' : 'Creates the application to this position.'} />
+        }))} hint={profile ? 'The CV is filed on Google Drive under <year>/<position>, or "Candidatures spontanées" when no position is set.' : 'Creates the application to this position.'} />
         <Field name="full_name" label="Full name" value={profile?.fullName} required />
         <Field name="headline" label="Professional headline" value={profile?.headline} />
+        <Field name="summary" label="Profile description" type="textarea" value={profile?.summary} hint="The profile or “About me” paragraph of the resume." />
         <Field name="email" label="Email" type="email" value={profile?.email} />
         <Field name="phone" label="Phone" type="tel" value={profile?.phone} />
         <Field name="location" label="Location" value={profile?.location} />
+        <Field name="linkedin_url" label="LinkedIn profile" type="url" value={profile?.linkedinUrl} />
         <Field name="owner_email" label="Record owner" type="email" value={actorEmail} />
         <Field name="source" label="Source" value={profile ? 'resume' : 'other'} options={['career_site', 'linkedin', 'referral', 'job_board', 'spontaneous', 'rediscovery', 'resume', 'other'].map(value => ({
           value,
           label: value.replace(/_/g, ' ')
         }))} required />
-        <Field name="skills" label="Skills and certifications" type="textarea" value={profile?.skills.join(', ')} />
-        <Field name="notes" label="Profile notes" type="textarea" value={profile ? `${profile.summary}\n\nResume source: ${fileName}` : ''} />
-        <label className="hr-checkbox hr-wide"><input type="checkbox" name="contact_allowed" defaultChecked />Contact permitted for future opportunities</label>
+        <Field name="skills" label="Skills" type="textarea" value={profile?.skills.join(', ')} />
+        <Field name="degrees" label="Education" type="textarea" value={profile ? educationLines(profile.education) : ''} hint="One per line: Degree — School — 2016–2018" />
+        <Field name="certifications" label="Certifications" type="textarea" value={profile ? certificationLines(profile.certifications) : ''} hint="One per line: Certification — Issuer — Year" />
+        <Field name="languages" label="Languages" type="textarea" value={profile ? languageLines(profile.languages) : ''} hint="One per line: Language — Level" />
+        <Field name="notes" label="Profile notes" type="textarea" value={profile ? `Resume source: ${fileName}` : ''} />
+        <UiField orientation="horizontal" className="col-span-full gap-2">
+          <Checkbox id="hr-intake-contact" name="contact_allowed" value="on" defaultChecked />
+          <FieldLabel htmlFor="hr-intake-contact" className="font-normal">Contact permitted for future opportunities</FieldLabel>
+        </UiField>
       </Form>
     </div>
   </>;

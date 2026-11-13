@@ -6,6 +6,7 @@ import type { InvoicingProvider } from "../server/invoicing/provider.ts";
 import { encryptCredentials, loadInvoicingSettings, providerFromSettings } from "../server/invoicing/settings.ts";
 import * as lifecycle from "../server/invoicing/lifecycle.ts";
 import { HttpError } from "../server/invoicing/lifecycle.ts";
+import { STATUS_LABELS } from "../server/invoicing/list.ts";
 import type { LifecycleCtx } from "../server/invoicing/lifecycle.ts";
 
 type Request = { method?: string; query?: Record<string, string | string[] | undefined>; headers: Record<string, string | string[] | undefined>; body: unknown };
@@ -16,6 +17,20 @@ type Ctx = {
   provider: () => InvoicingProvider; query: Record<string, string | undefined>; life: LifecycleCtx;
 };
 type Result = { status: number; body: unknown };
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const listQuery = z.object({
+  tab: z.enum(["invoices", "unassigned"]).default("invoices"),
+  q: z.string().max(200).default(""),
+  status: z.enum(["", ...STATUS_LABELS]).default(""),
+  client: z.string().max(100).default(""),
+  month: z.union([z.literal(""), z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/)]).default(""),
+  from: z.union([z.literal(""), z.string().regex(DAY)]).default(""),
+  to: z.union([z.literal(""), z.string().regex(DAY)]).default(""),
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(100).default(25),
+  group: z.enum(["month", "client"]).default("month"),
+});
 
 const NOT_CONFIGURED = "Connect Qonto in Invoicing settings first.";
 
@@ -96,7 +111,16 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
     if (!MONTH.test(query.month ?? "")) throw new HttpError("Choose a month (YYYY-MM).", 400);
     return lifecycle.monthRows(life, query.month as string);
   },
-  async invoices({ life, query }) { return lifecycle.listInvoices(life, query.refresh === "1"); },
+  async invoices({ life, query }) {
+    const parsed = listQuery.safeParse(query);
+    if (!parsed.success) throw new HttpError("Invalid invoice filters.", 400);
+    return lifecycle.listInvoices(life, query.refresh === "1", parsed.data);
+  },
+  async "link-candidates"({ life, query }) {
+    if (!z.uuid().safeParse(query.projectId).success) throw new HttpError("Choose a project.", 400);
+    if (!MONTH.test(query.month ?? "")) throw new HttpError("Choose a month (YYYY-MM).", 400);
+    return lifecycle.invoiceLinkCandidates(life, { projectId: query.projectId as string, billedClientId: query.billedClientId || null, month: query.month as string });
+  },
   async invoice({ life, query }) {
     if (!query.id) throw new HttpError("Choose an invoice.", 400);
     return lifecycle.invoiceDetail(life, query.id);

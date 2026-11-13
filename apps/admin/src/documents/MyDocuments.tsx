@@ -1,8 +1,9 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Check, Clock, Download, Eye, RefreshCw, Trash2, Upload } from "lucide-react";
+import { Badge, Button } from "@quicksort-sas/ui";
+import { cn } from "cn";
 import { expiryLabel, expiryState, uploadStatus } from "./expiry";
 import { TypeSearchField } from "./TypeSearchField";
-import "./documents.css";
 
 /** public.my_documents: the caller's HR folder as the registry holds it. */
 export type MyFiledDocument = {
@@ -96,7 +97,9 @@ export function MyDocuments({ folder, uploads, types, busy, loading, onUpload, o
   const checklist: Row[] = [...groups].map(([key, members]) => {
     const codes = new Set(members.map((t) => t.code));
     const label = members.map((t) => t.label).join(" or ");
-    const docs = active.filter((d) => codes.has(d.type_code));
+    // Most up-to-date first (a titre and its récépissé share a group).
+    const docs = active.filter((d) => codes.has(d.type_code))
+      .sort((a, b) => (b.expires_on || "9999-12-31").localeCompare(a.expires_on || "9999-12-31"));
     const valid = docs.find((d) => expiryState(d, d).tone !== "expired");
     const doc = valid ?? docs[0];
     const selfUpload = members.find((t) => t.self_upload)?.code;
@@ -157,29 +160,29 @@ export function MyDocuments({ folder, uploads, types, busy, loading, onUpload, o
     onPick={() => row.uploadType && pick(row.uploadType)}
     onRemove={() => row.upload && onRemove(row.upload)} />;
 
-  return <div className="doc-panel">
-    {!!checklist.length && <div className="doc-summary">
-      <div className="doc-summary-top">
-        <div className="doc-summary-counts">
-          <span className="doc-count">{filedCount} of {checklist.length} sent</span>
-          <span className="doc-muted">{summary}</span>
-        </div>
+  return <div className="flex min-w-0 flex-col gap-6">
+    {!!checklist.length && <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <span className="font-heading text-[32px] leading-none tracking-[-0.03em] text-foreground">{filedCount} of {checklist.length} sent</span>
+        <span className={MUTED}>{summary}</span>
       </div>
-      <div className="doc-segments" role="img" aria-label={`${filedCount} of ${checklist.length} required documents sent`}>
-        {checklist.map((row) => <span key={row.key} className={`doc-segment${row.filed || row.upload ? " is-filed" : ""}`} />)}
+      <div className="flex gap-1" role="img" aria-label={`${filedCount} of ${checklist.length} required documents sent`}>
+        {checklist.map((row) => <span key={row.key} className={cn("h-1.5 flex-1 rounded-full bg-border", (row.filed || row.upload) && "bg-pivot")} />)}
       </div>
     </div>}
-    {!!checklist.length && <div className="doc-rows">{checklist.map(renderRow)}</div>}
+    {!!checklist.length && <div className={ROWS}>{checklist.map(renderRow)}</div>}
 
-    <div className="doc-drop doc-drop--form" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
-      <span className="doc-drop-icon" aria-hidden="true"><Upload size={18} /></span>
-      <span className="doc-drop-main">{busy ? "Working…" : checklist.length ? "Add another document" : "Add a document"}</span>
-      <span className="doc-drop-sub">Choose what it is, then drop the file or browse · PDF, JPG, PNG or DOCX, up to 10 MB</span>
-      <span className="doc-drop-controls">
-        <TypeSearchField types={addable} value={addType} disabled={busy} onChange={setAddType} />
-        <button type="button" className="doc-upload" disabled={busy || !addType} onClick={() => pick(addType)}>
-          <Upload size={15} aria-hidden="true" /> Browse
-        </button>
+    <div className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-input bg-card p-6 text-center text-foreground" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+      <span className="inline-flex size-10 items-center justify-center rounded-full bg-accent" aria-hidden="true"><Upload className="size-[18px]" /></span>
+      <span className="text-[15px] font-medium">{busy ? "Working…" : checklist.length ? "Add another document" : "Add a document"}</span>
+      <span className={MUTED}>Choose what it is, then drop the file or browse · PDF, JPG, PNG or DOCX, up to 10 MB</span>
+      <span className="mt-1 flex w-full flex-wrap justify-center gap-2">
+        <span className="w-[300px] max-w-full text-left">
+          <TypeSearchField types={addable} value={addType} disabled={busy} onChange={setAddType} />
+        </span>
+        <Button disabled={busy || !addType} onClick={() => pick(addType)}>
+          <Upload data-icon="inline-start" aria-hidden="true" /> Browse
+        </Button>
       </span>
     </div>
     <input ref={inputRef} type="file" hidden accept={ACCEPT} aria-label="Choose a file" onChange={(e) => {
@@ -190,14 +193,39 @@ export function MyDocuments({ folder, uploads, types, busy, loading, onUpload, o
       if (file && choice) send(file, choice);
     }} />
 
-    {loading && !folder.length && !uploads.length && <p className="doc-muted">Loading…</p>}
-    {!loading && !checklist.length && !others.length && <p className="doc-muted">Documents you upload, and those HR files for you, appear here.</p>}
+    {loading && !folder.length && !uploads.length && <p role="status" className={MUTED}>Loading…</p>}
+    {!loading && !checklist.length && !others.length && <p className={MUTED}>Documents you upload, and those HR files for you, appear here.</p>}
 
-    {sections.map((section) => <section key={section.title} className="doc-group">
-      <h3 className="doc-group-title">{section.title}</h3>
-      <div className="doc-rows">{section.rows.map(renderRow)}</div>
+    {sections.map((section) => <section key={section.title} className="flex flex-col gap-1.5">
+      <h3 className="m-0 text-[13px] font-medium text-muted-foreground">{section.title}</h3>
+      <div className={ROWS}>{section.rows.map(renderRow)}</div>
     </section>)}
   </div>;
+}
+
+const MUTED = "m-0 text-[13px] text-muted-foreground";
+const ROWS = "flex flex-col border-t border-border";
+
+/** Pill per row tone, as on the HR checklist (DocumentsPanel). */
+const PILL: Record<State, { variant: "secondary" | "outline" | "warning" | "destructive"; className?: string }> = {
+  filed: { variant: "secondary" },
+  expiring: { variant: "warning" },
+  expired: { variant: "destructive" },
+  missing: { variant: "outline", className: "border-dashed" },
+};
+
+/** Status medallion: solid check (filed), clock ring (expiring/expired), dashed ring (missing). */
+function Medallion({ state }: { state: State }) {
+  return <span aria-hidden="true" className={cn(
+    "inline-flex size-8 flex-none items-center justify-center rounded-full",
+    state === "filed" && "bg-foreground text-background",
+    state === "expiring" && "border-[1.5px] border-foreground text-foreground",
+    state === "expired" && "border-[1.5px] border-destructive text-destructive",
+    state === "missing" && "border-[1.5px] border-dashed border-input",
+  )}>
+    {state === "filed" && <Check className="size-[15px]" strokeWidth={2.2} />}
+    {(state === "expiring" || state === "expired") && <Clock className="size-[15px]" strokeWidth={1.75} />}
+  </span>;
 }
 
 function DocRow({ row, busy, onOpen, onDownload, onPick, onRemove }: {
@@ -215,39 +243,37 @@ function DocRow({ row, busy, onOpen, onDownload, onPick, onRemove }: {
   const pill = row.pill.tone === "expiring" || row.pill.tone === "expired" ? expiryLabel(expiry!) : row.pill.label;
   // Own uploads HR has not verified yet can still be taken back.
   const removable = !!upload && (!filed || filed.needs_review || filed.status !== "active");
-  return <div className="doc-rowline">
-    <button type="button" className="doc-identity" disabled={!file && !row.uploadType}
+  const tone = PILL[row.pill.tone];
+  return <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-3 border-b border-border py-4">
+    <button type="button" className="group/identity flex min-w-0 flex-[1_1_240px] cursor-pointer items-center gap-3.5 rounded-lg py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default" disabled={!file && !row.uploadType}
       onClick={filed ? onOpen : file ? onDownload : onPick} aria-label={filed ? `Open ${row.name}` : file ? `Download ${row.name}` : `Upload ${row.name}`}>
-      <span className={`doc-medallion doc-medallion--${row.state}`} aria-hidden="true">
-        {row.state === "filed" && <Check size={15} strokeWidth={2.2} />}
-        {(row.state === "expiring" || row.state === "expired") && <Clock size={15} strokeWidth={1.75} />}
-      </span>
-      <span className="doc-identity-text">
-        <span className="doc-row-name">{row.name}</span>
-        <span className="doc-row-hint">{row.hint}</span>
+      <Medallion state={row.state} />
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="truncate text-[15px] font-medium text-foreground decoration-border underline-offset-4 group-enabled/identity:group-hover/identity:underline">{row.name}</span>
+        <span className="truncate text-[13px] text-muted-foreground">{row.hint}</span>
       </span>
     </button>
-    <div className="doc-file">
+    <div className="flex min-w-0 flex-[1_1_220px] items-center gap-3">
       {file ? <>
-        <span className="doc-ext" aria-hidden="true">{(file.name.split(".").pop() || "").toUpperCase().slice(0, 4)}</span>
-        <span className="doc-file-text">
-          <span className="doc-file-name" title={file.name}>{file.name}</span>
-          <span className="doc-file-meta">{meta}</span>
+        <span className="inline-flex h-9 w-8 flex-none items-end justify-center rounded-md border border-border bg-muted pb-1.5 font-mono text-[9px] font-semibold tracking-[0.02em] text-muted-foreground" aria-hidden="true">{(file.name.split(".").pop() || "").toUpperCase().slice(0, 4)}</span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-sm text-foreground" title={file.name}>{file.name}</span>
+          <span className="text-[13px] text-muted-foreground [overflow-wrap:anywhere]">{meta}</span>
         </span>
-      </> : <span className="doc-file-meta">Not sent yet</span>}
+      </> : <span className="text-[13px] text-muted-foreground">Not sent yet</span>}
     </div>
-    <div className="doc-status">
-      <span className={`doc-pill${row.pill.tone === "filed" ? "" : ` doc-pill--${row.pill.tone}`}`}>{pill}</span>
+    <div className="flex flex-none">
+      <Badge variant={tone.variant} className={tone.className}>{pill}</Badge>
     </div>
-    <div className="doc-actions">
+    <div className="ml-auto flex flex-none items-center justify-end gap-1">
       {file ? <>
-        {filed && <button type="button" className="doc-icon-button" title="Open" aria-label={`Open ${row.name}`} disabled={busy} onClick={onOpen}><Eye size={16} /></button>}
-        <button type="button" className="doc-icon-button" title="Download" aria-label={`Download ${row.name}`} disabled={busy} onClick={onDownload}><Download size={16} /></button>
-        {row.uploadType && <button type="button" className="doc-icon-button" title="Send a new version" aria-label={`Renew ${row.name}`} disabled={busy} onClick={onPick}><RefreshCw size={16} /></button>}
-        {removable && <button type="button" className="doc-icon-button" title="Remove" aria-label={`Remove ${row.name}`} disabled={busy} onClick={onRemove}><Trash2 size={16} /></button>}
-      </> : row.uploadType ? <button type="button" className="doc-upload" disabled={busy} onClick={onPick}>
-        <Upload size={15} aria-hidden="true" /> Upload
-      </button> : <span className="doc-file-meta">HR adds this</span>}
+        {filed && <Button variant="ghost" size="icon-sm" title="Open" aria-label={`Open ${row.name}`} disabled={busy} onClick={onOpen}><Eye /></Button>}
+        <Button variant="ghost" size="icon-sm" title="Download" aria-label={`Download ${row.name}`} disabled={busy} onClick={onDownload}><Download /></Button>
+        {row.uploadType && <Button variant="ghost" size="icon-sm" title="Send a new version" aria-label={`Renew ${row.name}`} disabled={busy} onClick={onPick}><RefreshCw /></Button>}
+        {removable && <Button variant="ghost" size="icon-sm" title="Remove" aria-label={`Remove ${row.name}`} disabled={busy} onClick={onRemove}><Trash2 /></Button>}
+      </> : row.uploadType ? <Button size="sm" disabled={busy} onClick={onPick}>
+        <Upload data-icon="inline-start" aria-hidden="true" /> Upload
+      </Button> : <span className="text-[13px] text-muted-foreground">HR adds this</span>}
     </div>
   </div>;
 }

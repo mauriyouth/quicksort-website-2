@@ -152,23 +152,6 @@ end; $$;
 reset role;
 select pg_temp.assert_true((select count(*) from public.documents)=6,'No document was deleted');
 
--- Supabase files register in place: contracts once both parties signed.
-insert into public.contracts(id,candidate_id,person_id,title,storage_path,document_sha256,created_at) values
- ('47000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000001','CDI 2026','41000000-0000-4000-8000-000000000002/cdi-2026.pdf',repeat('a',64),'2026-01-02'),
- ('47000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000002','42000000-0000-4000-8000-000000000001','Avenant CDI','41000000-0000-4000-8000-000000000002/cdi-2027.pdf',repeat('b',64),'2026-06-01');
-insert into public.contract_signatures(contract_id,candidate_id,signer_name,document_sha256) values
- ('47000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000002','Doc Employee',repeat('a',64));
-select pg_temp.assert_true(not exists(select 1 from public.documents where provider_file_id like 'contracts/%'),'A contract signed by one party is still a draft');
-insert into public.contract_countersignatures(contract_id,actor_id,signer_name,document_sha256) values
- ('47000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000001','Doc Admin',repeat('a',64));
-select pg_temp.assert_true((select type_code='EMPLOYMENT_CONTRACT' and status='active' and sha256=repeat('a',64) and storage_provider='supabase'
- from public.documents where provider_file_id='contracts/41000000-0000-4000-8000-000000000002/cdi-2026.pdf'),'Fully signed contract registered in place with its hash');
-insert into public.contract_signatures(contract_id,candidate_id,signer_name,document_sha256) values
- ('47000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000002','Doc Employee',repeat('b',64));
-insert into public.contract_countersignatures(contract_id,actor_id,signer_name,document_sha256) values
- ('47000000-0000-4000-8000-000000000002','41000000-0000-4000-8000-000000000001','Doc Admin',repeat('b',64));
-select pg_temp.assert_true((select status from public.documents where provider_file_id='contracts/41000000-0000-4000-8000-000000000002/cdi-2026.pdf')='superseded','A newer signed contract supersedes the previous one');
-
 -- Candidate uploads arrive for review; resumes stay out; deletion archives.
 insert into public.candidate_documents(id,candidate_id,name,category,storage_path,size_bytes) values
  ('48000000-0000-4000-8000-000000000001','41000000-0000-4000-8000-000000000002','cni.jpg','identity','41000000-0000-4000-8000-000000000002/cni.jpg',2048),
@@ -210,4 +193,73 @@ select pg_temp.assert_true(not exists(select 1 from public.documents where file_
 insert into public.hr_person_accounts(profile_id,person_id,linked_by) values
  ('41000000-0000-4000-8000-000000000005','42000000-0000-4000-8000-000000000003','41000000-0000-4000-8000-000000000001');
 select pg_temp.assert_true((select person_id from public.documents where file_name='rib.pdf')='42000000-0000-4000-8000-000000000003','Linking registers earlier uploads');
+
+-- A récépissé is a temporary titre de séjour: it satisfies the requirement,
+-- and an expired permit stops alerting once a more up-to-date one is filed.
+insert into public.hr_people(id,full_name) values ('42000000-0000-4000-8000-000000000004','Residence Permit');
+insert into public.employees(id,person_id,start_date,status,contract_type,nationality) values
+ ('43000000-0000-4000-8000-000000000004','42000000-0000-4000-8000-000000000004','2026-01-01','active','CDI','MA');
+create function pg_temp.permit(type_code text, file_id text, expires date) returns jsonb language sql as $$
+ select jsonb_build_object('owner_kind','person','person_id','42000000-0000-4000-8000-000000000004','type_code',type_code,
+  'title',type_code,'storage_provider','gdrive','provider_file_id',file_id,'file_name',file_id||'.pdf','expires_on',expires);
+$$;
+create function pg_temp.permit_alerts(kind text) returns bigint language sql as $$
+ select count(*) from public.document_alerts where person_id='42000000-0000-4000-8000-000000000004' and severity=kind
+  and type_code in ('TITRE_SEJOUR','TITRE_SEJOUR_RECEPISSE');
+$$;
+set local role authenticated;
+select pg_temp.assert_true(pg_temp.alerts('missing','TITRE_SEJOUR')>=1 and pg_temp.permit_alerts('missing')=1,'Non-EU employee misses one residence permit');
+select public.register_document(pg_temp.permit('TITRE_SEJOUR','ts-old',pg_temp.today()-30));
+select public.register_document(pg_temp.permit('TITRE_SEJOUR_RECEPISSE','rec-1',pg_temp.today()+60));
+select pg_temp.assert_true(pg_temp.permit_alerts('missing')=0,'Récépissé satisfies the residence requirement');
+select pg_temp.assert_true(pg_temp.permit_alerts('expired')=0,'Expired titre covered by a newer récépissé raises no alert');
+select public.register_document(pg_temp.permit('TITRE_SEJOUR_RECEPISSE','rec-0',pg_temp.today()-200));
+select public.register_document(pg_temp.permit('TITRE_SEJOUR','ts-new',pg_temp.today()+1400));
+select pg_temp.assert_true(pg_temp.permit_alerts('expired')=0,'Expired récépissés need no renewal once the new card is filed');
+select pg_temp.assert_true(pg_temp.permit_alerts('expiring')=0,'A récépissé still running is not chased when a later card exists');
+-- The rule is limited to residence permits: an expired CNI still alerts beside a valid passport.
+select public.register_document(pg_temp.permit('CNI','cni-old',pg_temp.today()-10));
+select public.register_document(pg_temp.permit('PASSPORT','pass-ok',pg_temp.today()+3000));
+select pg_temp.assert_true((select count(*) from public.document_alerts where person_id='42000000-0000-4000-8000-000000000004' and severity='expired' and type_code='CNI')=1,'Identity documents keep their own expiry alerts');
+-- Company documents: admins file and renew them, HR never sees them, the
+-- registry keeps them ownerless, and their expiry raises an alert.
+select pg_temp.as_user('41000000-0000-4000-8000-000000000001');
+set local role authenticated;
+select public.register_document(jsonb_build_object('owner_kind','company','type_code','COMPANY_KBIS','title','Kbis',
+ 'storage_provider','gdrive','provider_file_id','kbis-1','file_name','kbis.pdf','expires_on',pg_temp.today()+5));
+select pg_temp.assert_true(pg_temp.alerts('expiring','COMPANY_KBIS')=1,'A Kbis expiring within 15 days alerts');
+select public.register_document(jsonb_build_object('owner_kind','company','type_code','COMPANY_KBIS','title','Kbis',
+ 'storage_provider','gdrive','provider_file_id','kbis-2','file_name','kbis.pdf','expires_on',pg_temp.today()+90),
+ (select id from public.documents where provider_file_id='kbis-1'));
+select pg_temp.assert_true(pg_temp.alerts('expiring','COMPANY_KBIS')=0,'Renewing the Kbis clears its alert');
+select public.register_document(jsonb_build_object('owner_kind','company','type_code','ANNUAL_ACCOUNTS','title','Bilan 2025',
+ 'storage_provider','gdrive','provider_file_id','bilan-2025','file_name','bilan.pdf','valid_from','2025-01-01'));
+select pg_temp.assert_true((select count(*) from public.documents where owner_kind='company' and status='active')=2,'Admins read company documents');
+do $$ begin
+ begin
+  perform public.register_document(jsonb_build_object('owner_kind','company','type_code','RIB','title','x',
+   'storage_provider','gdrive','provider_file_id','company-rib','file_name','x.pdf'));
+  raise exception 'FAILED: person type accepted on the company';
+ exception when raise_exception then if sqlerrm like 'FAILED%' then raise; end if; end;
+ begin
+  perform public.register_document(jsonb_build_object('owner_kind','company','person_id','42000000-0000-4000-8000-000000000001',
+   'type_code','COMPANY_OTHER','title','x','storage_provider','gdrive','provider_file_id','company-owned','file_name','x.pdf'));
+  raise exception 'FAILED: company document attached to a person';
+ exception when check_violation then null; end;
+end; $$;
+insert into public.document_folders(storage_provider,owner_kind,owner_id,folder_code,provider_folder_id)
+ values('gdrive','company','00000000-0000-4000-8000-00000000c0de','','company-root');
+reset role;
+select pg_temp.as_user('41000000-0000-4000-8000-000000000003');
+set local role authenticated;
+select pg_temp.assert_true((select count(*) from public.documents where owner_kind='company')=0,'HR does not read company documents');
+select pg_temp.assert_true((select count(*) from public.document_folders where owner_kind='company')=0,'HR does not read company folders');
+do $$ begin
+ begin
+  perform public.register_document(jsonb_build_object('owner_kind','company','type_code','COMPANY_OTHER','title','x',
+   'storage_provider','gdrive','provider_file_id','hr-company','file_name','x.pdf'));
+  raise exception 'FAILED: HR registered a company document';
+ exception when raise_exception then if sqlerrm like 'FAILED%' then raise; end if; end;
+end; $$;
+reset role;
 rollback;

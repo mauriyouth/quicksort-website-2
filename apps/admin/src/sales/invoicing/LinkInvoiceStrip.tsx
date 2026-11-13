@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X } from "lucide-react";
+import { Button, NativeSelect, NativeSelectOption } from "@quicksort-sas/ui";
 import { errorText, type InvoicingApi } from "./api";
 import { money, monthLabel, shortDate } from "./format";
-import type { Invoice, InvoicesList } from "./types";
+import type { Invoice } from "./types";
 
 type Target = { projectId: string; employeeId: string; billedClientId: string; consultantName: string };
 
@@ -33,20 +34,14 @@ export function LinkInvoiceStrip({
 
   useEffect(() => {
     let live = true;
-    api.get<InvoicesList>({ resource: "invoices" })
+    api.get<{ invoices: Invoice[] }>({ resource: "link-candidates", projectId: target.projectId, billedClientId: target.billedClientId ?? "", month })
       .then((r) => { if (live) setInvoices(r.invoices); })
       .catch((e) => { if (live) setError(errorText(e, "Could not load the Qonto invoices.")); });
     return () => { live = false; };
-  }, [api]);
+  }, [api, target.projectId, target.billedClientId, month]);
 
-  // Same project first, then the client's unassigned imports; invoices of this month on top.
-  const candidates = useMemo(() => (invoices ?? [])
-    .filter((i) => i.source === "imported" && i.status !== "canceled" && !i.employee_id &&
-      (i.project_id ? i.project_id === target.projectId : i.billed_client_id === target.billedClientId))
-    .sort((a, b) =>
-      Number(b.project_id === target.projectId) - Number(a.project_id === target.projectId) ||
-      Number((b.period_month ?? "").startsWith(month)) - Number((a.period_month ?? "").startsWith(month)) ||
-      (b.issue_date ?? "").localeCompare(a.issue_date ?? "")), [invoices, target.projectId, target.billedClientId, month]);
+  // Already filtered and ordered by the server: same project first, then the client's unassigned imports.
+  const candidates = invoices ?? [];
 
   async function link() {
     if (!choice || busy) return;
@@ -60,32 +55,31 @@ export function LinkInvoiceStrip({
 
   const locked = disabled || busy;
   return (
-    <div className="inv-assign-strip">
-      <span>Already billed in Qonto? Link {target.consultantName ? <strong>{target.consultantName}</strong> : "this CRA"} · {monthLabel(month)} to</span>
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/60 px-3 py-2 text-sm">
+      <span className="text-muted-foreground">
+        Already billed in Qonto? Link {target.consultantName ? <strong className="font-medium text-foreground">{target.consultantName}</strong> : "this CRA"} · {monthLabel(month)} to
+      </span>
       {invoices === null ? (
-        !error && <span className="inv-muted">Loading invoices…</span>
+        !error && <span className="text-xs text-muted-foreground">Loading invoices…</span>
       ) : candidates.length === 0 ? (
-        <span className="inv-muted">No Qonto invoice without a consultant for this client.</span>
+        <span className="text-xs text-muted-foreground">No Qonto invoice without a consultant for this client.</span>
       ) : (
         <>
-          <span className="inv-select">
-            <select aria-label="Qonto invoice" autoFocus value={choice} disabled={locked} onChange={(e) => setChoice(e.target.value)}>
-              <option value="">Choose an invoice</option>
-              {candidates.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.number || "Draft"} · {shortDate(i.issue_date)} · {money(i.total_ttc, i.currency)} TTC
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} aria-hidden="true" />
-          </span>
-          <button type="button" className="inv-btn sm" disabled={locked || !choice} onClick={() => void link()}>
+          <NativeSelect size="sm" className="max-w-full" aria-label="Qonto invoice" autoFocus value={choice} disabled={locked} onChange={(e) => setChoice(e.target.value)}>
+            <NativeSelectOption value="">Choose an invoice</NativeSelectOption>
+            {candidates.map((i) => (
+              <NativeSelectOption key={i.id} value={i.id}>
+                {i.number || "Draft"} · {shortDate(i.issue_date)} · {money(i.total_ttc, i.currency)} TTC
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+          <Button size="sm" disabled={locked || !choice} onClick={() => void link()}>
             {busy ? "Linking…" : "Link"}
-          </button>
+          </Button>
         </>
       )}
-      {error && <span className="inv-error-text">{error}</span>}
-      <button type="button" className="inv-range-clear" aria-label="Close" disabled={busy} onClick={onClose}><X size={16} /></button>
+      {error && <span role="alert" className="text-xs text-destructive">{error}</span>}
+      <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label="Close" disabled={busy} onClick={onClose}><X /></Button>
     </div>
   );
 }

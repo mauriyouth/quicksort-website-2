@@ -1,0 +1,50 @@
+/* Admin entry stylesheet: Tailwind 4 + the @quicksort-sas/ui theme.
+   `legacy` holds every hand-written admin/package stylesheet (wrapped by the
+   legacy-css-layer plugin in vite.config.ts). It sits above preflight and
+   below components/utilities, so new components are never overridden by old
+   global element rules. index.html declares the same order first (the first
+   stylesheet in the document wins); restated here for clarity. */
+@layer theme, base, legacy, components, utilities;
+
+@import "tailwindcss";
+@import "@quicksort-sas/ui/theme.css";
+@source "../node_modules/@quicksort-sas/ui/dist";
+
+/* Token bridge: the legacy --qs-* semantic tokens now read from the new
+   palette, so pages not yet migrated to components share the shell's paper /
+   ink / stone colours, typefaces and 2px corners. Unlayered on purpose: it
+   wins over tokens.css (layer legacy) for both modes, and follows the `.dark`
+   class through the package variables. */
+/* Always reserve the scrollbar's width so switching between short and tall
+   pages (e.g. person record tabs) doesn't shift the centred layout. */
+html {
+  scrollbar-gutter: stable;
+}
+
+:root {
+  --qs-fg-1: var(--foreground);
+  --qs-fg-2: color-mix(in srgb, var(--foreground) 80%, var(--background));
+  --qs-fg-3: var(--muted-foreground);
+  --qs-fg-4: var(--faint);
+
+  --qs-bg-0: var(--background);
+  --qs-bg-1: var(--card);
+  --qs-bg-2: var(--muted);
+
+  --qs-hover: var(--accent);
+
+  --qs-border: var(--border);
+  --qs-border-strong: color-mix(in srgb, var(--border) 50%, var(--input));
+
+  --qs-accent: var(--pivot);
+  --qs-accent-fg: var(--pivot-foreground);
+
+  --qs-font-sans: "Host Grotesk Variable", "Host Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --qs-font-display: var(--qs-font-sans);
+  --qs-font-mono: "Martian Mono Variable", "Martian Mono", ui-monospace, monospace;
+
+  --qs-radius-sm: 2px;
+  --qs-radius-md: 2px;
+  --qs-radius-lg: 3px;
+  --qs-radius-xl: 4px;
+}

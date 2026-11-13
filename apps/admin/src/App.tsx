@@ -6,13 +6,16 @@ import { SpotlightSearch, type SpotlightSalesContact } from "./SpotlightSearch";
 import { HrWorkspace } from "./hr/HrWorkspace";
 import { loadWorkspace } from "./hr/data";
 import type { Workspace } from "./hr/domain";
-import { Opportunities } from "./sales/Opportunities";
+import { NEEDS_LIST, needUrl } from "./hr/HiringNeed";
 import { Projects } from "./sales/Projects";
 import { Invoicing } from "./sales/invoicing/Invoicing";
+import { FreelancerInvoices } from "./sales/freelancer-invoices/FreelancerInvoices";
 import { DocumentAlerts } from "./documents/DocumentAlerts";
 import { OpsBoard } from "./ops/OpsBoard";
+import { CompanyAdmin } from "./ops/CompanyAdmin";
 import { PipelineBoard } from "./sales/PipelineBoard";
 import { SalesDashboard } from "./sales/SalesDashboard";
+import { AdminShell } from "./AdminShell";
 import { SectionHeader, SALES_TABS, HR_TABS, OPS_TABS, type SectionTab } from "./SectionHeader";
 import { SettingsPage, type SettingsSection } from "./SettingsPage";
 import { Clients } from "./sales/Clients";
@@ -61,6 +64,7 @@ const PayslipImport = lazy(() =>
 const PayslipsMonth = lazy(() =>
   import("./payslips/PayslipsMonth").then((m) => ({ default: m.PayslipsMonth })),
 );
+const Checks = lazy(() => import("./ops/checks/Checks.tsx").then((m) => ({ default: m.Checks })));
 const BusinessPlan = lazy(() =>
   import("./ops/business-plan/BusinessPlan").then((m) => ({ default: m.BusinessPlan })),
 );
@@ -77,7 +81,6 @@ import { useAuth } from "@quicksort/hr-db/auth";
 import {
   resolvePortalRoute,
   AuthGate,
-  Shell,
   Stat,
   Notice,
   Empty,
@@ -97,9 +100,9 @@ const nav = [
       { id: "sales-pipeline", href: "/sales/pipeline", label: "Pipeline" },
       { id: "sales-clients", href: "/sales/clients", label: "Clients" },
       { id: "sales-people", href: "/sales/people", label: "Contacts" },
-      { id: "opportunities", href: "/sales/opportunities", label: "Opportunities" },
       { id: "sales-projects", href: "/sales/projects", label: "Projects" },
       { id: "sales-invoicing", href: "/sales/invoicing", label: "Invoicing" },
+      { id: "sales-freelancer-invoices", href: "/sales/freelancer-invoices", label: "Freelancer invoices" },
     ],
   },
   {
@@ -110,6 +113,8 @@ const nav = [
     children: [
       { id: "operations", href: "/operations", label: "Board" },
       { id: "ops-business-plan", href: "/operations/business-plan", label: "Business plan" },
+      { id: "ops-checks", href: "/operations/checks", label: "Checks" },
+      { id: "ops-admin", href: "/operations/admin", label: "Admin" },
     ],
   },
   {
@@ -120,6 +125,7 @@ const nav = [
     children: [
       { id: "hr-overview", href: "/hr", label: "Overview" },
       { id: "recruiting", href: "/hr/recruiting", label: "Recruiting" },
+      { id: "hr-opportunities", href: NEEDS_LIST, label: "Opportunities" },
       { id: "hr-people", href: "/hr/people", label: "People" },
       { id: "journeys", href: "/hr/journeys", label: "Journeys" },
       { id: "hr-documents", href: "/hr/documents", label: "Documents" },
@@ -141,6 +147,7 @@ const SETTINGS_TABS: SectionTab[] = [
   { id: "account", href: "/settings", label: "Account" },
   { id: "ai", href: "/settings/ai", label: "AI configuration" },
   { id: "drive", href: "/settings/drive", label: "Google Drive contracts" },
+  { id: "signatures", href: "/settings/signatures", label: "Signatures" },
 ];
 // Pre-merge HR screens, kept as redirects so old links and bookmarks work.
 const LEGACY_RECRUITING_PATHS = [
@@ -180,7 +187,7 @@ export default function App() {
         </AuthGate>
       ) : staff ? (
         <AuthGate auth={auth}>
-          {auth.session && <Admin email={auth.session.user.email || ""} isOwner={auth.isOwner} role={auth.role === "hr" ? "hr" : "admin"} />}
+          {auth.session && <Admin email={auth.session.user.email || ""} userId={auth.session.user.id} isOwner={auth.isOwner} role={auth.role === "hr" ? "hr" : "admin"} />}
         </AuthGate>
       ) : (
         <AuthGate auth={auth}>
@@ -208,16 +215,16 @@ function StaffingWorkspace({ email }: { email: string }) {
     const item = staffingNav.find(n => n.id === id);
     if (item) routerNavigate(item.href);
   }
-  return <Shell portal="Staffing" email={email} nav={staffingNav} current={tab} onNavigate={navigate} hideSubmenu hideTopbar>
-    <SectionHeader label={tab === "account" ? "Settings" : "People"} current={tab} onNavigate={navigate} />
+  return <AdminShell portal="Staffing" email={email} nav={staffingNav} current={tab} onNavigate={navigate}
+    header={<SectionHeader label={tab === "account" ? "Settings" : "People"} current={tab} onNavigate={navigate} />}>
     <Routes>
       <Route path="/" element={<Navigate to="/hr/people" replace />} />
       <Route path="/settings" element={<AccountSecurity />} />
       <Route path="/hr/people/*" element={<HrWorkspace view="people" actorEmail={email} role="sales" />} />
     </Routes>
-  </Shell>;
+  </AdminShell>;
 }
-function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role: "hr" | "admin" }) {
+function Admin({ email, userId, isOwner, role }: { email: string; userId: string; isOwner: boolean; role: "hr" | "admin" }) {
   const workspaceNav = role === "hr" ? nav.filter(item => item.id === "hr" || item.id === "account") : isOwner ? ownerNav : nav;
   // Legacy (pre-merge) paths resolve to their new section, so the redirect
   // routes below render instead of falling into the not-found state.
@@ -231,6 +238,8 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     ...LEGACY_RECRUITING_PATHS.map((href) => ({ id: "recruiting", href })),
     { id: "journeys", href: "/hr/onboarding" },
     { id: "journeys", href: "/hr/offboarding" },
+    // Opportunities moved to HR as hiring needs.
+    { id: "hr-opportunities", href: "/sales/opportunities" },
   ];
   const location = useLocation();
   const routerNavigate = useNavigate();
@@ -421,7 +430,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     ? "ai"
     : location.pathname.startsWith("/settings/drive")
       ? "drive"
-      : "account";
+      : location.pathname.startsWith("/settings/signatures")
+        ? "signatures"
+        : "account";
   // Spotlight deep-links: open a page pointed at an exact record
   // (?candidate=, ?account=, or a person record under /hr/people/<id>/<tab>).
   // Pages follow the router location, so navigating suffices whether or not
@@ -431,7 +442,8 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     const route = allRoutes.find((item) => item.id === id);
     if (!route) return navigate(id);
     const url = new URL(route.href, window.location.origin);
-    const { person, application, employment, ...rest } = params;
+    const { person, application, employment, need, ...rest } = params;
+    if (need) url.pathname = needUrl(need);
     if (person) {
       // Person records route as paths, not query params:
       // /hr/people/<id>[/tab], /hr/people/<id>/employments/<employmentId>.
@@ -496,18 +508,18 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
     "sales-pipeline",
     "sales-clients",
     "sales-people",
-    "opportunities",
     "sales-projects",
     "sales-invoicing",
+    "sales-freelancer-invoices",
   ];
   const isSales = salesTabIds.includes(tab);
   const hrTabIds = [
     "hr",
-    "hr-overview", "recruiting", "hr-people", "journeys",
+    "hr-overview", "recruiting", "hr-opportunities", "hr-people", "journeys",
     "hr-documents", "hr-payslips", "jobs",
   ];
   const isHr = hrTabIds.includes(tab);
-  const isOps = tab === "operations" || tab === "ops-business-plan";
+  const isOps = tab === "operations" || tab === "ops-business-plan" || tab === "ops-checks" || tab === "ops-admin";
   // One shared top menu on every page: the section name plus its screens
   // as tabs. Section landing routes resolve to their first screen
   // ("/sales" → Dashboard, "/hr" → Pipeline); single-screen pages show the
@@ -529,28 +541,23 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
       : isOps
         ? OPS_TABS
         : tab === "account"
-          ? SETTINGS_TABS
+          ? role === "admin" ? SETTINGS_TABS : SETTINGS_TABS.filter((t) => t.id !== "signatures")
           : [];
   return (
-    <Shell
+    <AdminShell
       portal="Admin"
       email={email}
       nav={workspaceNav}
       current={tab}
       onNavigate={navigate}
-      hideSubmenu
-      hideTopbar
-      sidebarAction={
-        <button
-          type="button"
-          className="spotlight-trigger"
-          onClick={() => setSpotlightOpen(true)}
-          title="Search the workspace (⌘P)"
-        >
-          <Search size={16} />
-          <span>Search</span>
-          <kbd>⌘P</kbd>
-        </button>
+      onSearch={() => setSpotlightOpen(true)}
+      header={
+        <SectionHeader
+          label={headerLabel}
+          tabs={headerTabs}
+          current={tab === "account" ? settingsSection : headerCurrent}
+          onNavigate={navigate}
+        />
       }
     >
       <SpotlightSearch
@@ -568,12 +575,6 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
       />
       <Notice error>{error}</Notice>
       <Notice>{message}</Notice>
-      <SectionHeader
-        label={headerLabel}
-        tabs={headerTabs}
-        current={tab === "account" ? settingsSection : headerCurrent}
-        onNavigate={navigate}
-      />
       {/* Pages render only for routes the current role can see; unknown
           paths fall through to the shell's not-found state (tab resolution). */}
       {tab !== "not-found" && (
@@ -591,7 +592,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         {isOwner && <Route path="/admin-access" element={<AccessManager />} />}
         <Route path="/events" element={<EventsManager />} />
         <Route path="/hr" element={<HrWorkspace view="overview" actorEmail={email} role={role} openProject={openProject} />} />
-        <Route path="/hr/recruiting" element={<HrWorkspace view="recruiting" actorEmail={email} role={role} openProject={openProject} />} />
+        <Route path="/hr/recruiting/*" element={<HrWorkspace view="recruiting" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/people/*" element={<HrWorkspace view="people" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/journeys" element={<HrWorkspace view="journeys" actorEmail={email} role={role} openProject={openProject} />} />
         <Route path="/hr/documents" element={<DocumentAlerts />} />
@@ -601,15 +602,20 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/sales/pipeline" element={<PipelineBoard />} />
         <Route path="/sales/clients/*" element={<Clients actorEmail={email} />} />
         <Route path="/sales/people" element={<People actorEmail={email} />} />
-        <Route path="/sales/opportunities" element={<Opportunities actorEmail={email} />} />
+        <Route path="/sales/opportunities" element={<Navigate to={NEEDS_LIST} replace />} />
         <Route path="/sales/projects" element={<Projects actorEmail={email} />} />
         <Route path="/sales/projects/:projectId" element={<Projects actorEmail={email} />} />
         <Route path="/sales/invoicing/*" element={<Invoicing />} />
-        <Route path="/operations" element={<OpsBoard actorEmail={email} />} />
+        <Route path="/sales/freelancer-invoices/*" element={<FreelancerInvoices />} />
+        <Route path="/operations" element={<OpsBoard actorEmail={email} actorId={userId} isAdmin={role === "admin"} />} />
+        {/* Employees reach their boards at /operations/board in the portal. */}
+        <Route path="/operations/board" element={<Navigate to="/operations" replace />} />
         <Route
           path="/operations/business-plan"
           element={<Suspense fallback={null}><BusinessPlan actorEmail={email} /></Suspense>}
         />
+        <Route path="/operations/checks" element={<Suspense fallback={null}><Checks /></Suspense>} />
+        {role === "admin" && <Route path="/operations/admin" element={<CompanyAdmin />} />}
         <Route path="/blog-posts" element={<BlogManager />} />
         <Route path="/administration" element={<AdminSettings />} />
         <Route path="/overview" element={(
@@ -658,11 +664,9 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
             />
           </div>
           <div className="hero">
-            <div className="eyebrow">The full talent cycle</div>
-            <h2>From first hello to a fond farewell.</h2>
             <p>
               Opportunities, AI-assisted screening, interviews, offers, onboarding,
-              probation and offboarding — one record per person, every decision
+              probation and offboarding. One record per person, every decision
               logged.
             </p>
             <button className="btn lime" onClick={() => navigate("recruiting")}>
@@ -674,7 +678,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
             <section className="panel">
               <div className="panel-head">
                 <h2>Latest opportunities</h2>
-                <button className="link-button" onClick={() => navigate("opportunities")}>
+                <button className="link-button" onClick={() => routerNavigate(NEEDS_LIST)}>
                   View all
                 </button>
               </div>
@@ -789,7 +793,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
                     rows={8}
                     maxLength={20000}
                     required
-                    placeholder="The role, responsibilities and what you’re looking for…"
+                    placeholder="The role, responsibilities and what you're looking for…"
                   />
                 </label>
                 <label>
@@ -912,7 +916,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
                       onClick={() => {
                         if (
                           confirm(
-                            `Delete “${j.title}”? This removes it from the website.`,
+                            `Delete "${j.title}"? This removes it from the website.`,
                           )
                         )
                           void action(async () => {
@@ -968,7 +972,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
               </label>
             </div>
             <p className="muted small-text">
-              Rights are assigned in the Access manager — this list is
+              Rights are assigned in the Access manager. This list is
               read-only.
             </p>
             {visibleAccounts.map((p) => (
@@ -1152,6 +1156,7 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
         <Route path="/settings" element={<SettingsPage section="account" isOwner={isOwner} email={email} />} />
         <Route path="/settings/ai" element={<SettingsPage section="ai" isOwner={isOwner} email={email} />} />
         <Route path="/settings/drive" element={<SettingsPage section="drive" isOwner={isOwner} email={email} />} />
+        {role === "admin" && <Route path="/settings/signatures" element={<SettingsPage section="signatures" isOwner={isOwner} isAdmin email={email} />} />}
       </Routes>
       )}
       {loading && (
@@ -1159,6 +1164,6 @@ function Admin({ email, isOwner, role }: { email: string; isOwner: boolean; role
           Refreshing workspace…
         </p>
       )}
-    </Shell>
+    </AdminShell>
   );
 }

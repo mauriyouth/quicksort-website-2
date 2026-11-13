@@ -17,7 +17,7 @@ function when(iso: string | null): string {
 
 function syncSummary(r: SyncResult): string {
   const poll = "messages" in r.poll
-    ? `${r.poll.invoices} new invoice${r.poll.invoices === 1 ? "" : "s"} from ${r.poll.messages} email${r.poll.messages === 1 ? "" : "s"}${r.poll.duplicates ? `, ${r.poll.duplicates} duplicate${r.poll.duplicates === 1 ? "" : "s"}` : ""}${r.poll.failed ? `, ${r.poll.failed} failed` : ""}${r.poll.partial ? " (more left for the next run)" : ""}`
+    ? `${r.poll.invoices} new invoice${r.poll.invoices === 1 ? "" : "s"} from ${r.poll.messages} email${r.poll.messages === 1 ? "" : "s"}${r.poll.duplicates ? `, ${r.poll.duplicates} duplicate${r.poll.duplicates === 1 ? "" : "s"}` : ""}${r.poll.notInvoices ? `, ${r.poll.notInvoices} other attachment${r.poll.notInvoices === 1 ? "" : "s"} skipped` : ""}${r.poll.failed ? `, ${r.poll.failed} failed` : ""}${r.poll.partial ? " (more left for the next run)" : ""}`
     : `Mailbox not read: ${r.poll.skipped}`;
   return `${poll}. ${r.matched} paid from Qonto, ${r.suggested} payment${r.suggested === 1 ? "" : "s"} to confirm, ${r.reviewed} approved.`;
 }

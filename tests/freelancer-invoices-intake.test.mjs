@@ -171,7 +171,7 @@ test("the same bytes again are a duplicate: no second upload or extraction", asy
   const first = await ingestInvoicePdf(d, input(bytes));
   const again = await ingestInvoicePdf(d, input(bytes, { source: "email", gmailMessageId: "m-2" }));
 
-  assert.deepEqual(again, { invoiceId: first.invoiceId, duplicate: true });
+  assert.deepEqual(again, { invoiceId: first.invoiceId, duplicate: true, skipped: false });
   assert.equal(storage.uploads.length, 1);
   assert.equal(calls.extract, 1);
   assert.equal(store.invoices.length, 1);
@@ -186,7 +186,7 @@ test("different bytes with the same invoice number are a duplicate", async () =>
   const first = await ingestInvoicePdf(d, input(pdf("october")));
   const again = await ingestInvoicePdf(d, input(pdf("october, re-exported")));
 
-  assert.deepEqual(again, { invoiceId: first.invoiceId, duplicate: true });
+  assert.deepEqual(again, { invoiceId: first.invoiceId, duplicate: true, skipped: false });
   assert.equal(storage.uploads.length, 1);
   assert.equal(store.invoices.length, 1);
   assert.equal(store.events.at(-1).kind, "duplicate_received");
@@ -205,7 +205,7 @@ test("a corrected invoice reusing a rejected invoice's number is a new invoice",
   assert.deepEqual(store.invoices.map((i) => [i.number, i.review]), [["FAC-12", "rejected"], ["FAC-12", "to_check"]]);
   // The rejected file itself is still a duplicate.
   const again = await ingestInvoicePdf(d, input(pdf("october")));
-  assert.deepEqual(again, { invoiceId: first.invoiceId, duplicate: true });
+  assert.deepEqual(again, { invoiceId: first.invoiceId, duplicate: true, skipped: false });
 });
 
 test("the Supabase store ignores rejected invoices when matching by number, not by file", async () => {
@@ -272,6 +272,24 @@ test("a document that is not an invoice is flagged and does not prefill billing"
   await ingestInvoicePdf(d, input(pdf("a CV")));
   assert.deepEqual(store.invoices[0].flags, ["not_invoice", "unreadable"]);
   assert.equal(store.billings.has(EMPLOYEE), false);
+});
+
+test("an email attachment that is not an invoice is skipped: nothing uploaded or stored", async () => {
+  const store = memoryStore();
+  const storage = fakeStorage();
+  const { deps: d } = deps(store, storage, fields({ looksLikeInvoice: false, number: "", amountHtCents: null }));
+  const result = await ingestInvoicePdf(d, input(pdf("a timesheet"), { source: "email", gmailMessageId: "msg-7", actorEmail: "mailbox-sync" }));
+  assert.deepEqual(result, { invoiceId: null, duplicate: false, skipped: true });
+  assert.equal(store.invoices.length, 0);
+  assert.equal(storage.uploads.length, 0);
+});
+
+test("an email attachment whose read failed is still stored, flagged unreadable", async () => {
+  const store = memoryStore();
+  const { deps: d } = deps(store, fakeStorage(), fields({ looksLikeInvoice: false, extractionFailed: true }));
+  const result = await ingestInvoicePdf(d, input(pdf("garbled"), { source: "email", gmailMessageId: "msg-8", actorEmail: "mailbox-sync" }));
+  assert.equal(result.skipped, false);
+  assert.deepEqual(store.invoices[0].flags, ["unreadable"]);
 });
 
 test("a failed extraction is flagged unreadable, not as a non-invoice", async () => {

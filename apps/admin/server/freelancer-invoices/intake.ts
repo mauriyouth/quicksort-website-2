@@ -60,7 +60,12 @@ export function intakeFlags(fields: InvoiceFields, billingIban: string): string[
   return flags;
 }
 
-export async function ingestInvoicePdf(deps: IngestDeps, input: IngestInput): Promise<{ invoiceId: string; duplicate: boolean }> {
+/** What happened to one PDF. `skipped`: an email attachment read as not an invoice (a timesheet, a contract), not stored. */
+export type IngestResult =
+  | { invoiceId: string; duplicate: boolean; skipped: false }
+  | { invoiceId: null; duplicate: false; skipped: true };
+
+export async function ingestInvoicePdf(deps: IngestDeps, input: IngestInput): Promise<IngestResult> {
   const { store, storage } = deps;
   const sha256 = createHash("sha256").update(input.bytes).digest("hex");
   const duplicateOf = async (invoiceId: string) => {
@@ -70,7 +75,7 @@ export async function ingestInvoicePdf(deps: IngestDeps, input: IngestInput): Pr
       gmailMessageId: input.gmailMessageId ?? null,
       sha256,
     });
-    return { invoiceId, duplicate: true };
+    return { invoiceId, duplicate: true, skipped: false } as const;
   };
 
   const sameFile = await store.findDuplicate(input.employeeId, sha256, "");
@@ -86,6 +91,12 @@ export async function ingestInvoicePdf(deps: IngestDeps, input: IngestInput): Pr
   } catch (error) {
     fields = blankFields();
     extraction = { error: error instanceof Error ? error.message : String(error) };
+  }
+  // Mail often carries a timesheet or contract next to the invoice: only invoices
+  // are kept. A failed read says nothing about the file, so that one is kept.
+  // A portal upload is always kept: the freelancer chose to send it as an invoice.
+  if (input.source === "email" && !fields.looksLikeInvoice && !fields.extractionFailed) {
+    return { invoiceId: null, duplicate: false, skipped: true };
   }
   if (fields.number) {
     const sameNumber = await store.findDuplicate(input.employeeId, sha256, fields.number);
@@ -171,5 +182,5 @@ export async function ingestInvoicePdf(deps: IngestDeps, input: IngestInput): Pr
       flags,
     })
     .catch((error) => console.error("Freelancer invoice intake: received event failed:", error));
-  return { invoiceId, duplicate: false };
+  return { invoiceId, duplicate: false, skipped: false };
 }

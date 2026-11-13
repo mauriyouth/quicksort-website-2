@@ -24,12 +24,23 @@ import {
 } from "@quicksort-sas/ui";
 import { PageAlerts } from "../../ui";
 import { errorText, FreelancerInvoicesError } from "./api";
-import type { Billing, FreelancerInvoicesApi, InvoiceEvent, InvoiceView, MonthRow } from "./api";
+import type { Billing, FreelancerInvoicesApi, InvoiceEvent, InvoiceView, MonthRow, Payment } from "./api";
 import { centsInput, craCheck, dayCount, dayMonth, euro, EVENT_LABELS, FLAG_LABELS, parseEuros, statusCell } from "./format";
 import type { Tone } from "./format";
 
 const PAID_ELSEWHERE = "This payment is already linked to another invoice. Unlink it there, or record it as one payment for several invoices.";
 const NOTE_MIN = 3;
+
+const MATCHED_BY: Record<Payment["matchedBy"], string> = { automatic: "Automatically (exact amount and payee)", confirmed: "Suggestion confirmed", manual: "Linked by hand" };
+const WHY: Record<string, string> = { name_fuzzy: "payee name close", amount_differs: "amount differs", ambiguous: "several possible", probable: "suggested" };
+
+/** "IBAN FR76 3000 … 5477" when the transfer has no payee name, which is common for freelancer transfers. */
+function payee(d: { counterparty: string; iban: string | null }): string {
+  const iban = d.iban ? `IBAN ${d.iban.slice(0, 4)} … ${d.iban.slice(-4)}` : "";
+  return [d.counterparty, iban].filter(Boolean).join(" · ") || "Unknown payee";
+}
+const fullDate = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Paris" }) : "—";
 /** The API's cap (apps/admin/api/freelancer-invoices.ts). */
 const MAX_PDF_BYTES = 3 * 1024 * 1024;
 
@@ -211,10 +222,11 @@ export function InvoiceDetail({
                 <div key={s.transactionId} className="flex flex-col gap-2 rounded-md bg-muted/60 px-3 py-2 text-sm">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="font-medium">{s.counterparty || "Unknown payee"}</span>
+                    <span className="font-medium">{payee(s)}</span>
                     <span className="text-xs text-muted-foreground">
-                      <span className="num">{euro(Math.abs(s.amountCents))}</span> · {dayMonth(s.settledAt)}{s.why ? ` · ${s.why}` : ""}
+                      <span className="num">{euro(s.amountCents)}</span> · {fullDate(s.settledAt)}{s.why ? ` · ${WHY[s.why] ?? s.why}` : ""}
                     </span>
+                    {(s.label || s.reference) && <span className="text-xs break-words text-muted-foreground">{[s.label, s.reference].filter(Boolean).join(" · ")}</span>}
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" disabled={locked}
@@ -259,6 +271,25 @@ export function InvoiceDetail({
 
           {invoice?.display.status === "paid" && (
             <Section title="Payment" description={`Paid ${dayMonth(invoice.paidAt)} from Qonto.`}>
+              {invoice.payment && (
+                <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 rounded-md bg-muted/60 px-3 py-2 text-sm">
+                  <dt className="text-muted-foreground">Amount</dt>
+                  <dd className="m-0 num font-medium">{euro(invoice.payment.amountCents)}
+                    {invoice.amountTtcCents != null && invoice.payment.amountCents !== invoice.amountTtcCents && (
+                      <span className="font-normal text-warning"> · invoice {euro(invoice.amountTtcCents)} TTC</span>
+                    )}
+                  </dd>
+                  <dt className="text-muted-foreground">Settled</dt>
+                  <dd className="m-0">{fullDate(invoice.payment.settledAt)}</dd>
+                  <dt className="text-muted-foreground">Paid to</dt>
+                  <dd className="m-0">{payee(invoice.payment)}</dd>
+                  {invoice.payment.label && <><dt className="text-muted-foreground">Qonto label</dt><dd className="m-0 break-words">{invoice.payment.label}</dd></>}
+                  {invoice.payment.reference && <><dt className="text-muted-foreground">Reference</dt><dd className="m-0 break-words">{invoice.payment.reference}</dd></>}
+                  <dt className="text-muted-foreground">Matched</dt>
+                  <dd className="m-0">{MATCHED_BY[invoice.payment.matchedBy]}{invoice.payment.decidedBy && invoice.payment.matchedBy !== "automatic" ? ` by ${invoice.payment.decidedBy}` : ""}</dd>
+                  {invoice.payment.alsoPays.length > 0 && <><dt className="text-muted-foreground">Also paid</dt><dd className="m-0 num">{invoice.payment.alsoPays.join(", ")}</dd></>}
+                </dl>
+              )}
               <div>
                 <Button variant="outline" size="sm" disabled={locked}
                   onClick={() => void act("unlink", () => api.post("unlink", { invoiceId: invoice.id }), "Payment unlinked.")}>
@@ -266,34 +297,6 @@ export function InvoiceDetail({
                 </Button>
               </div>
             </Section>
-          )}
-
-          {invoice && invoice.review !== "rejected" && (
-            <Section title="Review"
-              description={invoice.review === "ok"
-                ? (invoice.reviewNote ? `Approved: ${invoice.reviewNote}` : "Approved.")
-                : invoice.display.warning ? "The invoices of this month don't match the CRA. Accept the difference or reject the invoice, with a note." : "Approve the invoice or reject it, with a note."}>
-              <Field className="gap-1.5">
-                <FieldLabel htmlFor="fi-note">Review note</FieldLabel>
-                <Textarea id="fi-note" className="min-h-16 text-sm md:text-sm" value={note} maxLength={500} disabled={locked} onChange={(e) => setNote(e.target.value)} />
-                <FieldDescription className="text-xs">At least {NOTE_MIN} characters.</FieldDescription>
-              </Field>
-              <div className="flex flex-wrap gap-2">
-                {invoice.review === "to_check" && (
-                  <Button disabled={locked || !noteOk}
-                    onClick={() => void act("accept", () => api.post("accept_difference", { id: invoice.id, note: note.trim() }), "Invoice approved.")}>
-                    {busy === "accept" ? "Saving…" : invoice.display.warning ? "Accept difference" : "Approve"}
-                  </Button>
-                )}
-                <Button variant="outline" className="text-destructive hover:text-destructive" disabled={locked || !noteOk}
-                  onClick={() => void act("reject", () => api.post("reject", { id: invoice.id, note: note.trim() }), "Invoice rejected.")}>
-                  {busy === "reject" ? "Rejecting…" : "Reject"}
-                </Button>
-              </div>
-            </Section>
-          )}
-          {invoice?.review === "rejected" && (
-            <p className="m-0 text-sm text-muted-foreground">Rejected{invoice.reviewNote ? `: ${invoice.reviewNote}` : "."}</p>
           )}
 
           {row && (
@@ -395,6 +398,34 @@ export function InvoiceDetail({
                 </ol>
               )}
             </Section>
+          )}
+
+          {invoice && invoice.review !== "rejected" && (
+            <Section title="Review"
+              description={invoice.review === "ok"
+                ? (invoice.reviewNote ? `Approved: ${invoice.reviewNote}` : "Approved.")
+                : invoice.display.warning ? "The invoices of this month don't match the CRA. Accept the difference or reject the invoice, with a note." : "Approve the invoice or reject it, with a note."}>
+              <Field className="gap-1.5">
+                <FieldLabel htmlFor="fi-note">Review note</FieldLabel>
+                <Textarea id="fi-note" className="min-h-16 text-sm md:text-sm" value={note} maxLength={500} disabled={locked} onChange={(e) => setNote(e.target.value)} />
+                <FieldDescription className="text-xs">At least {NOTE_MIN} characters.</FieldDescription>
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                {invoice.review === "to_check" && (
+                  <Button disabled={locked || !noteOk}
+                    onClick={() => void act("accept", () => api.post("accept_difference", { id: invoice.id, note: note.trim() }), "Invoice approved.")}>
+                    {busy === "accept" ? "Saving…" : invoice.display.warning ? "Accept difference" : "Approve"}
+                  </Button>
+                )}
+                <Button variant="outline" className="text-destructive hover:text-destructive" disabled={locked || !noteOk}
+                  onClick={() => void act("reject", () => api.post("reject", { id: invoice.id, note: note.trim() }), "Invoice rejected.")}>
+                  {busy === "reject" ? "Rejecting…" : "Reject"}
+                </Button>
+              </div>
+            </Section>
+          )}
+          {invoice?.review === "rejected" && (
+            <p className="m-0 text-sm text-muted-foreground">Rejected{invoice.reviewNote ? `: ${invoice.reviewNote}` : "."}</p>
           )}
         </div>
       </SheetContent>

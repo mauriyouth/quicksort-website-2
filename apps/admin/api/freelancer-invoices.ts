@@ -164,6 +164,22 @@ async function updateInvoice(client: SupabaseClient, row: { id: string; version:
   if (!data?.length) throw new HttpError("This invoice changed in the meantime. Reload and try again.", 409);
 }
 
+/** What the panel shows of a Qonto debit. Freelancer transfers often carry no payee name: the IBAN and label say who it went to. */
+type DebitInfo = { transactionId: string; amountCents: number; settledAt: string; counterparty: string; label: string; reference: string; iban: string | null };
+type Payment = DebitInfo & { matchedBy: "automatic" | "confirmed" | "manual"; decidedBy: string; alsoPays: string[] };
+type DebitDetailRow = { id: string; settled_at: string; amount_cents: number | string; counterparty: string | null; label: string | null; reference: string | null; raw: unknown };
+const DEBIT_DETAIL_COLUMNS = "id,settled_at,amount_cents,counterparty,label,reference,raw";
+const debitInfo = (d: DebitDetailRow): DebitInfo => ({
+  transactionId: d.id,
+  // Synced debits keep Qonto's positive amount.
+  amountCents: Math.abs(Number(d.amount_cents)),
+  settledAt: d.settled_at,
+  counterparty: d.counterparty ?? "",
+  label: d.label ?? "",
+  reference: d.reference ?? "",
+  iban: debitIban(d.raw),
+});
+
 type DebitRow = { id: string; settled_at: string; amount_cents: number | string; status: string | null; counterparty: string | null; raw: unknown };
 
 async function loadDebit(client: SupabaseClient, id: string): Promise<DebitRow> {
@@ -172,7 +188,9 @@ async function loadDebit(client: SupabaseClient, id: string): Promise<DebitRow> 
   if (!data) throw new HttpError("Bank transaction not found.", 404);
   const debit = data as DebitRow;
   // Qonto statuses: pending, completed, declined, reversed. Only a completed debit paid anyone.
-  if (!(Number(debit.amount_cents) < 0) || !debit.settled_at || debit.status !== "completed") {
+  // Synced debits keep Qonto's positive amount; the direction is raw.side.
+  const side = (debit.raw as { side?: unknown } | null)?.side;
+  if (Number(debit.amount_cents) === 0 || side === "credit" || !debit.settled_at || debit.status !== "completed") {
     throw new HttpError("Only a completed debit can pay an invoice.", 400);
   }
   return debit;
@@ -260,7 +278,7 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
     // Suggestions of unpaid invoices, with their debit, unless that debit already pays something.
     const all = [...invoices, ...unassigned];
     const open = all.filter((r) => !r.paid_at && r.review !== "rejected").map((r) => r.id);
-    const suggestionsOf = new Map<string, { transactionId: string; amountCents: number; settledAt: string; counterparty: string; why: string }[]>();
+    const suggestionsOf = new Map<string, (DebitInfo & { why: string })[]>();
     if (open.length) {
       const matches = await paged<{ invoice_id: string; transaction_id: string; kind: string }>(
         (from, to) => client.from("freelancer_invoice_matches").select("invoice_id,transaction_id,kind").in("invoice_id", open).eq("state", "suggested").order("invoice_id").order("transaction_id").range(from, to),
@@ -269,8 +287,8 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
       const txIds = [...new Set(matches.map((m) => m.transaction_id))];
       if (txIds.length) {
         const [debits, used, whyEvents] = await Promise.all([
-          paged<{ id: string; settled_at: string; amount_cents: number | string; counterparty: string | null }>(
-            (from, to) => client.from("bank_transactions").select("id,settled_at,amount_cents,counterparty").in("id", txIds).order("id").range(from, to),
+          paged<DebitDetailRow>(
+            (from, to) => client.from("bank_transactions").select(DEBIT_DETAIL_COLUMNS).in("id", txIds).order("id").range(from, to),
             "read suggested debits",
           ),
           paged<{ transaction_id: string }>(
@@ -289,15 +307,38 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
           const d = debitOf.get(m.transaction_id);
           if (!d || usedIds.has(d.id)) continue;
           const list = suggestionsOf.get(m.invoice_id) ?? [];
-          list.push({
-            transactionId: d.id,
-            amountCents: Number(d.amount_cents),
-            settledAt: d.settled_at,
-            counterparty: d.counterparty ?? "",
-            why: why.get(`${m.invoice_id}|${d.id}`) || m.kind,
-          });
+          list.push({ ...debitInfo(d), why: why.get(`${m.invoice_id}|${d.id}`) || m.kind });
           suggestionsOf.set(m.invoice_id, list);
         }
+      }
+    }
+
+    // The debit that paid each paid invoice: how it was matched, and what else it paid.
+    const paymentOf = new Map<string, Payment>();
+    const paidTx = [...new Set(all.map((r) => r.paid_by_transaction_id).filter((id): id is string => !!id))];
+    if (paidTx.length) {
+      const [debits, confirmed, siblings] = await Promise.all([
+        paged<DebitDetailRow>((from, to) => client.from("bank_transactions").select(DEBIT_DETAIL_COLUMNS).in("id", paidTx).order("id").range(from, to), "read paying debits"),
+        paged<{ invoice_id: string; transaction_id: string; kind: string; decided_by: string | null }>(
+          (from, to) => client.from("freelancer_invoice_matches").select("invoice_id,transaction_id,kind,decided_by").in("transaction_id", paidTx).eq("state", "confirmed").order("invoice_id").order("transaction_id").range(from, to),
+          "read confirmed matches",
+        ),
+        paged<{ id: string; number: string; paid_by_transaction_id: string }>(
+          (from, to) => client.from("freelancer_invoices").select("id,number,paid_by_transaction_id").in("paid_by_transaction_id", paidTx).order("id").range(from, to),
+          "read invoices paid by the same debits",
+        ),
+      ]);
+      const debitOf = new Map(debits.map((d) => [d.id, d]));
+      for (const r of all) {
+        const d = r.paid_by_transaction_id ? debitOf.get(r.paid_by_transaction_id) : undefined;
+        if (!d) continue;
+        const match = confirmed.find((m) => m.invoice_id === r.id && m.transaction_id === d.id);
+        paymentOf.set(r.id, {
+          ...debitInfo(d),
+          matchedBy: match?.kind === "confident" ? "automatic" : match?.kind === "probable" ? "confirmed" : "manual",
+          decidedBy: match?.decided_by ?? "",
+          alsoPays: siblings.filter((x) => x.paid_by_transaction_id === d.id && x.id !== r.id).map((x) => x.number || "No number"),
+        });
       }
     }
 
@@ -312,6 +353,7 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
         documentId: r.document_id,
         display: displayStatus(inv, monthOk, today),
         suggestions: suggestionsOf.get(r.id) ?? [],
+        payment: paymentOf.get(r.id) ?? null,
       };
     };
 
@@ -350,6 +392,26 @@ const resources: Record<string, (ctx: Ctx) => Promise<unknown>> = {
       rows,
       unassigned: unassigned.map((r) => ({ ...view(r, false), name: names.get(freelancers.find((f) => f.id === r.employee_id)?.person_id ?? "") ?? "" })),
     };
+  },
+
+  /**
+   * Every month of a year up to the current one, for the by-freelancer view:
+   * each month is checked as on its own; invoices without a period are listed once.
+   */
+  async year(ctx) {
+    const year = ctx.query.year ?? "";
+    if (!/^\d{4}$/.test(year)) throw new HttpError("Choose a year (YYYY).", 400);
+    const current = parisDay.format(nowOf(ctx.deps)).slice(0, 7);
+    const months: string[] = [];
+    for (let m = 1; m <= 12; m++) {
+      const month = `${year}-${String(m).padStart(2, "0")}`;
+      if (month <= current) months.push(`${month}-01`);
+    }
+    type Month = { rows: unknown[]; unassigned: { id: string }[] };
+    const loaded = await Promise.all(months.map((month) => resources.month({ ...ctx, query: { month } }) as Promise<Month>));
+    const unassigned = new Map<string, { id: string }>();
+    for (const m of loaded) for (const u of m.unassigned) unassigned.set(u.id, u);
+    return { months: months.map((month, i) => ({ month, rows: loaded[i].rows })), unassigned: [...unassigned.values()] };
   },
 
   async settings({ client }) {
@@ -502,19 +564,29 @@ const actions: Record<string, (ctx: Ctx, input: any) => Promise<Result>> = {
     check(employee.error, "read employee");
     if (!employee.data) throw new HttpError("Employee not found.", 404);
     if (employee.data.contract_type !== "Freelance") throw new HttpError("Only freelancers have billing details.", 400);
+    const extraEmails = [...new Set(input.extraEmails.map((e) => e.trim().toLowerCase()))];
+    const before = await client.from("freelancer_billing").select("extra_emails").eq("employee_id", input.employeeId).maybeSingle();
+    check(before.error, "read billing");
+    const known = new Set(((before.data as { extra_emails?: string[] } | null)?.extra_emails ?? []).map((e) => e.toLowerCase()));
     const { error } = await client.from("freelancer_billing").upsert(
       {
         employee_id: input.employeeId,
         company_name: input.companyName,
         siret: input.siret,
         iban: input.iban,
-        extra_emails: [...new Set(input.extraEmails.map((e) => e.trim().toLowerCase()))],
+        extra_emails: extraEmails,
         updated_by: email,
         updated_at: stamp(deps),
       },
       { onConflict: "employee_id" },
     );
     check(error, "save billing");
+    // A new sender address: its older mail was never listed, so the next poll reads from backfill_from
+    // again. Messages already done are skipped by freelancer_mailbox_messages.
+    if (extraEmails.some((e) => !known.has(e))) {
+      const reset = await client.from("freelancer_mailbox_settings").update({ last_polled_at: null }).eq("id", "mailbox");
+      check(reset.error, "reset mailbox poll");
+    }
     return { status: 200, body: { saved: true } };
   },
 

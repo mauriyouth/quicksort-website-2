@@ -59,7 +59,10 @@ export function useFreelancerInvoicesApi() {
 export type FreelancerInvoicesApi = ReturnType<typeof useFreelancerInvoicesApi>;
 
 // Response shapes of /api/freelancer-invoices (see apps/admin/api/freelancer-invoices.ts).
-export type Suggestion = { transactionId: string; amountCents: number; settledAt: string; counterparty: string; why: string };
+/** A Qonto debit as the panel shows it; amountCents is positive (money out). */
+export type DebitInfo = { transactionId: string; amountCents: number; settledAt: string; counterparty: string; label: string; reference: string; iban: string | null };
+export type Suggestion = DebitInfo & { why: string };
+export type Payment = DebitInfo & { matchedBy: "automatic" | "confirmed" | "manual"; decidedBy: string; alsoPays: string[] };
 export type DisplayStatus = { status: "to_check" | "to_pay" | "paid" | "rejected"; warning: boolean; overdue: boolean };
 export type InvoiceView = {
   id: string;
@@ -83,6 +86,7 @@ export type InvoiceView = {
   documentId: string | null;
   display: DisplayStatus;
   suggestions: Suggestion[];
+  payment: Payment | null;
 };
 export type Billing = { companyName: string; siret: string; iban: string; extraEmails: string[] };
 export type MonthCheck = {
@@ -105,6 +109,7 @@ export type MonthRow = {
 };
 export type UnassignedInvoice = InvoiceView & { name: string };
 export type MonthResponse = { rows: MonthRow[]; unassigned: UnassignedInvoice[] };
+export type YearResponse = { months: { month: string; rows: MonthRow[] }[]; unassigned: UnassignedInvoice[] };
 export type InvoiceEvent = { id: string; kind: string; actor_email: string; detail: Record<string, unknown> | null; created_at: string };
 export type MailboxSettingsResponse = {
   mailbox: string;
@@ -114,7 +119,7 @@ export type MailboxSettingsResponse = {
   driveServiceAccountEmail: string | null;
 };
 export type SyncResult = {
-  poll: { messages: number; invoices: number; duplicates: number; skipped: number; failed: number; abandoned: number; partial: boolean } | { skipped: string };
+  poll: { messages: number; invoices: number; duplicates: number; notInvoices?: number; skipped: number; failed: number; abandoned: number; partial: boolean } | { skipped: string };
   matched: number;
   suggested: number;
   reviewed: number;
